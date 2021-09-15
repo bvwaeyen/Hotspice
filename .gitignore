@@ -1,2 +1,4 @@
-# Ignore all __pycache__ folders and their contents
+# Ignore __pycache__ and some third-party folders and their contents
 /**/__pycache__/*
+/**/.vscode/*
+/**/.ipynb_checkpoints/*
