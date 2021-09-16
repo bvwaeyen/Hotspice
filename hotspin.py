@@ -1,5 +1,6 @@
 import math
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from dataclasses import dataclass, field
@@ -208,7 +209,9 @@ class Magnets:
         self.m.flat[indexmax] = -self.m.flat[indexmax]
     
     def Save_history(self):
-        """ Updates all members of self.history """
+        """ Updates all members of self.history
+            !! Note that you have to manually save the history by calling this function every Update() step !!
+        """
         if hasattr(self, "E_tot"):
             self.history.E.append(self.E_tot)
         else:
@@ -256,6 +259,128 @@ class Magnets:
         corr_binned = np.divide(corr_binned, counts)
         corr_length = np.sum(np.multiply(abs(corr_binned), distances))
         return corr_binned, distances, corr_length
+    
+
+    # Below here are some graphical functions (plot magnetization profile etc.)
+    def Get_magAngles(self, m=None, avg='point'):
+        '''
+            Returns the magnetization angle (can be averaged using the averaging method specified by <avg>). If the local
+            average magnetization is zero, the corresponding angle is NaN, such that those regions are white in imshow.
+            @param m [2D array] (self.m): The magnetization profile that should be averaged.
+            @param avg [str] ('point'): can be any of 'point', 'cross', 'square', 'triangle', 'hexagon'. These are:
+                'point' does no averaging at all, so just calculates the angle of each individual spin.
+                'cross' averages the spins north, east, south and west of each position.
+                'square' averages the spins northeast, southeast, southwest and northwest of each position.
+                'triangle' averages the three magnets connected to a corner of a hexagon in the kagome geometry.
+                'hexagon' averages in a hexagon around each position, though this is not very clear.
+            @return [2D array]: the (averaged) magnetization angle at each position. 
+                !! This does not necessarily have the same shape as <m> !!
+        '''
+        assert avg in ['point', 'cross', 'square', 'triangle', 'hexagon'], "Unsupported averaging mask: %s" % avg
+        if m is None: m = self.m
+
+        x_comp = np.multiply(m, self.orientation[:,:,0])
+        y_comp = np.multiply(m, self.orientation[:,:,1])
+        if avg == 'point':
+            mask = [[1]]
+        elif avg == 'cross':
+            mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
+        elif avg == 'square':
+            mask = [[1, 0, 1], [0, 0, 0], [1, 0, 1]]
+        elif avg == 'hexagon':
+            mask = [[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]]
+        elif avg == 'triangle':
+            mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
+        x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')
+        y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')
+        if avg == 'triangle':
+            x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='fill')
+            y_comp_avg = signal.convolve2d(y_comp, mask, mode='same', boundary='fill')
+        angles_avg = np.arctan2(y_comp_avg, x_comp_avg) % (2*np.pi)
+        useless_angles = np.where(np.logical_and(np.isclose(x_comp_avg, 0), np.isclose(y_comp_avg, 0)), np.nan, 1)
+        angles_avg *= useless_angles
+        if avg == 'triangle':
+            angles_avg = angles_avg[::2,::2]
+        return angles_avg
+
+    def Show_m(self, m=None, avg='point', show_energy=True):
+        ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
+            the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
+            a third and similar plot, displaying the interaction energy of each spin, is also shown.
+            @param m [2D array] (self.m): the direction (+1 or -1) of each spin on the geometry. Default is the current
+                magnetization profile. This is useful if some magnetization profiles have been saved manually, while 
+                self.Update() has been called since: one can then pass these saved profiles as the <m> parameter to
+                draw them onto the geometry stored in <self>.
+            @param average [str] ('point'): any of 'point', 'cross', 'square', 'triangle' and 'hexagon'. This adds together 
+                the nearest neighbors according to the given shape. This is useful to see the boundaries between 
+                antiferromagnetic domains. One can also just pass a bool: True -> 'cross', False -> 'point'.
+            @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
+        '''
+        if m is None: m = self.m
+        
+        if not isinstance(avg, str): # TODO: can detect which type of ASI <self> is, but currently that information is not stored in a Magnets() object
+            if not avg: # If average is falsey
+                avg = 'point'
+            else: # If average is truthy
+                avg = 'cross'
+            
+        if self.m_type == 'op':
+            num_plots = 2 if show_energy else 1
+            fig = plt.figure(figsize=(3.5*num_plots, 3))
+            ax1 = fig.add_subplot(1, num_plots, 1)
+            im1 = ax1.imshow(self.m, cmap='gray', origin='lower')
+            ax1.set_title(r'$m$')
+            plt.colorbar(im1)
+            if show_energy:
+                ax2 = fig.add_subplot(1, num_plots, 2)
+                im2 = ax2.imshow(self.E_int, origin='lower')
+                ax2.set_title(r'$E_{int}$')
+                plt.colorbar(im2)
+        elif self.m_type == 'ip':
+            num_plots = 3 if show_energy else 2
+            fig = plt.figure(figsize=(3.5*num_plots, 3))
+            ax1 = fig.add_subplot(1, num_plots, 1)
+            im1 = ax1.imshow(self.Get_magAngles(m=m, avg=avg), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
+            ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % avg if avg != 'point' else ''))
+            plt.colorbar(im1)
+            ax2 = fig.add_subplot(1, num_plots, 2)
+            ax2.set_aspect('equal')
+            ax2.quiver(self.xx, self.yy, np.multiply(m, self.orientation[:,:,0]), np.multiply(m, self.orientation[:,:,1]), pivot='mid', headlength=17, headaxislength=17, headwidth=7)
+            ax2.set_title(r'$m$')
+            if show_energy:
+                ax3 = fig.add_subplot(1, num_plots, 3)
+                im3 = ax3.imshow(self.E_int, origin='lower')
+                plt.colorbar(im3)
+                ax3.set_title(r'$E_{int}$')
+        plt.gcf().tight_layout()
+        plt.show()
+
+    def Show_history(self, y_quantity=None, y_label=r'Average magnetization'):
+        ''' Plots <y_quantity> (default: average magnetization (self.history.m)) and total energy (self.history.E)
+            as a function of either the time or the temperature: if the temperature (self.history.T) is constant, 
+            then the x-axis will represent the time (self.history.t), otherwise it represents the temperature.
+            @param y_quantity [1D array] (self.m): The quantity to be plotted as a function of T or t.
+            @param y_label [str] (r'Average magnetization'): The y-axis label in the plot.
+        '''
+        if y_quantity is None:
+            y_quantity = self.history.m
+        if np.all(np.isclose(self.history.T, self.history.T[0])):
+            x_quantity, x_label = self.history.t, 'Time [a.u.]'
+        else:
+            x_quantity, x_label = self.history.T, 'Temperature [a.u.]'
+        assert len(y_quantity) == len(x_quantity), "Error in Show_history: <y_quantity> has different length than %s history." % x_label.split(' ')[0].lower()
+
+        fig = plt.figure(figsize=(4, 6))
+        ax1 = fig.add_subplot(211)
+        ax1.plot(x_quantity, y_quantity)
+        ax1.set_xlabel(x_label)
+        ax1.set_ylabel(y_label)
+        ax2 = fig.add_subplot(212)
+        ax2.plot(x_quantity, self.history.E)
+        ax2.set_xlabel(x_label)
+        ax2.set_ylabel('Total energy [a.u.]')
+        plt.gcf().tight_layout()
+        plt.show()
 
 
 @dataclass
