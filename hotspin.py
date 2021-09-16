@@ -2,8 +2,10 @@ import math
 
 import numpy as np
 
+from dataclasses import dataclass, field
 from numpy.core.numeric import Inf
 from scipy import signal
+
 
 class Magnets:
     def __init__(self, xx, yy, T, E_b, config='full', m_type='op'):
@@ -42,6 +44,7 @@ class Magnets:
         self.m_tot = np.mean(self.m)
         self.E_int = np.zeros_like(xx)
         self.index = range(self.xx.size)
+        self.history = History()
 
     def Initialize_m(self, config):
         if config == 'uniform':
@@ -204,6 +207,16 @@ class Magnets:
         indexmax = np.argmax(self.E_int, axis=None)
         self.m.flat[indexmax] = -self.m.flat[indexmax]
     
+    def Save_history(self):
+        """ Updates all members of self.history """
+        if hasattr(self, "E_tot"):
+            self.history.E.append(self.E_tot)
+        else:
+            self.history.E.append(self.Energy())
+        self.history.t.append(self.t)
+        self.history.T.append(self.T)
+        self.history.m.append(self.m_tot)
+    
     def Autocorrelation_fast(self, max_distance):
         max_distance = round(max_distance)
         s = np.shape(self.xx)
@@ -240,3 +253,12 @@ class Magnets:
         corr_binned = np.divide(corr_binned, counts)
         corr_length = np.sum(np.multiply(abs(corr_binned), distances))
         return corr_binned, distances, corr_length
+
+
+@dataclass
+class History:
+    """ Stores the history of the energy, temperature, time, and average magnetization. """
+    E: list = field(default_factory=list)
+    T: list = field(default_factory=list)
+    t: list = field(default_factory=list)
+    m: list = field(default_factory=list)
