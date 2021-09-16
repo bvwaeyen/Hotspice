@@ -44,6 +44,7 @@ class Magnets:
             print('Bad m_type')
         self.m_tot = np.mean(self.m)
         self.E_int = np.zeros_like(xx)
+        self.E_tot = 0
         self.index = range(self.xx.size)
         self.history = History()
 
@@ -226,15 +227,14 @@ class Magnets:
         indexmax = np.argmax(self.E_int, axis=None)
         self.m.flat[indexmax] = -self.m.flat[indexmax]
     
-    def Save_history(self):
-        """ Records self.E_tot, self.t, self.T and self.m_tot as they are now. """
-        if hasattr(self, "E_tot"):
-            self.history.E.append(self.E_tot)
-        else:
-            self.history.E.append(self.Energy())
-        self.history.t.append(self.t)
-        self.history.T.append(self.T)
-        self.history.m.append(self.m_tot)
+    def Save_history(self, *, E_tot=None, t=None, T=None, m_tot=None):
+        """ Records E_tot, t, T and m_tot as they were last calculated. This default behavior can be overruled: if
+            passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T|m_tot> value(s).
+        """
+        self.history.E.append(self.E_tot if E_tot is None else E_tot)
+        self.history.t.append(self.t if t is None else t)
+        self.history.T.append(self.T if T is None else T)
+        self.history.m.append(self.m_tot if m_tot is None else m_tot)
     
     def Clear_history(self):
         self.history.clear()
