@@ -290,7 +290,7 @@ class Magnets:
             mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
         elif avg == 'square':
             mask = [[1, 0, 1], [0, 0, 0], [1, 0, 1]]
-        elif avg == 'hexagon':
+        elif avg == 'hexagon': # TODO: instead of a normal averaging mask, can also make a 'clockwiseness' graph
             mask = [[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]]
         elif avg == 'triangle':
             mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
@@ -304,6 +304,12 @@ class Magnets:
         angles_avg *= useless_angles
         if avg == 'triangle':
             angles_avg = angles_avg[::2,::2]
+        elif avg == 'hexagon':
+            angles_avg = angles_avg[::2,::2]
+            ix = np.arange(0, angles_avg.shape[1])
+            iy = np.arange(0, angles_avg.shape[0])
+            ixx, iyy = np.meshgrid(ix, iy)
+            angles_avg[(ixx + iyy) % 2 == 1] = np.nan # These are not the centers of hexagons, so dont draw these
         return angles_avg
 
     def Show_m(self, m=None, avg='point', show_energy=True):
