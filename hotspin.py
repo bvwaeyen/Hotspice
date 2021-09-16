@@ -1,4 +1,6 @@
 import math
+import ctypes
+ctypes.windll.shcore.SetProcessDpiAwareness(2) # This makes the matplotlib plots smooth on high DPI screens
 
 import matplotlib.pyplot as plt
 import numpy as np
