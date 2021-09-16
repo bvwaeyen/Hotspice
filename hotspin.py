@@ -157,8 +157,9 @@ class Magnets:
         for i in self.index:
             rrx = np.reshape(self.xx.flat[i] - self.xx, -1)
             rry = np.reshape(self.yy.flat[i] - self.yy, -1)
-            rr_inv = (rrx**2 + rry**2)**(-1/2)
-            np.place(rr_inv, rr_inv == Inf, 0.0)
+            rr_sq = rrx**2 + rry**2
+            np.place(rr_sq, rr_sq == 0.0, Inf)
+            rr_inv = rr_sq**(-1/2)
             rrx_u = rrx*rr_inv
             rry_u = rry*rr_inv
             self.Dipolar_interaction[i] = rr_inv**3 # Distance^-3 of magnet <i> to every other magnet
