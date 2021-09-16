@@ -217,6 +217,9 @@ class Magnets:
         self.history.T.append(self.T)
         self.history.m.append(self.m_tot)
     
+    def Clear_history(self):
+        self.history.clear()
+    
     def Autocorrelation_fast(self, max_distance):
         max_distance = round(max_distance)
         s = np.shape(self.xx)
@@ -262,3 +265,9 @@ class History:
     T: list = field(default_factory=list)
     t: list = field(default_factory=list)
     m: list = field(default_factory=list)
+
+    def clear(self):
+        self.E.clear()
+        self.T.clear()
+        self.t.clear()
+        self.m.clear()
