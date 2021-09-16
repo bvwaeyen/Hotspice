@@ -204,13 +204,17 @@ class Magnets:
             self.m_tot_y = np.mean(np.multiply(self.m, self.orientation[:,:,1]))
             self.m_tot = (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
     
-    def Run(self, N=1, save_history=1):
+    def Run(self, N=1, save_history=1, T=None):
         ''' Perform <N> self.Update() steps, which defaults to only 1 step.
             @param N [int] (1): the number of update steps to run.
             @param save_history [int] (1): the number of steps between two recorded 
-                entries in self.history. If 0, the history is not recorded. 
+                entries in self.history. If 0, the history is not recorded.
+            @param T [float] (self.T): the temperature at which to run the <N> steps.
+                If not specified, the current temperature is kept.
         '''
-        for i in range(N):
+        if T is not None:
+            self.T = T
+        for i in range(int(N)):
             self.Update()
             if save_history:
                 if i % save_history == 0:
