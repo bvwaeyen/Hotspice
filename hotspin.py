@@ -188,20 +188,23 @@ class Magnets:
     def Exchange_update(self):
         self.E_exchange = -self.Exchange_J*np.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='fill'), self.m)
 
-    def Update(self):
-        self.Energy()
-        self.barrier = self.E_b - self.E_int
-        self.rate = np.exp(self.barrier/self.T)
-        taus = np.random.exponential(scale=self.rate)
-        indexmin = np.argmin(taus, axis=None)
-        self.m.flat[indexmin] = -self.m.flat[indexmin]
-        self.t += taus.flat[indexmin]
-        if self.m_type == 'op':
-            self.m_tot = np.mean(self.m)
-        elif self.m_type == 'ip':
-            self.m_tot_x = np.mean(np.multiply(self.m, self.orientation[:,:,0]))
-            self.m_tot_y = np.mean(np.multiply(self.m, self.orientation[:,:,1]))
-            self.m_tot = (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
+    def Update(self, N=1, save_history=False):
+        for _ in range(N):
+            self.Energy()
+            self.barrier = self.E_b - self.E_int
+            self.rate = np.exp(self.barrier/self.T)
+            taus = np.random.exponential(scale=self.rate)
+            indexmin = np.argmin(taus, axis=None)
+            self.m.flat[indexmin] = -self.m.flat[indexmin]
+            self.t += taus.flat[indexmin]
+            if self.m_type == 'op':
+                self.m_tot = np.mean(self.m)
+            elif self.m_type == 'ip':
+                self.m_tot_x = np.mean(np.multiply(self.m, self.orientation[:,:,0]))
+                self.m_tot_y = np.mean(np.multiply(self.m, self.orientation[:,:,1]))
+                self.m_tot = (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
+            if save_history:
+                self.Save_history()
 
     def Minimize(self):
         self.Energy()
