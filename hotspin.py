@@ -1,6 +1,6 @@
-import math
 import ctypes
-ctypes.windll.shcore.SetProcessDpiAwareness(2) # This makes the matplotlib plots smooth on high DPI screens
+import math
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,6 +8,9 @@ import numpy as np
 from dataclasses import dataclass, field
 from numpy.core.numeric import Inf
 from scipy import signal
+
+
+ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
 
 
 class Magnets:
@@ -58,7 +61,7 @@ class Magnets:
         elif config == 'chess':
             self.m = ((self.xx + self.yy) % 2)*2 - 1
         else:
-            print('Warning: Config not recognized, defuaulting to "random".')
+            warnings.warn('Config not recognized, defaulting to "random".', stacklevel=2)
             self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
         self.m_tot = np.mean(self.m)
         self.mask = np.ones_like(self.m) # Necessary if you would need the 'mask' later on
@@ -74,7 +77,7 @@ class Magnets:
         elif config == 'AFM_squareASI':
             self.m = ((self.xx - self.yy)//2 % 2)*2 - 1
         else:
-            print('Warning: Config not recognized, defuaulting to "random".')
+            warnings.warn('Config not recognized, defaulting to "random".', stacklevel=2)
             self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
         self.mask = np.zeros_like(self.m)
         self.mask[(self.xx + self.yy) % 2 == 1] = 1
@@ -89,11 +92,11 @@ class Magnets:
         # Same as Initialize_m, but a lot of the magnets are removed to get a kagome-like pattern
         if config == 'uniform':
             self.m = np.ones(np.shape(self.xx))
-            self.m[(ixx - iyy) %4 == 1] = -1
+            self.m[(ixx - iyy) % 4 == 1] = -1
         elif config == 'random':
             self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1 
         else:
-            print('Warning: Config not recognized, defuaulting to "random".')
+            warnings.warn('Config not recognized, defaulting to "random".', stacklevel=2)
             self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
             
         self.mask = np.zeros_like(self.m)
