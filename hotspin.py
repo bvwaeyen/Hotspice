@@ -202,8 +202,8 @@ class Magnets:
         """ Performs a single magnetization switch. """
         self.Energy()
         self.barrier = self.E_b - self.E_int
-        self.rate = np.exp(self.barrier/self.T)
-        taus = np.random.exponential(scale=self.rate)
+        self.rate = np.exp(self.barrier/self.T) # TODO: this can throw a divide by zero warning
+        taus = np.random.exponential(scale=self.rate) # TODO: this can throw an overflow warning
         indexmin = np.argmin(taus, axis=None)
         self.m.flat[indexmin] = -self.m.flat[indexmin]
         self.t += taus.flat[indexmin]
@@ -280,7 +280,7 @@ class Magnets:
             if distbin <= max_distance:
                 corr_binned[distbin] += self.correlation.flat[i]*self.corr_mask.flat[i]
                 counts[distbin] += self.corr_mask.flat[i]
-        corr_binned = np.divide(corr_binned, counts)
+        corr_binned = np.divide(corr_binned, counts) # TODO: this can throw a divide by zero warning
         corr_length = np.sum(np.multiply(abs(corr_binned), distances))
         return corr_binned, distances, corr_length
     
