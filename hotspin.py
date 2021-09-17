@@ -120,12 +120,12 @@ class Magnets:
             ix = np.arange(0, self.xx.shape[1])
             iy = np.arange(0, self.yy.shape[0])
             ixx, iyy = np.meshgrid(ix, iy)
-            self.orientation[:,:,0] = np.cos(np.pi/2)
-            self.orientation[:,:,1] = np.sin(np.pi/2)
-            self.orientation[np.logical_and((ixx - iyy) % 4 == 1, ixx % 2 == 1),0] = np.cos(-np.pi/6)
-            self.orientation[np.logical_and((ixx - iyy) % 4 == 1, ixx % 2 == 1),1] = np.sin(-np.pi/6)
-            self.orientation[np.logical_and((ixx + iyy) % 4 == 3, ixx % 2 == 1),0] = np.cos(np.pi/6)
-            self.orientation[np.logical_and((ixx + iyy) % 4 == 3, ixx % 2 == 1),1] = np.sin(np.pi/6)
+            self.orientation[:,:,0] = np.cos(angle + np.pi/2)
+            self.orientation[:,:,1] = np.sin(angle + np.pi/2)
+            self.orientation[np.logical_and((ixx - iyy) % 4 == 1, ixx % 2 == 1),0] = np.cos(angle - np.pi/6)
+            self.orientation[np.logical_and((ixx - iyy) % 4 == 1, ixx % 2 == 1),1] = np.sin(angle - np.pi/6)
+            self.orientation[np.logical_and((ixx + iyy) % 4 == 3, ixx % 2 == 1),0] = np.cos(angle + np.pi/6)
+            self.orientation[np.logical_and((ixx + iyy) % 4 == 3, ixx % 2 == 1),1] = np.sin(angle + np.pi/6)
             self.orientation[self.mask == 0,0] = 0
             self.orientation[self.mask == 0,1] = 0
     

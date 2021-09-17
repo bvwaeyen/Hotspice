@@ -147,4 +147,4 @@ if __name__ == "__main__":
     # run_a_bit(mm, N=10e3, T=0.1)
     # animate_quenching(mm, animate=3, speed=50)
     # autocorrelation_dist_dependence(mm)
-    autocorrelation_temp_dependence(mm, N=31) # Since kagome is quite sparse behind-the-scenes, it is doubtable whether the autocorrelation has a significant meaning
+    # autocorrelation_temp_dependence(mm, N=31) # Since kagome is quite sparse behind-the-scenes, it is doubtable whether the autocorrelation has a significant meaning
