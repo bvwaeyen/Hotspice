@@ -21,7 +21,7 @@ xx, yy = np.meshgrid(x, y)
 ## Initialize main Magnets object
 mm = hotspin.Magnets(xx, yy, T, E_b, 'square', 'ip')
 mm.Initialize_m_kagome('uniform')
-mm.Initialize_ip('kagome')
+mm.Initialize_ip('kagome', angle=np.pi/2)
 
 ## Choose which energy components are taken into account
 mm.Dipolar_energy_init()
@@ -97,8 +97,8 @@ def autocorrelation_dist_dependence(mm):
     plt.show()
 
 
-def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=0.3):
-    ''' Shows how the correlation distance depends on the temperature. 
+def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=1, T_max=1.3):
+    ''' Shows how the correlation distance depends on the temperature.
         @param N [int] (31): Number of temperature steps between <T_min> and <T_max>.
         @param M [int] (50): How many times to do <L> switches at each temperature,
             which are then averaged to get the correlation length at each temperature.
@@ -147,4 +147,4 @@ if __name__ == "__main__":
     # run_a_bit(mm, N=10e3, T=0.1)
     # animate_quenching(mm, animate=3, speed=50)
     # autocorrelation_dist_dependence(mm)
-    autocorrelation_temp_dependence(mm, N=31) # Since kagome is quite sparse behind-the-scenes, it is doubtable whether the autocorrelation has a significant meaning
+    # autocorrelation_temp_dependence(mm, N=31) # Since kagome is quite sparse behind-the-scenes, it is doubtable whether the autocorrelation has a significant meaning
