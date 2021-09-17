@@ -365,7 +365,7 @@ class Magnets:
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
             im1 = ax1.imshow(self.Get_magAngles(m=m, avg=avg), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
-            ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % avg if avg != 'point' else ''))
+            ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % avg if avg != 'point' else ''), font={"size":"10"})
             plt.colorbar(im1)
             ax2 = fig.add_subplot(1, num_plots, 2)
             ax2.set_aspect('equal')
