@@ -58,6 +58,7 @@ class Magnets:
         elif config == 'chess':
             self.m = ((self.xx + self.yy) % 2)*2 - 1
         else:
+            print('Warning: Config not recognized, defuaulting to "random".')
             self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
         self.m_tot = np.mean(self.m)
         self.mask = np.ones_like(self.m) # Necessary if you would need the 'mask' later on
@@ -73,6 +74,7 @@ class Magnets:
         elif config == 'AFM_squareASI':
             self.m = ((self.xx - self.yy)//2 % 2)*2 - 1
         else:
+            print('Warning: Config not recognized, defuaulting to "random".')
             self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
         self.mask = np.zeros_like(self.m)
         self.mask[(self.xx + self.yy) % 2 == 1] = 1
@@ -91,6 +93,7 @@ class Magnets:
         elif config == 'random':
             self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1 
         else:
+            print('Warning: Config not recognized, defuaulting to "random".')
             self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
             
         self.mask = np.zeros_like(self.m)
