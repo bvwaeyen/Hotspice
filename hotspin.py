@@ -93,6 +93,9 @@ class Magnets:
         if config == 'uniform':
             self.m = np.ones(np.shape(self.xx))
             self.m[(ixx - iyy) % 4 == 1] = -1
+        elif config == 'AFM_triangleASI':
+            self.m = np.ones(np.shape(self.xx))
+            self.m[(ixx + iyy) % 4 == 3] = -1
         elif config == 'random':
             self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1 
         else:
