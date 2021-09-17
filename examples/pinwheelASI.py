@@ -1,4 +1,4 @@
-import math
+# import math
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,7 +6,7 @@ import numpy as np
 from context import hotspin
 from matplotlib import animation
 from numpy.core.numeric import Inf
-from scipy import signal
+# from scipy import signal
 
 
 ## Parameters, meshgrid
@@ -37,11 +37,10 @@ def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
         mm.Show_m(avg=True)
 
 
-def curieTemperature(mm, N=20000):
+def curieTemperature(mm, N=5000):
     ''' A naive attempt at determining the Curie temperature, by looking at the average magnetization.
-        @param N [int] (20000): The number of simulated switches at each individual temperature
+        @param N [int] (5000): The number of simulated switches at each individual temperature
     '''
-    ## Determine the Curie temperature
     mm.Clear_history()
     mm.Initialize_m_square('chess') # Re-initialize mm, because otherwise domains cancel out for m_tot
     for T in np.linspace(0, 1, 100):
@@ -89,7 +88,7 @@ def animate_quenching(mm, animate=1, speed=50, n_low=20000, n_high=2000, T_low=0
         return h, # This has to be an iterable!
 
     # Assign the animation to a variable, to prevent it from getting garbage-collected
-    anim1 = animation.FuncAnimation(fig, animate_quenching_update, 
+    anim = animation.FuncAnimation(fig, animate_quenching_update, 
                                     frames=(n_low + n_high)//speed, interval=speed/animate, 
                                     blit=False, repeat=True)
     plt.show()
@@ -135,7 +134,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
         h.set_array(mm.Get_magAngles(avg='cross'))
         return h, p
 
-    anim2 = animation.FuncAnimation(fig, animate_temp_rise_update, 
+    anim = animation.FuncAnimation(fig, animate_temp_rise_update, 
                                     frames=int(T_max/T_step//speed)+1, interval=speed/2/animate, 
                                     blit=False, repeat=False, init_func=lambda:0) # Provide empty init_func: otherwise the update func is used as init and is thus called twice for the 0th frame
     plt.show()
@@ -170,7 +169,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=0.4)
             correlation length.
     '''
     # Calculate the correlation distance as a function of temperature
-    mm.Initialize_m('random')
+    mm.Initialize_m_square('random')
     TT = np.linspace(T_min, T_max, N)
     T_step = TT[1] - TT[0]
     corr_length = np.empty((N, M))
@@ -179,7 +178,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=0.4)
     for j, T in enumerate(TT):
         print('Temperature step %d/%d (T = %.2f) ...' % (j+1, N, T))
         mm.T = T
-        for i in range(niter[j]): # Update for a while to ensure that the different temperatures are not very correlated
+        for _ in range(niter[j]): # Update for a while to ensure that the different temperatures are not very correlated
             mm.Update()
         for k in range(M):
             corr, d, corr_length[j,k] = mm.Autocorrelation_fast(20)
@@ -200,7 +199,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=0.4)
     ax2 = fig.add_subplot(122)
     ax2.plot(TT, corr_ll)
     ax2.set_xlabel('Temperature [a.u.]')
-    ax2.set_ylabel('$\langle$Correlation length$\rangle$ [a.u.]')
+    ax2.set_ylabel(r'$\langle$Correlation length$\rangle$ [a.u.]')
     plt.gcf().tight_layout()
     plt.show()
 
