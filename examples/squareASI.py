@@ -44,7 +44,7 @@ def neelTemperature(mm, N=200000):
     for T in np.linspace(0, 2, N):
         mm.T = T
         mm.Update()
-        AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m))
+        AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m)/2)
         mm.Save_history()
     mm.Show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
 
@@ -70,7 +70,6 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
     # This is the function that gets called each frame
     def animate_quenching_update(i):
         currStep = i*speed
-        prev_T = mm.T
         for j in range(currStep, currStep + speed):
             exponent = np.log(T_high/T_low)
             if j % (2*n_sweep) > n_sweep: # Then cool down
@@ -92,7 +91,8 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
 def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
     """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
-        temperature too fast, as otherwise the phase transitions will lag behind anyway.
+        temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
+        line indicates the AFM-ness of a perfectly random state.
         @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
@@ -110,8 +110,9 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
     p,  = ax2.plot(mm.history.T, mm.history.m)
+    ax2.axhline(3/8, linestyle=':', linewidth=1, color='grey')
     ax2.set_xlim(0, T_max)
-    ax2.set_ylim(0, 2)
+    ax2.set_ylim(0, 1)
     ax2.set_xlabel('Temperature')
     ax2.set_ylabel('Average AFM-ness')
 
@@ -122,7 +123,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
             mm.T = j*T_step
             mm.Update()
             mm.Save_history()
-            AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m))
+            AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m)/2)
         p.set_data(mm.history.T, AFM_ness)
         h.set_array(mm.Get_magAngles(avg='cross'))
         return h, p
