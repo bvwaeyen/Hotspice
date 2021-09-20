@@ -21,7 +21,7 @@ class Magnets:
              2) config:  The placement of magnets on the grid can be
                     if m_type is 'op': 'full', 'chess',
                     if m_type is 'ip': 'square', 'pinwheel', 'kagome' or 'triangle'.
-             3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'random', 'chess' or 'AFM'.
+             3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
                 If you want to adjust the specifics of these energies, than call <energy>_init(<parameters>) manually.
         '''
@@ -94,11 +94,10 @@ class Magnets:
             self.m = np.ones(np.shape(self.xx)) # For full, chess, square, pinwheel: this is already ok
             if self.config in ['kagome', 'triangle']:
                 self.m[(self.ixx - self.iyy) % 4 == 1] = -1
-        elif pattern == 'chess':
-            assert self.config == 'full', "Can only use 'chess' pattern for 'full' out-of-plane magnetization." # TODO: maybe implement this for in-plane somehow
-            self.m = ((self.xx + self.yy) % 2)*2 - 1
         elif pattern == 'AFM':
-            if self.config in ['square', 'pinwheel']:
+            if self.config in ['full']:
+                self.m = ((self.xx + self.yy) % 2)*2 - 1
+            elif self.config in ['chess', 'square', 'pinwheel']:
                 self.m = ((self.xx - self.yy)//2 % 2)*2 - 1
             elif self.config in ['kagome', 'triangle']:
                 self.m = np.ones(np.shape(self.xx))
