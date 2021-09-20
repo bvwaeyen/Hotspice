@@ -1,3 +1,5 @@
+""" Creates an out-of-plane (op) spin-ice, as a means of testing the out-of-plane functionality of hotspin.Magnets(). """
+
 # import math
 
 import matplotlib.pyplot as plt
@@ -19,7 +21,7 @@ y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
 
 ## Initialize main Magnets object
-mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'square', 'AFM', energies=['dipolar'])
+mm = hotspin.Magnets(xx, yy, T, E_b, 'op', 'full', 'uniform', energies=['dipolar']) # config='chess' is just the same but with different boundaries
 
 
 def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
@@ -38,13 +40,13 @@ def neelTemperature(mm, N=200000):
     '''
     mm.Clear_history()
     mm.Initialize_m('AFM')
-    AFM_mask = [[1, 0, -1], [0, 0, 0], [-1, 0, 1]]
+    AFM_mask = [[1, -1], [-1, 1]]
     AFM_ness = []
 
     for T in np.linspace(0, 2, N):
         mm.T = T
         mm.Update()
-        AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m)/2)
+        AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m)/4)
         mm.Save_history()
     mm.Show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
 
@@ -62,8 +64,10 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(5, 4))
     ax1 = fig.add_subplot(111)
-    h = ax1.imshow(mm.Get_magAngles(avg='cross'), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
-    ax1.set_title(r'Averaged magnetization angle')
+    mask = mm._get_mask()
+    h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill'),
+                             cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask))
+    ax1.set_title(r'Averaged magnetization $\vert m \vert$')
     c1 = plt.colorbar(h)
     fig.suptitle('Temperature %.3f [a.u.]' % mm.T)
 
@@ -77,7 +81,7 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
             else: # Then heat up
                 mm.T = T_low*np.exp(exponent*((j%n_sweep)/n_sweep))
             mm.Update()
-        h.set_array(mm.Get_magAngles(avg='cross'))
+        h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill'))
         fig.suptitle('Temperature %.3f' % mm.T)
         return h, # This has to be an iterable!
 
@@ -97,15 +101,17 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
     """
-    mm.Initialize_m('AFM')
+    mm.Initialize_m('uniform')
     mm.Clear_history()
-    AFM_mask = [[1, 0, -1], [0, 0, 0], [-1, 0, 1]]
+    AFM_mask = [[1, -1], [-1, 1]]
     AFM_ness = []
 
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(mm.Get_magAngles(avg='cross'), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
+    mask = mm._get_mask()
+    h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill'),
+                             cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask))
     ax1.set_title(r'Averaged magnetization angle')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -123,9 +129,9 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
             mm.T = j*T_step
             mm.Update()
             mm.Save_history()
-            AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m)/2)
+            AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m)/4)
         p.set_data(mm.history.T, AFM_ness)
-        h.set_array(mm.Get_magAngles(avg='cross'))
+        h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill'))
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 
@@ -154,7 +160,7 @@ def autocorrelation_dist_dependence(mm):
     plt.show()
 
 
-def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=1):
+def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.9, T_max=1.2):
     ''' Shows how the correlation distance depends on the temperature. 
         @param N [int] (31): Number of temperature steps between <T_min> and <T_max>.
         @param M [int] (50): How many times to do <L> switches at each temperature,
@@ -201,8 +207,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=1):
 if __name__ == "__main__":
     print('Initialization energy:', mm.Energy())
 
-    # run_a_bit(mm, N=4e3, T=100, show_m=False)
-    # run_a_bit(mm, N=20e3, T=0.2)
+    # run_a_bit(mm, N=10e3, T=1)
     # neelTemperature(mm)
     # animate_quenching(mm, animate=3, speed=50)
     # animate_temp_rise(mm, animate=3, speed=1000)

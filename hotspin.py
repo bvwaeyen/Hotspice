@@ -33,6 +33,7 @@ class Magnets:
         self.E_b = E_b
         self.m_type = m_type
 
+        self.index = range(self.xx.size)
         ix = np.arange(0, self.xx.shape[1])
         iy = np.arange(0, self.yy.shape[0])
         self.ixx, self.iyy = np.meshgrid(ix, iy)
@@ -46,7 +47,7 @@ class Magnets:
                 self.config = 'chess'
             else:
                 raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'op'.")
-        if m_type == 'ip':
+        elif m_type == 'ip':
             if config in ['square', 'squareASI']:
                 self.config = 'square'
             elif config in ['pinwheel', 'pinwheelASI']:
@@ -81,7 +82,6 @@ class Magnets:
             self.Exchange_energy_init()
         self.Energy()
 
-        self.index = range(self.xx.size)
         self.history = History()
 
 
@@ -177,8 +177,6 @@ class Magnets:
     def Dipolar_energy_init(self, strength=1):
         self.Dipolar_interaction = np.empty((self.xx.size, self.xx.size))
         self.E_dipolar = np.empty_like(self.xx)
-        mx2 = np.reshape(self.orientation[:,:,0], -1) # Vector: the mx of all the other magnets
-        my2 = np.reshape(self.orientation[:,:,1], -1) # Vector: the my of all the other magnets
         for i in self.index:
             rrx = np.reshape(self.xx.flat[i] - self.xx, -1)
             rry = np.reshape(self.yy.flat[i] - self.yy, -1)
@@ -189,6 +187,8 @@ class Magnets:
             rry_u = rry*rr_inv
             self.Dipolar_interaction[i] = rr_inv**3 # Distance^-3 of magnet <i> to every other magnet
             if self.m_type == 'ip':
+                mx2 = np.reshape(self.orientation[:,:,0], -1) # Vector: the mx of all the other magnets
+                my2 = np.reshape(self.orientation[:,:,1], -1) # Vector: the my of all the other magnets
                 mx1 = mx2[i] # Scalar: the mx of this magnet
                 my1 = my2[i] # Scalar: the my of this magnet
                 self.Dipolar_interaction[i] = mx1*mx2 + my1*my2
@@ -223,7 +223,7 @@ class Magnets:
         """ Performs a single magnetization switch. """
         self.Energy()
         self.barrier = self.E_b - self.E_int
-        self.rate = np.exp(self.barrier/self.T) # TODO: this can throw a divide by zero warning
+        self.rate = np.exp(self.barrier/self.T) # TODO: this can throw a divide by zero or overflow warning
         taus = np.random.exponential(scale=self.rate) # TODO: this can throw an overflow warning
         indexmin = np.argmin(taus, axis=None)
         self.m.flat[indexmin] = -self.m.flat[indexmin]
@@ -306,10 +306,13 @@ class Magnets:
         return corr_binned, distances, corr_length
 
     # Below here are some graphical functions (plot magnetization profile etc.)
-    def _get_mask(self, avg):
+    def _get_mask(self, avg=None):
         ''' Returns the raw averaging mask as a 2D array. Note that this obviously does not include
             any removal of excess zero-rows etc., that is the task of self.Get_magAngles. '''
+        if avg is None:
+            avg = self._get_appropriate_avg()
         assert avg in ['point', 'cross', 'square', 'hexagon', 'triangle'], "Unsupported averaging mask: %s" % avg
+
         if avg == 'point': # shape .
             mask = [[1]]
         elif avg == 'cross': # shape ⁛
@@ -329,6 +332,18 @@ class Magnets:
                     [1, 0, 1], 
                     [0, 1, 0]]
         return mask
+    
+    def _get_appropriate_avg(self):
+        ''' Auto-detect the most appropriate averaging mask based on self.config '''
+        if self.config in ['full']:
+            avg = 'point'
+        elif self.config in ['chess', 'square', 'pinwheel']:
+            avg = 'cross'
+        elif self.config in ['kagome']:
+            avg = 'hexagon'
+        elif self.config in ['triangle']:
+            avg = 'triangle'
+        return avg
 
     def Get_magAngles(self, m=None, avg='point'):
         '''
@@ -384,14 +399,7 @@ class Magnets:
         if m is None: m = self.m
         
         if average: # Auto-detect the most appropriate averaging mask based on self.config
-            if self.config in ['full']:
-                avg = 'point'
-            elif self.config in ['chess', 'square', 'pinwheel']:
-                avg = 'cross'
-            elif self.config in ['kagome']:
-                avg = 'hexagon'
-            elif self.config in ['triangle']:
-                avg = 'triangle'
+            avg = self._get_appropriate_avg()
         else:
             avg = 'point'
             
@@ -399,8 +407,9 @@ class Magnets:
             num_plots = 2 if show_energy else 1
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
-            im1 = ax1.imshow(signal.convolve2d(self.m, self._get_mask(avg=avg), mode='valid', boundary='fill'),
-                             cmap='gray', origin='lower')
+            mask = self._get_mask(avg=avg)
+            im1 = ax1.imshow(signal.convolve2d(self.m, mask, mode='valid', boundary='fill'),
+                             cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask))
             ax1.set_title(r'Averaged magnetization $\vert m \vert$')
             plt.colorbar(im1)
             if show_energy:
