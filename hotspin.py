@@ -201,10 +201,15 @@ class Magnets:
         self.E_dipolar = np.multiply(self.m, np.reshape(temp, self.xx.shape)) # This multiplies each row (which is now only 1 element long due to the sum from the previous line of code) with m1
 
     def Exchange_energy_init(self, J):
-        if self.m_type == 'op': # Mask for nearest neighbors
+        # self.Exchange_interaction is the mask for nearest neighbors
+        if self.m_type == 'op': 
             self.Exchange_interaction = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
-        elif self.m_type == 'ip': # TODO: this only works for square and pinwheel ASI, maybe include other geometries too
-            self.Exchange_interaction = np.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
+        elif self.m_type == 'ip':
+            if self.config in ['square', 'pinwheel']:
+                self.Exchange_interaction = np.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
+            elif self.config in ['kagome', 'triangle']:
+                self.Exchange_interaction = np.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
+
         self.Exchange_J = J
         self.Exchange_energy_update()
 
