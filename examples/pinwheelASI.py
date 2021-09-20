@@ -18,10 +18,8 @@ x = np.linspace(0, nx - 1, nx)
 y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
 
-## Initialize main Magnets object
-mm = hotspin.Magnets(xx, yy, T, E_b, 'square', 'ip')
-mm.Initialize_ip('square', np.pi/4)
-mm.Initialize_m_square('chess') # For pinwheel, this is a uniform magnetization in positive y-direction
+## Initialize main Magnets object: pinwheel with uniform magnetization in +y direction
+mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'pinwheel', 'uniform')
 
 ## Choose which energy components are taken into account
 mm.Dipolar_energy_init()
@@ -42,7 +40,7 @@ def curieTemperature(mm, N=5000):
         @param N [int] (5000): The number of simulated switches at each individual temperature
     '''
     mm.Clear_history()
-    mm.Initialize_m_square('chess') # Re-initialize mm, because otherwise domains cancel out for m_tot
+    mm.Initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_tot
     for T in np.linspace(0, 1, 100):
         total_m = np.zeros_like(mm.m)
         total_energy = 0
@@ -107,7 +105,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
     """
-    mm.Initialize_m_square('chess')
+    mm.Initialize_m('uniform')
     mm.Clear_history()
 
     # Set up the figure, the axis, and the plot element we want to animate
@@ -169,7 +167,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=0.4)
             correlation length.
     '''
     # Calculate the correlation distance as a function of temperature
-    mm.Initialize_m_square('random')
+    mm.Initialize_m('random')
     TT = np.linspace(T_min, T_max, N)
     T_step = TT[1] - TT[0]
     corr_length = np.empty((N, M))

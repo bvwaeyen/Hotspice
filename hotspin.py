@@ -14,13 +14,12 @@ ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes
 
 
 class Magnets:
-    def __init__(self, xx, yy, T, E_b, config='full', m_type='op'):
+    def __init__(self, xx, yy, T, E_b, m_type='ip', config='square', pattern='random'): # TODO: allow to specify the energy components here as well
         '''
             The initial configuration of a Magnets geometry consists of 3 parts:
-             1) Magnets can be in-plane or out-of-plane: m_type='ip' or m_type='op', respectively.
-             2) Each spot on the grid can be occupied by a magnet (config='full'), or only a chess-like
-                pattern can be occupied on the grid (config='square').
-             3) The initial magnetization direction (e.g. up/down) can be 'uniform', 'random', or 'chess'. 
+             1) m_type:  Magnets can be in-plane or out-of-plane: 'ip' or 'op', respectively.
+             2) config:  The placement of magnets on the grid can be 'full', 'square', 'pinwheel', 'kagome' or 'triangle'.
+             3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'random', 'chess' or 'AFM'.
         '''
         assert np.shape(xx) == np.shape(yy), "Error: xx and yy should have the same shape. Please obtain xx and yy using np.meshgrid(x,y) to avoid this issue."
         self.xx = xx
@@ -29,86 +28,91 @@ class Magnets:
         self.t = 0.
         self.E_b = E_b
         self.m_type = m_type
-        if m_type == 'op': # Out of plane
-            if config == 'full':
-                self.Initialize_m('random')
-            elif config == 'square':
-                self.Initialize_m_square('random')
-            else:
-                print('Bad config')
-        elif m_type == 'ip': # In plane
-            if config == 'square':
-                self.Initialize_m_square('random')
-                self.Initialize_ip('square')
-            elif config == 'kagome':
-                self.Initialize_m_kagome('random')
-                self.Initialize_ip('kagome')
-            else:
-                print('Bad config')
+
+        ix = np.arange(0, self.xx.shape[1])
+        iy = np.arange(0, self.yy.shape[0])
+        self.ixx, self.iyy = np.meshgrid(ix, iy)
+
+        # config disambiguation
+        # TODO: could use an Enum for the config, though this might make for a more difficult user experience
+        if config in ['full']:
+            assert m_type == 'op', f"Can not use config '{config}' if m_type is not 'op'."
+            self.config = 'full'
+        elif config in ['square', 'squareASI']:
+            self.config = 'square'
+        elif config in ['pinwheel', 'pinwheelASI']:
+            assert m_type == 'ip', f"Can not use config '{config}' if m_type is not 'ip'."
+            self.config = 'pinwheel'
+        elif config in ['kagome', 'kagomeASI']:
+            assert m_type == 'ip', f"Can not use config '{config}' if m_type is not 'ip'."
+            self.config = 'kagome'
+        elif config in ['triangle', 'triangleASI']:
+            assert m_type == 'ip', f"Can not use config '{config}' if m_type is not 'ip'."
+            self.config = 'triangle'
         else:
-            print('Bad m_type')
-        self.m_tot = np.mean(self.m)
+            raise AssertionError(f"Invalid argument for parameter 'config': '{config}'.")
+
+        # Initialize self.m and the correct self.mask
+        self.Initialize_m(pattern)
+
+        # Set the orientation of the islands corresponding to config
+        if m_type == 'ip': 
+            if self.config == 'square':
+                self._Initialize_ip('square', 0)
+            elif self.config == 'pinwheel':
+                self._Initialize_ip('square', np.pi/4)
+            elif self.config == 'kagome':
+                self._Initialize_ip('kagome', 0)
+            elif self.config == 'triangle':
+                self._Initialize_ip('kagome', np.pi/2)
+
         self.E_int = np.zeros_like(xx)
         self.E_tot = 0
         self.index = range(self.xx.size)
         self.history = History()
 
-    def Initialize_m(self, config):
-        if config == 'uniform':
-            self.m = np.ones(np.shape(self.xx))
-        elif config == 'random':
-            self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1 # Yields random -1 or 1
-        elif config == 'chess':
-            self.m = ((self.xx + self.yy) % 2)*2 - 1
-        else:
-            warnings.warn('Config not recognized, defaulting to "random".', stacklevel=2)
-            self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
-        self.m_tot = np.mean(self.m)
-        self.mask = np.ones_like(self.m) # Necessary if you would need the 'mask' later on
 
-    def Initialize_m_square(self, config):
-        # Same as Initialize_m, but half of the magnets are removed to get a chess-like pattern
-        if config == 'uniform':
-            self.m = np.ones(np.shape(self.xx))
-        elif config == 'random':
-            self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
-        elif config == 'chess': # TODO: Is this not exactly the same as 'uniform', since we will apply a mask at the end of this function anyway?
+    def Initialize_m(self, pattern):
+        ''' Pattern can be any of "random", "uniform", "chess", "AFM".
+            This function should detect which kind of geometry this ASI is without
+            the user specifying it.
+        '''
+        if pattern == 'uniform':
+            self.m = np.ones(np.shape(self.xx)) # For full, square, pinwheel: this is already ok
+            if self.config in ['kagome', 'triangle']:
+                self.m[(self.ixx - self.iyy) % 4 == 1] = -1
+        elif pattern == 'chess':
+            assert self.config == 'full', "Can only use 'chess' pattern for 'full' out-of-plane magnetization." # TODO: maybe implement this for in-plane somehow
             self.m = ((self.xx + self.yy) % 2)*2 - 1
-        elif config == 'AFM_squareASI':
-            self.m = ((self.xx - self.yy)//2 % 2)*2 - 1
+        elif pattern == 'AFM':
+            if self.config in ['square', 'pinwheel']:
+                self.m = ((self.xx - self.yy)//2 % 2)*2 - 1
+            elif self.config in ['kagome', 'triangle']:
+                self.m = np.ones(np.shape(self.xx))
+                self.m[(self.ixx + self.iyy) % 4 == 3] = -1
         else:
-            warnings.warn('Config not recognized, defaulting to "random".', stacklevel=2)
-            self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
-        self.mask = np.zeros_like(self.m)
-        self.mask[(self.xx + self.yy) % 2 == 1] = 1
+            self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1 # Yields random -1 or 1
+            if pattern != 'random': warnings.warn('Config not recognized, defaulting to "random".', stacklevel=2)
+
+        if self.config == 'full':
+            self.mask = np.ones_like(self.m)
+        elif self.config in ['square', 'pinwheel']:
+            self.mask = np.zeros_like(self.m)
+            self.mask[(self.xx + self.yy) % 2 == 1] = 1
+        elif self.config in ['kagome', 'triangle']:
+            self.mask = np.zeros_like(self.m)
+            self.mask[(self.ixx + self.iyy) % 4 == 1] = 1 # One bunch of diagonals \
+            self.mask[(self.ixx - self.iyy) % 4 == 3] = 1 # Other bunch of diagonals /
+
         self.m = np.multiply(self.m, self.mask)
         self.m_tot = np.mean(self.m)
-        
-    def Initialize_m_kagome(self, config):
-        ix = np.arange(0, self.xx.shape[1])
-        iy = np.arange(0, self.yy.shape[0])
-        ixx, iyy = np.meshgrid(ix, iy)
-        
-        # Same as Initialize_m, but a lot of the magnets are removed to get a kagome-like pattern
-        if config == 'uniform':
-            self.m = np.ones(np.shape(self.xx))
-            self.m[(ixx - iyy) % 4 == 1] = -1
-        elif config == 'AFM_triangleASI':
-            self.m = np.ones(np.shape(self.xx))
-            self.m[(ixx + iyy) % 4 == 3] = -1
-        elif config == 'random':
-            self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1 
-        else:
-            warnings.warn('Config not recognized, defaulting to "random".', stacklevel=2)
-            self.m = np.random.randint(0, 2, size=np.shape(self.xx))*2 - 1
             
-        self.mask = np.zeros_like(self.m)
-        self.mask[(ixx + iyy) % 4 == 1] = 1 # One bunch of diagonals \
-        self.mask[(ixx - iyy) % 4 == 3] = 1 # Other bunch of diagonals /
-        self.m = np.multiply(self.m, self.mask)
-        self.m_tot = np.mean(self.m)
       
-    def Initialize_ip(self, config, angle=0.):
+    def _Initialize_ip(self, config, angle=0.):
+        ''' This function should only be called by the Magnets() class itself, since
+            it initializes the angles of all the spins, which is something the user should not
+            adjust themselves.
+        '''
         # This sets the angle of all the magnets (this is of course only applicable in the in-plane case)
         assert self.m_type == 'ip', "Error: can not Initialize_ip() if m_type != 'ip'."
         self.orientation = np.zeros(np.shape(self.m) + (2,))
@@ -120,15 +124,12 @@ class Magnets:
             self.orientation[self.mask == 0,0] = 0
             self.orientation[self.mask == 0,1] = 0
         elif config == 'kagome':
-            ix = np.arange(0, self.xx.shape[1])
-            iy = np.arange(0, self.yy.shape[0])
-            ixx, iyy = np.meshgrid(ix, iy)
             self.orientation[:,:,0] = np.cos(angle + np.pi/2)
             self.orientation[:,:,1] = np.sin(angle + np.pi/2)
-            self.orientation[np.logical_and((ixx - iyy) % 4 == 1, ixx % 2 == 1),0] = np.cos(angle - np.pi/6)
-            self.orientation[np.logical_and((ixx - iyy) % 4 == 1, ixx % 2 == 1),1] = np.sin(angle - np.pi/6)
-            self.orientation[np.logical_and((ixx + iyy) % 4 == 3, ixx % 2 == 1),0] = np.cos(angle + np.pi/6)
-            self.orientation[np.logical_and((ixx + iyy) % 4 == 3, ixx % 2 == 1),1] = np.sin(angle + np.pi/6)
+            self.orientation[np.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),0] = np.cos(angle - np.pi/6)
+            self.orientation[np.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),1] = np.sin(angle - np.pi/6)
+            self.orientation[np.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),0] = np.cos(angle + np.pi/6)
+            self.orientation[np.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),1] = np.sin(angle + np.pi/6)
             self.orientation[self.mask == 0,0] = 0
             self.orientation[self.mask == 0,1] = 0
     
@@ -193,7 +194,7 @@ class Magnets:
     def Exchange_init(self, J):
         if self.m_type == 'op': # Mask for nearest neighbors
             self.Exchange_interaction = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
-        elif self.m_type == 'ip':
+        elif self.m_type == 'ip': # TODO: this only works for square and pinwheel ASI, maybe include other geometries too
             self.Exchange_interaction = np.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
         self.Exchange_J = J
         self.Exchange_update()
@@ -332,7 +333,7 @@ class Magnets:
             angles_avg = angles_avg[::2,::2]
             ix = np.arange(0, angles_avg.shape[1])
             iy = np.arange(0, angles_avg.shape[0])
-            ixx, iyy = np.meshgrid(ix, iy)
+            ixx, iyy = np.meshgrid(ix, iy) # DO NOT REMOVE THIS, THIS IS NOT THE SAME AS self.ixx, self.iyy!
             angles_avg[(ixx + iyy) % 2 == 1] = np.nan # These are not the centers of hexagons, so dont draw these
         return angles_avg
 

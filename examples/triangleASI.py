@@ -19,9 +19,7 @@ y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
 
 ## Initialize main Magnets object
-mm = hotspin.Magnets(xx, yy, T, E_b, 'square', 'ip')
-mm.Initialize_m_kagome('AFM_triangleASI')
-mm.Initialize_ip('kagome', angle=np.pi/2)
+mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'triangle', 'AFM')
 
 ## Choose which energy components are taken into account
 mm.Dipolar_energy_init()
@@ -45,7 +43,7 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
         @param speed [int] (20): How many switches are simulated between each frame.
         @param n_sweep [int] (20000): The number of switches between the temperature extrema.
     """
-    mm.Initialize_m_kagome('AFM_triangleASI')
+    mm.Initialize_m('AFM')
 
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(5, 4))
@@ -106,7 +104,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=1, T_max=1.3):
             correlation length.
     '''
     # Calculate the correlation distance as a function of temperature
-    mm.Initialize_m_kagome('AFM_triangleASI')
+    mm.Initialize_m('AFM')
     TT = np.linspace(T_min, T_max, N)
     T_step = TT[1] - TT[0]
     corr_length = np.empty((N, M))

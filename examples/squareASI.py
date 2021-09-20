@@ -19,9 +19,7 @@ y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
 
 ## Initialize main Magnets object
-mm = hotspin.Magnets(xx, yy, T, E_b, 'square', 'ip')
-mm.Initialize_ip('square', 0)
-mm.Initialize_m_square('AFM_squareASI')
+mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'square', 'AFM')
 
 ## Choose which energy components are taken into account
 mm.Dipolar_energy_init()
@@ -42,7 +40,7 @@ def neelTemperature(mm, N=200000):
         @param N [int] (200000): The number of simulated switches at each individual temperature
     '''
     mm.Clear_history()
-    mm.Initialize_m_square('AFM_squareASI')
+    mm.Initialize_m('AFM')
     AFM_mask = [[1, 0, -1], [0, 0, 0], [-1, 0, 1]]
     AFM_ness = []
 
@@ -62,8 +60,7 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
         @param speed [int] (20): How many switches are simulated between each frame.
         @param n_sweep [int] (20000): The number of switches between the temperature extrema.
     """
-    # Start with a 'uniform' magnetization along the diagonal
-    mm.Initialize_m_square('chess') # For square ASI, this is a 'uniform' magnetization along the diagonal
+    mm.Initialize_m('uniform')
 
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(5, 4))
@@ -103,7 +100,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
     """
-    mm.Initialize_m_square('AFM_squareASI')
+    mm.Initialize_m('AFM')
     mm.Clear_history()
     AFM_mask = [[1, 0, -1], [0, 0, 0], [-1, 0, 1]]
     AFM_ness = []
@@ -168,7 +165,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=1):
             correlation length.
     '''
     # Calculate the correlation distance as a function of temperature
-    mm.Initialize_m_square('AFM_squareASI')
+    mm.Initialize_m('AFM')
     TT = np.linspace(T_min, T_max, N)
     T_step = TT[1] - TT[0]
     corr_length = np.empty((N, M))
