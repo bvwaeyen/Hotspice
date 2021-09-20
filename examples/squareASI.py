@@ -19,10 +19,7 @@ y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
 
 ## Initialize main Magnets object
-mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'square', 'AFM')
-
-## Choose which energy components are taken into account
-mm.Dipolar_energy_init()
+mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'square', 'AFM', energies=['dipolar'])
 
 
 def run_a_bit(mm, N=50e3, T=0.2, show_m=True):

@@ -19,10 +19,7 @@ y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
 
 ## Initialize main Magnets object
-mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'kagome', 'uniform')
-
-## Choose which energy components are taken into account
-mm.Dipolar_energy_init()
+mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'kagome', 'uniform', energies=['dipolar'])
 
 
 def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
@@ -142,7 +139,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=0.3)
 if __name__ == "__main__":
     print('Initialization energy:', mm.Energy())
 
-    run_a_bit(mm, N=10e3, T=0.1)
+    # run_a_bit(mm, N=10e3, T=0.1)
     # animate_quenching(mm, animate=3, speed=50)
     # autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, N=31) # Since kagome is quite sparse behind-the-scenes, it is doubtable whether the autocorrelation has a significant meaning

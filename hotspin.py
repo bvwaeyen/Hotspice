@@ -14,12 +14,14 @@ ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes
 
 
 class Magnets:
-    def __init__(self, xx, yy, T, E_b, m_type='ip', config='square', pattern='random'): # TODO: allow to specify the energy components here as well
+    def __init__(self, xx, yy, T, E_b, m_type='ip', config='square', pattern='random', energies=('dipolar')):
         '''
             The initial configuration of a Magnets geometry consists of 3 parts:
              1) m_type:  Magnets can be in-plane or out-of-plane: 'ip' or 'op', respectively.
              2) config:  The placement of magnets on the grid can be 'full', 'square', 'pinwheel', 'kagome' or 'triangle'.
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'random', 'chess' or 'AFM'.
+            One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
+                If you want to adjust the specifics of these energies, than call <energy>_init(<parameters>) manually.
         '''
         assert np.shape(xx) == np.shape(yy), "Error: xx and yy should have the same shape. Please obtain xx and yy using np.meshgrid(x,y) to avoid this issue."
         self.xx = xx
@@ -66,8 +68,15 @@ class Magnets:
             elif self.config == 'triangle':
                 self._Initialize_ip('kagome', np.pi/2)
 
-        self.E_int = np.zeros_like(xx)
-        self.E_tot = 0
+        # Initialize the specified energy components
+        if 'dipolar' in energies:
+            self.Dipolar_energy_init()
+        if 'Zeeman' in energies:
+            self.Zeeman_energy_init()
+        if 'exchange' in energies:
+            self.Exchange_energy_init()
+        self.Energy()
+
         self.index = range(self.xx.size)
         self.history = History()
 
@@ -136,27 +145,27 @@ class Magnets:
     def Energy(self):
         E = np.zeros_like(self.xx)
         if hasattr(self, 'E_exchange'):
-            self.Exchange_update()
+            self.Exchange_energy_update()
             E = E + self.E_exchange
         if hasattr(self, 'E_dipolar'):
             self.Dipolar_energy_update()
             E = E + self.E_dipolar
         if hasattr(self, 'E_Zeeman'):
-            self.Zeeman_update()
+            self.Zeeman_energy_update()
             E = E + self.E_Zeeman
         self.E_int = E
         self.E_tot = np.sum(E, axis=None)
         return self.E_tot  
 
-    def Zeeman_init(self):
+    def Zeeman_energy_init(self):
         self.E_Zeeman = np.empty_like(self.xx)
         if self.m_type == 'op':
             self.H_ext = 0.
         elif self.m_type == 'ip':
             self.H_ext = np.zeros(2)
-        self.Zeeman_update()
+        self.Zeeman_energy_update()
 
-    def Zeeman_update(self):
+    def Zeeman_energy_update(self):
         if self.m_type == 'op':
             self.E_Zeeman = -self.m*self.H_ext
         elif self.m_type == 'ip':
@@ -191,15 +200,15 @@ class Magnets:
         temp = np.dot(self.Dipolar_interaction, np.reshape(self.m, self.m.size)) # This adds the columns of self.Dipolar_interaction together with weights self.m (i.e. m2)
         self.E_dipolar = np.multiply(self.m, np.reshape(temp, self.xx.shape)) # This multiplies each row (which is now only 1 element long due to the sum from the previous line of code) with m1
 
-    def Exchange_init(self, J):
+    def Exchange_energy_init(self, J):
         if self.m_type == 'op': # Mask for nearest neighbors
             self.Exchange_interaction = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
         elif self.m_type == 'ip': # TODO: this only works for square and pinwheel ASI, maybe include other geometries too
             self.Exchange_interaction = np.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
         self.Exchange_J = J
-        self.Exchange_update()
+        self.Exchange_energy_update()
 
-    def Exchange_update(self):
+    def Exchange_energy_update(self):
         self.E_exchange = -self.Exchange_J*np.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='fill'), self.m)
 
     def Update(self):
