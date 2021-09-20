@@ -304,24 +304,32 @@ class Magnets:
         corr_binned = np.divide(corr_binned, counts) # TODO: this can throw a divide by zero warning
         corr_length = np.sum(np.multiply(abs(corr_binned), distances))
         return corr_binned, distances, corr_length
-    
+
+    # Below here are some graphical functions (plot magnetization profile etc.)
     def _get_mask(self, avg):
         ''' Returns the raw averaging mask as a 2D array. Note that this obviously does not include
             any removal of excess zero-rows etc., that is the task of self.Get_magAngles. '''
         assert avg in ['point', 'cross', 'square', 'hexagon', 'triangle'], "Unsupported averaging mask: %s" % avg
-        if avg == 'point':
+        if avg == 'point': # shape .
             mask = [[1]]
-        elif avg == 'cross':
-            mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
-        elif avg == 'square':
-            mask = [[1, 0, 1], [0, 0, 0], [1, 0, 1]]
+        elif avg == 'cross': # shape ⁛
+            mask = [[0, 1, 0], 
+                    [1, 0, 1], 
+                    [0, 1, 0]]
+        elif avg == 'square': # shape ⸬
+            mask = [[1, 0, 1], 
+                    [0, 0, 0], 
+                    [1, 0, 1]]
         elif avg == 'hexagon':
-            mask = [[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]]
+            mask = [[0, 1, 0, 1, 0], 
+                    [1, 0, 0, 0, 1], 
+                    [0, 1, 0, 1, 0]]
         elif avg == 'triangle':
-            mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
+            mask = [[0, 1, 0], 
+                    [1, 0, 1], 
+                    [0, 1, 0]]
         return mask
 
-    # Below here are some graphical functions (plot magnetization profile etc.)
     def Get_magAngles(self, m=None, avg='point'):
         '''
             Returns the magnetization angle (can be averaged using the averaging method specified by <avg>). If the local
@@ -371,15 +379,14 @@ class Magnets:
                 draw them onto the geometry stored in <self>.
             @param average [bool] (True): if True, the nearest neigbors are averaged depending on the specific geometry 
                 of this particular spin ice. This is for example useful to easily see the boundaries between AFM domains.
-                Note that this only works for in-plane spin ices. TODO: make this work for out-of-plane as well.
             @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         '''
         if m is None: m = self.m
         
         if average: # Auto-detect the most appropriate averaging mask based on self.config
-            if self.config in ['full', 'chess']:
-                avg = 'cross'
-            elif self.config in ['square', 'pinwheel']:
+            if self.config in ['full']:
+                avg = 'point'
+            elif self.config in ['chess', 'square', 'pinwheel']:
                 avg = 'cross'
             elif self.config in ['kagome']:
                 avg = 'hexagon'
