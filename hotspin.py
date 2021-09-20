@@ -39,8 +39,7 @@ class Magnets:
         self.ixx, self.iyy = np.meshgrid(ix, iy)
 
         # config disambiguation
-        # TODO: could use an Enum for the config, though this might make for a more difficult user experience
-        if m_type == 'op': # TODO: make an example for the out-of-plane spin ices to test if those work well
+        if m_type == 'op':
             if config in ['full']:
                 self.config = 'full'
             elif config in ['chess']:
@@ -221,10 +220,15 @@ class Magnets:
 
     def Update(self):
         """ Performs a single magnetization switch. """
+        if self.T == 0:
+            warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
+            return # We just warned that no switch will be simulated, so let's keep our word
         self.Energy()
         self.barrier = self.E_b - self.E_int
-        self.rate = np.exp(self.barrier/self.T) # TODO: this can throw a divide by zero or overflow warning
-        taus = np.random.exponential(scale=self.rate) # TODO: this can throw an overflow warning
+        self.barrier -= np.min(self.barrier) # Energy is relative, so set min(E) to zero (this solves issues at low T)
+        with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
+            self.rate = np.exp(self.barrier/self.T)
+        taus = np.random.exponential(scale=self.rate)
         indexmin = np.argmin(taus, axis=None)
         self.m.flat[indexmin] = -self.m.flat[indexmin]
         self.t += taus.flat[indexmin]
@@ -301,7 +305,7 @@ class Magnets:
             if distbin <= max_distance:
                 corr_binned[distbin] += self.correlation.flat[i]*self.corr_mask.flat[i]
                 counts[distbin] += self.corr_mask.flat[i]
-        corr_binned = np.divide(corr_binned, counts) # TODO: this can throw a divide by zero warning
+        corr_binned = np.divide(corr_binned, counts, where=(counts!=0), out=counts) # Where counts==0, just output '0' to prevent divide by 0
         corr_length = np.sum(np.multiply(abs(corr_binned), distances))
         return corr_binned, distances, corr_length
 
