@@ -305,6 +305,21 @@ class Magnets:
         corr_length = np.sum(np.multiply(abs(corr_binned), distances))
         return corr_binned, distances, corr_length
     
+    def _get_mask(self, avg):
+        ''' Returns the raw averaging mask as a 2D array. Note that this obviously does not include
+            any removal of excess zero-rows etc., that is the task of self.Get_magAngles. '''
+        assert avg in ['point', 'cross', 'square', 'hexagon', 'triangle'], "Unsupported averaging mask: %s" % avg
+        if avg == 'point':
+            mask = [[1]]
+        elif avg == 'cross':
+            mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
+        elif avg == 'square':
+            mask = [[1, 0, 1], [0, 0, 0], [1, 0, 1]]
+        elif avg == 'hexagon':
+            mask = [[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]]
+        elif avg == 'triangle':
+            mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
+        return mask
 
     # Below here are some graphical functions (plot magnetization profile etc.)
     def Get_magAngles(self, m=None, avg='point'):
@@ -327,16 +342,7 @@ class Magnets:
 
         x_comp = np.multiply(m, self.orientation[:,:,0])
         y_comp = np.multiply(m, self.orientation[:,:,1])
-        if avg == 'point':
-            mask = [[1]]
-        elif avg == 'cross':
-            mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
-        elif avg == 'square':
-            mask = [[1, 0, 1], [0, 0, 0], [1, 0, 1]]
-        elif avg == 'hexagon': # TODO: instead of a normal averaging mask, can also make a 'clockwiseness' graph
-            mask = [[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]]
-        elif avg == 'triangle':
-            mask = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
+        mask = self._get_mask(avg=avg)
         x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')
         y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')
         if avg == 'triangle':
@@ -370,7 +376,7 @@ class Magnets:
         '''
         if m is None: m = self.m
         
-        if average:
+        if average: # Auto-detect the most appropriate averaging mask based on self.config
             if self.config in ['full', 'chess']:
                 avg = 'cross'
             elif self.config in ['square', 'pinwheel']:
@@ -386,8 +392,9 @@ class Magnets:
             num_plots = 2 if show_energy else 1
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
-            im1 = ax1.imshow(self.m, cmap='gray', origin='lower')
-            ax1.set_title(r'$m$')
+            im1 = ax1.imshow(signal.convolve2d(self.m, self._get_mask(avg=avg), mode='valid', boundary='fill'),
+                             cmap='gray', origin='lower')
+            ax1.set_title(r'Averaged magnetization $\vert m \vert$')
             plt.colorbar(im1)
             if show_energy:
                 ax2 = fig.add_subplot(1, num_plots, 2)
@@ -398,7 +405,8 @@ class Magnets:
             num_plots = 3 if show_energy else 2
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
-            im1 = ax1.imshow(self.Get_magAngles(m=m, avg=avg), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
+            im1 = ax1.imshow(self.Get_magAngles(m=m, avg=avg),
+                             cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
             ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % avg if avg != 'point' else ''), font={"size":"10"})
             plt.colorbar(im1)
             ax2 = fig.add_subplot(1, num_plots, 2)
