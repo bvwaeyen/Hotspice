@@ -18,7 +18,9 @@ class Magnets:
         '''
             The initial configuration of a Magnets geometry consists of 3 parts:
              1) m_type:  Magnets can be in-plane or out-of-plane: 'ip' or 'op', respectively.
-             2) config:  The placement of magnets on the grid can be 'full', 'square', 'pinwheel', 'kagome' or 'triangle'.
+             2) config:  The placement of magnets on the grid can be
+                    if m_type is 'op': 'full', 'chess',
+                    if m_type is 'ip': 'square', 'pinwheel', 'kagome' or 'triangle'.
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'random', 'chess' or 'AFM'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
                 If you want to adjust the specifics of these energies, than call <energy>_init(<parameters>) manually.
@@ -37,22 +39,24 @@ class Magnets:
 
         # config disambiguation
         # TODO: could use an Enum for the config, though this might make for a more difficult user experience
-        if config in ['full']:
-            assert m_type == 'op', f"Can not use config '{config}' if m_type is not 'op'."
-            self.config = 'full'
-        elif config in ['square', 'squareASI']:
-            self.config = 'square'
-        elif config in ['pinwheel', 'pinwheelASI']:
-            assert m_type == 'ip', f"Can not use config '{config}' if m_type is not 'ip'."
-            self.config = 'pinwheel'
-        elif config in ['kagome', 'kagomeASI']:
-            assert m_type == 'ip', f"Can not use config '{config}' if m_type is not 'ip'."
-            self.config = 'kagome'
-        elif config in ['triangle', 'triangleASI']:
-            assert m_type == 'ip', f"Can not use config '{config}' if m_type is not 'ip'."
-            self.config = 'triangle'
-        else:
-            raise AssertionError(f"Invalid argument for parameter 'config': '{config}'.")
+        if m_type == 'op':
+            if config in ['full']:
+                self.config = 'full'
+            elif config in ['chess']:
+                self.config = 'chess'
+            else:
+                raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'op'.")
+        if m_type == 'ip':
+            if config in ['square', 'squareASI']:
+                self.config = 'square'
+            elif config in ['pinwheel', 'pinwheelASI']:
+                self.config = 'pinwheel'
+            elif config in ['kagome', 'kagomeASI']:
+                self.config = 'kagome'
+            elif config in ['triangle', 'triangleASI']:
+                self.config = 'triangle'
+            else:
+                raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'ip'.")
 
         # Initialize self.m and the correct self.mask
         self.Initialize_m(pattern)
@@ -87,7 +91,7 @@ class Magnets:
             the user specifying it.
         '''
         if pattern == 'uniform':
-            self.m = np.ones(np.shape(self.xx)) # For full, square, pinwheel: this is already ok
+            self.m = np.ones(np.shape(self.xx)) # For full, chess, square, pinwheel: this is already ok
             if self.config in ['kagome', 'triangle']:
                 self.m[(self.ixx - self.iyy) % 4 == 1] = -1
         elif pattern == 'chess':
@@ -105,7 +109,7 @@ class Magnets:
 
         if self.config == 'full':
             self.mask = np.ones_like(self.m)
-        elif self.config in ['square', 'pinwheel']:
+        elif self.config in ['chess', 'square', 'pinwheel']:
             self.mask = np.zeros_like(self.m)
             self.mask[(self.xx + self.yy) % 2 == 1] = 1
         elif self.config in ['kagome', 'triangle']:
@@ -123,7 +127,7 @@ class Magnets:
             adjust themselves.
         '''
         # This sets the angle of all the magnets (this is of course only applicable in the in-plane case)
-        assert self.m_type == 'ip', "Error: can not Initialize_ip() if m_type != 'ip'."
+        assert self.m_type == 'ip', "Can not _Initialize_ip() if m_type != 'ip'."
         self.orientation = np.zeros(np.shape(self.m) + (2,))
         if config == 'square':
             self.orientation[self.yy % 2 == 0,0] = np.cos(angle)
