@@ -39,7 +39,7 @@ class Magnets:
 
         # config disambiguation
         # TODO: could use an Enum for the config, though this might make for a more difficult user experience
-        if m_type == 'op':
+        if m_type == 'op': # TODO: make an example for the out-of-plane spin ices to test if those work well
             if config in ['full']:
                 self.config = 'full'
             elif config in ['chess']:
@@ -321,6 +321,7 @@ class Magnets:
             @return [2D array]: the (averaged) magnetization angle at each position. 
                 !! This does not necessarily have the same shape as <m> !!
         '''
+        assert self.m_type == 'ip', "Can not Get_magAngles of an out-of-plane spin ice (m_type='op')."
         assert avg in ['point', 'cross', 'square', 'triangle', 'hexagon'], "Unsupported averaging mask: %s" % avg
         if m is None: m = self.m
 
@@ -354,7 +355,7 @@ class Magnets:
             angles_avg[(ixx + iyy) % 2 == 1] = np.nan # These are not the centers of hexagons, so dont draw these
         return angles_avg
 
-    def Show_m(self, m=None, avg='point', show_energy=True):
+    def Show_m(self, m=None, average=True, show_energy=True):
         ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
             the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
             a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -362,18 +363,24 @@ class Magnets:
                 magnetization profile. This is useful if some magnetization profiles have been saved manually, while 
                 self.Update() has been called since: one can then pass these saved profiles as the <m> parameter to
                 draw them onto the geometry stored in <self>.
-            @param average [str] ('point'): any of 'point', 'cross', 'square', 'triangle' and 'hexagon'. This adds together 
-                the nearest neighbors according to the given shape. This is useful to see the boundaries between 
-                antiferromagnetic domains. One can also just pass a bool: True -> 'cross', False -> 'point'.
+            @param average [bool] (True): if True, the nearest neigbors are averaged depending on the specific geometry 
+                of this particular spin ice. This is for example useful to easily see the boundaries between AFM domains.
+                Note that this only works for in-plane spin ices. TODO: make this work for out-of-plane as well.
             @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         '''
         if m is None: m = self.m
         
-        if not isinstance(avg, str): # TODO: can detect which type of ASI <self> is, but currently that information is not stored in a Magnets() object
-            if not avg: # If average is falsey
-                avg = 'point'
-            else: # If average is truthy
+        if average:
+            if self.config in ['full', 'chess']:
                 avg = 'cross'
+            elif self.config in ['square', 'pinwheel']:
+                avg = 'cross'
+            elif self.config in ['kagome']:
+                avg = 'hexagon'
+            elif self.config in ['triangle']:
+                avg = 'triangle'
+        else:
+            avg = 'point'
             
         if self.m_type == 'op':
             num_plots = 2 if show_energy else 1
