@@ -122,7 +122,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=1, T_max=1.3):
     # Draw a nice plot of all this
     fig = plt.figure(figsize=(10,3))
     ax1 = fig.add_subplot(121)
-    extent = [-0.5,corr_length.shape[1]-0.5,np.min(TT)-T_step/2,np.max(TT)+T_step/2] # Adding all these halves to place the pixels correctly
+    extent = [-0.5, corr_length.shape[1]-0.5, T_min-T_step/2, T_max+T_step/2] # Adding all these halves to place the pixels correctly
     im1 = ax1.imshow(corr_length, origin='lower', interpolation='nearest', cmap='bone', extent=extent, aspect='auto')
     c1 = plt.colorbar(im1) 
     c1.set_label(r'Correlation length [a.u.]', rotation=270, labelpad=15)
