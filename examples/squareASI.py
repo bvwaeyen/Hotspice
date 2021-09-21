@@ -44,7 +44,7 @@ def neelTemperature(mm, N=200000):
     for T in np.linspace(0, 2, N):
         mm.T = T
         mm.Update()
-        AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m)/2)
+        AFM_ness.append(np.mean(np.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')))/2)
         mm.Save_history()
     mm.Show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
 
@@ -88,7 +88,7 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
     plt.show()
 
 
-def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
+def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
     """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -123,7 +123,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
             mm.T = j*T_step
             mm.Update()
             mm.Save_history()
-            AFM_ness.append(np.mean(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')*mm.m)/2)
+            AFM_ness.append(np.mean(np.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')))/2)
         p.set_data(mm.history.T, AFM_ness)
         h.set_array(mm.Get_magAngles(avg='cross'))
         return h, p
@@ -184,7 +184,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=1):
     # Draw a nice plot of all this
     fig = plt.figure(figsize=(10,3))
     ax1 = fig.add_subplot(121)
-    extent = [-0.5,corr_length.shape[1]-0.5,np.min(TT)-T_step/2,np.max(TT)+T_step/2] # Adding all these halves to place the pixels correctly
+    extent = [-0.5, corr_length.shape[1]-0.5, T_min-T_step/2, T_max+T_step/2] # Adding all these halves to place the pixels correctly
     im1 = ax1.imshow(corr_length, origin='lower', interpolation='nearest', cmap='bone', extent=extent, aspect='auto')
     c1 = plt.colorbar(im1) 
     c1.set_label(r'Correlation length [a.u.]', rotation=270, labelpad=15)
