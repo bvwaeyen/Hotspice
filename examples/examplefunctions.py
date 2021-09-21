@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from context import hotspin
+
 
 def autocorrelation_dist_dependence(mm):
     ''' Shows the full 2D autocorrelation, as well as the binned autocorrelation
@@ -22,7 +24,7 @@ def autocorrelation_dist_dependence(mm):
     plt.show()
 
 
-def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.9, T_max=1.2):
+def autocorrelation_temp_dependence(mm, N=41, M=50, L=500, T_min=0, T_max=2):
     ''' Shows how the correlation distance depends on the temperature. 
         @param N [int] (31): Number of temperature steps between <T_min> and <T_max>.
         @param M [int] (50): How many times to do <L> switches at each temperature,
@@ -63,3 +65,12 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.9, T_max=1.2)
     ax2.set_ylabel(r'$\langle$Correlation length$\rangle$ [a.u.]')
     plt.gcf().tight_layout()
     plt.show()
+
+
+if __name__ == "__main__":
+    nx = ny = 29
+    x, y = np.linspace(0, nx - 1, nx), np.linspace(0, ny - 1, ny)
+    xx, yy = np.meshgrid(x, y)
+    mm = hotspin.Magnets(xx, yy, 0.2, 10., 'ip', 'pinwheel', 'uniform', energies=['dipolar'])
+    autocorrelation_dist_dependence(mm)
+    autocorrelation_temp_dependence(mm, N=41, T_min=0.05, T_max=0.45)
