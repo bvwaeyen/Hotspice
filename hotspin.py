@@ -225,13 +225,14 @@ class Magnets:
             return # We just warned that no switch will be simulated, so let's keep our word
         self.Energy()
         self.barrier = self.E_b - self.E_int
-        self.barrier -= np.min(self.barrier) # Energy is relative, so set min(E) to zero (this solves issues at low T)
+        minBarrier = np.min(self.barrier)
+        self.barrier -= minBarrier # Energy is relative, so set min(E) to zero (this solves issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
             self.rate = np.exp(self.barrier/self.T)
-        taus = np.random.exponential(scale=self.rate)
-        indexmin = np.argmin(taus, axis=None)
-        self.m.flat[indexmin] = -self.m.flat[indexmin]
-        self.t += taus.flat[indexmin]
+            taus = np.random.exponential(scale=self.rate)
+            indexmin = np.argmin(taus, axis=None)
+            self.m.flat[indexmin] = -self.m.flat[indexmin]
+            self.t += taus.flat[indexmin]*np.exp(minBarrier/self.T) # This can become np.inf quite quickly if T is small
         if self.m_type == 'op':
             self.m_tot = np.mean(self.m)
         elif self.m_type == 'ip':
