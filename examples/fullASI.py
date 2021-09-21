@@ -140,9 +140,9 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
     plt.show()
 
 
-def autocorrelation_temp_dependence(mm):
+def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.9, T_max=1.2):
     mm.Initialize_m('AFM')
-    examplefunctions.autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.9, T_max=1.2)
+    examplefunctions.autocorrelation_temp_dependence(mm, N=N, M=M, L=L, T_min=T_min, T_max=T_max)
 
 
 if __name__ == "__main__":

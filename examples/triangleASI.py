@@ -73,9 +73,9 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
     plt.show()
 
 
-def autocorrelation_temp_dependence(mm):
+def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=1, T_max=1.3):
     mm.Initialize_m('AFM')
-    examplefunctions.autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=1, T_max=1.3)
+    examplefunctions.autocorrelation_temp_dependence(mm, N=N, M=M, L=L, T_min=T_min, T_max=T_max)
 
 
 if __name__ == "__main__":
