@@ -7,7 +7,7 @@ from matplotlib import animation
 from numpy.core.numeric import Inf
 from scipy import signal
 
-import examplefunctions
+import examplefunctions as ef
 from context import hotspin
 
 
@@ -24,14 +24,6 @@ xx, yy = np.meshgrid(x, y)
 mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'square', 'AFM', energies=['dipolar'])
 
 
-def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
-    ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
-        This end plot can be disabled by setting <show_m> to False.
-    '''
-    mm.Run(N=N, T=T)
-    print('Energy:', mm.Energy())
-    if show_m:
-        mm.Show_m()
 
 
 def neelTemperature(mm, N=200000):
@@ -138,16 +130,16 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
 
 def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=1):
     mm.Initialize_m('AFM')
-    examplefunctions.autocorrelation_temp_dependence(mm, N=N, M=M, L=L, T_min=T_min, T_max=T_max)
+    ef.autocorrelation_temp_dependence(mm, N=N, M=M, L=L, T_min=T_min, T_max=T_max)
 
 
 if __name__ == "__main__":
     print('Initialization energy:', mm.Energy())
 
-    # run_a_bit(mm, N=4e3, T=100, show_m=False)
-    # run_a_bit(mm, N=20e3, T=0.2)
+    # ef.run_a_bit(mm, N=4e3, T=100, show_m=False)
+    # ef.run_a_bit(mm, N=20e3, T=0.2)
     # neelTemperature(mm)
     # animate_quenching(mm, animate=3, speed=50)
     # animate_temp_rise(mm, animate=3, speed=1000)
-    # examplefunctions.autocorrelation_dist_dependence(mm)
+    # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm)

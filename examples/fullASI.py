@@ -7,7 +7,7 @@ from matplotlib import animation
 from numpy.core.numeric import Inf
 from scipy import signal
 
-import examplefunctions
+import examplefunctions as ef
 from context import hotspin
 
 
@@ -142,15 +142,15 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
 
 def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.9, T_max=1.2):
     mm.Initialize_m('AFM')
-    examplefunctions.autocorrelation_temp_dependence(mm, N=N, M=M, L=L, T_min=T_min, T_max=T_max)
+    ef.autocorrelation_temp_dependence(mm, N=N, M=M, L=L, T_min=T_min, T_max=T_max)
 
 
 if __name__ == "__main__":
     print('Initialization energy:', mm.Energy())
 
-    # run_a_bit(mm, N=10e3, T=1)
+    # ef.run_a_bit(mm, N=10e3, T=1)
     # neelTemperature(mm)
     # animate_quenching(mm, animate=3, speed=50)
     # animate_temp_rise(mm, animate=3, speed=1000)
-    # examplefunctions.autocorrelation_dist_dependence(mm)
+    # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm)

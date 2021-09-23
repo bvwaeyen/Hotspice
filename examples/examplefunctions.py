@@ -4,6 +4,16 @@ import matplotlib.pyplot as plt
 from context import hotspin
 
 
+def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
+    ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
+        This end plot can be disabled by setting <show_m> to False.
+    '''
+    mm.Run(N=N, T=T)
+    print('Energy:', mm.Energy())
+    if show_m:
+        mm.Show_m()
+
+
 def autocorrelation_dist_dependence(mm):
     ''' Shows the full 2D autocorrelation, as well as the binned autocorrelation
         as a function of distance. '''

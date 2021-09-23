@@ -7,7 +7,7 @@ from matplotlib import animation
 from numpy.core.numeric import Inf
 # from scipy import signal
 
-import examplefunctions
+import examplefunctions as ef
 from context import hotspin
 
 
@@ -75,13 +75,13 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
 
 def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=1, T_max=1.3):
     mm.Initialize_m('AFM')
-    examplefunctions.autocorrelation_temp_dependence(mm, N=N, M=M, L=L, T_min=T_min, T_max=T_max)
+    ef.autocorrelation_temp_dependence(mm, N=N, M=M, L=L, T_min=T_min, T_max=T_max)
 
 
 if __name__ == "__main__":
     print('Initialization energy:', mm.Energy())
 
-    # run_a_bit(mm, N=10e3, T=0.1)
+    # ef.run_a_bit(mm, N=10e3, T=0.1)
     # animate_quenching(mm, animate=3, speed=50)
-    # examplefunctions.autocorrelation_dist_dependence(mm)
+    # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, N=31) # Since kagome is quite sparse behind-the-scenes, it is doubtable whether the autocorrelation has a significant meaning
