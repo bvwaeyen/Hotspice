@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from matplotlib import animation
-from numpy.core.numeric import Inf
 # from scipy import signal
 
 import examplefunctions as ef
