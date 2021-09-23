@@ -311,33 +311,6 @@ class Magnets:
         return corr_binned, distances, corr_length
 
     # Below here are some graphical functions (plot magnetization profile etc.)
-    def _get_mask(self, avg=None):
-        ''' Returns the raw averaging mask as a 2D array. Note that this obviously does not include
-            any removal of excess zero-rows etc., that is the task of self.Get_magAngles. '''
-        if avg is None:
-            avg = self._get_appropriate_avg()
-        assert avg in ['point', 'cross', 'square', 'hexagon', 'triangle'], "Unsupported averaging mask: %s" % avg
-
-        if avg == 'point': # shape .
-            mask = [[1]]
-        elif avg == 'cross': # shape ⁛
-            mask = [[0, 1, 0], 
-                    [1, 0, 1], 
-                    [0, 1, 0]]
-        elif avg == 'square': # shape ⸬
-            mask = [[1, 0, 1], 
-                    [0, 0, 0], 
-                    [1, 0, 1]]
-        elif avg == 'hexagon':
-            mask = [[0, 1, 0, 1, 0], 
-                    [1, 0, 0, 0, 1], 
-                    [0, 1, 0, 1, 0]]
-        elif avg == 'triangle':
-            mask = [[0, 1, 0], 
-                    [1, 0, 1], 
-                    [0, 1, 0]]
-        return mask
-    
     def _get_appropriate_avg(self):
         ''' Auto-detect the most appropriate averaging mask based on self.config '''
         if self.config in ['full']:
@@ -350,23 +323,56 @@ class Magnets:
             avg = 'triangle'
         return avg
 
-    def Get_magAngles(self, m=None, avg='point'):
+    def _resolve_avg(self, avg):
+        ''' If avg is str then determine if it is valid, otherwise auto-determine which averaging method is appropriate. '''
+        if isinstance(avg, str):
+            assert avg in ['point', 'cross', 'square', 'hexagon', 'triangle'], "Unsupported averaging mask: %s" % avg
+        else: # It is something which can be truthy or falsy
+            avg = self._get_appropriate_avg() if avg else 'point'
+        return avg
+
+    def _get_mask(self, avg=None):
+        ''' Returns the raw averaging mask as a 2D array. Note that this obviously does not include
+            any removal of excess zero-rows etc., that is the task of self.Get_magAngles. '''
+        avg = self._resolve_avg(avg)
+        if avg == 'point':
+            mask = [[1]]
+        elif avg == 'cross': # cross ⁛
+            mask = [[0, 1, 0], 
+                    [1, 0, 1], 
+                    [0, 1, 0]]
+        elif avg == 'square': # square ⸬
+            mask = [[1, 0, 1], 
+                    [0, 0, 0], 
+                    [1, 0, 1]]
+        elif avg == 'hexagon':
+            mask = [[0, 1, 0, 1, 0], 
+                    [1, 0, 0, 0, 1], 
+                    [0, 1, 0, 1, 0]]
+        elif avg == 'triangle':
+            mask = [[0, 1, 0], 
+                    [1, 0, 1], 
+                    [0, 1, 0]]
+        return mask
+
+    def Get_magAngles(self, m=None, avg=True):
         '''
             Returns the magnetization angle (can be averaged using the averaging method specified by <avg>). If the local
             average magnetization is zero, the corresponding angle is NaN, such that those regions are white in imshow.
             @param m [2D array] (self.m): The magnetization profile that should be averaged.
-            @param avg [str] ('point'): can be any of 'point', 'cross', 'square', 'triangle', 'hexagon'. These are:
-                'point' does no averaging at all, so just calculates the angle of each individual spin.
-                'cross' averages the spins north, east, south and west of each position.
-                'square' averages the spins northeast, southeast, southwest and northwest of each position.
-                'triangle' averages the three magnets connected to a corner of a hexagon in the kagome geometry.
-                'hexagon' averages in a hexagon around each position, though this is not very clear.
-            @return [2D array]: the (averaged) magnetization angle at each position. 
+            @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon':
+                True: automatically determines the appropriate averaging method corresponding to self.config.
+                False|'point': no averaging at all, just calculates the angle of each individual spin.
+                'cross': averages the spins north, east, south and west of each position.
+                'square': averages the spins northeast, southeast, southwest and northwest of each position.
+                'triangle': averages the three magnets connected to a corner of a hexagon in the kagome geometry.
+                'hexagon:' averages each hexagon in 'kagome' config, or each star in 'triangle' config.
+            @return [2D array]: the (averaged) magnetization angle at each position.
                 !! This does not necessarily have the same shape as <m> !!
         '''
         assert self.m_type == 'ip', "Can not Get_magAngles of an out-of-plane spin ice (m_type='op')."
-        assert avg in ['point', 'cross', 'square', 'triangle', 'hexagon'], "Unsupported averaging mask: %s" % avg
         if m is None: m = self.m
+        avg = self._resolve_avg(avg)
 
         x_comp = np.multiply(m, self.orientation[:,:,0])
         y_comp = np.multiply(m, self.orientation[:,:,1])
@@ -389,7 +395,7 @@ class Magnets:
             angles_avg[(ixx + iyy) % 2 == 1] = np.nan # These are not the centers of hexagons, so dont draw these
         return angles_avg
 
-    def Show_m(self, m=None, average=True, show_energy=True):
+    def Show_m(self, m=None, avg=True, show_energy=True):
         ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
             the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
             a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -397,23 +403,18 @@ class Magnets:
                 magnetization profile. This is useful if some magnetization profiles have been saved manually, while 
                 self.Update() has been called since: one can then pass these saved profiles as the <m> parameter to
                 draw them onto the geometry stored in <self>.
-            @param average [bool] (True): if True, the nearest neigbors are averaged depending on the specific geometry 
-                of this particular spin ice. This is for example useful to easily see the boundaries between AFM domains.
+            @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon'.
             @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         '''
         if m is None: m = self.m
-        
-        if average: # Auto-detect the most appropriate averaging mask based on self.config
-            avg = self._get_appropriate_avg()
-        else:
-            avg = 'point'
+        avg = self._resolve_avg(avg)
             
         if self.m_type == 'op':
             num_plots = 2 if show_energy else 1
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
             mask = self._get_mask(avg=avg)
-            im1 = ax1.imshow(signal.convolve2d(self.m, mask, mode='valid', boundary='fill'),
+            im1 = ax1.imshow(signal.convolve2d(m, mask, mode='valid', boundary='fill'),
                              cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask))
             ax1.set_title(r'Averaged magnetization $\vert m \vert$')
             plt.colorbar(im1)

@@ -31,7 +31,7 @@ def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
     mm.Run(N=N, T=T)
     print('Energy:', mm.Energy())
     if show_m:
-        mm.Show_m(average=True)
+        mm.Show_m()
 
 
 def curieTemperature(mm, N=5000):
@@ -67,7 +67,7 @@ def animate_quenching(mm, animate=1, speed=50, n_low=20000, n_high=2000, T_low=0
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(5, 4))
     ax1 = fig.add_subplot(111)
-    h = ax1.imshow(mm.Get_magAngles(avg='cross'), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
+    h = ax1.imshow(mm.Get_magAngles(), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
     ax1.set_title(r'Averaged magnetization angle')
     c1 = plt.colorbar(h)
     fig.suptitle('Temperature %.3f [a.u.]' % mm.T)
@@ -81,7 +81,7 @@ def animate_quenching(mm, animate=1, speed=50, n_low=20000, n_high=2000, T_low=0
             mm.Update()
         if mm.T != prev_T: # Update the temperature text if T changed
             fig.suptitle('Temperature %.3f' % mm.T)
-        h.set_array(mm.Get_magAngles(avg='cross'))
+        h.set_array(mm.Get_magAngles())
         return h, # This has to be an iterable!
 
     # Assign the animation to a variable, to prevent it from getting garbage-collected
@@ -110,7 +110,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(mm.Get_magAngles(avg='cross'), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
+    h = ax1.imshow(mm.Get_magAngles(), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
     ax1.set_title(r'Averaged magnetization angle')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -128,7 +128,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
             mm.Update()
             mm.Save_history()
         p.set_data(mm.history.T, mm.history.m)
-        h.set_array(mm.Get_magAngles(avg='cross'))
+        h.set_array(mm.Get_magAngles())
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 

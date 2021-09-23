@@ -31,7 +31,7 @@ def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
     mm.Run(N=N, T=T)
     print('Energy:', mm.Energy())
     if show_m:
-        mm.Show_m(average=True)
+        mm.Show_m()
 
 
 def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high=4):
