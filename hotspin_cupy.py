@@ -284,6 +284,7 @@ class Magnets:
             # First calculate the distance between all spins in the simulation.
             self.Distances = (self.xx**2 + self.yy**2)**(1/2)
             self.Distance_range = math.ceil(cp.max(self.Distances))
+            self.Distances_floor = cp.floor(self.Distances)
             # Then, calculate how many multiplications hide behind each cell in the convolution matrix, so we can normalize.
             self.corr_norm = 1/signal.convolve2d(cp.ones_like(self.m), cp.ones_like(self.m), mode='full', boundary='fill')
             # Then, calculate the correlation of the mask, since not each position contains a spin
@@ -299,20 +300,16 @@ class Magnets:
             corr = corr_x + corr_y
         corr = corr*cp.size(self.m)/cp.sum(self.corr_mask) # Put between 0 and 1
         self.correlation = corr[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)]**2
+        self.correlation = cp.multiply(self.correlation, self.corr_mask)
         
         # Prepare distance bins etc.
         corr_binned = cp.zeros(max_distance + 1) # How much the magnets correlate over a distance [i]
-        counts = cp.zeros(max_distance + 1)
         distances = cp.linspace(0, max_distance, num=max_distance+1) # Use cp.linspace to get float, cp.arange to get int
-        # Now loop over all the spins, and record their correlation and counts
-        for i in self.index:
-            distbin = math.floor(self.Distances.flat[i])
-            if distbin <= max_distance:
-                corr_binned[distbin] += self.correlation.flat[i]*self.corr_mask.flat[i]
-                counts[distbin] += self.corr_mask.flat[i]
-        corr_binned = cp.divide(corr_binned, counts, where=(counts!=0), out=counts) # Where counts==0, just output '0' to prevent divide by 0
+        # Now loop over all the interesting distances
+        for i, d in enumerate(distances):
+            corr_binned[i] = cp.mean(self.correlation[cp.where(cp.isclose(self.Distances_floor, d))])
         corr_length = cp.sum(cp.multiply(abs(corr_binned), distances))
-        return corr_binned, distances, corr_length
+        return corr_binned.get(), distances.get(), float(corr_length)
 
     # Below here are some graphical functions (plot magnetization profile etc.)
     def _get_appropriate_avg(self):

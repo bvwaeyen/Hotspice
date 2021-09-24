@@ -31,7 +31,7 @@ def autocorrelation_dist_dependence(mm):
     ax1.set_xlabel(r'Distance [a.u.]')
     ax1.set_ylabel(r'Autocorrelation')
     ax2 = fig.add_subplot(122)
-    h1 = ax2.imshow(mm.correlation, origin='lower', cmap='bone')
+    h1 = ax2.imshow(mm.correlation.get(), origin='lower', cmap='bone')
     c2 = plt.colorbar(h1)
     c2.set_label(r'Correlation', rotation=270, labelpad=15)
     plt.gcf().tight_layout()
