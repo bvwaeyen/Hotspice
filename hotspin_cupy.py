@@ -1,5 +1,6 @@
 import ctypes
 import math
+import matplotlib
 import warnings
 
 import matplotlib.pyplot as plt
@@ -12,7 +13,7 @@ from scipy import signal
 
 
 ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
-
+matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
 
 class Magnets:
     def __init__(self, xx, yy, T, E_b, m_type='ip', config='square', pattern='random', energies=('dipolar')):
@@ -411,7 +412,7 @@ class Magnets:
                 draw them onto the geometry stored in <self>.
             @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon'.
             @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
-        '''
+        '''  # TODO: add possibility to fill up all the NaNs with the nearest color if all nearest colors are equal (or something like that)
         if m is None: m = self.m
         avg = self._resolve_avg(avg)
             
@@ -439,7 +440,8 @@ class Magnets:
             plt.colorbar(im1)
             ax2 = fig.add_subplot(1, num_plots, 2)
             ax2.set_aspect('equal')
-            ax2.quiver(self.xx.get(), self.yy.get(), np.multiply(m.get(), self.orientation[:,:,0].get()), np.multiply(m.get(), self.orientation[:,:,1].get()), pivot='mid', headlength=17, headaxislength=17, headwidth=7)
+            ax2.quiver(self.xx.get(), self.yy.get(), cp.multiply(m, self.orientation[:,:,0]).get(), cp.multiply(m, self.orientation[:,:,1]).get(),
+                       pivot='mid', headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
             ax2.set_title(r'$m$')
             if show_energy:
                 ax3 = fig.add_subplot(1, num_plots, 3)
