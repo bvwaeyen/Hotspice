@@ -270,10 +270,10 @@ class Magnets:
         """ Records E_tot, t, T and m_tot as they were last calculated. This default behavior can be overruled: if
             passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T|m_tot> value(s).
         """
-        self.history.E.append(self.E_tot if E_tot is None else E_tot)
-        self.history.t.append(self.t if t is None else t)
-        self.history.T.append(self.T if T is None else T)
-        self.history.m.append(self.m_tot if m_tot is None else m_tot)
+        self.history.E.append(float(self.E_tot) if E_tot is None else float(E_tot))
+        self.history.t.append(float(self.t) if t is None else float(t))
+        self.history.T.append(float(self.T) if T is None else float(T))
+        self.history.m.append(float(self.m_tot) if m_tot is None else float(m_tot))
     
     def Clear_history(self):
         self.history.clear()
