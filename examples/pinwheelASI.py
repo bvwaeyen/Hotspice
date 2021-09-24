@@ -22,16 +22,6 @@ xx, yy = np.meshgrid(x, y)
 mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'pinwheel', 'uniform', energies=['dipolar'])
 
 
-def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
-    ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
-        This end plot can be disabled by setting <show_m> to False.
-    '''
-    mm.Run(N=N, T=T)
-    print('Energy:', mm.Energy())
-    if show_m:
-        mm.Show_m()
-
-
 def curieTemperature(mm, N=5000):
     ''' A naive attempt at determining the Curie temperature, by looking at the average magnetization.
         @param N [int] (5000): The number of simulated switches at each individual temperature

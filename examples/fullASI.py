@@ -23,16 +23,6 @@ xx, yy = np.meshgrid(x, y)
 mm = hotspin.Magnets(xx, yy, T, E_b, 'op', 'full', 'uniform', energies=['dipolar']) # config='chess' is just the same but with different boundaries
 
 
-def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
-    ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
-        This end plot can be disabled by setting <show_m> to False.
-    '''
-    mm.Run(N=N, T=T)
-    print('Energy:', mm.Energy())
-    if show_m:
-        mm.Show_m()
-
-
 def neelTemperature(mm, N=200000):
     ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
         @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.

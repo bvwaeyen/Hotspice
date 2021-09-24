@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from context import hotspin
 
 
-def run_a_bit(mm, N=50e3, T=0.2, show_m=True, timeit=False): # TODO: remove this function everywhere and add the time stuff to it
+def run_a_bit(mm, N=50e3, T=0.2, show_m=True, timeit=False):
     ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
         This end plot can be disabled by setting <show_m> to False.
     '''

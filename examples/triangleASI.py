@@ -23,16 +23,6 @@ xx, yy = np.meshgrid(x, y)
 mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'triangle', 'AFM', energies=['dipolar'])
 
 
-def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
-    ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
-        This end plot can be disabled by setting <show_m> to False.
-    '''
-    mm.Run(N=N, T=T)
-    print('Energy:', mm.Energy())
-    if show_m:
-        mm.Show_m()
-
-
 def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high=4):
     """ Shows an animation of repeatedly sweeping the simulation between quite low and high temperatures,
         WITH a smooth temperature transition in between (exponential between T_low and T_high).
