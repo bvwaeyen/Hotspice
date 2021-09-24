@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from matplotlib import animation
-# from scipy import signal
+# from cupyx.scipy import signal
 
 import examplefunctions as ef
 from context import hotspin

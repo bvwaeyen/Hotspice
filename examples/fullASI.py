@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from matplotlib import animation
-from scipy import signal
+from cupyx.scipy import signal
 
 import examplefunctions as ef
 from context import hotspin
@@ -39,13 +39,12 @@ def neelTemperature(mm, N=200000):
     '''
     mm.Clear_history()
     mm.Initialize_m('AFM')
-    AFM_mask = [[1, -1], [-1, 1]]
     AFM_ness = []
 
     for T in np.linspace(0, 2, N):
         mm.T = T
         mm.Update()
-        AFM_ness.append(np.mean(np.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')))/4)
+        AFM_ness.append(mm.Get_AFMness())
         mm.Save_history()
     mm.Show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
 
@@ -64,7 +63,7 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
     fig = plt.figure(figsize=(5, 4))
     ax1 = fig.add_subplot(111)
     mask = mm._get_mask()
-    h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill'),
+    h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get(),
                              cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask))
     ax1.set_title(r'Averaged magnetization $\vert m \vert$')
     c1 = plt.colorbar(h)
@@ -80,7 +79,7 @@ def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high
             else: # Then heat up
                 mm.T = T_low*np.exp(exponent*((j%n_sweep)/n_sweep))
             mm.Update()
-        h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill'))
+        h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get())
         fig.suptitle('Temperature %.3f' % mm.T)
         return h, # This has to be an iterable!
 
@@ -100,16 +99,15 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
     """
-    mm.Initialize_m('uniform')
+    mm.Initialize_m('AFM')
     mm.Clear_history()
-    AFM_mask = [[1, -1], [-1, 1]]
     AFM_ness = []
 
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
     mask = mm._get_mask()
-    h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill'),
+    h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get(),
                              cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask))
     ax1.set_title(r'Averaged magnetization angle')
     c1 = plt.colorbar(h)
@@ -128,9 +126,9 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
             mm.T = j*T_step
             mm.Update()
             mm.Save_history()
-            AFM_ness.append(np.mean(np.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')))/4)
+            AFM_ness.append(mm.Get_AFMness())
         p.set_data(mm.history.T, AFM_ness)
-        h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill'))
+        h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get())
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 

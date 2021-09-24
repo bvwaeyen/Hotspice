@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from matplotlib import animation
-from scipy import signal
+# from cupyx.scipy import signal
 
 import examplefunctions as ef
 from context import hotspin
@@ -23,21 +23,18 @@ xx, yy = np.meshgrid(x, y)
 mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'square', 'AFM', energies=['dipolar'])
 
 
-
-
 def neelTemperature(mm, N=200000):
     ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
         @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.
     '''
     mm.Clear_history()
     mm.Initialize_m('AFM')
-    AFM_mask = [[1, 0, -1], [0, 0, 0], [-1, 0, 1]]
     AFM_ness = []
 
     for T in np.linspace(0, 2, N):
         mm.T = T
         mm.Update()
-        AFM_ness.append(np.mean(np.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')))/2)
+        AFM_ness.append(mm.Get_AFMness())
         mm.Save_history()
     mm.Show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
 
@@ -92,7 +89,6 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
     """
     mm.Initialize_m('AFM')
     mm.Clear_history()
-    AFM_mask = [[1, 0, -1], [0, 0, 0], [-1, 0, 1]]
     AFM_ness = []
 
     # Set up the figure, the axis, and the plot element we want to animate
@@ -116,7 +112,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
             mm.T = j*T_step
             mm.Update()
             mm.Save_history()
-            AFM_ness.append(np.mean(np.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='fill')))/2)
+            AFM_ness.append(mm.Get_AFMness())
         p.set_data(mm.history.T, AFM_ness)
         h.set_array(mm.Get_magAngles())
         return h, p

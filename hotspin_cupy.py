@@ -415,13 +415,13 @@ class Magnets:
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
             mask = self._get_mask(avg=avg)
-            im1 = ax1.imshow(signal.convolve2d(m, mask, mode='valid', boundary='fill'),
+            im1 = ax1.imshow(signal.convolve2d(m, mask, mode='valid', boundary='fill').get(),
                              cmap='gray', origin='lower', vmin=-cp.sum(mask), vmax=cp.sum(mask))
             ax1.set_title(r'Averaged magnetization $\vert m \vert$')
             plt.colorbar(im1)
             if show_energy:
                 ax2 = fig.add_subplot(1, num_plots, 2)
-                im2 = ax2.imshow(self.E_int, origin='lower')
+                im2 = ax2.imshow(self.E_int.get(), origin='lower')
                 ax2.set_title(r'$E_{int}$')
                 plt.colorbar(im2)
         elif self.m_type == 'ip':
@@ -471,6 +471,17 @@ class Magnets:
         ax2.set_ylabel('Total energy [a.u.]')
         plt.gcf().tight_layout()
         plt.show()
+    
+    def Get_AFMness(self, AFM_mask=None):
+        if AFM_mask is None: # TODO: see if self.config='triangle' can also have an AFM_mask
+            if self.config in ['full']:
+                AFM_mask = cp.array([[1, -1], [-1, 1]], dtype='float')
+            elif self.config in ['square']:
+                AFM_mask = cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
+        else:
+            AFM_mask = cp.asarray(AFM_mask)
+        AFM_ness = cp.mean(cp.abs(signal.convolve2d(self.m, AFM_mask, mode='same', boundary='fill')))
+        return float(AFM_ness/4/cp.sum(self.mask)*self.m.size)
 
 
 @dataclass
