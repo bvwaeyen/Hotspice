@@ -9,7 +9,7 @@ import cupy as cp
 
 from dataclasses import dataclass, field
 from numpy.core.numeric import Inf
-from scipy import signal
+from cupyx.scipy import signal
 
 
 ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
@@ -358,7 +358,7 @@ class Magnets:
             mask = [[0, 1, 0], 
                     [1, 0, 1], 
                     [0, 1, 0]]
-        return mask
+        return cp.array(mask, dtype='float') # If mask would be int, then precision of convolve2d is also int instead of float
 
     def Get_magAngles(self, m=None, avg=True):
         '''
@@ -379,16 +379,14 @@ class Magnets:
         if m is None: m = self.m
         avg = self._resolve_avg(avg)
 
-        x_comp = cp.multiply(m, self.orientation[:,:,0]).get()
-        y_comp = cp.multiply(m, self.orientation[:,:,1]).get()
+        x_comp = cp.multiply(m, self.orientation[:,:,0])
+        y_comp = cp.multiply(m, self.orientation[:,:,1])
         mask = self._get_mask(avg=avg)
         x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')
         y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')
         if avg == 'triangle':
             x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='fill')
             y_comp_avg = signal.convolve2d(y_comp, mask, mode='same', boundary='fill')
-        x_comp_avg = cp.asarray(x_comp_avg)
-        y_comp_avg = cp.asarray(y_comp_avg)
         angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % (2*cp.pi)
         useless_angles = cp.where(cp.logical_and(cp.isclose(x_comp_avg, 0), cp.isclose(y_comp_avg, 0)), cp.nan, 1)
         angles_avg *= useless_angles
