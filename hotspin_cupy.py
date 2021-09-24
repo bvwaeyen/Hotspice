@@ -141,10 +141,10 @@ class Magnets:
         elif config == 'kagome':
             self.orientation[:,:,0] = math.cos(angle + math.pi/2)
             self.orientation[:,:,1] = math.sin(angle + math.pi/2)
-            self.orientation[np.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),0] = math.cos(angle - math.pi/6)
-            self.orientation[np.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),1] = math.sin(angle - math.pi/6)
-            self.orientation[np.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),0] = math.cos(angle + math.pi/6)
-            self.orientation[np.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),1] = math.sin(angle + math.pi/6)
+            self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1).get(),0] = math.cos(angle - math.pi/6)
+            self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1).get(),1] = math.sin(angle - math.pi/6)
+            self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1).get(),0] = math.cos(angle + math.pi/6)
+            self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1).get(),1] = math.sin(angle + math.pi/6)
             self.orientation[mask == 0,0] = 0
             self.orientation[mask == 0,1] = 0
         self.orientation = cp.asarray(self.orientation)
@@ -473,15 +473,17 @@ class Magnets:
         plt.show()
     
     def Get_AFMness(self, AFM_mask=None):
-        if AFM_mask is None: # TODO: see if self.config='triangle' can also have an AFM_mask
+        if AFM_mask is None: # TODO: see if self.config='triangle' can also have an AFM_mask, it only works half right now
             if self.config in ['full']:
                 AFM_mask = cp.array([[1, -1], [-1, 1]], dtype='float')
-            elif self.config in ['square']:
+            elif self.config in ['chess', 'square', 'pinwheel']:
                 AFM_mask = cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
+            elif self.config in ['kagome', 'triangle']:
+                AFM_mask = cp.array([[1, 0, -1], [0, 1, 0], [-1, 0, 1]], dtype='float')
         else:
             AFM_mask = cp.asarray(AFM_mask)
         AFM_ness = cp.mean(cp.abs(signal.convolve2d(self.m, AFM_mask, mode='same', boundary='fill')))
-        return float(AFM_ness/4/cp.sum(self.mask)*self.m.size)
+        return float(AFM_ness/cp.sum(AFM_mask)/cp.sum(self.mask)*self.m.size) # Normalized to 1 (boundaries not taken into account)
 
 
 @dataclass
