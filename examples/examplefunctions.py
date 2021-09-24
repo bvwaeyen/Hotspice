@@ -1,14 +1,18 @@
+import time
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 from context import hotspin
 
 
-def run_a_bit(mm, N=50e3, T=0.2, show_m=True):
+def run_a_bit(mm, N=50e3, T=0.2, show_m=True, timeit=False): # TODO: remove this function everywhere and add the time stuff to it
     ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
         This end plot can be disabled by setting <show_m> to False.
     '''
+    if timeit: t = time.time()
     mm.Run(N=N, T=T)
+    if timeit: print(f"Simulated {N} switches (on {mm.m.shape[0]}x{mm.m.shape[1]} grid) in {time.time() - t} seconds.")
     print('Energy:', mm.Energy())
     if show_m:
         mm.Show_m()
