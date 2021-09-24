@@ -128,23 +128,23 @@ class Magnets:
         '''
         # This sets the angle of all the magnets (this is of course only applicable in the in-plane case)
         assert self.m_type == 'ip', "Can not _Initialize_ip() if m_type != 'ip'."
-        self.orientation = np.zeros(np.shape(self.m) + (2,))
+        self.orientation = np.zeros(np.shape(self.m) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         mask = self.mask.get()
         yy = self.yy.get()
         if config == 'square':
-            self.orientation[yy % 2 == 0,0] = np.cos(angle)
-            self.orientation[yy % 2 == 0,1] = np.sin(angle)
-            self.orientation[yy % 2 == 1,0] = np.cos(angle + np.pi/2)
-            self.orientation[yy % 2 == 1,1] = np.sin(angle + np.pi/2)
+            self.orientation[yy % 2 == 0,0] = math.cos(angle)
+            self.orientation[yy % 2 == 0,1] = math.sin(angle)
+            self.orientation[yy % 2 == 1,0] = math.cos(angle + math.pi/2)
+            self.orientation[yy % 2 == 1,1] = math.sin(angle + math.pi/2)
             self.orientation[mask == 0,0] = 0
             self.orientation[mask == 0,1] = 0
         elif config == 'kagome':
-            self.orientation[:,:,0] = np.cos(angle + np.pi/2)
-            self.orientation[:,:,1] = np.sin(angle + np.pi/2)
-            self.orientation[np.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),0] = np.cos(angle - np.pi/6)
-            self.orientation[np.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),1] = np.sin(angle - np.pi/6)
-            self.orientation[np.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),0] = np.cos(angle + np.pi/6)
-            self.orientation[np.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),1] = np.sin(angle + np.pi/6)
+            self.orientation[:,:,0] = math.cos(angle + math.pi/2)
+            self.orientation[:,:,1] = math.sin(angle + math.pi/2)
+            self.orientation[np.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),0] = math.cos(angle - math.pi/6)
+            self.orientation[np.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),1] = math.sin(angle - math.pi/6)
+            self.orientation[np.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),0] = math.cos(angle + math.pi/6)
+            self.orientation[np.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),1] = math.sin(angle + math.pi/6)
             self.orientation[mask == 0,0] = 0
             self.orientation[mask == 0,1] = 0
         self.orientation = cp.asarray(self.orientation)
@@ -178,7 +178,7 @@ class Magnets:
         elif self.m_type == 'ip':
             self.E_Zeeman = -cp.multiply(self.m, self.H_ext[0]*self.orientation[:,:,0] + self.H_ext[1]*self.orientation[:,:,1])
             
-    def Dipolar_energy_init(self, strength=1):
+    def Dipolar_energy_init(self, strength=1): # TODO: shrink this demag kernel
         self.Dipolar_interaction = cp.empty((self.xx.size, self.xx.size))
         self.E_dipolar = cp.empty_like(self.xx)
         for i in self.index:
@@ -229,15 +229,14 @@ class Magnets:
             warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
         self.Energy()
-        self.barrier = self.E_b - self.E_int
+        self.barrier = (self.E_b - self.E_int)/self.mask # Divide by mask to make non-occupied grid cells have infinite barrier
         minBarrier = cp.min(self.barrier)
         self.barrier -= minBarrier # Energy is relative, so set min(E) to zero (this solves issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
-            self.rate = cp.exp(self.barrier/self.T)
-            taus = np.random.exponential(scale=self.rate.get())
-            indexmin = np.argmin(taus, axis=None)
-            self.m.flat[indexmin] = -self.m.flat[indexmin]
-            self.t += taus.flat[indexmin]*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
+            taus = cp.random.exponential(cp.exp(self.barrier/self.T))
+            indexmin = cp.unravel_index(cp.argmin(taus), self.m.shape) # WARN: this might not be optimal
+            self.m[indexmin] = -self.m[indexmin]
+            self.t += taus[indexmin]*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
         if self.m_type == 'op':
             self.m_tot = cp.mean(self.m)
         elif self.m_type == 'ip':
