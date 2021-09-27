@@ -334,7 +334,9 @@ class Magnets:
 
     def _get_mask(self, avg=None):
         ''' Returns the raw averaging mask as a 2D array. Note that this obviously does not include
-            any removal of excess zero-rows etc., that is the task of self.Get_magAngles. '''
+            any removal of excess zero-rows etc., that is the task of self.Get_magAngles.
+            Note that this returns a CuPy array for performance reasons, since this is a 'hidden' _function anyway.
+        '''
         avg = self._resolve_avg(avg)
         if avg == 'point':
             mask = [[1]]
@@ -368,7 +370,7 @@ class Magnets:
                 'square': averages the spins northeast, southeast, southwest and northwest of each position.
                 'triangle': averages the three magnets connected to a corner of a hexagon in the kagome geometry.
                 'hexagon:' averages each hexagon in 'kagome' config, or each star in 'triangle' config.
-            @return [2D array]: the (averaged) magnetization angle at each position.
+            @return [2D np.array]: the (averaged) magnetization angle at each position.
                 !! This does not necessarily have the same shape as <m> !!
         '''
         assert self.m_type == 'ip', "Can not Get_magAngles of an out-of-plane spin ice (m_type='op')."
@@ -473,7 +475,15 @@ class Magnets:
         plt.show()
     
     def Get_AFMness(self, AFM_mask=None):
-        if AFM_mask is None: # TODO: see if self.config='triangle' can also have an AFM_mask, it only works half right now
+        ''' Returns the average AFM-ness of self.m at the current time step, normalized to 1.
+            For a perfectly uniform configuration this is 0, while for random it is 0.375.
+            Note that the boundaries are not taken into account for the normalization, so the
+            AFM-ness will often be slightly lower than the ideal values mentioned above.
+            @param AFM_mask [2D array] (None): The mask used to determine the AFM-ness. If not
+                provided explicitly, it is determined automatically based on self.config.
+            @return [float]: The average normalized AFM-ness.
+        '''
+        if AFM_mask is None:
             if self.config in ['full']:
                 AFM_mask = cp.array([[1, -1], [-1, 1]], dtype='float')
             elif self.config in ['chess', 'square', 'pinwheel']:
@@ -483,7 +493,7 @@ class Magnets:
         else:
             AFM_mask = cp.asarray(AFM_mask)
         AFM_ness = cp.mean(cp.abs(signal.convolve2d(self.m, AFM_mask, mode='same', boundary='fill')))
-        return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(self.mask)*self.m.size) # Normalized to 1 (boundaries not taken into account)
+        return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(self.mask)*self.m.size)
 
 
 @dataclass
