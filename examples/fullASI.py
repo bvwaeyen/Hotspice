@@ -23,22 +23,6 @@ xx, yy = np.meshgrid(x, y)
 mm = hotspin.Magnets(xx, yy, T, E_b, 'op', 'full', 'uniform', energies=['dipolar']) # config='chess' is just the same but with different boundaries
 
 
-def neelTemperature(mm, N=200000):
-    ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
-        @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.
-    '''
-    mm.Clear_history()
-    mm.Initialize_m('AFM')
-    AFM_ness = []
-
-    for T in np.linspace(0, 2, N):
-        mm.T = T
-        mm.Update()
-        AFM_ness.append(mm.Get_AFMness())
-        mm.Save_history()
-    mm.Show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
-
-
 def animate_quenching(mm, animate=1, speed=20, n_sweep=20000, T_low=0.01, T_high=4):
     """ Shows an animation of repeatedly sweeping the simulation between quite low and high temperatures,
         WITH a smooth temperature transition in between (exponential between T_low and T_high).
@@ -136,7 +120,7 @@ if __name__ == "__main__":
     print('Initialization energy:', mm.Energy())
 
     # ef.run_a_bit(mm, N=10e3, T=1)
-    # neelTemperature(mm)
+    # ef.neelTemperature(mm, T_max=2)
     # animate_quenching(mm, animate=3, speed=50)
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)

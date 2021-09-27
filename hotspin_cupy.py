@@ -479,11 +479,11 @@ class Magnets:
             elif self.config in ['chess', 'square', 'pinwheel']:
                 AFM_mask = cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
             elif self.config in ['kagome', 'triangle']:
-                AFM_mask = cp.array([[1, 0, -1], [0, 1, 0], [-1, 0, 1]], dtype='float')
+                AFM_mask = cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
         else:
             AFM_mask = cp.asarray(AFM_mask)
         AFM_ness = cp.mean(cp.abs(signal.convolve2d(self.m, AFM_mask, mode='same', boundary='fill')))
-        return float(AFM_ness/cp.sum(AFM_mask)/cp.sum(self.mask)*self.m.size) # Normalized to 1 (boundaries not taken into account)
+        return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(self.mask)*self.m.size) # Normalized to 1 (boundaries not taken into account)
 
 
 @dataclass

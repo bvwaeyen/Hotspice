@@ -18,6 +18,22 @@ def run_a_bit(mm, N=50e3, T=0.2, show_m=True, timeit=False):
         mm.Show_m()
 
 
+def neelTemperature(mm, N=200000, T_min=0, T_max=1):
+    ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
+        @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.
+    '''
+    mm.Clear_history()
+    mm.Initialize_m('AFM')
+    AFM_ness = []
+
+    for T in np.linspace(T_min, T_max, N):
+        mm.T = T
+        mm.Update()
+        AFM_ness.append(mm.Get_AFMness())
+        mm.Save_history()
+    mm.Show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
+
+
 def autocorrelation_dist_dependence(mm):
     ''' Shows the full 2D autocorrelation, as well as the binned autocorrelation
         as a function of distance. '''

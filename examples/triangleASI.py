@@ -71,6 +71,7 @@ if __name__ == "__main__":
     print('Initialization energy:', mm.Energy())
 
     # ef.run_a_bit(mm, N=10e3, T=0.1)
+    # neelTemperature(mm, T_max=3)
     # animate_quenching(mm, animate=3, speed=50)
     # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, N=31) # Since kagome is quite sparse behind-the-scenes, it is doubtable whether the autocorrelation has a significant meaning
