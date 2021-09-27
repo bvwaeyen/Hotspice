@@ -496,6 +496,33 @@ class Magnets:
         return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(self.mask)*self.m.size)
 
 
+def fill_nan_neighbors(arr): # TODO: find a better place and name for this function, maybe create separate graphical helper function file
+    ''' Assume an array <arr> has np.nan at every other diagonal (i.e. chess pattern of np.nan's). Then this
+        function fills in these NaNs with the surrounding values at its nearest neighbors (cross neighbors ⁛),
+        but only if all those neighbors are equal. This is useful for very large simulations where each cell
+        occupies less than 1 pixel when plotted: by removing the NaNs, visual issues can be prevented.
+        @return [2D np.array]: The interpolated array.
+    '''
+    if type(arr) == cp.ndarray:
+        arr = arr.get() # We need numpy for this, to np.insert the desired rows (cp.insert does not exist)
+    else:
+        arr = np.asarray(arr)
+    replaceable = np.isnan(arr)
+
+    a = np.insert(arr, 0, arr[1], axis=0)
+    a = np.insert(a, 0, a[:,1], axis=1)
+    a = np.append(a, a[-2].reshape(1,-1), axis=0)
+    a = np.append(a, a[:,-2].reshape(-1,1), axis=1)
+
+    N = a[:-2, 1:-1]
+    E = a[1:-1, 2:]
+    S = a[2:, 1:-1]
+    W = a[1:-1, :-2]
+    equal_neighbors = np.logical_and(np.logical_and(np.isclose(N, E), np.isclose(E, S)), np.isclose(S, W))
+
+    return np.where(np.logical_and(replaceable, equal_neighbors), N, arr)
+
+
 @dataclass
 class History:
     """ Stores the history of the energy, temperature, time, and average magnetization. """
