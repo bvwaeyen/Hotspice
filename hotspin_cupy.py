@@ -34,7 +34,7 @@ class Magnets:
         self.t = 0.
         self.E_b = E_b
         self.m_type = m_type
-        self.energies = []
+        self.energies = list(energies)
 
         self.index = range(self.xx.size)
         ix = cp.arange(0, self.xx.shape[1])
@@ -166,7 +166,7 @@ class Magnets:
         return self.E_tot  
 
     def Zeeman_energy_init(self):
-        if 'exchange' not in self.energies: self.energies.append('exchange')
+        if 'Zeeman' not in self.energies: self.energies.append('Zeeman')
         self.E_Zeeman = cp.empty_like(self.xx)
         if self.m_type == 'op':
             self.H_ext = 0.
@@ -211,7 +211,7 @@ class Magnets:
         self.E_dipolar = cp.multiply(self.m, cp.reshape(temp, self.xx.shape)) # This multiplies each row (which is now only 1 element long due to the sum from the previous line of code) with m1
 
     def Exchange_energy_init(self, J):
-        if 'Zeeman' not in self.energies: self.energies.append('Zeeman')
+        if 'exchange' not in self.energies: self.energies.append('exchange')
         # self.Exchange_interaction is the mask for nearest neighbors
         if self.m_type == 'op': 
             self.Exchange_interaction = cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
