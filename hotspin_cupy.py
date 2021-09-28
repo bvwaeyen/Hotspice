@@ -150,20 +150,24 @@ class Magnets:
             self.orientation[mask == 0,1] = 0
         self.orientation = cp.asarray(self.orientation)
     
-    def Energy(self):
+    def Energy(self, single=False, i=None):
+        assert not (single and i is None), "Provide the latest switch index to Energy(single=True)"
         E = cp.zeros_like(self.xx)
         if 'exchange' in self.energies:
             self.Exchange_energy_update()
             E = E + self.E_exchange
         if 'dipolar' in self.energies:
-            self.Dipolar_energy_update()
+            if single:
+                self.Dipolar_energy_update_single(i)
+            else:
+                self.Dipolar_energy_update()
             E = E + self.E_dipolar
         if 'Zeeman' in self.energies:
             self.Zeeman_energy_update()
             E = E + self.E_Zeeman
         self.E_int = E
         self.E_tot = cp.sum(E, axis=None)
-        return self.E_tot  
+        return self.E_tot
 
     def Zeeman_energy_init(self):
         if 'Zeeman' not in self.energies: self.energies.append('Zeeman')
@@ -182,34 +186,42 @@ class Magnets:
             
     def Dipolar_energy_init(self, strength=1): # TODO: shrink this demag kernel
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
-        self.Dipolar_interaction = cp.empty((self.xx.size, self.xx.size))
         self.E_dipolar = cp.empty_like(self.xx)
-        for i in self.index:
-            rrx = cp.reshape(self.xx.flat[i] - self.xx, -1)
-            rry = cp.reshape(self.yy.flat[i] - self.yy, -1)
-            rr_sq = rrx**2 + rry**2
-            cp.place(rr_sq, rr_sq == 0.0, Inf)
-            rr_inv = rr_sq**(-1/2)
-            rrx_u = rrx*rr_inv
-            rry_u = rry*rr_inv
-            self.Dipolar_interaction[i] = rr_inv**3 # Distance^-3 of magnet <i> to every other magnet
-            if self.m_type == 'ip':
-                mx2 = cp.reshape(self.orientation[:,:,0], -1) # Vector: the mx of all the other magnets
-                my2 = cp.reshape(self.orientation[:,:,1], -1) # Vector: the my of all the other magnets
-                mx1 = mx2[i] # Scalar: the mx of this magnet
-                my1 = my2[i] # Scalar: the my of this magnet
-                self.Dipolar_interaction[i] = mx1*mx2 + my1*my2
-                self.Dipolar_interaction[i] -= 3*(mx1*rrx_u + my1*rry_u)*(cp.multiply(mx2, rrx_u) + cp.multiply(my2, rry_u))
-                self.Dipolar_interaction[i] = cp.multiply(self.Dipolar_interaction[i], rr_inv**3)
-        cp.place(self.Dipolar_interaction, self.Dipolar_interaction == Inf, 0.0) # Magnet does not interact with itself
-        self.Dipolar_interaction *= strength
-        self.Dipolar_energy_update()
+    
+    def Dipolar_energy_single(self, i):
+        ''' This calculates the kernel between magnet <i> and j, where j is the index in the output array. '''
+        # First calculate the distance to all the other magnets
+        rrx = cp.reshape(self.xx.flat[i] - self.xx, -1)
+        rry = cp.reshape(self.yy.flat[i] - self.yy, -1)
+        rr_sq = rrx**2 + rry**2
+        cp.place(rr_sq, rr_sq == 0.0, Inf)
+        rr_inv = rr_sq**(-1/2) # Due tot he previous line, this is now never infinite
+        rrx_u = rrx*rr_inv
+        rry_u = rry*rr_inv
+        # Now we can determine the interaction energy with all other magnets
+        if self.m_type == 'ip':
+            ox2 = cp.reshape(self.orientation[:,:,0], -1) # Vector: the mx of all the other magnets
+            oy2 = cp.reshape(self.orientation[:,:,1], -1) # Vector: the my of all the other magnets
+            ox1 = ox2[i] # Scalar: the mx of this magnet
+            oy1 = oy2[i] # Scalar: the my of this magnet
+            E_now = ox1*ox2 + oy1*oy2
+            E_now -= 3*(ox1*rrx_u + oy1*rry_u)*(cp.multiply(ox2, rrx_u) + cp.multiply(oy2, rry_u))
+            E_now = cp.multiply(E_now, rr_inv**3) # Prefactor (TODO: include units mu_0/4pi)
+        elif self.m_type == 'op':
+            E_now = rr_inv**3 # Just ones because in 'op' all magnets have the same orientation anyway
+        return E_now
+    
+    def Dipolar_energy_update_single(self, i):
+        ''' <i> is the index of the magnet that was switched. '''
+        interaction = self.Dipolar_energy_single(i)
+        self.E_dipolar += cp.reshape(cp.multiply(interaction*2*self.m.flat[i], cp.reshape(self.m, self.m.size)), self.E_dipolar.shape)
+        self.E_dipolar.flat[i] *= -1
 
     def Dipolar_energy_update(self):
-        # All we still need to do is multiply self.Dipolar_interaction by the correct current values of m1*m2.
-        temp = cp.dot(self.Dipolar_interaction, cp.reshape(self.m, self.m.size)) # This adds the columns of self.Dipolar_interaction together with weights self.m (i.e. m2)
-        self.E_dipolar = cp.multiply(self.m, cp.reshape(temp, self.xx.shape)) # This multiplies each row (which is now only 1 element long due to the sum from the previous line of code) with m1
-
+        for i in range(self.m.size):
+            interaction = self.m.flat[i]*cp.dot(self.Dipolar_energy_single(i), cp.reshape(self.m, self.m.size))
+            self.E_dipolar.flat[i] = cp.sum(interaction)
+        
     def Exchange_energy_init(self, J):
         if 'exchange' not in self.energies: self.energies.append('exchange')
         # self.Exchange_interaction is the mask for nearest neighbors
@@ -232,21 +244,23 @@ class Magnets:
         if self.T == 0:
             warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
-        self.Energy()
         self.barrier = (self.E_b - self.E_int)/self.mask # Divide by mask to make non-occupied grid cells have infinite barrier
         minBarrier = cp.min(self.barrier)
         self.barrier -= minBarrier # Energy is relative, so set min(E) to zero (this solves issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
             taus = cp.random.exponential(cp.exp(self.barrier/self.T))
-            indexmin = cp.unravel_index(cp.argmin(taus), self.m.shape) # WARN: this might not be optimal
-            self.m[indexmin] = -self.m[indexmin]
-            self.t += taus[indexmin]*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
+            indexmin = cp.argmin(taus)
+            indexmin2D = cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
+            self.m[indexmin2D] = -self.m[indexmin2D]
+            self.t += taus[indexmin2D]*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
         if self.m_type == 'op':
             self.m_tot = cp.mean(self.m)
         elif self.m_type == 'ip':
             self.m_tot_x = cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))
             self.m_tot_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
             self.m_tot = (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
+        
+        self.Energy(single=True, i=int(indexmin))
     
     def Run(self, N=1, save_history=1, T=None):
         ''' Perform <N> self.Update() steps, which defaults to only 1 step.

@@ -131,7 +131,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=0.4)
 
 
 if __name__ == "__main__":
-    print('Initialization energy:', mm.Energy())
+    print('Initialization energy:', mm.E_tot)
 
     ef.run_a_bit(mm, N=5000, T=0.3, timeit=True)
     # curieTemperature(mm)
