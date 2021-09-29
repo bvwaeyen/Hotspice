@@ -421,7 +421,7 @@ class Magnets:
             angles_avg[(ixx + iyy) % 2 == 1] = cp.nan # These are not the centers of hexagons, so dont draw these
         return angles_avg.get()
 
-    def Show_m(self, m=None, avg=True, show_energy=True):
+    def Show_m(self, m=None, avg=True, show_energy=True, fill=False):
         ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
             the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
             a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -431,6 +431,7 @@ class Magnets:
                 draw them onto the geometry stored in <self>.
             @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon'.
             @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
+            @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
         '''  # TODO: add possibility to fill up all the NaNs with the nearest color if all nearest colors are equal (or something like that)
         if m is None: m = self.m
         show_quiver = self.m.size < 1e5 # Quiver becomes very slow for more than 100k cells, so just dont show it then
@@ -456,8 +457,8 @@ class Magnets:
             num_plots += 1 if show_quiver else 0
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
-            im1 = ax1.imshow(fill_nan_neighbors(self.Get_magAngles(m=m, avg=avg)),
-                             cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
+            im = fill_nan_neighbors(self.Get_magAngles(m=m, avg=avg)) if fill else self.Get_magAngles(m=m, avg=avg)
+            im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
                              extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
             ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % avg if avg != 'point' else ''), font={"size":"10"})
             plt.colorbar(im1)
