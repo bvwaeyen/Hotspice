@@ -30,6 +30,9 @@ class Magnets:
         assert cp.shape(xx) == cp.shape(yy), "Error: xx and yy should have the same shape. Please obtain xx and yy using cp.meshgrid(x,y) to avoid this issue."
         self.xx = cp.asarray(xx)
         self.yy = cp.asarray(yy)
+        self.ny, self.nx = self.xx.shape
+        self.dx, self.dy = float(self.xx[1,1] - self.xx[0,0]), float(self.yy[1,1] - self.yy[0,0])
+        self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
         self.T = T
         self.t = 0.
         self.E_b = E_b
@@ -400,14 +403,11 @@ class Magnets:
         mask = self._get_mask(avg=avg)
         x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')
         y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')
-        if avg == 'triangle':
-            x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='fill')
-            y_comp_avg = signal.convolve2d(y_comp, mask, mode='same', boundary='fill')
         angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % (2*cp.pi)
         useless_angles = cp.where(cp.logical_and(cp.isclose(x_comp_avg, 0), cp.isclose(y_comp_avg, 0)), cp.nan, 1)
         angles_avg *= useless_angles
         if avg == 'triangle':
-            angles_avg = angles_avg[::2,::2]
+            angles_avg = angles_avg[1::2,1::2]
         elif avg == 'hexagon':
             angles_avg = angles_avg[::2,::2]
             ix = cp.arange(0, angles_avg.shape[1])
@@ -428,40 +428,46 @@ class Magnets:
             @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         '''  # TODO: add possibility to fill up all the NaNs with the nearest color if all nearest colors are equal (or something like that)
         if m is None: m = self.m
+        show_quiver = self.m.size < 1e5 # Quiver becomes very slow for more than 100k cells, so just dont show it then
         avg = self._resolve_avg(avg)
-            
+        mask = self._get_mask(avg=avg)
+        movex, movey = mask.shape[1]/2*self.dx, mask.shape[0]/2*self.dy # The averaged imshow should be displaced by this much
+        averaged_extent = [self.x_min-self.dx+movex,self.x_max-movex+self.dx,self.y_min-self.dy+movey,self.y_max-movey+self.dy]
+        full_extent = [self.x_min-self.dx/2,self.x_max+self.dx/2,self.y_min-self.dy/2,self.y_max+self.dx/2]
+
+        num_plots = 2 if show_energy else 1
         if self.m_type == 'op':
-            num_plots = 2 if show_energy else 1
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
             mask = self._get_mask(avg=avg)
             im1 = ax1.imshow(signal.convolve2d(m, mask, mode='valid', boundary='fill').get(),
-                             cmap='gray', origin='lower', vmin=-cp.sum(mask), vmax=cp.sum(mask))
+                             cmap='gray', origin='lower', vmin=-cp.sum(mask), vmax=cp.sum(mask),
+                             extent=averaged_extent)
             ax1.set_title(r'Averaged magnetization $\vert m \vert$')
             plt.colorbar(im1)
-            if show_energy:
-                ax2 = fig.add_subplot(1, num_plots, 2)
-                im2 = ax2.imshow(self.E_int.get(), origin='lower')
-                ax2.set_title(r'$E_{int}$')
-                plt.colorbar(im2)
         elif self.m_type == 'ip':
-            num_plots = 3 if show_energy else 2
+            num_plots += 1 if show_quiver else 0
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
-            im1 = ax1.imshow(self.Get_magAngles(m=m, avg=avg),
-                             cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi)
+            im1 = ax1.imshow(fill_nan_neighbors(self.Get_magAngles(m=m, avg=avg)),
+                             cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
+                             extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
             ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % avg if avg != 'point' else ''), font={"size":"10"})
             plt.colorbar(im1)
-            ax2 = fig.add_subplot(1, num_plots, 2)
-            ax2.set_aspect('equal')
-            ax2.quiver(self.xx.get(), self.yy.get(), cp.multiply(m, self.orientation[:,:,0]).get(), cp.multiply(m, self.orientation[:,:,1]).get(),
-                       pivot='mid', headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
-            ax2.set_title(r'$m$')
-            if show_energy:
-                ax3 = fig.add_subplot(1, num_plots, 3)
-                im3 = ax3.imshow(self.E_int.get(), origin='lower')
-                plt.colorbar(im3)
-                ax3.set_title(r'$E_{int}$')
+            if show_quiver:
+                ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
+                ax2.set_aspect('equal')
+                nonzero = self.m.get().nonzero()
+                ax2.quiver(self.xx.get()[nonzero], self.yy.get()[nonzero], 
+                        cp.multiply(m, self.orientation[:,:,0]).get()[nonzero], cp.multiply(m, self.orientation[:,:,1]).get()[nonzero],
+                        pivot='mid', scale=0.7, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
+                ax2.set_title(r'$m$')
+        if show_energy:
+            ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
+            im3 = ax3.imshow(self.E_int.get(), origin='lower',
+                             extent=full_extent)
+            plt.colorbar(im3)
+            ax3.set_title(r'$E_{int}$')
         plt.gcf().tight_layout()
         plt.show()
 
