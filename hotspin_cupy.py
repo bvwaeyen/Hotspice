@@ -189,7 +189,7 @@ class Magnets:
             
     def Dipolar_energy_init(self, strength=1): # TODO: shrink this demag kernel
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
-        self.E_dipolar = cp.empty_like(self.xx)
+        self.E_dipolar = cp.zeros_like(self.xx)
     
     def Dipolar_energy_single(self, i):
         ''' This calculates the kernel between magnet <i> and j, where j is the index in the output array. '''
@@ -222,6 +222,8 @@ class Magnets:
 
     def Dipolar_energy_update(self):
         for i in range(self.m.size):
+            if self.m.flat[i] == 0:
+                continue
             interaction = self.m.flat[i]*cp.dot(self.Dipolar_energy_single(i), cp.reshape(self.m, self.m.size))
             self.E_dipolar.flat[i] = cp.sum(interaction)
         
