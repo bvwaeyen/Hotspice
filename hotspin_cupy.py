@@ -189,10 +189,35 @@ class Magnets:
             self.E_Zeeman = -self.m*self.H_ext
         elif self.m_type == 'ip':
             self.E_Zeeman = -cp.multiply(self.m, self.H_ext[0]*self.orientation[:,:,0] + self.H_ext[1]*self.orientation[:,:,1])
-            
+    
+    def _mirror4(self, arr):
+        ny, nx = arr.shape
+        arr4 = cp.zeros((2*ny-1, 2*nx-1))
+        arr4[ny-1:, nx-1:] = arr4[ny-1:, nx-1::-1] = arr4[ny-1::-1, nx-1:] = arr4[ny-1::-1, nx-1::-1] = arr
+        return arr4
+
     def Dipolar_energy_init(self, strength=1): # TODO: shrink this demag kernel
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
         self.E_dipolar = cp.zeros_like(self.xx)
+        # Let us first make the four-mirrored self.Dipolar_rinv3 matrix
+        self.Dipolar_rinv3 = cp.zeros((2*self.ny-1, 2*self.nx-1)) # WARN: this only works if dx and dy is the same for every cell everywhere!
+        rrx = self.xx - self.xx[0,0]
+        rry = self.yy - self.yy[0,0]
+        rr_sq = rrx**2 + rry**2
+        rr_sq[0,0] = cp.inf
+        rr_inv = rr_sq**(-1/2)
+        rr_inv3 = rr_inv**3
+        self.Dipolar_rinv3 = self._mirror4(rr_inv3)
+        # Now we determine the normalized rx and ry
+        self.Dipolar_ux = self._mirror4(rrx*rr_inv)
+        self.Dipolar_uy = self._mirror4(rry*rr_inv)
+        # Now comes the part where we start splitting the different cells in the unit cells
+        self.Dipolar_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
+        unitcell_ox = self.orientation[:self.unitcell.y,:self.unitcell.x,0]
+        unitcell_oy = self.orientation[:self.unitcell.y,:self.unitcell.x,1]
+        for x in range(self.unitcell.x):
+            for y in range(self.unitcell.y):
+                pass # TODO: for tomorrow :)
     
     def Dipolar_energy_single(self, i):
         ''' This calculates the kernel between magnet <i> and j, where j is the index in the output array. '''

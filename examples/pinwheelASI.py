@@ -13,7 +13,7 @@ from context import hotspin
 ## Parameters, meshgrid
 T = 0.2
 E_b = 10.
-nx = ny = 50
+nx = ny = 4
 x = np.linspace(0, nx - 1, nx)
 y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
