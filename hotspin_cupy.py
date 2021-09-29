@@ -8,6 +8,7 @@ import numpy as np
 import cupy as cp
 
 from dataclasses import dataclass, field
+from matplotlib.widgets import MultiCursor
 from numpy.core.numeric import Inf
 from cupyx.scipy import signal
 
@@ -438,6 +439,7 @@ class Magnets:
         full_extent = [self.x_min-self.dx/2,self.x_max+self.dx/2,self.y_min-self.dy/2,self.y_max+self.dx/2]
 
         num_plots = 2 if show_energy else 1
+        axes = []
         if self.m_type == 'op':
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
@@ -447,6 +449,7 @@ class Magnets:
                              extent=averaged_extent)
             ax1.set_title(r'Averaged magnetization $\vert m \vert$')
             plt.colorbar(im1)
+            axes.append(ax1)
         elif self.m_type == 'ip':
             num_plots += 1 if show_quiver else 0
             fig = plt.figure(figsize=(3.5*num_plots, 3))
@@ -456,6 +459,7 @@ class Magnets:
                              extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
             ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % avg if avg != 'point' else ''), font={"size":"10"})
             plt.colorbar(im1)
+            axes.append(ax1)
             if show_quiver:
                 ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
                 ax2.set_aspect('equal')
@@ -464,12 +468,15 @@ class Magnets:
                         cp.multiply(m, self.orientation[:,:,0]).get()[nonzero], cp.multiply(m, self.orientation[:,:,1]).get()[nonzero],
                         pivot='mid', scale=0.7, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
                 ax2.set_title(r'$m$')
+                axes.append(ax2)
         if show_energy:
             ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
             im3 = ax3.imshow(self.E_int.get(), origin='lower',
                              extent=full_extent)
             plt.colorbar(im3)
             ax3.set_title(r'$E_{int}$')
+            axes.append(ax3)
+        multi = MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True)
         plt.gcf().tight_layout()
         plt.show()
 
