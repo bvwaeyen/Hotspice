@@ -9,7 +9,6 @@ import cupy as cp
 
 from dataclasses import dataclass, field
 from matplotlib.widgets import MultiCursor
-from numpy.core.numeric import Inf
 from cupyx.scipy import signal
 
 
@@ -114,13 +113,16 @@ class Magnets:
 
         if self.config == 'full':
             self.mask = cp.ones_like(self.m)
+            self.unitcell = Vec2D(1,1)
         elif self.config in ['chess', 'square', 'pinwheel']:
             self.mask = cp.zeros_like(self.m)
             self.mask[(self.xx + self.yy) % 2 == 1] = 1
+            self.unitcell = Vec2D(2,2)
         elif self.config in ['kagome', 'triangle']:
             self.mask = cp.zeros_like(self.m)
             self.mask[(self.ixx + self.iyy) % 4 == 1] = 1 # One bunch of diagonals \
             self.mask[(self.ixx - self.iyy) % 4 == 3] = 1 # Other bunch of diagonals /
+            self.unitcell = Vec2D(4,4)
 
         self.m = cp.multiply(self.m, self.mask)
         self.m_tot = cp.mean(self.m)
@@ -198,8 +200,8 @@ class Magnets:
         rrx = cp.reshape(self.xx.flat[i] - self.xx, -1)
         rry = cp.reshape(self.yy.flat[i] - self.yy, -1)
         rr_sq = rrx**2 + rry**2
-        cp.place(rr_sq, rr_sq == 0.0, Inf)
-        rr_inv = rr_sq**(-1/2) # Due tot he previous line, this is now never infinite
+        cp.place(rr_sq, rr_sq == 0.0, cp.inf)
+        rr_inv = rr_sq**(-1/2) # Due to the previous line, this is now never infinite
         rrx_u = rrx*rr_inv
         rry_u = rry*rr_inv
         # Now we can determine the interaction energy with all other magnets
@@ -569,3 +571,9 @@ class History:
         self.T.clear()
         self.t.clear()
         self.m.clear()
+
+@dataclass
+class Vec2D:
+    """ Stores x and y components, so we don't need to index [0] or [1] in a tuple, which would be unclear. """
+    x: float
+    y: float
