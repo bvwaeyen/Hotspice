@@ -19,7 +19,10 @@ y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
 
 ## Initialize main Magnets object: pinwheel with uniform magnetization in +y direction
+import time
+t = time.time()
 mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'pinwheel', 'uniform', energies=['dipolar'])
+print(f'Initialization time: {time.time() - t} seconds.')
 
 
 def curieTemperature(mm, N=5000):
