@@ -211,13 +211,30 @@ class Magnets:
         # Now we determine the normalized rx and ry
         self.Dipolar_ux = self._mirror4(rrx*rr_inv)
         self.Dipolar_uy = self._mirror4(rry*rr_inv)
-        # Now comes the part where we start splitting the different cells in the unit cells
-        self.Dipolar_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
+        # Now we initialize the full ox
         unitcell_ox = self.orientation[:self.unitcell.y,:self.unitcell.x,0]
         unitcell_oy = self.orientation[:self.unitcell.y,:self.unitcell.x,1]
+        num_unitcells_x = 2*math.ceil(self.nx/self.unitcell.x) + 1
+        num_unitcells_y = 2*math.ceil(self.ny/self.unitcell.y) + 1
+        toolargematrix_ox = np.tile(unitcell_ox, num_unitcells_x) # This is the maximum that we can ever need (this maximum
+        toolargematrix_oy = np.tile(unitcell_oy, num_unitcells_y) # occurs when the simulation does not cut off any unit cells)
+        # Now comes the part where we start splitting the different cells in the unit cells
+        self.Dipolar_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
         for x in range(self.unitcell.x):
             for y in range(self.unitcell.y):
-                pass # TODO: for tomorrow :)
+                ox, oy = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
+                if ox == oy == 0:
+                    continue # Empty cell in the unit cell, so keep self.Dipolar_unitcell[y][x] equal to None
+                # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
+                slice_startx = (self.unitcell.x - ((self.nx-1)%self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
+                slice_starty = (self.unitcell.y - ((self.ny-1)%self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
+                now_ox = toolargematrix_ox[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
+                now_oy = toolargematrix_oy[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
+                kernel1 = ox*cp.multiply(now_ox, 3*self.Dipolar_ux**2 + 1)
+                kernel2 = oy*cp.multiply(now_oy, 3*self.Dipolar_uy**2 + 1)
+                kernel3 = 3*cp.multiply(cp.multiply(self.Dipolar_ux, self.Dipolar_uy), ox*now_oy + oy*now_ox)
+                kernel = cp.multiply(kernel1 + kernel2 + kernel3, rr_inv3)
+                self.Dipolar_unitcell[y][x] = kernel
     
     def Dipolar_energy_single(self, i):
         ''' This calculates the kernel between magnet <i> and j, where j is the index in the output array. '''
