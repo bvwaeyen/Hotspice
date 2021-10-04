@@ -84,16 +84,15 @@ class Magnets:
         if 'Zeeman' in energies:
             self.Zeeman_energy_init()
         if 'exchange' in energies:
-            self.Exchange_energy_init()
+            self.Exchange_energy_init(1)
         self.Energy()
 
         self.history = History()
 
 
     def Initialize_m(self, pattern):
-        ''' Pattern can be any of "random", "uniform", "chess", "AFM".
-            This function should detect which kind of geometry this ASI is without
-            the user specifying it.
+        ''' Initializes the magnetization (-1, 0 or 1), mask and unit cell dimensions.
+            @param pattern [str]: can be any of "random", "uniform", "chess", "AFM".
         '''
         if pattern == 'uniform':
             self.m = cp.ones(cp.shape(self.xx)) # For full, chess, square, pinwheel: this is already ok
@@ -129,9 +128,8 @@ class Magnets:
             
       
     def _Initialize_ip(self, config, angle=0.):
-        ''' This function should only be called by the Magnets() class itself, since
-            it initializes the angles of all the spins, which is something the user should not
-            adjust themselves.
+        ''' Initialize the angles of all the magnets.
+            This function should only be called by the Magnets() class itself, not by the user.
         '''
         # This sets the angle of all the magnets (this is of course only applicable in the in-plane case)
         assert self.m_type == 'ip', "Can not _Initialize_ip() if m_type != 'ip'."
@@ -190,17 +188,18 @@ class Magnets:
         elif self.m_type == 'ip':
             self.E_Zeeman = -cp.multiply(self.m, self.H_ext[0]*self.orientation[:,:,0] + self.H_ext[1]*self.orientation[:,:,1])
     
-    def _mirror4(self, arr):
+    def _mirror4(self, arr): # TODO: does this function really have to be a method of the Magnets() class? Maybe place it somewhere else
         ny, nx = arr.shape
         arr4 = cp.zeros((2*ny-1, 2*nx-1))
         arr4[ny-1:, nx-1:] = arr4[ny-1:, nx-1::-1] = arr4[ny-1::-1, nx-1:] = arr4[ny-1::-1, nx-1::-1] = arr
         return arr4
 
-    def Dipolar_energy_init(self, strength=1): # TODO: shrink this demag kernel
+    def Dipolar_energy_init(self): # TODO: shrink this demag kernel
+        print('Calling Dipolar_energy_init.')
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
         self.E_dipolar = cp.zeros_like(self.xx)
-        # Let us first make the four-mirrored self.Dipolar_rinv3 matrix
-        self.Dipolar_rinv3 = cp.zeros((2*self.ny-1, 2*self.nx-1)) # WARN: this only works if dx and dy is the same for every cell everywhere!
+        # Let us first make the four-mirrored distance matrix self.Dipolar_rinv3
+        # WARN: this four-mirrored technique only works if dx and dy is the same for every cell everywhere!
         rrx = self.xx - self.xx[0,0]
         rry = self.yy - self.yy[0,0]
         rr_sq = rrx**2 + rry**2
@@ -218,59 +217,61 @@ class Magnets:
         num_unitcells_y = 2*math.ceil(self.ny/self.unitcell.y) + 1
         toolargematrix_ox = np.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
         toolargematrix_oy = np.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
+        np.set_printoptions(edgeitems=0) # TODO: remove this line when done with debugging
         # Now comes the part where we start splitting the different cells in the unit cells
         self.Dipolar_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
         for x in range(self.unitcell.x):
             for y in range(self.unitcell.y):
-                ox, oy = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
-                if ox == oy == 0:
+                ox1, oy1 = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
+                if ox1 == oy1 == 0:
                     continue # Empty cell in the unit cell, so keep self.Dipolar_unitcell[y][x] equal to None
                 # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
                 slice_startx = (self.unitcell.x - ((self.nx-1)%self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
                 slice_starty = (self.unitcell.y - ((self.ny-1)%self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
-                now_ox = toolargematrix_ox[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
-                now_oy = toolargematrix_oy[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
-                kernel1 = ox*cp.multiply(now_ox, 3*self.Dipolar_ux**2 + 1)
-                kernel2 = oy*cp.multiply(now_oy, 3*self.Dipolar_uy**2 + 1)
-                kernel3 = 3*cp.multiply(cp.multiply(self.Dipolar_ux, self.Dipolar_uy), ox*now_oy + oy*now_ox)
-                kernel = cp.multiply(kernel1 + kernel2 + kernel3, self.Dipolar_rinv3)
+                ox2 = toolargematrix_ox[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
+                oy2 = toolargematrix_oy[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
+                kernel1 = ox1*ox2*(3*self.Dipolar_ux**2 - 1)
+                kernel2 = oy1*oy2*(3*self.Dipolar_uy**2 - 1)
+                kernel3 = 3*(self.Dipolar_ux*self.Dipolar_uy)*(ox1*oy2 + oy1*ox2)
+                kernel = -(kernel1 + kernel2 + kernel3)*self.Dipolar_rinv3
                 self.Dipolar_unitcell[y][x] = kernel
     
     def Dipolar_energy_single(self, i):
-        ''' This calculates the kernel between magnet <i> and j, where j is the index in the output array. '''
-        # First calculate the distance to all the other magnets
-        rrx = cp.reshape(self.xx.flat[i] - self.xx, -1)
-        rry = cp.reshape(self.yy.flat[i] - self.yy, -1)
-        rr_sq = rrx**2 + rry**2
-        cp.place(rr_sq, rr_sq == 0.0, cp.inf)
-        rr_inv = rr_sq**(-1/2) # Due to the previous line, this is now never infinite
-        rrx_u = rrx*rr_inv
-        rry_u = rry*rr_inv
-        # Now we can determine the interaction energy with all other magnets
-        if self.m_type == 'ip':
-            ox2 = cp.reshape(self.orientation[:,:,0], -1) # Vector: the mx of all the other magnets
-            oy2 = cp.reshape(self.orientation[:,:,1], -1) # Vector: the my of all the other magnets
-            ox1 = ox2[i] # Scalar: the mx of this magnet
-            oy1 = oy2[i] # Scalar: the my of this magnet
-            E_now = ox1*ox2 + oy1*oy2
-            E_now -= 3*(ox1*rrx_u + oy1*rry_u)*(cp.multiply(ox2, rrx_u) + cp.multiply(oy2, rry_u))
-            E_now = cp.multiply(E_now, rr_inv**3) # Prefactor (TODO: include units mu_0/4pi)
-        elif self.m_type == 'op':
-            E_now = rr_inv**3 # Just ones because in 'op' all magnets have the same orientation anyway
-        return E_now
+        ''' This calculates the dipolar interaction energy between magnet <i> and j,
+            where j is the index in the output array. '''
+        print('Calling Dipolar_energy_single.')
+        # First we get the x and y coordinates of magnet <i> in its unit cell
+        y, x = cp.unravel_index(cp.asarray(i), self.m.shape)
+        x_unitcell = int(x) % self.unitcell.x
+        y_unitcell = int(y) % self.unitcell.y
+        # The kernel to use is then
+        kernel = self.Dipolar_unitcell[y_unitcell][x_unitcell]
+        if kernel is not None:
+            # Multiply with the magnetization
+            usefulkernel = kernel[self.ny-1-y:2*self.ny-1-y,self.nx-1-x:2*self.nx-1-x]
+            E_now = self.m.flat[i]*cp.multiply(self.m, usefulkernel)
+        else:
+            E_now = cp.zeros_like(self.m)
+        return cp.reshape(E_now, -1) # TODO: sort out whether we actually want to input and output in a 1D or 2D index
     
     def Dipolar_energy_update_single(self, i):
         ''' <i> is the index of the magnet that was switched. '''
+        print('Calling Dipolar_energy_update_single.')
         interaction = self.Dipolar_energy_single(i)
-        self.E_dipolar += cp.reshape(cp.multiply(interaction*2*self.m.flat[i], cp.reshape(self.m, self.m.size)), self.E_dipolar.shape)
+        self.E_dipolar += 2*cp.reshape(interaction, self.E_dipolar.shape) #cp.reshape(cp.multiply(interaction*2*self.m.flat[i], cp.reshape(self.m, self.m.size)), self.E_dipolar.shape)
         self.E_dipolar.flat[i] *= -1
 
     def Dipolar_energy_update(self):
+        ''' Calculates (from scratch!) the interaction energy of each magnet with all others. '''
+        # TODO: can make this a convolution, probably
+        print('Calling Dipolar_energy_update.')
         for i in range(self.m.size):
             if self.m.flat[i] == 0:
                 continue
-            interaction = self.m.flat[i]*cp.dot(self.Dipolar_energy_single(i), cp.reshape(self.m, self.m.size))
+            interaction = self.Dipolar_energy_single(i)#self.m.flat[i]*cp.dot(self.Dipolar_energy_single(i), cp.reshape(self.m, self.m.size))
+            print(i, interaction, cp.sum(interaction))
             self.E_dipolar.flat[i] = cp.sum(interaction)
+        print(self.E_dipolar)
         
     def Exchange_energy_init(self, J):
         if 'exchange' not in self.energies: self.energies.append('exchange')

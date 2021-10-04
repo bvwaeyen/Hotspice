@@ -116,7 +116,7 @@ if __name__ == "__main__":
     print('Initialization energy:', mm.Energy())
 
     # ef.run_a_bit(mm, N=4e3, T=100, show_m=False)
-    # ef.run_a_bit(mm, N=20e3, T=0.2)
+    ef.run_a_bit(mm, N=0, T=0.2)
     # ef.neelTemperature(mm, T_max=2)
     # animate_quenching(mm, animate=3, speed=50)
     # animate_temp_rise(mm, animate=3, speed=1000)

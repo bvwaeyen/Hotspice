@@ -13,7 +13,7 @@ from context import hotspin
 ## Parameters, meshgrid
 T = 0.2
 E_b = 10.
-nx = ny = 4
+nx = ny = 10
 x = np.linspace(0, nx - 1, nx)
 y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
@@ -136,7 +136,7 @@ def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=0.4)
 if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
 
-    ef.run_a_bit(mm, N=5000, T=0.3, timeit=True)
+    ef.run_a_bit(mm, N=0, T=0.3, timeit=True)
     # curieTemperature(mm)
     # animate_quenching(mm, animate=3, speed=50)
     # animate_temp_rise(mm, animate=3, speed=1000)
