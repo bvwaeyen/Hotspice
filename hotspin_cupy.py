@@ -154,15 +154,15 @@ class Magnets:
             self.orientation[mask == 0,1] = 0
         self.orientation = cp.asarray(self.orientation)
     
-    def Energy(self, single=False, i=None):
-        assert not (single and i is None), "Provide the latest switch index to Energy(single=True)"
+    def Energy(self, single=False, index2D=None):
+        assert not (single and index2D is None), "Provide the latest switch index to Energy(single=True)"
         E = cp.zeros_like(self.xx)
         if 'exchange' in self.energies:
             self.Exchange_energy_update()
             E = E + self.E_exchange
         if 'dipolar' in self.energies:
             if single:
-                self.Dipolar_energy_update_single(i)
+                self.Dipolar_energy_update_single(index2D)
             else:
                 self.Dipolar_energy_update()
             E = E + self.E_dipolar
@@ -202,15 +202,15 @@ class Magnets:
     def Dipolar_energy_init(self):
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
         self.E_dipolar = cp.zeros_like(self.xx)
-        # Let us first make the four-mirrored distance matrix self.Dipolar_rinv3
+        # Let us first make the four-mirrored distance matrix rinv3
         # WARN: this four-mirrored technique only works if dx and dy is the same for every cell everywhere!
         rrx = self.xx - self.xx[0,0]
         rry = self.yy - self.yy[0,0]
         rr_sq = rrx**2 + rry**2
         rr_sq[0,0] = cp.inf
-        rr_inv = rr_sq**(-1/2)
+        rr_inv = rr_sq**(-1/2) # Due to the previous line, this is now never infinite
         rr_inv3 = rr_inv**3
-        self.Dipolar_rinv3 = self._mirror4(rr_inv3) # TODO: determine which quantities calculated here are actually needed elsewhere, and remove the self. from those that are only needed locally
+        rinv3 = self._mirror4(rr_inv3)
         # Now we determine the normalized rx and ry
         ux = self._mirror4(rrx*rr_inv, negativex=True) # THE BUG WAS HERE OMG
         uy = self._mirror4(rry*rr_inv, negativey=True) # HOLY FLYING GUACAMOLE
@@ -223,8 +223,8 @@ class Magnets:
         toolargematrix_oy = np.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
         # Now comes the part where we start splitting the different cells in the unit cells
         self.Dipolar_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
-        for x in range(self.unitcell.x):
-            for y in range(self.unitcell.y):
+        for y in range(self.unitcell.y):
+            for x in range(self.unitcell.x):
                 ox1, oy1 = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
                 if ox1 == oy1 == 0:
                     continue # Empty cell in the unit cell, so keep self.Dipolar_unitcell[y][x] equal to None
@@ -233,17 +233,17 @@ class Magnets:
                 slice_starty = (self.unitcell.y - ((self.ny-1)%self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
                 ox2 = toolargematrix_ox[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
                 oy2 = toolargematrix_oy[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
-                kernel1 = ox1*ox2*(3*self.Dipolar_ux**2 - 1)
-                kernel2 = oy1*oy2*(3*self.Dipolar_uy**2 - 1)
-                kernel3 = 3*(self.Dipolar_ux*self.Dipolar_uy)*(ox1*oy2 + oy1*ox2)
-                kernel = -(kernel1 + kernel2 + kernel3)*self.Dipolar_rinv3
-                self.Dipolar_unitcell[y][x] = kernel
+                kernel1 = ox1*ox2*(3*ux**2 - 1)
+                kernel2 = oy1*oy2*(3*uy**2 - 1)
+                kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
+                kernel = -(kernel1 + kernel2 + kernel3)*rinv3
+                self.Dipolar_unitcell[y][x] = kernel # WIP: The kernel1, 2, 3 and their sum work perfectly
     
-    def Dipolar_energy_single(self, i):
+    def Dipolar_energy_single(self, index2D):
         ''' This calculates the dipolar interaction energy between magnet <i> and j,
             where j is the index in the output array. '''
         # First we get the x and y coordinates of magnet <i> in its unit cell
-        y, x = cp.unravel_index(cp.asarray(i), self.m.shape)
+        y, x = index2D
         x_unitcell = int(x) % self.unitcell.x
         y_unitcell = int(y) % self.unitcell.y
         # The kernel to use is then
@@ -251,29 +251,25 @@ class Magnets:
         if kernel is not None:
             # Multiply with the magnetization
             usefulkernel = kernel[self.ny-1-y:2*self.ny-1-y,self.nx-1-x:2*self.nx-1-x]
-            E_now = self.m.flat[i]*cp.multiply(self.m, usefulkernel)
+            E_now = self.m[index2D]*cp.multiply(self.m, usefulkernel)
         else:
             E_now = cp.zeros_like(self.m)
-        return cp.reshape(E_now, -1) # TODO: sort out whether we actually want to input and output in a 1D or 2D index
+        return E_now
     
-    def Dipolar_energy_update_single(self, i):
+    def Dipolar_energy_update_single(self, index2D):
         ''' <i> is the index of the magnet that was switched. '''
-        print('Calling Dipolar_energy_update_single.')
-        interaction = self.Dipolar_energy_single(i)
-        self.E_dipolar += 2*cp.reshape(interaction, self.E_dipolar.shape) #cp.reshape(cp.multiply(interaction*2*self.m.flat[i], cp.reshape(self.m, self.m.size)), self.E_dipolar.shape)
-        self.E_dipolar.flat[i] *= -1
+        interaction = self.Dipolar_energy_single(index2D)
+        self.E_dipolar += 2*interaction
+        self.E_dipolar[index2D] *= -1 # This magnet switched, so all its interactions are inverted
 
     def Dipolar_energy_update(self):
         ''' Calculates (from scratch!) the interaction energy of each magnet with all others. '''
         # TODO: can make this a convolution, probably
-        print('Calling Dipolar_energy_update.')
-        for i in range(self.m.size):
-            if self.m.flat[i] == 0:
+        for index, m in np.ndenumerate(self.m.get()): # cp.ndenumerate function doesn't exist, so use numpy
+            if m == 0:
                 continue
-            interaction = self.Dipolar_energy_single(i)#self.m.flat[i]*cp.dot(self.Dipolar_energy_single(i), cp.reshape(self.m, self.m.size))
-            print(i, interaction, cp.sum(interaction))
-            self.E_dipolar.flat[i] = cp.sum(interaction)
-        print(self.E_dipolar)
+            interaction = self.Dipolar_energy_single(index)
+            self.E_dipolar[index] = cp.sum(interaction)
         
     def Exchange_energy_init(self, J):
         if 'exchange' not in self.energies: self.energies.append('exchange')
@@ -313,7 +309,7 @@ class Magnets:
             self.m_tot_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
             self.m_tot = (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
         
-        self.Energy(single=True, i=int(indexmin))
+        self.Energy(single=True, index2D=indexmin2D)
     
     def Run(self, N=1, save_history=1, T=None):
         ''' Perform <N> self.Update() steps, which defaults to only 1 step.
@@ -477,7 +473,7 @@ class Magnets:
             @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon'.
             @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
             @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
-        '''  # TODO: add possibility to fill up all the NaNs with the nearest color if all nearest colors are equal (or something like that)
+        '''
         if m is None: m = self.m
         show_quiver = self.m.size < 1e5 # Quiver becomes very slow for more than 100k cells, so just dont show it then
         avg = self._resolve_avg(avg)
