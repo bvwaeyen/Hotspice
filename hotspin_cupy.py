@@ -277,10 +277,11 @@ class Magnets:
         if self.m_type == 'op': 
             self.Exchange_interaction = cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
         elif self.m_type == 'ip':
-            if self.config in ['square', 'pinwheel']:
-                self.Exchange_interaction = cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
-            elif self.config in ['kagome', 'triangle']:
-                self.Exchange_interaction = cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
+            # if self.config in ['square', 'pinwheel']:
+            #     self.Exchange_interaction = cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
+            # elif self.config in ['kagome', 'triangle']:
+            #     self.Exchange_interaction = cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
+            self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
 
         self.Exchange_J = J
         self.Exchange_energy_update()
