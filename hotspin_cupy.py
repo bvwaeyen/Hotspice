@@ -215,29 +215,35 @@ class Magnets:
         ux = self._mirror4(rrx*rr_inv, negativex=True) # THE BUG WAS HERE OMG
         uy = self._mirror4(rry*rr_inv, negativey=True) # HOLY FLYING GUACAMOLE
         # Now we initialize the full ox
-        unitcell_ox = self.orientation[:self.unitcell.y,:self.unitcell.x,0]
-        unitcell_oy = self.orientation[:self.unitcell.y,:self.unitcell.x,1]
+        if self.m_type == 'ip':
+            unitcell_ox = self.orientation[:self.unitcell.y,:self.unitcell.x,0]
+            unitcell_oy = self.orientation[:self.unitcell.y,:self.unitcell.x,1]
+        else:
+            unitcell_ox = unitcell_oy = cp.zeros((self.unitcell.y, self.unitcell.x))
         num_unitcells_x = 2*math.ceil(self.nx/self.unitcell.x) + 1
         num_unitcells_y = 2*math.ceil(self.ny/self.unitcell.y) + 1
-        toolargematrix_ox = np.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
-        toolargematrix_oy = np.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
+        toolargematrix_ox = cp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
+        toolargematrix_oy = cp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
         # Now comes the part where we start splitting the different cells in the unit cells
         self.Dipolar_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
-                ox1, oy1 = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
-                if ox1 == oy1 == 0:
-                    continue # Empty cell in the unit cell, so keep self.Dipolar_unitcell[y][x] equal to None
-                # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
-                slice_startx = (self.unitcell.x - ((self.nx-1)%self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
-                slice_starty = (self.unitcell.y - ((self.ny-1)%self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
-                ox2 = toolargematrix_ox[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
-                oy2 = toolargematrix_oy[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
-                kernel1 = ox1*ox2*(3*ux**2 - 1)
-                kernel2 = oy1*oy2*(3*uy**2 - 1)
-                kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
-                kernel = -(kernel1 + kernel2 + kernel3)*rinv3
-                self.Dipolar_unitcell[y][x] = kernel # WIP: The kernel1, 2, 3 and their sum work perfectly
+                if self.m_type == 'op':
+                    self.Dipolar_unitcell[y][x] = rinv3 # 'kernel' for out-of-plane is very simple
+                elif self.m_type == 'ip':
+                    ox1, oy1 = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
+                    if ox1 == oy1 == 0:
+                        continue # Empty cell in the unit cell, so keep self.Dipolar_unitcell[y][x] equal to None
+                    # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
+                    slice_startx = (self.unitcell.x - ((self.nx-1)%self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
+                    slice_starty = (self.unitcell.y - ((self.ny-1)%self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
+                    ox2 = toolargematrix_ox[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
+                    oy2 = toolargematrix_oy[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
+                    kernel1 = ox1*ox2*(3*ux**2 - 1)
+                    kernel2 = oy1*oy2*(3*uy**2 - 1)
+                    kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
+                    kernel = -(kernel1 + kernel2 + kernel3)*rinv3
+                    self.Dipolar_unitcell[y][x] = kernel # WIP: The kernel1, 2, 3 and their sum work perfectly
     
     def Dipolar_energy_single(self, index2D):
         ''' This calculates the dipolar interaction energy between magnet <i> and j,
