@@ -509,9 +509,10 @@ class Magnets:
                 ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
                 ax2.set_aspect('equal')
                 nonzero = self.m.get().nonzero()
+                quiverscale = 0.9 if self.config in ['kagome'] else 0.7
                 ax2.quiver(self.xx.get()[nonzero], self.yy.get()[nonzero], 
                         cp.multiply(m, self.orientation[:,:,0]).get()[nonzero], cp.multiply(m, self.orientation[:,:,1]).get()[nonzero],
-                        pivot='mid', scale=0.7, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
+                        pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
                 ax2.set_title(r'$m$')
                 axes.append(ax2)
         if show_energy:
@@ -575,7 +576,8 @@ class Magnets:
 
 
 def fill_nan_neighbors(arr): # TODO: find a better place and name for this function, maybe create separate graphical helper function file
-    ''' Assume an array <arr> has np.nan at every other diagonal (i.e. chess pattern of np.nan's). Then this
+    ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
+        Assume an array <arr> has np.nan at every other diagonal (i.e. chess pattern of np.nan's). Then this
         function fills in these NaNs with the surrounding values at its nearest neighbors (cross neighbors ⁛),
         but only if all those neighbors are equal. This is useful for very large simulations where each cell
         occupies less than 1 pixel when plotted: by removing the NaNs, visual issues can be prevented.
@@ -587,6 +589,7 @@ def fill_nan_neighbors(arr): # TODO: find a better place and name for this funct
         arr = np.asarray(arr)
     replaceable = np.isnan(arr)
 
+    # Extend arrays a bit to fill nans near boundaries as well
     a = np.insert(arr, 0, arr[1], axis=0)
     a = np.insert(a, 0, a[:,1], axis=1)
     a = np.append(a, a[-2].reshape(1,-1), axis=0)
