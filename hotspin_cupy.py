@@ -64,8 +64,18 @@ class Magnets:
             else:
                 raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'ip'.")
 
-        # Initialize self.m and the correct self.mask
-        self.Initialize_m(pattern)
+        if self.config == 'full':
+            self.mask = cp.ones_like(self.xx)
+            self.unitcell = Vec2D(1,1)
+        elif self.config in ['chess', 'square', 'pinwheel']:
+            self.mask = cp.zeros_like(self.xx)
+            self.mask[(self.xx + self.yy) % 2 == 1] = 1
+            self.unitcell = Vec2D(2,2)
+        elif self.config in ['kagome', 'triangle']:
+            self.mask = cp.zeros_like(self.xx)
+            self.mask[(self.ixx + self.iyy) % 4 == 1] = 1 # One bunch of diagonals \
+            self.mask[(self.ixx - self.iyy) % 4 == 3] = 1 # Other bunch of diagonals /
+            self.unitcell = Vec2D(4,4)
 
         # Set the orientation of the islands corresponding to config
         if m_type == 'ip': 
@@ -85,7 +95,9 @@ class Magnets:
             self.Zeeman_energy_init()
         if 'exchange' in energies:
             self.Exchange_energy_init(1)
-        self.Energy()
+
+        # Initialize self.m and the correct self.mask
+        self.Initialize_m(pattern)
 
         self.history = History()
 
@@ -110,21 +122,9 @@ class Magnets:
             self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1 # Yields random -1 or 1
             if pattern != 'random': warnings.warn('Config not recognized, defaulting to "random".', stacklevel=2)
 
-        if self.config == 'full':
-            self.mask = cp.ones_like(self.m)
-            self.unitcell = Vec2D(1,1)
-        elif self.config in ['chess', 'square', 'pinwheel']:
-            self.mask = cp.zeros_like(self.m)
-            self.mask[(self.xx + self.yy) % 2 == 1] = 1
-            self.unitcell = Vec2D(2,2)
-        elif self.config in ['kagome', 'triangle']:
-            self.mask = cp.zeros_like(self.m)
-            self.mask[(self.ixx + self.iyy) % 4 == 1] = 1 # One bunch of diagonals \
-            self.mask[(self.ixx - self.iyy) % 4 == 3] = 1 # Other bunch of diagonals /
-            self.unitcell = Vec2D(4,4)
-
         self.m = cp.multiply(self.m, self.mask)
         self.m_tot = cp.mean(self.m)
+        self.Energy() # Have to recalculate all the energies since m changed completely
             
       
     def _Initialize_ip(self, config, angle=0.):
@@ -133,7 +133,7 @@ class Magnets:
         '''
         # This sets the angle of all the magnets (this is of course only applicable in the in-plane case)
         assert self.m_type == 'ip', "Can not _Initialize_ip() if m_type != 'ip'."
-        self.orientation = np.zeros(np.shape(self.m) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
+        self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         mask = self.mask.get()
         yy = self.yy.get()
         if config == 'square':
@@ -351,7 +351,7 @@ class Magnets:
     def Clear_history(self):
         self.history.clear()
     
-    def Autocorrelation_fast(self, max_distance):
+    def Autocorrelation_fast(self, max_distance): # TODO: test this performance on a large simulation
         max_distance = round(max_distance)
         s = cp.shape(self.xx)
         if not(hasattr(self, 'Distances')):
