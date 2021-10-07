@@ -386,6 +386,13 @@ class Magnets:
         return corr_binned.get(), distances.get(), float(corr_length)
 
     # Below here are some graphical functions (plot magnetization profile etc.)
+    def _get_averaged_extent(self, avg):
+        ''' Returns the extent that can be used in imshow when plotting an averaged quantity. '''
+        avg = self._resolve_avg(avg)
+        mask = self._get_mask(avg=avg)
+        movex, movey = mask.shape[1]/2*self.dx, mask.shape[0]/2*self.dy # The averaged imshow should be displaced by this much
+        return [self.x_min-self.dx+movex,self.x_max-movex+self.dx,self.y_min-self.dy+movey,self.y_max-movey+self.dy]
+        
     def _get_appropriate_avg(self):
         ''' Auto-detect the most appropriate averaging mask based on self.config '''
         if self.config in ['full']:
@@ -419,9 +426,9 @@ class Magnets:
                     [1, 0, 1], 
                     [0, 1, 0]]
         elif avg == 'square': # square ⸬
-            mask = [[1, 0, 1], 
-                    [0, 0, 0], 
-                    [1, 0, 1]]
+            mask = [[1, 1, 1], 
+                    [1, 0, 1], 
+                    [1, 1, 1]]
         elif avg == 'hexagon':
             mask = [[0, 1, 0, 1, 0], 
                     [1, 0, 0, 0, 1], 
@@ -447,12 +454,15 @@ class Magnets:
             @return [2D np.array]: the (averaged) magnetization angle at each position.
                 !! This does not necessarily have the same shape as <m> !!
         '''
-        assert self.m_type == 'ip', "Can not Get_magAngles of an out-of-plane spin ice (m_type='op')."
         if m is None: m = self.m
         avg = self._resolve_avg(avg)
 
-        x_comp = cp.multiply(m, self.orientation[:,:,0])
-        y_comp = cp.multiply(m, self.orientation[:,:,1])
+        if self.m_type == 'ip':
+            x_comp = cp.multiply(m, self.orientation[:,:,0])
+            y_comp = cp.multiply(m, self.orientation[:,:,1])
+        else:
+            x_comp = m
+            y_comp = cp.zeros_like(m)
         mask = self._get_mask(avg=avg)
         x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')
         y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')
@@ -481,12 +491,10 @@ class Magnets:
             @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
             @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
         '''
+        avg = self._resolve_avg(avg)
         if m is None: m = self.m
         show_quiver = self.m.size < 1e5 # Quiver becomes very slow for more than 100k cells, so just dont show it then
-        avg = self._resolve_avg(avg)
-        mask = self._get_mask(avg=avg)
-        movex, movey = mask.shape[1]/2*self.dx, mask.shape[0]/2*self.dy # The averaged imshow should be displaced by this much
-        averaged_extent = [self.x_min-self.dx+movex,self.x_max-movex+self.dx,self.y_min-self.dy+movey,self.y_max-movey+self.dy]
+        averaged_extent = self._get_averaged_extent(avg)
         full_extent = [self.x_min-self.dx/2,self.x_max+self.dx/2,self.y_min-self.dy/2,self.y_max+self.dx/2]
 
         num_plots = 2 if show_energy else 1

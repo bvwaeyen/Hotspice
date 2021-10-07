@@ -1,4 +1,4 @@
-# import math
+import math
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,7 +13,7 @@ from context import hotspin
 ## Parameters, meshgrid
 T = 0.2
 E_b = 10.
-nx = ny = 10
+nx = ny = 400
 x = np.linspace(0, nx - 1, nx)
 y = np.linspace(0, ny - 1, ny)
 xx, yy = np.meshgrid(x, y)
@@ -46,42 +46,6 @@ def curieTemperature(mm, N=5000):
     mm.Show_history()
 
 
-def animate_quenching(mm, animate=1, speed=50, n_low=20000, n_high=2000, T_low=0.15, T_high=1):
-    """ Shows an animation of repeatedly putting the simulation at quite low and high temperatures,
-        WITHOUT a smooth temperature transition in between.
-        @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
-            time between two frames.
-        @param speed [int] (50): How many switches are simulated between each frame.
-        @param n_low [int] (20000): The number of switches at low T before returning to high T.
-        @param n_high [int] (2000): The number of switches at high T before returning to low T.
-    """
-    # Set up the figure, the axis, and the plot element we want to animate
-    fig = plt.figure(figsize=(5, 4))
-    ax1 = fig.add_subplot(111)
-    h = ax1.imshow(mm.Get_magAngles(), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
-    ax1.set_title(r'Averaged magnetization angle')
-    c1 = plt.colorbar(h)
-    fig.suptitle('Temperature %.3f [a.u.]' % mm.T)
-
-    # This is the function that gets called each frame
-    def animate_quenching_update(i):
-        currStep = i*speed
-        prev_T = mm.T
-        for j in range(currStep, currStep + speed):
-            mm.T = T_high if j%(n_low + n_high) < n_high else T_low
-            mm.Update()
-        if mm.T != prev_T: # Update the temperature text if T changed
-            fig.suptitle('Temperature %.3f' % mm.T)
-        h.set_array(mm.Get_magAngles())
-        return h, # This has to be an iterable!
-
-    # Assign the animation to a variable, to prevent it from getting garbage-collected
-    anim = animation.FuncAnimation(fig, animate_quenching_update, 
-                                    frames=(n_low + n_high)//speed, interval=speed/animate, 
-                                    blit=False, repeat=True)
-    plt.show()
-
-
 def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
     """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Curie temperature. Caution has to be taken, however, since the graph shows
@@ -101,7 +65,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(mm.Get_magAngles(), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi)
+    h = ax1.imshow(mm.Get_magAngles(), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
     ax1.set_title(r'Averaged magnetization angle')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -128,17 +92,15 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
     plt.show()
 
 
-def autocorrelation_temp_dependence(mm, N=31, M=50, L=500, T_min=0.1, T_max=0.4):
-    mm.Initialize_m('random')
-    ef.autocorrelation_temp_dependence(mm, N=N, M=M, L=L, T_min=T_min, T_max=T_max)
-
-
 if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
 
-    ef.run_a_bit(mm, N=0, T=0.3, timeit=True)
+    # ef.run_a_bit(mm, N=5000, T=0.3, timeit=True, fill=True)
     # curieTemperature(mm)
-    # animate_quenching(mm, animate=3, speed=50)
+    # ef.animate_quenching(mm, pattern='random', T_low=0.3, T_high=0.3, animate=3, speed=500, fill=True)
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
-    # autocorrelation_temp_dependence(mm)
+    # autocorrelation_temp_dependence(mm, T_min=0.1, T_max=0.4)
+
+    #### Commands which do some specific thing which yields nice saved figures or videos
+    # ef.animate_quenching(mm, pattern='random', T_low=0.3, T_high=0.3, animate=3, speed=500, fill=True, save=25) # Optimized for nx = ny = 400
