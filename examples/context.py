@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 # This is the line of code we need: importing the hotspin.py or hotspin_cupy.py module which is located in the parent directory
 # import hotspin
-import hotspin_cupy as hotspin 
+import hotspin as hotspin 
 
 if __name__ == "__main__":
     print(hotspin)
