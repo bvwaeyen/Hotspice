@@ -58,9 +58,10 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     fig = plt.figure(figsize=(6, 4.8))
     ax1 = fig.add_subplot(111)
     h = ax1.imshow(mm.Get_magAngles(avg=avg), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=mm._get_averaged_extent(avg))
-    ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % mm._resolve_avg(avg) if avg != 'point' else ''))
     c1 = plt.colorbar(h)
-    fig.suptitle('Temperature %.3f [a.u.]' % mm.T)
+    c1.ax.get_yaxis().labelpad = 30
+    c1.ax.set_ylabel('Averaged magnetization angle' + ('\n("%s" average)' % mm._resolve_avg(avg) if avg != 'point' else ''), rotation=270, fontsize=12)
+    fig.suptitle('Temperature %.3f' % mm.T)
 
     # This is the function that gets called each frame
     def animate_quenching_update(i):

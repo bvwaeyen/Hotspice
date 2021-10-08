@@ -103,4 +103,4 @@ if __name__ == "__main__":
     # autocorrelation_temp_dependence(mm, T_min=0.1, T_max=0.4)
 
     #### Commands which do some specific thing which yields nice saved figures or videos
-    # ef.animate_quenching(mm, pattern='random', T_low=0.3, T_high=0.3, animate=3, speed=500, fill=True, save=25) # Optimized for nx = ny = 400
+    # ef.animate_quenching(mm, pattern='random', T_low=0.15, T_high=0.15, animate=3, speed=500, fill=True, save=25) # Optimized for nx = ny = 400
