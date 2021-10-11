@@ -271,11 +271,18 @@ class Magnets:
     def energy_dipolar_full(self):
         ''' Calculates (from scratch!) the interaction energy of each magnet with all others. '''
         # TODO: can make this a convolution, probably
-        for index, m in np.ndenumerate(self.m.get()): # cp.ndenumerate function doesn't exist, so use numpy
-            if m == 0:
-                continue
-            interaction = self.energy_dipolar_single(index)
-            self.E_dipolar[index] = cp.sum(interaction)
+        total_energy = cp.zeros_like(self.m)
+        for y in range(self.unitcell.y):
+            for x in range(self.unitcell.x):
+                kernel = self.Dipolar_unitcell[y][x]
+                if kernel is None:
+                    continue
+                else:
+                    partial_m = cp.zeros_like(self.m)
+                    partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.m[y::self.unitcell.y, x::self.unitcell.x]
+
+                    total_energy += partial_m*signal.convolve2d(kernel, self.m, mode='valid')
+        self.E_dipolar = total_energy
         
     def energy_exchange_init(self, J):
         if 'exchange' not in self.energies: self.energies.append('exchange')
