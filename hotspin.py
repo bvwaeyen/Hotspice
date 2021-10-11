@@ -162,9 +162,9 @@ class Magnets:
             E = E + self.E_exchange
         if 'dipolar' in self.energies:
             if single:
-                self.energy_dipolar_update_single(index2D)
+                self.energy_dipolar_update(index2D)
             else:
-                self.energy_dipolar_update()
+                self.energy_dipolar_full()
             E = E + self.E_dipolar
         if 'Zeeman' in self.energies:
             self.energy_Zeeman_update()
@@ -243,7 +243,7 @@ class Magnets:
                     kernel2 = oy1*oy2*(3*uy**2 - 1)
                     kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
                     kernel = -(kernel1 + kernel2 + kernel3)*rinv3
-                    self.Dipolar_unitcell[y][x] = kernel # WIP: The kernel1, 2, 3 and their sum work perfectly
+                    self.Dipolar_unitcell[y][x] = kernel
     
     def energy_dipolar_single(self, index2D):
         ''' This calculates the dipolar interaction energy between magnet <i> and j,
@@ -262,13 +262,13 @@ class Magnets:
             E_now = cp.zeros_like(self.m)
         return E_now
     
-    def energy_dipolar_update_single(self, index2D):
+    def energy_dipolar_update(self, index2D):
         ''' <i> is the index of the magnet that was switched. '''
         interaction = self.energy_dipolar_single(index2D)
         self.E_dipolar += 2*interaction
         self.E_dipolar[index2D] *= -1 # This magnet switched, so all its interactions are inverted
 
-    def energy_dipolar_update(self):
+    def energy_dipolar_full(self):
         ''' Calculates (from scratch!) the interaction energy of each magnet with all others. '''
         # TODO: can make this a convolution, probably
         for index, m in np.ndenumerate(self.m.get()): # cp.ndenumerate function doesn't exist, so use numpy
