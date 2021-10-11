@@ -90,11 +90,11 @@ class Magnets:
 
         # Initialize the specified energy components
         if 'dipolar' in energies:
-            self.Dipolar_energy_init()
+            self.Energy_dipolar_init()
         if 'Zeeman' in energies:
-            self.Zeeman_energy_init()
+            self.Energy_Zeeman_init()
         if 'exchange' in energies:
-            self.Exchange_energy_init(1)
+            self.Energy_exchange_init(1)
 
         # Initialize self.m and the correct self.mask
         self.Initialize_m(pattern)
@@ -104,7 +104,7 @@ class Magnets:
 
     def Initialize_m(self, pattern):
         ''' Initializes the magnetization (-1, 0 or 1), mask and unit cell dimensions.
-            @param pattern [str]: can be any of "random", "uniform", "chess", "AFM".
+            @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
         if pattern == 'uniform':
             self.m = cp.ones(cp.shape(self.xx)) # For full, chess, square, pinwheel: this is already ok
@@ -158,31 +158,31 @@ class Magnets:
         assert not (single and index2D is None), "Provide the latest switch index to Energy(single=True)"
         E = cp.zeros_like(self.xx)
         if 'exchange' in self.energies:
-            self.Exchange_energy_update()
+            self.Energy_exchange_update()
             E = E + self.E_exchange
         if 'dipolar' in self.energies:
             if single:
-                self.Dipolar_energy_update_single(index2D)
+                self.Energy_dipolar_update_single(index2D)
             else:
-                self.Dipolar_energy_update()
+                self.Energy_dipolar_update()
             E = E + self.E_dipolar
         if 'Zeeman' in self.energies:
-            self.Zeeman_energy_update()
+            self.Energy_Zeeman_update()
             E = E + self.E_Zeeman
         self.E_int = E
         self.E_tot = cp.sum(E, axis=None)
         return self.E_tot
 
-    def Zeeman_energy_init(self):
+    def Energy_Zeeman_init(self):
         if 'Zeeman' not in self.energies: self.energies.append('Zeeman')
         self.E_Zeeman = cp.empty_like(self.xx)
         if self.m_type == 'op':
             self.H_ext = 0.
         elif self.m_type == 'ip':
             self.H_ext = cp.zeros(2)
-        self.Zeeman_energy_update()
+        self.Energy_Zeeman_update()
 
-    def Zeeman_energy_update(self):
+    def Energy_Zeeman_update(self):
         if self.m_type == 'op':
             self.E_Zeeman = -self.m*self.H_ext
         elif self.m_type == 'ip':
@@ -199,7 +199,7 @@ class Magnets:
         arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
         return arr4
 
-    def Dipolar_energy_init(self):
+    def Energy_dipolar_init(self):
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
         self.E_dipolar = cp.zeros_like(self.xx)
         # Let us first make the four-mirrored distance matrix rinv3
@@ -245,7 +245,7 @@ class Magnets:
                     kernel = -(kernel1 + kernel2 + kernel3)*rinv3
                     self.Dipolar_unitcell[y][x] = kernel # WIP: The kernel1, 2, 3 and their sum work perfectly
     
-    def Dipolar_energy_single(self, index2D):
+    def Energy_dipolar_single(self, index2D):
         ''' This calculates the dipolar interaction energy between magnet <i> and j,
             where j is the index in the output array. '''
         # First we get the x and y coordinates of magnet <i> in its unit cell
@@ -262,22 +262,22 @@ class Magnets:
             E_now = cp.zeros_like(self.m)
         return E_now
     
-    def Dipolar_energy_update_single(self, index2D):
+    def Energy_dipolar_update_single(self, index2D):
         ''' <i> is the index of the magnet that was switched. '''
-        interaction = self.Dipolar_energy_single(index2D)
+        interaction = self.Energy_dipolar_single(index2D)
         self.E_dipolar += 2*interaction
         self.E_dipolar[index2D] *= -1 # This magnet switched, so all its interactions are inverted
 
-    def Dipolar_energy_update(self):
+    def Energy_dipolar_update(self):
         ''' Calculates (from scratch!) the interaction energy of each magnet with all others. '''
         # TODO: can make this a convolution, probably
         for index, m in np.ndenumerate(self.m.get()): # cp.ndenumerate function doesn't exist, so use numpy
             if m == 0:
                 continue
-            interaction = self.Dipolar_energy_single(index)
+            interaction = self.Energy_dipolar_single(index)
             self.E_dipolar[index] = cp.sum(interaction)
         
-    def Exchange_energy_init(self, J):
+    def Energy_exchange_init(self, J):
         if 'exchange' not in self.energies: self.energies.append('exchange')
         # self.Exchange_interaction is the mask for nearest neighbors
         if self.m_type == 'op': 
@@ -290,9 +290,9 @@ class Magnets:
             self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
 
         self.Exchange_J = J
-        self.Exchange_energy_update()
+        self.Energy_exchange_update()
 
-    def Exchange_energy_update(self):
+    def Energy_exchange_update(self):
         self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='fill'), self.m)
 
     def Update(self):
