@@ -9,13 +9,28 @@ from matplotlib import animation
 from context import hotspin
 
 
-def run_a_bit(mm: hotspin.Magnets, N=50e3, T=0.2, show_m=True, timeit=False, fill=False):
+def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False, show_m=True, fill=False):
     ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
         This end plot can be disabled by setting <show_m> to False.
+        @param N [int] (50000): the number of update steps to run.
+        @param T [float] (mm.T): the temperature at which to run the <N> steps.
+            If not specified, the current temperature of the simulation is retained.
+        @param save_history [int] (1): the number of steps between two recorded entries in mm.history.
+            If 0, no history is recorded.
+        @param timeit [bool] (False): whether or not to time how long it takes to simulate the <N> switches.
+        @param show_m [bool] (True): whether or not to plot the magnetization profile after the <N> switches.
+        @param fill [bool] (False): whether or not to fill in the empty pixels in the <show_m> plot.
     '''
+    if T is not None: mm.T = T
+
     if timeit: t = time.time()
-    mm.run(N=N, T=T)
+    for i in range(int(N)):
+        mm.update()
+        if save_history:
+            if i % save_history == 0:
+                mm.save_history()
     if timeit: print(f"Simulated {N} switches (on {mm.m.shape[0]}x{mm.m.shape[1]} grid) in {time.time() - t} seconds.")
+
     print('Energy:', mm.E_tot)
     if show_m:
         mm.show_m(fill=fill)

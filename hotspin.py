@@ -154,6 +154,7 @@ class Magnets:
             self.orientation[mask == 0,1] = 0
         self.orientation = cp.asarray(self.orientation)
     
+
     def energy(self, single=False, index2D=None):
         assert not (single and index2D is None), "Provide the latest switch index to energy(single=True)"
         E = cp.zeros_like(self.xx)
@@ -187,33 +188,23 @@ class Magnets:
             self.E_Zeeman = -self.m*self.H_ext
         elif self.m_type == 'ip':
             self.E_Zeeman = -cp.multiply(self.m, self.H_ext[0]*self.orientation[:,:,0] + self.H_ext[1]*self.orientation[:,:,1])
-    
-    def _mirror4(self, arr, negativex=False, negativey=False): # TODO: does this function really have to be a method of the Magnets() class? Maybe place it somewhere else
-        ny, nx = arr.shape
-        arr4 = cp.zeros((2*ny-1, 2*nx-1))
-        xp = -1 if negativex else 1
-        yp = -1 if negativey else 1
-        arr4[ny-1:, nx-1:] = arr
-        arr4[ny-1:, nx-1::-1] = xp*arr
-        arr4[ny-1::-1, nx-1:] = yp*arr
-        arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
-        return arr4
 
     def energy_dipolar_init(self):
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
         self.E_dipolar = cp.zeros_like(self.xx)
         # Let us first make the four-mirrored distance matrix rinv3
-        # WARN: this four-mirrored technique only works if dx and dy is the same for every cell everywhere!
+        # WARN: this four-mirrored technique only works if dx and dy is the same for every cell everywhere! so,
+        # TODO: make the initialization of Magnets() object only take an nx, ny, dx, dy which is also much easier to use
         rrx = self.xx - self.xx[0,0]
         rry = self.yy - self.yy[0,0]
         rr_sq = rrx**2 + rry**2
         rr_sq[0,0] = cp.inf
         rr_inv = rr_sq**(-1/2) # Due to the previous line, this is now never infinite
         rr_inv3 = rr_inv**3
-        rinv3 = self._mirror4(rr_inv3)
+        rinv3 = _mirror4(rr_inv3)
         # Now we determine the normalized rx and ry
-        ux = self._mirror4(rrx*rr_inv, negativex=True) # THE BUG WAS HERE OMG
-        uy = self._mirror4(rry*rr_inv, negativey=True) # HOLY FLYING GUACAMOLE
+        ux = _mirror4(rrx*rr_inv, negativex=True) # THE BUG WAS HERE OMG
+        uy = _mirror4(rry*rr_inv, negativey=True) # HOLY FLYING GUACAMOLE
         # Now we initialize the full ox
         if self.m_type == 'ip':
             unitcell_ox = self.orientation[:self.unitcell.y,:self.unitcell.x,0]
@@ -270,7 +261,6 @@ class Magnets:
 
     def energy_dipolar_full(self):
         ''' Calculates (from scratch!) the interaction energy of each magnet with all others. '''
-        # TODO: can make this a convolution, probably
         total_energy = cp.zeros_like(self.m)
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
@@ -286,6 +276,7 @@ class Magnets:
         
     def energy_exchange_init(self, J):
         if 'exchange' not in self.energies: self.energies.append('exchange')
+        self.Exchange_J = J
         # self.Exchange_interaction is the mask for nearest neighbors
         if self.m_type == 'op': 
             self.Exchange_interaction = cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
@@ -296,11 +287,9 @@ class Magnets:
             #     self.Exchange_interaction = cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
             self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
 
-        self.Exchange_J = J
-        self.energy_exchange_update()
-
     def energy_exchange_update(self):
         self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='fill'), self.m)
+
 
     def update(self):
         """ Performs a single magnetization switch. """
@@ -324,28 +313,13 @@ class Magnets:
             self.m_tot = (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
         
         self.energy(single=True, index2D=indexmin2D)
-    
-    def run(self, N=1, save_history=1, T=None): # TODO: is this a necessary function?
-        ''' Perform <N> self.update() steps, which defaults to only 1 step.
-            @param N [int] (1): the number of update steps to run.
-            @param save_history [int] (1): the number of steps between two recorded 
-                entries in self.history. If 0, the history is not recorded.
-            @param T [float] (self.T): the temperature at which to run the <N> steps.
-                If not specified, the current temperature is kept.
-        '''
-        if T is not None:
-            self.T = T
-        for i in range(int(N)):
-            self.update()
-            if save_history:
-                if i % save_history == 0:
-                    self.save_history()
 
     def minimize(self):
         self.energy()
         indexmax = cp.argmax(self.E_int, axis=None)
         self.m.flat[indexmax] = -self.m.flat[indexmax]
     
+
     def save_history(self, *, E_tot=None, t=None, T=None, m_tot=None):
         """ Records E_tot, t, T and m_tot as they were last calculated. This default behavior can be overruled: if
             passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T|m_tot> value(s).
@@ -358,7 +332,8 @@ class Magnets:
     def clear_history(self):
         self.history.clear()
     
-    def autocorrelation_fast(self, max_distance): # TODO: test this performance on a large simulation
+
+    def autocorrelation_fast(self, max_distance):
         max_distance = round(max_distance)
         s = cp.shape(self.xx)
         if not(hasattr(self, 'Distances')):
@@ -391,6 +366,7 @@ class Magnets:
             corr_binned[i] = cp.mean(self.correlation[cp.where(cp.isclose(self.Distances_floor, d))])
         corr_length = cp.sum(cp.multiply(abs(corr_binned), distances))
         return corr_binned.get(), distances.get(), float(corr_length)
+
 
     # Below here are some graphical functions (plot magnetization profile etc.)
     def _get_averaged_extent(self, avg):
@@ -595,6 +571,17 @@ class Magnets:
         AFM_ness = cp.mean(cp.abs(signal.convolve2d(self.m, AFM_mask, mode='same', boundary='fill')))
         return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(self.mask)*self.m.size)
 
+
+def _mirror4(arr, negativex=False, negativey=False):
+    ny, nx = arr.shape
+    arr4 = cp.zeros((2*ny-1, 2*nx-1))
+    xp = -1 if negativex else 1
+    yp = -1 if negativey else 1
+    arr4[ny-1:, nx-1:] = arr
+    arr4[ny-1:, nx-1::-1] = xp*arr
+    arr4[ny-1::-1, nx-1:] = yp*arr
+    arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
+    return arr4
 
 def fill_nan_neighbors(arr): # TODO: find a better place and name for this function, maybe create separate graphical helper function file
     ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
