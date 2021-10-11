@@ -14,27 +14,27 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=0.2, show_m=True, timeit=False, fil
         This end plot can be disabled by setting <show_m> to False.
     '''
     if timeit: t = time.time()
-    mm.Run(N=N, T=T)
+    mm.run(N=N, T=T)
     if timeit: print(f"Simulated {N} switches (on {mm.m.shape[0]}x{mm.m.shape[1]} grid) in {time.time() - t} seconds.")
     print('Energy:', mm.E_tot)
     if show_m:
-        mm.Show_m(fill=fill)
+        mm.show_m(fill=fill)
 
 
 def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=1):
     ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
         @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.
     '''
-    mm.Clear_history()
-    mm.Initialize_m('AFM')
+    mm.clear_history()
+    mm.initialize_m('AFM')
     AFM_ness = []
 
     for T in np.linspace(T_min, T_max, N):
         mm.T = T
-        mm.Update()
-        AFM_ness.append(mm.Get_AFMness())
-        mm.Save_history()
-    mm.Show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
+        mm.update()
+        AFM_ness.append(mm.get_AFMness())
+        mm.save_history()
+    mm.show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
 
 
 def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T_low=0.01, T_high=4, save=False, fill=False, avg=True, pattern='uniform'):
@@ -51,13 +51,13 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
             Set to a False value to prevent initialization of the magnetization.
     """
     if pattern:
-        mm.Initialize_m(pattern)
+        mm.initialize_m(pattern)
     n_sweep2 = n_sweep/2
 
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(6, 4.8))
     ax1 = fig.add_subplot(111)
-    h = ax1.imshow(mm.Get_magAngles(avg=avg), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=mm._get_averaged_extent(avg))
+    h = ax1.imshow(mm.get_m_angles(avg=avg), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=mm._get_averaged_extent(avg))
     c1 = plt.colorbar(h)
     c1.ax.get_yaxis().labelpad = 30
     c1.ax.set_ylabel('Averaged magnetization angle' + ('\n("%s" average)' % mm._resolve_avg(avg) if avg != 'point' else ''), rotation=270, fontsize=12)
@@ -72,8 +72,8 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
                 mm.T = T_low*np.exp(exponent*((j % n_sweep)/n_sweep2))
             else: # Then cool down
                 mm.T = T_low*np.exp(exponent*(((n_sweep - j) % n_sweep2)/n_sweep2))
-            mm.Update()
-        h.set_array(hotspin.fill_nan_neighbors(mm.Get_magAngles(avg=avg)) if fill else mm.Get_magAngles(avg=avg))
+            mm.update()
+        h.set_array(hotspin.fill_nan_neighbors(mm.get_m_angles(avg=avg)) if fill else mm.get_m_angles(avg=avg))
         fig.suptitle('Temperature %.3f' % mm.T)
         return h, # This has to be an iterable!
 
@@ -92,7 +92,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
 def autocorrelation_dist_dependence(mm: hotspin.Magnets):
     ''' Shows the full 2D autocorrelation, as well as the binned autocorrelation
         as a function of distance. '''
-    corr, d, corr_length = mm.Autocorrelation_fast(20)
+    corr, d, corr_length = mm.autocorrelation_fast(20)
     print("Correlation length:", corr_length)
 
     fig = plt.figure(figsize=(10, 4))
@@ -119,9 +119,9 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
     '''
     # Initialize in the ground state
     if mm.config in ['pinwheel', 'kagome']:
-        mm.Initialize_m('random')
+        mm.initialize_m('random')
     elif mm.config in ['full', 'square', 'triangle']:
-        mm.Initialize_m('AFM')
+        mm.initialize_m('AFM')
 
     # Calculate the correlation distance as a function of temperature
     TT = np.linspace(T_min, T_max, N)
@@ -133,12 +133,12 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
         print('Temperature step %d/%d (T = %.2f) ...' % (j+1, N, T))
         mm.T = T
         for _ in range(niter[j]): # Update for a while to ensure that the different temperatures are not very correlated
-            mm.Update()
+            mm.update()
         for k in range(M):
-            corr, d, corr_length[j,k] = mm.Autocorrelation_fast(20)
+            corr, d, corr_length[j,k] = mm.autocorrelation_fast(20)
             if k < M - 1: # Always except the last step
                 for i in range(L):
-                    mm.Update()
+                    mm.update()
     corr_ll = np.mean(corr_length, axis=1)
 
     # Draw a nice plot of all this

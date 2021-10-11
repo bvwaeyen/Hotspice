@@ -24,7 +24,7 @@ mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'kagome', 'uniform', energies=['dipol
 
 
 if __name__ == "__main__":
-    print('Initialization energy:', mm.Energy())
+    print('Initialization energy:', mm.E_tot)
 
     # ef.run_a_bit(mm, N=10e3, T=0.1)
     # ef.animate_quenching(mm, animate=3, speed=50, avg='triangle')

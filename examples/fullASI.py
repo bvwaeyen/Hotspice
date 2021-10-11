@@ -31,8 +31,8 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
     """
-    mm.Initialize_m('AFM')
-    mm.Clear_history()
+    mm.initialize_m('AFM')
+    mm.clear_history()
     AFM_ness = []
 
     # Set up the figure, the axis, and the plot element we want to animate
@@ -56,9 +56,9 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
         currStep = i*speed
         for j in range(currStep, min(currStep + speed, int(T_max//T_step)+1)):
             mm.T = j*T_step
-            mm.Update()
-            mm.Save_history()
-            AFM_ness.append(mm.Get_AFMness())
+            mm.update()
+            mm.save_history()
+            AFM_ness.append(mm.get_AFMness())
         p.set_data(mm.history.T, AFM_ness)
         h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get())
         return h, p
@@ -70,7 +70,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
 
 
 if __name__ == "__main__":
-    print('Initialization energy:', mm.Energy())
+    print('Initialization energy:', mm.E_tot)
 
     # ef.run_a_bit(mm, N=10e3, T=1)
     # ef.neelTemperature(mm, T_max=2)

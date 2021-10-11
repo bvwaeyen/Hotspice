@@ -31,14 +31,14 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
     """
-    mm.Initialize_m('AFM')
-    mm.Clear_history()
+    mm.initialize_m('AFM')
+    mm.clear_history()
     AFM_ness = []
 
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(mm.Get_magAngles(), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
+    h = ax1.imshow(mm.get_m_angles(), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
     ax1.set_title(r'Averaged magnetization angle')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -54,11 +54,11 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
         currStep = i*speed
         for j in range(currStep, min(currStep + speed, int(T_max//T_step)+1)):
             mm.T = j*T_step
-            mm.Update()
-            mm.Save_history()
-            AFM_ness.append(mm.Get_AFMness())
+            mm.update()
+            mm.save_history()
+            AFM_ness.append(mm.get_AFMness())
         p.set_data(mm.history.T, AFM_ness)
-        h.set_array(mm.Get_magAngles())
+        h.set_array(mm.get_m_angles())
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 
@@ -68,7 +68,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
 
 
 if __name__ == "__main__":
-    print('Initialization energy:', mm.Energy())
+    print('Initialization energy:', mm.E_tot)
 
     # ef.run_a_bit(mm, N=4e3, T=100, show_m=False)
     # ef.run_a_bit(mm, N=20e3, T=0.2)

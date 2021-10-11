@@ -80,29 +80,29 @@ class Magnets:
         # Set the orientation of the islands corresponding to config
         if m_type == 'ip': 
             if self.config == 'square':
-                self._Initialize_ip('square', 0)
+                self._initialize_ip('square', 0)
             elif self.config == 'pinwheel':
-                self._Initialize_ip('square', cp.pi/4)
+                self._initialize_ip('square', cp.pi/4)
             elif self.config == 'kagome':
-                self._Initialize_ip('kagome', 0)
+                self._initialize_ip('kagome', 0)
             elif self.config == 'triangle':
-                self._Initialize_ip('kagome', cp.pi/2)
+                self._initialize_ip('kagome', cp.pi/2)
 
         # Initialize the specified energy components
         if 'dipolar' in energies:
-            self.Energy_dipolar_init()
+            self.energy_dipolar_init()
         if 'Zeeman' in energies:
-            self.Energy_Zeeman_init()
+            self.energy_Zeeman_init()
         if 'exchange' in energies:
-            self.Energy_exchange_init(1)
+            self.energy_exchange_init(1)
 
-        # Initialize self.m and the correct self.mask
-        self.Initialize_m(pattern)
+        # Initialize self.m and the correct self.mask, this also calculates the initial energy
+        self.initialize_m(pattern)
 
         self.history = History()
 
 
-    def Initialize_m(self, pattern):
+    def initialize_m(self, pattern):
         ''' Initializes the magnetization (-1, 0 or 1), mask and unit cell dimensions.
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
@@ -124,15 +124,15 @@ class Magnets:
 
         self.m = cp.multiply(self.m, self.mask)
         self.m_tot = cp.mean(self.m)
-        self.Energy() # Have to recalculate all the energies since m changed completely
+        self.energy() # Have to recalculate all the energies since m changed completely
             
       
-    def _Initialize_ip(self, config, angle=0.):
+    def _initialize_ip(self, config, angle=0.):
         ''' Initialize the angles of all the magnets.
             This function should only be called by the Magnets() class itself, not by the user.
         '''
         # This sets the angle of all the magnets (this is of course only applicable in the in-plane case)
-        assert self.m_type == 'ip', "Can not _Initialize_ip() if m_type != 'ip'."
+        assert self.m_type == 'ip', "Can not _initialize_ip() if m_type != 'ip'."
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         mask = self.mask.get()
         yy = self.yy.get()
@@ -154,35 +154,35 @@ class Magnets:
             self.orientation[mask == 0,1] = 0
         self.orientation = cp.asarray(self.orientation)
     
-    def Energy(self, single=False, index2D=None):
-        assert not (single and index2D is None), "Provide the latest switch index to Energy(single=True)"
+    def energy(self, single=False, index2D=None):
+        assert not (single and index2D is None), "Provide the latest switch index to energy(single=True)"
         E = cp.zeros_like(self.xx)
         if 'exchange' in self.energies:
-            self.Energy_exchange_update()
+            self.energy_exchange_update()
             E = E + self.E_exchange
         if 'dipolar' in self.energies:
             if single:
-                self.Energy_dipolar_update_single(index2D)
+                self.energy_dipolar_update_single(index2D)
             else:
-                self.Energy_dipolar_update()
+                self.energy_dipolar_update()
             E = E + self.E_dipolar
         if 'Zeeman' in self.energies:
-            self.Energy_Zeeman_update()
+            self.energy_Zeeman_update()
             E = E + self.E_Zeeman
         self.E_int = E
         self.E_tot = cp.sum(E, axis=None)
         return self.E_tot
 
-    def Energy_Zeeman_init(self):
+    def energy_Zeeman_init(self):
         if 'Zeeman' not in self.energies: self.energies.append('Zeeman')
         self.E_Zeeman = cp.empty_like(self.xx)
         if self.m_type == 'op':
             self.H_ext = 0.
         elif self.m_type == 'ip':
             self.H_ext = cp.zeros(2)
-        self.Energy_Zeeman_update()
+        self.energy_Zeeman_update()
 
-    def Energy_Zeeman_update(self):
+    def energy_Zeeman_update(self):
         if self.m_type == 'op':
             self.E_Zeeman = -self.m*self.H_ext
         elif self.m_type == 'ip':
@@ -199,7 +199,7 @@ class Magnets:
         arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
         return arr4
 
-    def Energy_dipolar_init(self):
+    def energy_dipolar_init(self):
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
         self.E_dipolar = cp.zeros_like(self.xx)
         # Let us first make the four-mirrored distance matrix rinv3
@@ -245,7 +245,7 @@ class Magnets:
                     kernel = -(kernel1 + kernel2 + kernel3)*rinv3
                     self.Dipolar_unitcell[y][x] = kernel # WIP: The kernel1, 2, 3 and their sum work perfectly
     
-    def Energy_dipolar_single(self, index2D):
+    def energy_dipolar_single(self, index2D):
         ''' This calculates the dipolar interaction energy between magnet <i> and j,
             where j is the index in the output array. '''
         # First we get the x and y coordinates of magnet <i> in its unit cell
@@ -262,22 +262,22 @@ class Magnets:
             E_now = cp.zeros_like(self.m)
         return E_now
     
-    def Energy_dipolar_update_single(self, index2D):
+    def energy_dipolar_update_single(self, index2D):
         ''' <i> is the index of the magnet that was switched. '''
-        interaction = self.Energy_dipolar_single(index2D)
+        interaction = self.energy_dipolar_single(index2D)
         self.E_dipolar += 2*interaction
         self.E_dipolar[index2D] *= -1 # This magnet switched, so all its interactions are inverted
 
-    def Energy_dipolar_update(self):
+    def energy_dipolar_update(self):
         ''' Calculates (from scratch!) the interaction energy of each magnet with all others. '''
         # TODO: can make this a convolution, probably
         for index, m in np.ndenumerate(self.m.get()): # cp.ndenumerate function doesn't exist, so use numpy
             if m == 0:
                 continue
-            interaction = self.Energy_dipolar_single(index)
+            interaction = self.energy_dipolar_single(index)
             self.E_dipolar[index] = cp.sum(interaction)
         
-    def Energy_exchange_init(self, J):
+    def energy_exchange_init(self, J):
         if 'exchange' not in self.energies: self.energies.append('exchange')
         # self.Exchange_interaction is the mask for nearest neighbors
         if self.m_type == 'op': 
@@ -290,12 +290,12 @@ class Magnets:
             self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
 
         self.Exchange_J = J
-        self.Energy_exchange_update()
+        self.energy_exchange_update()
 
-    def Energy_exchange_update(self):
+    def energy_exchange_update(self):
         self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='fill'), self.m)
 
-    def Update(self):
+    def update(self):
         """ Performs a single magnetization switch. """
         if self.T == 0:
             warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
@@ -316,10 +316,10 @@ class Magnets:
             self.m_tot_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
             self.m_tot = (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
         
-        self.Energy(single=True, index2D=indexmin2D)
+        self.energy(single=True, index2D=indexmin2D)
     
-    def Run(self, N=1, save_history=1, T=None):
-        ''' Perform <N> self.Update() steps, which defaults to only 1 step.
+    def run(self, N=1, save_history=1, T=None): # TODO: is this a necessary function?
+        ''' Perform <N> self.update() steps, which defaults to only 1 step.
             @param N [int] (1): the number of update steps to run.
             @param save_history [int] (1): the number of steps between two recorded 
                 entries in self.history. If 0, the history is not recorded.
@@ -329,17 +329,17 @@ class Magnets:
         if T is not None:
             self.T = T
         for i in range(int(N)):
-            self.Update()
+            self.update()
             if save_history:
                 if i % save_history == 0:
-                    self.Save_history()
+                    self.save_history()
 
-    def Minimize(self):
-        self.Energy()
+    def minimize(self):
+        self.energy()
         indexmax = cp.argmax(self.E_int, axis=None)
         self.m.flat[indexmax] = -self.m.flat[indexmax]
     
-    def Save_history(self, *, E_tot=None, t=None, T=None, m_tot=None):
+    def save_history(self, *, E_tot=None, t=None, T=None, m_tot=None):
         """ Records E_tot, t, T and m_tot as they were last calculated. This default behavior can be overruled: if
             passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T|m_tot> value(s).
         """
@@ -348,10 +348,10 @@ class Magnets:
         self.history.T.append(float(self.T) if T is None else float(T))
         self.history.m.append(float(self.m_tot) if m_tot is None else float(m_tot))
     
-    def Clear_history(self):
+    def clear_history(self):
         self.history.clear()
     
-    def Autocorrelation_fast(self, max_distance): # TODO: test this performance on a large simulation
+    def autocorrelation_fast(self, max_distance): # TODO: test this performance on a large simulation
         max_distance = round(max_distance)
         s = cp.shape(self.xx)
         if not(hasattr(self, 'Distances')):
@@ -415,7 +415,7 @@ class Magnets:
 
     def _get_mask(self, avg=None):
         ''' Returns the raw averaging mask as a 2D array. Note that this obviously does not include
-            any removal of excess zero-rows etc., that is the task of self.Get_magAngles.
+            any removal of excess zero-rows etc., that is the task of self.get_m_angles.
             Note that this returns a CuPy array for performance reasons, since this is a 'hidden' _function anyway.
         '''
         avg = self._resolve_avg(avg)
@@ -439,7 +439,7 @@ class Magnets:
                     [0, 1, 0]]
         return cp.array(mask, dtype='float') # If mask would be int, then precision of convolve2d is also int instead of float
 
-    def Get_magAngles(self, m=None, avg=True):
+    def get_m_angles(self, m=None, avg=True):
         '''
             Returns the magnetization angle (can be averaged using the averaging method specified by <avg>). If the local
             average magnetization is zero, the corresponding angle is NaN, such that those regions are white in imshow.
@@ -479,13 +479,13 @@ class Magnets:
             angles_avg[(ixx + iyy) % 2 == 1] = cp.nan # These are not the centers of hexagons, so dont draw these
         return angles_avg.get()
 
-    def Show_m(self, m=None, avg=True, show_energy=True, fill=False):
+    def show_m(self, m=None, avg=True, show_energy=True, fill=False):
         ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
             the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
             a third and similar plot, displaying the interaction energy of each spin, is also shown.
             @param m [2D array] (self.m): the direction (+1 or -1) of each spin on the geometry. Default is the current
                 magnetization profile. This is useful if some magnetization profiles have been saved manually, while 
-                self.Update() has been called since: one can then pass these saved profiles as the <m> parameter to
+                self.update() has been called since: one can then pass these saved profiles as the <m> parameter to
                 draw them onto the geometry stored in <self>.
             @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon'.
             @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
@@ -513,7 +513,7 @@ class Magnets:
             num_plots += 1 if show_quiver else 0
             fig = plt.figure(figsize=(3.5*num_plots, 3))
             ax1 = fig.add_subplot(1, num_plots, 1)
-            im = fill_nan_neighbors(self.Get_magAngles(m=m, avg=avg)) if fill else self.Get_magAngles(m=m, avg=avg)
+            im = fill_nan_neighbors(self.get_m_angles(m=m, avg=avg)) if fill else self.get_m_angles(m=m, avg=avg)
             im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
                              extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
             ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % avg if avg != 'point' else ''), font={"size":"10"})
@@ -540,7 +540,7 @@ class Magnets:
         plt.gcf().tight_layout()
         plt.show()
 
-    def Show_history(self, y_quantity=None, y_label=r'Average magnetization'):
+    def show_history(self, y_quantity=None, y_label=r'Average magnetization'):
         ''' Plots <y_quantity> (default: average magnetization (self.history.m)) and total energy (self.history.E)
             as a function of either the time or the temperature: if the temperature (self.history.T) is constant, 
             then the x-axis will represent the time (self.history.t), otherwise it represents the temperature.
@@ -553,7 +553,7 @@ class Magnets:
             x_quantity, x_label = self.history.t, 'Time [a.u.]'
         else:
             x_quantity, x_label = self.history.T, 'Temperature [a.u.]'
-        assert len(y_quantity) == len(x_quantity), "Error in Show_history: <y_quantity> has different length than %s history." % x_label.split(' ')[0].lower()
+        assert len(y_quantity) == len(x_quantity), "Error in show_history: <y_quantity> has different length than %s history." % x_label.split(' ')[0].lower()
 
         fig = plt.figure(figsize=(4, 6))
         ax1 = fig.add_subplot(211)
@@ -567,7 +567,7 @@ class Magnets:
         plt.gcf().tight_layout()
         plt.show()
     
-    def Get_AFMness(self, AFM_mask=None):
+    def get_AFMness(self, AFM_mask=None):
         ''' Returns the average AFM-ness of self.m at the current time step, normalized to 1.
             For a perfectly uniform configuration this is 0, while for random it is 0.375.
             Note that the boundaries are not taken into account for the normalization, so the

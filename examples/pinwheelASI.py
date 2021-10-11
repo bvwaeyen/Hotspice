@@ -29,21 +29,21 @@ def curieTemperature(mm, N=5000):
     ''' A naive attempt at determining the Curie temperature, by looking at the average magnetization.
         @param N [int] (5000): The number of simulated switches at each individual temperature
     '''
-    mm.Clear_history()
-    mm.Initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_tot
+    mm.clear_history()
+    mm.initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_tot
     for T in np.linspace(0, 1, 100):
         total_m = np.zeros_like(mm.m)
         total_energy = 0
         mm.T = T
         for i in range(int(N)):
-            mm.Update()
+            mm.update()
             total_m += mm.m
             total_energy += mm.E_tot
         total_m = total_m/N
         m_tot_x = np.mean(np.multiply(total_m, mm.orientation[:,:,0]))
         m_tot_y = np.mean(np.multiply(total_m, mm.orientation[:,:,1]))
-        mm.Save_history(E_tot=total_energy/N, m_tot=(m_tot_x**2 + m_tot_y**2)**(1/2))
-    mm.Show_history()
+        mm.save_history(E_tot=total_energy/N, m_tot=(m_tot_x**2 + m_tot_y**2)**(1/2))
+    mm.show_history()
 
 
 def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
@@ -59,13 +59,13 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
     """
-    mm.Initialize_m('uniform')
-    mm.Clear_history()
+    mm.initialize_m('uniform')
+    mm.clear_history()
 
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(mm.Get_magAngles(), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
+    h = ax1.imshow(mm.get_m_angles(), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
     ax1.set_title(r'Averaged magnetization angle')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -80,10 +80,10 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
         currStep = i*speed
         for j in range(currStep, min(currStep + speed, int(T_max//T_step)+1)):
             mm.T = j*T_step
-            mm.Update()
-            mm.Save_history()
+            mm.update()
+            mm.save_history()
         p.set_data(mm.history.T, mm.history.m)
-        h.set_array(mm.Get_magAngles())
+        h.set_array(mm.get_m_angles())
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 
