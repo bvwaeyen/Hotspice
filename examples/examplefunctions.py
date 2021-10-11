@@ -21,6 +21,27 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=0.2, show_m=True, timeit=False, fil
         mm.show_m(fill=fill)
 
 
+def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=1):
+    ''' A naive attempt at determining the Curie temperature, by looking at the average magnetization.
+        @param N [int] (5000): The number of simulated switches at each individual temperature
+    '''
+    mm.clear_history()
+    mm.initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_tot
+    for T in np.linspace(T_min, T_max, 100):
+        total_m = np.zeros_like(mm.m)
+        total_energy = 0
+        mm.T = T
+        for i in range(int(N)):
+            mm.update()
+            total_m += mm.m
+            total_energy += mm.E_tot
+        total_m = total_m/N
+        m_tot_x = np.mean(np.multiply(total_m, mm.orientation[:,:,0]))
+        m_tot_y = np.mean(np.multiply(total_m, mm.orientation[:,:,1]))
+        mm.save_history(E_tot=total_energy/N, m_tot=(m_tot_x**2 + m_tot_y**2)**(1/2))
+    mm.show_history()
+
+
 def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=1):
     ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
         @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.

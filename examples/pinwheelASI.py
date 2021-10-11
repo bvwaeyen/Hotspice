@@ -25,27 +25,6 @@ mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'pinwheel', 'uniform', energies=['dip
 print(f'Initialization time: {time.time() - t} seconds.')
 
 
-def curieTemperature(mm, N=5000):
-    ''' A naive attempt at determining the Curie temperature, by looking at the average magnetization.
-        @param N [int] (5000): The number of simulated switches at each individual temperature
-    '''
-    mm.clear_history()
-    mm.initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_tot
-    for T in np.linspace(0, 1, 100):
-        total_m = np.zeros_like(mm.m)
-        total_energy = 0
-        mm.T = T
-        for i in range(int(N)):
-            mm.update()
-            total_m += mm.m
-            total_energy += mm.E_tot
-        total_m = total_m/N
-        m_tot_x = np.mean(np.multiply(total_m, mm.orientation[:,:,0]))
-        m_tot_y = np.mean(np.multiply(total_m, mm.orientation[:,:,1]))
-        mm.save_history(E_tot=total_energy/N, m_tot=(m_tot_x**2 + m_tot_y**2)**(1/2))
-    mm.show_history()
-
-
 def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
     """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Curie temperature. Caution has to be taken, however, since the graph shows
@@ -96,7 +75,7 @@ if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
 
     # ef.run_a_bit(mm, N=5000, T=0.3, timeit=True, fill=True)
-    # curieTemperature(mm)
+    # ef.curieTemperature(mm)
     # ef.animate_quenching(mm, pattern='random', T_low=0.3, T_high=0.3, animate=3, speed=500, fill=True)
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
