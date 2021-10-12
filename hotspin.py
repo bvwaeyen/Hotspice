@@ -40,7 +40,6 @@ class Magnets:
         self.E_b = E_b
         self.m_type = m_type
         self.energies = list(energies)
-        self.PBC = PBC
 
         # config disambiguation
         if self.m_type == 'op':
@@ -78,7 +77,7 @@ class Magnets:
             if a is None: a = 4
             self.dx = a/4
             self.dy = math.sqrt(3)*self.dx
-            if ny is None: self.ny = int(self.nx/math.sqrt(3))//4*4 - 1
+            if ny is None: self.ny = int(self.nx/math.sqrt(3))//4*4 - (0 if PBC else 1)
         self.xx, self.yy = cp.meshgrid(cp.linspace(0, self.dx*(self.nx-1), self.nx), cp.linspace(0, self.dy*(self.ny-1), self.ny))
         self.index = range(self.xx.size)
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.xx.shape[1]), cp.arange(0, self.yy.shape[0]))
@@ -98,6 +97,11 @@ class Magnets:
             self.unitcell = Vec2D(4,4) # This could in theory be Vec2D(2,4) with a vertical offset of 2 for subsequent
                                        # cells in the x-direction to use only half as much memory, but at the same time
                                        # this would make the calculation and code much more complicated
+
+        self.PBC = PBC
+        if self.PBC:
+            if self.nx % self.unitcell.x != 0 or self.ny % self.unitcell.y != 0:
+                warnings.warn(f"""Be careful with PBC, as there are not an integer number of unit cells in the simulation! Hence, the boundaries do not nicely fit together. Adjust nx or ny to alleviate this problem (unit cell has size {self.unitcell.x}x{self.unitcell.y}).""", stacklevel=2)
 
         # Set the orientation of the islands corresponding to config
         if m_type == 'ip': 
@@ -215,8 +219,7 @@ class Magnets:
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
         self.E_dipolar = cp.zeros_like(self.xx)
         # Let us first make the four-mirrored distance matrix rinv3
-        # WARN: this four-mirrored technique only works if dx and dy is the same for every cell everywhere! so,
-        # TODO: make the initialization of Magnets() object only take an nx, ny, dx, dy which is also much easier to use
+        # WARN: this four-mirrored technique only works if (dx, dy) is the same for every cell everywhere!
         rrx = self.xx - self.xx[0,0]
         rry = self.yy - self.yy[0,0]
         rr_sq = rrx**2 + rry**2
@@ -503,7 +506,7 @@ class Magnets:
             angles_avg[(ixx + iyy) % 2 == 1] = cp.nan # These are not the centers of hexagons, so dont draw these
         return angles_avg.get()
 
-    def show_m(self, m=None, avg=True, show_energy=True, fill=False): # TODO: see if the averaging can extend across PBC
+    def show_m(self, m=None, avg=True, show_energy=True, fill=False):
         ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
             the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
             a third and similar plot, displaying the interaction energy of each spin, is also shown.
