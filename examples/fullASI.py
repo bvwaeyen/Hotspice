@@ -41,7 +41,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
     mask = mm._get_mask()
     h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get(),
                              cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask))
-    ax1.set_title(r'Averaged magnetization angle')
+    ax1.set_title(r'Averaged magnetization')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
     p,  = ax2.plot(mm.history.T, mm.history.m)

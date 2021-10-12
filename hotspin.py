@@ -407,7 +407,10 @@ class Magnets:
         ''' Returns the extent that can be used in imshow when plotting an averaged quantity. '''
         avg = self._resolve_avg(avg)
         mask = self._get_mask(avg=avg)
-        movex, movey = mask.shape[1]/2*self.dx, mask.shape[0]/2*self.dy # The averaged imshow should be displaced by this much
+        if self.PBC:
+            movex, movey = 0.5*self.dx, 0.5*self.dy
+        else:
+            movex, movey = mask.shape[1]/2*self.dx, mask.shape[0]/2*self.dy # The averaged imshow should be displaced by this much
         return [self.x_min-self.dx+movex,self.x_max-movex+self.dx,self.y_min-self.dy+movey,self.y_max-movey+self.dy]
         
     def _get_appropriate_avg(self):
@@ -481,8 +484,12 @@ class Magnets:
             x_comp = m
             y_comp = cp.zeros_like(m)
         mask = self._get_mask(avg=avg)
-        x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')
-        y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')
+        if self.PBC:
+            x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='wrap')
+            y_comp_avg = signal.convolve2d(y_comp, mask, mode='same', boundary='wrap')
+        else:
+            x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')
+            y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')
         angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % (2*cp.pi)
         useless_angles = cp.where(cp.logical_and(cp.isclose(x_comp_avg, 0), cp.isclose(y_comp_avg, 0)), cp.nan, 1)
         angles_avg *= useless_angles
@@ -496,7 +503,7 @@ class Magnets:
             angles_avg[(ixx + iyy) % 2 == 1] = cp.nan # These are not the centers of hexagons, so dont draw these
         return angles_avg.get()
 
-    def show_m(self, m=None, avg=True, show_energy=True, fill=False):
+    def show_m(self, m=None, avg=True, show_energy=True, fill=False): # TODO: see if the averaging can extend across PBC
         ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
             the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
             a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -523,7 +530,7 @@ class Magnets:
             im1 = ax1.imshow(signal.convolve2d(m, mask, mode='valid', boundary='fill').get(),
                              cmap='gray', origin='lower', vmin=-cp.sum(mask), vmax=cp.sum(mask),
                              extent=averaged_extent)
-            ax1.set_title(r'Averaged magnetization $\vert m \vert$')
+            ax1.set_title(r"Averaged magnetization $\vert m \vert$\n('{avg}' average{', PBC' if self.PBC else ''})", font={"size":10})
             plt.colorbar(im1)
             axes.append(ax1)
         elif self.m_type == 'ip':
@@ -533,7 +540,7 @@ class Magnets:
             im = fill_nan_neighbors(self.get_m_angles(m=m, avg=avg)) if fill else self.get_m_angles(m=m, avg=avg)
             im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
                              extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
-            ax1.set_title('Averaged magnetization angle' + ('\n("%s" average)' % avg if avg != 'point' else ''), font={"size":"10"})
+            ax1.set_title(f"Averaged magnetization angle\n('{avg}' average{', PBC' if self.PBC else ''})", font={"size":10})
             plt.colorbar(im1)
             axes.append(ax1)
             if show_quiver:
