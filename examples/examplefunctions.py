@@ -73,7 +73,7 @@ def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=1):
     mm.show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
 
 
-def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T_low=0.01, T_high=4, save=False, fill=False, avg=True, pattern='uniform'):
+def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T_low=0.01, T_high=4, save=False, fill=False, avg=True, pattern=None):
     """ Shows an animation of repeatedly sweeping the simulation between quite low and high temperatures,
         WITH a smooth temperature transition in between (exponential between T_low and T_high).
         @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
@@ -83,7 +83,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         @param save [int] (0): If nonzero, this specifies the amount of cycles that are saved as a video.
         @param fill [bool] (False): If true, empty simulation cells are interpolated to prevent white pixels.
         @param avg [str] (True): Which averaging mask to use in the plot.
-        @param pattern [str] ('uniform'): The initial magnetization pattern (any of 'random', 'uniform', 'AFM').
+        @param pattern [str] (None): The initial magnetization pattern (any of 'random', 'uniform', 'AFM').
             Set to a False value to prevent initialization of the magnetization.
     """
     if pattern:
@@ -93,7 +93,8 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(6, 4.8))
     ax1 = fig.add_subplot(111)
-    h = ax1.imshow(mm.get_m_angles(avg=avg), cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=mm._get_averaged_extent(avg))
+    h = ax1.imshow(hotspin.fill_nan_neighbors(mm.get_m_angles(avg=avg)) if fill else mm.get_m_angles(avg=avg),
+                   cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=mm._get_averaged_extent(avg))
     c1 = plt.colorbar(h)
     c1.ax.get_yaxis().labelpad = 30
     c1.ax.set_ylabel('Averaged magnetization angle' + ('\n("%s" average)' % mm._resolve_avg(avg) if avg != 'point' else ''), rotation=270, fontsize=12)

@@ -21,7 +21,7 @@ xx, yy = np.meshgrid(x, y)
 ## Initialize main Magnets object: pinwheel with uniform magnetization in +y direction
 import time
 t = time.time()
-mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'pinwheel', 'uniform', energies=['dipolar'])
+mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'pinwheel', 'uniform', energies=['dipolar'], PBC=True)
 print(f'Initialization time: {time.time() - t} seconds.')
 
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     # ef.run_a_bit(mm, N=5000, T=0.3, timeit=True, fill=True)
     # ef.curieTemperature(mm)
-    # ef.animate_quenching(mm, pattern='random', T_low=0.3, T_high=0.3, animate=3, speed=500, fill=True)
+    # ef.animate_quenching(mm, pattern='random', T_low=0.15, T_high=0.15, animate=3, speed=500, fill=True)
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, T_min=0.1, T_max=0.4)

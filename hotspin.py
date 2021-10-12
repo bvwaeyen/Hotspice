@@ -16,7 +16,7 @@ ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes
 matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
 
 class Magnets:
-    def __init__(self, xx, yy, T, E_b, m_type='ip', config='square', pattern='random', energies=('dipolar')):
+    def __init__(self, xx, yy, T, E_b, m_type='ip', config='square', pattern='random', energies=('dipolar'), PBC=False):
         '''
             The initial configuration of a Magnets geometry consists of 3 parts:
              1) m_type:  Magnets can be in-plane or out-of-plane: 'ip' or 'op', respectively.
@@ -38,6 +38,7 @@ class Magnets:
         self.E_b = E_b
         self.m_type = m_type
         self.energies = list(energies)
+        self.PBC = PBC
 
         self.index = range(self.xx.size)
         ix = cp.arange(0, self.xx.shape[1])
@@ -234,6 +235,16 @@ class Magnets:
                     kernel2 = oy1*oy2*(3*uy**2 - 1)
                     kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
                     kernel = -(kernel1 + kernel2 + kernel3)*rinv3
+                    if self.PBC:
+                        kernelcopy = kernel.copy()
+                        kernel[:,self.nx:] += kernelcopy[:,:self.nx-1]
+                        kernel[self.ny:,self.nx:] += kernelcopy[:self.ny-1,:self.nx-1]
+                        kernel[self.ny:,:] += kernelcopy[:self.ny-1,:]
+                        kernel[self.ny:,:self.nx-1] += kernelcopy[:self.ny-1,self.nx:]
+                        kernel[:,:self.nx-1] += kernelcopy[:,self.nx:]
+                        kernel[:self.ny-1,:self.nx-1] += kernelcopy[self.ny:,self.nx:]
+                        kernel[:self.ny-1,:] += kernelcopy[self.ny:,:]
+                        kernel[:self.ny-1,self.nx:] += kernelcopy[self.ny:,:self.nx-1]
                     self.Dipolar_unitcell[y][x] = kernel
     
     def energy_dipolar_single(self, index2D):
@@ -289,6 +300,8 @@ class Magnets:
 
     def energy_exchange_update(self):
         self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='fill'), self.m)
+        if self.PBC:
+            pass # TODO: implement PBC
 
 
     def update(self):
