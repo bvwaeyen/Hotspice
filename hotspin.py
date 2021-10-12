@@ -16,8 +16,14 @@ ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes
 matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
 
 class Magnets:
-    def __init__(self, xx, yy, T, E_b, m_type='ip', config='square', pattern='random', energies=('dipolar'), PBC=False):
+    def __init__(self, nx, a=None, T=1, E_b=1, m_type='ip', config='square', pattern='random', energies=('dipolar'), ny=None, PBC=False):
         '''
+            The position of magnets is specified using <nx> and <a>. The meaning of <a> is as follows: # TODO: should the meaning of nx also be changed then?
+            For config='pinwheel', 'square' or 'full': the smallest distance between two magnets with the same orientation.
+                                                       (so for 'full' this is dx, for the others 2*dx, with dx the cell size)
+                       'kagome':   distance between the centers of two adjacent hexagons (this is 4*dx).
+                       'triangle': side length of the triangles (this is also 4*dx).
+            If ny is not explicitly specified, the simulation domain is made as square as possible.
             The initial configuration of a Magnets geometry consists of 3 parts:
              1) m_type:  Magnets can be in-plane or out-of-plane: 'ip' or 'op', respectively.
              2) config:  The placement of magnets on the grid can be
@@ -25,14 +31,10 @@ class Magnets:
                     if m_type is 'ip': 'square', 'pinwheel', 'kagome' or 'triangle'.
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
-                If you want to adjust the specifics of these energies, than call <energy>_init(<parameters>) manually.
+                If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
+            # TODO: linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy
+            #       see https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html for the imshows then
         '''
-        assert cp.shape(xx) == cp.shape(yy), "Error: xx and yy should have the same shape. Please obtain xx and yy using cp.meshgrid(x,y) to avoid this issue."
-        self.xx = cp.asarray(xx)
-        self.yy = cp.asarray(yy)
-        self.ny, self.nx = self.xx.shape
-        self.dx, self.dy = float(self.xx[1,1] - self.xx[0,0]), float(self.yy[1,1] - self.yy[0,0])
-        self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
         self.T = T
         self.t = 0.
         self.E_b = E_b
@@ -40,20 +42,15 @@ class Magnets:
         self.energies = list(energies)
         self.PBC = PBC
 
-        self.index = range(self.xx.size)
-        ix = cp.arange(0, self.xx.shape[1])
-        iy = cp.arange(0, self.yy.shape[0])
-        self.ixx, self.iyy = cp.meshgrid(ix, iy)
-
         # config disambiguation
-        if m_type == 'op':
+        if self.m_type == 'op':
             if config in ['full']:
                 self.config = 'full'
             elif config in ['chess']:
                 self.config = 'chess'
             else:
                 raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'op'.")
-        elif m_type == 'ip':
+        elif self.m_type == 'ip':
             if config in ['square', 'squareASI']:
                 self.config = 'square'
             elif config in ['pinwheel', 'pinwheelASI']:
@@ -64,8 +61,30 @@ class Magnets:
                 self.config = 'triangle'
             else:
                 raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'ip'.")
+        else:
+            raise AssertionError(f"Invalid argument: m_type='{self.m_type}' not supported, instead use 'ip' or 'op'.")
+        
+        # initialize the coordinates based on nx, (ny) and L
+        self.nx, self.ny = nx, ny
+        if self.config in ['full']:
+            if a is None: a = 1
+            self.dx = self.dy = a
+            if ny is None: self.ny = self.nx
+        elif self.config in ['chess', 'square', 'pinwheel']:
+            if a is None: a = 2
+            self.dx = self.dy = a/2
+            if ny is None: self.ny = self.nx
+        elif self.config in ['kagome', 'triangle']:
+            if a is None: a = 4
+            self.dx = a/4
+            self.dy = math.sqrt(3)*self.dx
+            if ny is None: self.ny = int(self.nx/math.sqrt(3))//4*4 - 1
+        self.xx, self.yy = cp.meshgrid(cp.linspace(0, self.dx*(self.nx-1), self.nx), cp.linspace(0, self.dy*(self.ny-1), self.ny))
+        self.index = range(self.xx.size)
+        self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.xx.shape[1]), cp.arange(0, self.yy.shape[0]))
+        self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
-        if self.config == 'full':
+        if self.config in ['full']:
             self.mask = cp.ones_like(self.xx)
             self.unitcell = Vec2D(1,1)
         elif self.config in ['chess', 'square', 'pinwheel']:
@@ -76,7 +95,9 @@ class Magnets:
             self.mask = cp.zeros_like(self.xx)
             self.mask[(self.ixx + self.iyy) % 4 == 1] = 1 # One bunch of diagonals \
             self.mask[(self.ixx - self.iyy) % 4 == 3] = 1 # Other bunch of diagonals /
-            self.unitcell = Vec2D(4,4)
+            self.unitcell = Vec2D(4,4) # This could in theory be Vec2D(2,4) with a vertical offset of 2 for subsequent
+                                       # cells in the x-direction to use only half as much memory, but at the same time
+                                       # this would make the calculation and code much more complicated
 
         # Set the orientation of the islands corresponding to config
         if m_type == 'ip': 
@@ -519,7 +540,7 @@ class Magnets:
                 ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
                 ax2.set_aspect('equal')
                 nonzero = self.m.get().nonzero()
-                quiverscale = 0.9 if self.config in ['kagome'] else 0.7
+                quiverscale = 0.5 if self.config in ['triangle'] else 0.7
                 ax2.quiver(self.xx.get()[nonzero], self.yy.get()[nonzero], 
                         cp.multiply(m, self.orientation[:,:,0]).get()[nonzero], cp.multiply(m, self.orientation[:,:,1]).get()[nonzero],
                         pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming

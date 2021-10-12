@@ -1,4 +1,5 @@
 import math
+import time
 
 # import matplotlib.pyplot as plt
 import numpy as np
@@ -14,13 +15,11 @@ from context import hotspin
 T = 0.1
 E_b = 10.
 nx = 25 *4+1 # Multiple of 4 + 1
-ny = int(nx/math.sqrt(3))//4*4 - 1 # To have a nice square-like shape of hexagons
-x = np.linspace(0, nx - 1, nx)/math.sqrt(3)
-y = np.linspace(0, ny - 1, ny)
-xx, yy = np.meshgrid(x, y)
 
 ## Initialize main Magnets object
-mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'kagome', 'uniform', energies=['dipolar'])
+t = time.time()
+mm = hotspin.Magnets(nx, T=T, E_b=E_b, m_type='ip', config='kagome', pattern='uniform', energies=['dipolar'], PBC=False)
+print(f'Initialization time: {time.time() - t} seconds.')
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import math
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,15 +14,11 @@ from context import hotspin
 ## Parameters, meshgrid
 T = 0.2
 E_b = 10.
-nx = ny = 400
-x = np.linspace(0, nx - 1, nx)
-y = np.linspace(0, ny - 1, ny)
-xx, yy = np.meshgrid(x, y)
+n = 400
 
-## Initialize main Magnets object: pinwheel with uniform magnetization in +y direction
-import time
+## Initialize main Magnets object
 t = time.time()
-mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'pinwheel', 'uniform', energies=['dipolar'], PBC=True)
+mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='ip', config='pinwheel', pattern='uniform', energies=['dipolar'], PBC=True)
 print(f'Initialization time: {time.time() - t} seconds.')
 
 

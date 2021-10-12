@@ -1,4 +1,5 @@
 import math
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,13 +14,12 @@ from context import hotspin
 ## Parameters, meshgrid
 T = 0.1
 E_b = 10.
-nx = ny = 200
-x = np.linspace(0, nx - 1, nx)
-y = np.linspace(0, ny - 1, ny)
-xx, yy = np.meshgrid(x, y)
+n = 200
 
 ## Initialize main Magnets object
-mm = hotspin.Magnets(xx, yy, T, E_b, 'ip', 'square', 'AFM', energies=['dipolar'])
+t = time.time()
+mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='ip', config='square', pattern='AFM', energies=['dipolar'], PBC=False)
+print(f'Initialization time: {time.time() - t} seconds.')
 
 
 def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
