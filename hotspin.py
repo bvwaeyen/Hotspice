@@ -263,8 +263,6 @@ class Magnets:
                     kernel = -(kernel1 + kernel2 + kernel3)*rinv3
                 if self.PBC:
                     kernelcopy = kernel.copy()
-                    plt.colorbar(plt.imshow(kernelcopy.get(), origin='lower'))
-                    plt.show()
                     kernel[:,self.nx:] += kernelcopy[:,:self.nx-1]
                     kernel[self.ny:,self.nx:] += kernelcopy[:self.ny-1,:self.nx-1]
                     kernel[self.ny:,:] += kernelcopy[:self.ny-1,:]
@@ -273,8 +271,6 @@ class Magnets:
                     kernel[:self.ny-1,:self.nx-1] += kernelcopy[self.ny:,self.nx:]
                     kernel[:self.ny-1,:] += kernelcopy[self.ny:,:]
                     kernel[:self.ny-1,self.nx:] += kernelcopy[self.ny:,:self.nx-1]
-                    plt.colorbar(plt.imshow(kernel.get(), origin='lower'))
-                    plt.show()
                 self.Dipolar_unitcell[y][x] = kernel
     
     def energy_dipolar_single(self, index2D):
