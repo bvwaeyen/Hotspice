@@ -18,7 +18,7 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.time()
-mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='op', config='full', pattern='uniform', energies=['dipolar'], PBC=False)
+mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='op', config='full', pattern='uniform', energies=['dipolar'], PBC=True)
 print(f'Initialization time: {time.time() - t} seconds.')
 
 

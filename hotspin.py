@@ -220,6 +220,7 @@ class Magnets:
         self.E_dipolar = cp.zeros_like(self.xx)
         # Let us first make the four-mirrored distance matrix rinv3
         # WARN: this four-mirrored technique only works if (dx, dy) is the same for every cell everywhere!
+        # This could be generalized by calculating a separate rrx and rry for each magnet in a unit cell similar to toolargematrix_o{x,y}
         rrx = self.xx - self.xx[0,0]
         rry = self.yy - self.yy[0,0]
         rr_sq = rrx**2 + rry**2
@@ -245,6 +246,7 @@ class Magnets:
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
                 if self.m_type == 'op':
+                    kernel = rinv3 # 'kernel' for out-of-plane is very simple
                     self.Dipolar_unitcell[y][x] = rinv3 # 'kernel' for out-of-plane is very simple
                 elif self.m_type == 'ip':
                     ox1, oy1 = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
@@ -259,17 +261,21 @@ class Magnets:
                     kernel2 = oy1*oy2*(3*uy**2 - 1)
                     kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
                     kernel = -(kernel1 + kernel2 + kernel3)*rinv3
-                    if self.PBC:
-                        kernelcopy = kernel.copy()
-                        kernel[:,self.nx:] += kernelcopy[:,:self.nx-1]
-                        kernel[self.ny:,self.nx:] += kernelcopy[:self.ny-1,:self.nx-1]
-                        kernel[self.ny:,:] += kernelcopy[:self.ny-1,:]
-                        kernel[self.ny:,:self.nx-1] += kernelcopy[:self.ny-1,self.nx:]
-                        kernel[:,:self.nx-1] += kernelcopy[:,self.nx:]
-                        kernel[:self.ny-1,:self.nx-1] += kernelcopy[self.ny:,self.nx:]
-                        kernel[:self.ny-1,:] += kernelcopy[self.ny:,:]
-                        kernel[:self.ny-1,self.nx:] += kernelcopy[self.ny:,:self.nx-1]
-                    self.Dipolar_unitcell[y][x] = kernel
+                if self.PBC:
+                    kernelcopy = kernel.copy()
+                    plt.colorbar(plt.imshow(kernelcopy.get(), origin='lower'))
+                    plt.show()
+                    kernel[:,self.nx:] += kernelcopy[:,:self.nx-1]
+                    kernel[self.ny:,self.nx:] += kernelcopy[:self.ny-1,:self.nx-1]
+                    kernel[self.ny:,:] += kernelcopy[:self.ny-1,:]
+                    kernel[self.ny:,:self.nx-1] += kernelcopy[:self.ny-1,self.nx:]
+                    kernel[:,:self.nx-1] += kernelcopy[:,self.nx:]
+                    kernel[:self.ny-1,:self.nx-1] += kernelcopy[self.ny:,self.nx:]
+                    kernel[:self.ny-1,:] += kernelcopy[self.ny:,:]
+                    kernel[:self.ny-1,self.nx:] += kernelcopy[self.ny:,:self.nx-1]
+                    plt.colorbar(plt.imshow(kernel.get(), origin='lower'))
+                    plt.show()
+                self.Dipolar_unitcell[y][x] = kernel
     
     def energy_dipolar_single(self, index2D):
         ''' This calculates the dipolar interaction energy between magnet <i> and j,
@@ -323,9 +329,7 @@ class Magnets:
             self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
 
     def energy_exchange_update(self):
-        self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='fill'), self.m)
-        if self.PBC:
-            pass # TODO: implement PBC
+        self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill'), self.m)
 
 
     def update(self):
@@ -382,7 +386,7 @@ class Magnets:
             self.corr_norm = 1/signal.convolve2d(cp.ones_like(self.m), cp.ones_like(self.m), mode='full', boundary='fill')
             # Then, calculate the correlation of the mask, since not each position contains a spin
             maskcor = signal.convolve2d(self.mask, cp.flipud(cp.fliplr(self.mask)), mode='full', boundary='fill')*self.corr_norm
-            self.corr_mask = maskcor[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)] # Lower right quadrant of maskcor because the other quadrants are symmetrical
+            self.corr_mask = maskcor[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)] # Lower right quadrant of maskcor because the other quadrants should be symmetrical
             self.corr_mask[self.corr_mask > 0] = 1
         # Now, convolve self.m with its point-mirrored/180°-rotated counterpart
         if self.m_type == 'op':
@@ -448,7 +452,7 @@ class Magnets:
             mask = [[0, 1, 0], 
                     [1, 0, 1], 
                     [0, 1, 0]]
-        elif avg == 'square': # square ⸬
+        elif avg == 'square': # square □
             mask = [[1, 1, 1], 
                     [1, 0, 1], 
                     [1, 1, 1]]
@@ -533,7 +537,7 @@ class Magnets:
             im1 = ax1.imshow(signal.convolve2d(m, mask, mode='valid', boundary='fill').get(),
                              cmap='gray', origin='lower', vmin=-cp.sum(mask), vmax=cp.sum(mask),
                              extent=averaged_extent)
-            ax1.set_title(r"Averaged magnetization $\vert m \vert$\n('{avg}' average{', PBC' if self.PBC else ''})", font={"size":10})
+            ax1.set_title(f"Averaged magnetization $\\vert m \\vert$\n('{avg}' average{', PBC' if self.PBC else ''})", font={"size":10})
             plt.colorbar(im1)
             axes.append(ax1)
         elif self.m_type == 'ip':
