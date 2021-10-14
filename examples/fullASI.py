@@ -22,7 +22,7 @@ mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='op', config='full', pattern='unifo
 print(f'Initialization time: {time.time() - t} seconds.')
 
 
-def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=4):
+def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005, T_max=4): # TODO: update this function with modern methods
     """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal

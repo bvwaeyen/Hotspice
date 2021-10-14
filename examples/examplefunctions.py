@@ -93,7 +93,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(6, 4.8))
     ax1 = fig.add_subplot(111)
-    h = ax1.imshow(hotspin.fill_nan_neighbors(mm.get_m_angles(avg=avg)) if fill else mm.get_m_angles(avg=avg),
+    h = ax1.imshow(mm.polar_to_rgb(fill=fill, avg=avg),
                    cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=mm._get_averaged_extent(avg))
     c1 = plt.colorbar(h)
     c1.ax.get_yaxis().labelpad = 30
@@ -110,7 +110,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
             else: # Then cool down
                 mm.T = T_low*np.exp(exponent*(((n_sweep - j) % n_sweep2)/n_sweep2))
             mm.update()
-        h.set_array(hotspin.fill_nan_neighbors(mm.get_m_angles(avg=avg)) if fill else mm.get_m_angles(avg=avg))
+        h.set_array(mm.polar_to_rgb(fill=fill, avg=avg))
         fig.suptitle('Temperature %.3f' % mm.T)
         return h, # This has to be an iterable!
 

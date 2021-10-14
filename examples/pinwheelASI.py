@@ -22,7 +22,7 @@ mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='ip', config='pinwheel', pattern='u
 print(f'Initialization time: {time.time() - t} seconds.')
 
 
-def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
+def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
     """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Curie temperature. Caution has to be taken, however, since the graph shows
         the average magnetization, which above the Curie temperature is expected to approach 0, but this
@@ -41,7 +41,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(mm.get_m_angles(), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
+    h = ax1.imshow(mm.polar_to_rgb(fill=True), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
     ax1.set_title(r'Averaged magnetization angle [rad]')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -59,7 +59,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
             mm.update()
             mm.save_history()
         p.set_data(mm.history.T, mm.history.m)
-        h.set_array(mm.get_m_angles())
+        h.set_array(mm.polar_to_rgb(fill=True))
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 

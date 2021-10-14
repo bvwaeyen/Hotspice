@@ -22,7 +22,7 @@ mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='ip', config='square', pattern='AFM
 print(f'Initialization time: {time.time() - t} seconds.')
 
 
-def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
+def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005, T_max=3):
     """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -38,7 +38,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(mm.get_m_angles(), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
+    h = ax1.imshow(mm.polar_to_rgb(fill=True), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
     ax1.set_title(r'Averaged magnetization angle [rad]')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -58,7 +58,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
             mm.save_history()
             AFM_ness.append(mm.get_AFMness())
         p.set_data(mm.history.T, AFM_ness)
-        h.set_array(mm.get_m_angles())
+        h.set_array(mm.polar_to_rgb(fill=True))
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # ef.run_a_bit(mm, N=4e3, T=100, show_m=False)
     # ef.run_a_bit(mm, N=20e3, T=0.2)
     # ef.neelTemperature(mm, T_max=2)
-    # ef.animate_quenching(mm, animate=3, speed=50)
+    # ef.animate_quenching(mm, animate=3, speed=50, fill=True, pattern='uniform') # TODO: this is very dark :(
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, T_min=0.1, T_max=1)

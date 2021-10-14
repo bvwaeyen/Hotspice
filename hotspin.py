@@ -9,6 +9,7 @@ import cupy as cp
 
 from dataclasses import dataclass, field
 from matplotlib.widgets import MultiCursor
+from matplotlib.colors import hsv_to_rgb
 from cupyx.scipy import signal
 
 
@@ -16,7 +17,7 @@ ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes
 matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
 
 class Magnets:
-    def __init__(self, nx, a=None, T=1, E_b=1, m_type='ip', config='square', pattern='random', energies=('dipolar'), ny=None, PBC=False):
+    def __init__(self, nx, a=None, T=1, E_b=1, Msat=1, m_type='ip', config='square', pattern='random', energies=('dipolar'), ny=None, PBC=False):
         '''
             The position of magnets is specified using <nx> and <a>. 
             The meaning of <a> is as follows: # TODO: should the meaning of nx also be changed then? Or do we use an optional 'truncate=True' argument that crops nx to an integer amount of unit cells?
@@ -40,6 +41,7 @@ class Magnets:
         self.T = T
         self.t = 0.
         self.E_b = E_b
+        self.Msat = Msat
         self.m_type = m_type
         self.energies = list(energies)
 
@@ -134,6 +136,7 @@ class Magnets:
         ''' Initializes the magnetization (-1, 0 or 1), mask and unit cell dimensions.
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
+        # WARN: it is important that self.m is normalized to -1, 0 or 1!!! To get the magnitude, just multiply with Msat afterwards.
         if pattern == 'uniform':
             self.m = cp.ones(cp.shape(self.xx)) # For full, chess, square, pinwheel: this is already ok
             if self.config in ['kagome', 'triangle']:
@@ -464,19 +467,22 @@ class Magnets:
                     [0, 1, 0]]
         return cp.array(mask, dtype='float') # If mask would be int, then precision of convolve2d is also int instead of float
 
-    def get_m_angles(self, m=None, avg=True):
+    def get_m_polar(self, m=None, avg=True):
         '''
-            Returns the magnetization angle (can be averaged using the averaging method specified by <avg>). If the local
-            average magnetization is zero, the corresponding angle is NaN, such that those regions are white in imshow.
+            Returns the magnetization angle and magnitude (can be averaged using the averaging method specified by <avg>).
+            If the local average magnetization is zero, the corresponding angle is NaN.
+            If there are no magnets to average around a given cell, then the angle and magnitude are both NaN.
             @param m [2D array] (self.m): The magnetization profile that should be averaged.
             @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon':
                 True: automatically determines the appropriate averaging method corresponding to self.config.
                 False|'point': no averaging at all, just calculates the angle of each individual spin.
                 'cross': averages the spins north, east, south and west of each position.
-                'square': averages the spins northeast, southeast, southwest and northwest of each position.
+                'square': averages the 8 nearest neighbors of each cell.
                 'triangle': averages the three magnets connected to a corner of a hexagon in the kagome geometry.
                 'hexagon:' averages each hexagon in 'kagome' config, or each star in 'triangle' config.
-            @return [2D np.array]: the (averaged) magnetization angle at each position.
+            @return [(2D np.array, 2D np.array)]: a tuple containing two arrays, namely the (averaged) magnetization
+                angle and magnitude, respecively, for each relevant position in the simulation.
+                Angles lay between 0 and 2*pi, magnitudes between 0 and self.Msat.
                 !! This does not necessarily have the same shape as <m> !!
         '''
         if m is None: m = self.m
@@ -490,23 +496,71 @@ class Magnets:
             y_comp = cp.zeros_like(m)
         mask = self._get_mask(avg=avg)
         if self.PBC:
-            x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='wrap')
-            y_comp_avg = signal.convolve2d(y_comp, mask, mode='same', boundary='wrap')
+            magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode='same', boundary='wrap')
+            x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='wrap')/magnets_in_avg
+            y_comp_avg = signal.convolve2d(y_comp, mask, mode='same', boundary='wrap')/magnets_in_avg
         else:
-            x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')
-            y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')
-        angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % (2*cp.pi)
-        useless_angles = cp.where(cp.logical_and(cp.isclose(x_comp_avg, 0), cp.isclose(y_comp_avg, 0)), cp.nan, 1)
+            magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode='valid', boundary='fill')
+            x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
+            y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
+        angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % (2*math.pi)
+        magnitudes_avg = cp.sqrt(x_comp_avg**2 + y_comp_avg**2)*self.Msat
+        useless_angles = cp.where(cp.logical_and(cp.isclose(x_comp_avg, 0), cp.isclose(y_comp_avg, 0)), cp.NaN, 1) # No well-defined angle
+        useless_magnitudes = cp.where(magnets_in_avg == 0, cp.NaN, 1) # No magnet (the NaNs here will be a subset of useless_angles)
         angles_avg *= useless_angles
+        magnitudes_avg *= useless_magnitudes
         if avg == 'triangle':
             angles_avg = angles_avg[1::2,1::2]
-        elif avg == 'hexagon':
+            magnitudes_avg = magnitudes_avg[1::2,1::2]
+        elif avg == 'hexagon': # Only keep the centers of hexagons, throw away the rest
             angles_avg = angles_avg[::2,::2]
-            ix = cp.arange(0, angles_avg.shape[1])
-            iy = cp.arange(0, angles_avg.shape[0])
-            ixx, iyy = cp.meshgrid(ix, iy) # DO NOT REMOVE THIS, THIS IS NOT THE SAME AS self.ixx, self.iyy!
-            angles_avg[(ixx + iyy) % 2 == 1] = cp.nan # These are not the centers of hexagons, so dont draw these
-        return angles_avg.get()
+            magnitudes_avg = magnitudes_avg[::2,::2]
+            ixx, iyy = cp.meshgrid(cp.arange(0, angles_avg.shape[1]), cp.arange(0, angles_avg.shape[0])) # DO NOT REMOVE THIS, THIS IS NOT THE SAME AS self.ixx, self.iyy!
+            NaN_mask = (ixx + iyy) % 2 == 1 # These are not the centers of hexagons, so dont draw these
+            angles_avg[NaN_mask] = cp.NaN
+            magnitudes_avg[NaN_mask] = cp.NaN
+        return angles_avg, magnitudes_avg
+    
+    def polar_to_rgb(self, angles=None, magnitudes=None, m=None, avg=True, fill=False, autoscale=True):
+        ''' Returns the rgb values for the polar coordinates defined by angles and magnitudes. 
+            TAKES CUPY ARRAYS AS INPUT, YIELDS NUMPY ARRAYS AS OUTPUT
+            @param angles [2D cp.array()] (None): The averaged angles.
+        '''
+        if angles is None or magnitudes is None:
+            angles, magnitudes = self.get_m_polar(m=m, avg=avg)
+            if autoscale:
+                avgmethod = self._resolve_avg(avg)
+                if self.config in ['pinwheel', 'square'] and avgmethod in ['cross', 'square']:
+                    magnitudes *= math.sqrt(2)*.999
+                elif self.config in ['kagome', 'triangle'] and avgmethod in ['hexagon', 'triangle']:
+                    magnitudes *= 1.5*.999
+        assert angles.shape == magnitudes.shape, "polar_to_hsv() did not receive angle and magnitude arrays of the same shape."
+        
+        # Normalize to ranges between 0 and 1 and determine NaN-positions
+        angles = angles/2/math.pi
+        magnitudes = magnitudes/self.Msat
+        NaNangles = cp.isnan(angles)
+        NaNmagnitudes = cp.isnan(magnitudes)
+        # Create hue, saturation and value arrays
+        hue = cp.zeros_like(angles)
+        saturation = cp.ones_like(angles)
+        value = cp.zeros_like(angles)
+        # Situation 1: angle and magnitude both well-defined (an average => color (hue=angle, saturation=1, value=magnitude))
+        affectedpositions = cp.where(cp.logical_and(cp.logical_not(NaNangles), cp.logical_not(NaNmagnitudes)))
+        hue[affectedpositions] = angles[affectedpositions]
+        value[affectedpositions] = magnitudes[affectedpositions]
+        # Situation 2: magnitude is zero, so angle is NaN (zero average => black (hue=anything, saturation=anything, value=0))
+        affectedpositions = cp.where(cp.logical_and(NaNangles, magnitudes == 0))
+        value[affectedpositions] = 0
+        # Situation 3: magnitude is NaN, so angle is NaN (no magnet => white (hue=0, saturation=0, value=1))
+        affectedpositions = cp.where(cp.logical_and(NaNangles, NaNmagnitudes))
+        saturation[affectedpositions] = 0
+        value[affectedpositions] = 1
+        # Create the hsv matrix with correct axes ordering for matplotlib.color.hsv_to_rgb:
+        hsv = np.array([hue.get(), saturation.get(), value.get()]).swapaxes(0, 2).swapaxes(0, 1)
+        if fill: hsv = fill_neighbors(hsv, cp.logical_and(NaNangles, NaNmagnitudes))
+        rgb = hsv_to_rgb(hsv)
+        return rgb
 
     def show_m(self, m=None, avg=True, show_energy=True, fill=False):
         ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
@@ -522,42 +576,33 @@ class Magnets:
         '''
         avg = self._resolve_avg(avg)
         if m is None: m = self.m
-        show_quiver = self.m.size < 1e5 # Quiver becomes very slow for more than 100k cells, so just dont show it then
+        show_quiver = self.m.size < 1e5 and self.m_type == 'ip' # Quiver becomes very slow for more than 100k cells, so just dont show it then
         averaged_extent = self._get_averaged_extent(avg)
         full_extent = [self.x_min-self.dx/2,self.x_max+self.dx/2,self.y_min-self.dy/2,self.y_max+self.dx/2]
 
-        num_plots = 2 if show_energy else 1
+        num_plots = 1
+        num_plots += 1 if show_energy else 0
+        num_plots += 1 if show_quiver else 0
         axes = []
-        if self.m_type == 'op':
-            fig = plt.figure(figsize=(3.5*num_plots, 3))
-            ax1 = fig.add_subplot(1, num_plots, 1)
-            mask = self._get_mask(avg=avg)
-            im1 = ax1.imshow(signal.convolve2d(m, mask, mode='valid', boundary='fill').get(),
-                             cmap='gray', origin='lower', vmin=-cp.sum(mask), vmax=cp.sum(mask),
-                             extent=averaged_extent)
-            ax1.set_title(f"Averaged magnetization $\\vert m \\vert$\n('{avg}' average{', PBC' if self.PBC else ''})", font={"size":10})
-            plt.colorbar(im1)
-            axes.append(ax1)
-        elif self.m_type == 'ip':
-            num_plots += 1 if show_quiver else 0
-            fig = plt.figure(figsize=(3.5*num_plots, 3))
-            ax1 = fig.add_subplot(1, num_plots, 1)
-            im = fill_nan_neighbors(self.get_m_angles(m=m, avg=avg)) if fill else self.get_m_angles(m=m, avg=avg)
-            im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
-                             extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
-            ax1.set_title(f"Averaged magnetization angle\n('{avg}' average{', PBC' if self.PBC else ''})", font={"size":10})
-            plt.colorbar(im1)
-            axes.append(ax1)
-            if show_quiver:
-                ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
-                ax2.set_aspect('equal')
-                nonzero = self.m.get().nonzero()
-                quiverscale = 0.5 if self.config in ['triangle'] else 0.7
-                ax2.quiver(self.xx.get()[nonzero], self.yy.get()[nonzero], 
-                        cp.multiply(m, self.orientation[:,:,0]).get()[nonzero], cp.multiply(m, self.orientation[:,:,1]).get()[nonzero],
-                        pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
-                ax2.set_title(r'$m$')
-                axes.append(ax2)
+        fig = plt.figure(figsize=(3.5*num_plots, 3))
+        ax1 = fig.add_subplot(1, num_plots, 1)
+        im = self.polar_to_rgb(m=m, avg=avg, fill=fill)
+        im1 = ax1.imshow(im, cmap='hsv' if self.m_type == 'ip' else 'gray', origin='lower', vmin=0, vmax=2*cp.pi,
+                            extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
+        c1 = plt.colorbar(im1)
+        c1.ax.get_yaxis().labelpad = 30
+        c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg}' average{', PBC' if self.PBC else ''})", rotation=270, fontsize=12)
+        axes.append(ax1)
+        if show_quiver:
+            ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
+            ax2.set_aspect('equal')
+            nonzero = self.m.get().nonzero()
+            quiverscale = 0.5 if self.config in ['triangle'] else 0.7
+            ax2.quiver(self.xx.get()[nonzero], self.yy.get()[nonzero], 
+                    cp.multiply(m, self.orientation[:,:,0]).get()[nonzero], cp.multiply(m, self.orientation[:,:,1]).get()[nonzero],
+                    pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
+            ax2.set_title(r'$m$')
+            axes.append(ax2)
         if show_energy:
             ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
             im3 = ax3.imshow(self.E_int.get(), origin='lower',
@@ -629,33 +674,32 @@ def _mirror4(arr, negativex=False, negativey=False):
     arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
     return arr4
 
-def fill_nan_neighbors(arr): # TODO: find a better place and name for this function, maybe create separate graphical helper function file
+def fill_neighbors(hsv, replaceable):
     ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
-        Assume an array <arr> has np.nan at every other diagonal (i.e. chess pattern of np.nan's). Then this
-        function fills in these NaNs with the surrounding values at its nearest neighbors (cross neighbors ⁛),
+        The 2D array <replaceable> is True at the positions of hsv which can be overwritten by this function.
+        The 3D array <hsv> has the same first two dimensions as <replaceable>, with the third dimension having size 3 (h, s, v).
+        Then this function overwrites the replaceables with the surrounding values at the nearest neighbors (cross neighbors ⁛),
         but only if all those neighbors are equal. This is useful for very large simulations where each cell
-        occupies less than 1 pixel when plotted: by removing the NaNs, visual issues can be prevented.
+        occupies less than 1 pixel when plotted: by removing the replaceables, visual issues can be prevented.
         @return [2D np.array]: The interpolated array.
     '''
-    if type(arr) == cp.ndarray:
-        arr = arr.get() # We need numpy for this, to np.insert the desired rows (cp.insert does not exist)
-    else:
-        arr = np.asarray(arr)
-    replaceable = np.isnan(arr)
+    hsv = hsv.get() if type(hsv) == cp.ndarray else np.asarray(hsv)
+    replaceable = replaceable.get() if type(replaceable) == cp.ndarray else np.asarray(replaceable)
 
-    # Extend arrays a bit to fill nans near boundaries as well
-    a = np.insert(arr, 0, arr[1], axis=0)
+    # Extend arrays a bit to fill NaNs near boundaries as well
+    a = np.insert(hsv, 0, hsv[1], axis=0)
     a = np.insert(a, 0, a[:,1], axis=1)
-    a = np.append(a, a[-2].reshape(1,-1), axis=0)
-    a = np.append(a, a[:,-2].reshape(-1,1), axis=1)
+    a = np.append(a, a[-2].reshape(1,-1,3), axis=0)
+    a = np.append(a, a[:,-2].reshape(-1,1,3), axis=1)
 
-    N = a[:-2, 1:-1]
-    E = a[1:-1, 2:]
-    S = a[2:, 1:-1]
-    W = a[1:-1, :-2]
+    N = a[:-2, 1:-1, :]
+    E = a[1:-1, 2:, :]
+    S = a[2:, 1:-1, :]
+    W = a[1:-1, :-2, :]
     equal_neighbors = np.logical_and(np.logical_and(np.isclose(N, E), np.isclose(E, S)), np.isclose(S, W))
+    equal_neighbors = np.logical_and(np.logical_and(equal_neighbors[:,:,0], equal_neighbors[:,:,1]), equal_neighbors[:,:,2])
 
-    return np.where(np.logical_and(replaceable, equal_neighbors), N, arr)
+    return np.where(np.repeat(np.logical_and(replaceable, equal_neighbors)[:,:,np.newaxis], 3, axis=2), N, hsv)
 
 
 @dataclass
