@@ -18,11 +18,12 @@ matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for larg
 class Magnets:
     def __init__(self, nx, a=None, T=1, E_b=1, m_type='ip', config='square', pattern='random', energies=('dipolar'), ny=None, PBC=False):
         '''
-            The position of magnets is specified using <nx> and <a>. The meaning of <a> is as follows: # TODO: should the meaning of nx also be changed then?
-            For config='pinwheel', 'square' or 'full': the smallest distance between two magnets with the same orientation.
+            The position of magnets is specified using <nx> and <a>. 
+            The meaning of <a> is as follows: # TODO: should the meaning of nx also be changed then? Or do we use an optional 'truncate=True' argument that crops nx to an integer amount of unit cells?
+                For config='pinwheel', 'square' or 'full': the smallest distance between two magnets with the same orientation.
                                                        (so for 'full' this is dx, for the others 2*dx, with dx the cell size)
-                       'kagome':   distance between the centers of two adjacent hexagons (this is 4*dx).
-                       'triangle': side length of the triangles (this is also 4*dx).
+                           'kagome':   distance between the centers of two adjacent hexagons (this is 4*dx).
+                           'triangle': side length of the triangles (this is also 4*dx).
             If ny is not explicitly specified, the simulation domain is made as square as possible.
             The initial configuration of a Magnets geometry consists of 3 parts:
              1) m_type:  Magnets can be in-plane or out-of-plane: 'ip' or 'op', respectively.
@@ -34,6 +35,7 @@ class Magnets:
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
             # TODO: linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy
             #       see https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html for the imshows then
+            # TODO: add Ising config for comparison with analytical solution
         '''
         self.T = T
         self.t = 0.
@@ -337,7 +339,7 @@ class Magnets:
         minBarrier = cp.min(self.barrier)
         self.barrier -= minBarrier # Energy is relative, so set min(E) to zero (this solves issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
-            taus = cp.random.exponential(cp.exp(self.barrier/self.T))
+            taus = cp.random.exponential(cp.exp(self.barrier/self.T)) # TODO: search if less computationally expensive random generator exists
             indexmin = cp.argmin(taus)
             indexmin2D = cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
             self.m[indexmin2D] = -self.m[indexmin2D]
@@ -563,7 +565,7 @@ class Magnets:
             plt.colorbar(im3)
             ax3.set_title(r'$E_{int}$')
             axes.append(ax3)
-        multi = MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True)
+        multi = MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
         plt.gcf().tight_layout()
         plt.show()
 

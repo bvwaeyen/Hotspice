@@ -42,7 +42,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
     h = ax1.imshow(mm.get_m_angles(), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
-    ax1.set_title(r'Averaged magnetization angle')
+    ax1.set_title(r'Averaged magnetization angle [rad]')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
     p,  = ax2.plot(mm.history.T, mm.history.m)

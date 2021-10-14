@@ -18,7 +18,7 @@ n = 200
 
 ## Initialize main Magnets object
 t = time.time()
-mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='ip', config='square', pattern='AFM', energies=['dipolar'], PBC=False)
+mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='ip', config='square', pattern='AFM', energies=['dipolar'], PBC=True)
 print(f'Initialization time: {time.time() - t} seconds.')
 
 
@@ -39,7 +39,7 @@ def animate_temp_rise(mm, animate=1, speed=1000, T_step=0.00005, T_max=3):
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
     h = ax1.imshow(mm.get_m_angles(), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
-    ax1.set_title(r'Averaged magnetization angle')
+    ax1.set_title(r'Averaged magnetization angle [rad]')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
     p,  = ax2.plot(mm.history.T, mm.history.m)
@@ -79,4 +79,4 @@ if __name__ == "__main__":
     # autocorrelation_temp_dependence(mm, T_min=0.1, T_max=1)
 
     #### Commands which do some specific thing which yields nice saved figures or videos
-    # ef.animate_quenching(mm, animate=3, speed=50, n_sweep=40000, save=2) # Optimized for nx = ny = 200
+    # ef.animate_quenching(mm, animate=3, speed=50, n_sweep=80000, save=2, pattern='uniform') # Optimized for nx = ny = 200
