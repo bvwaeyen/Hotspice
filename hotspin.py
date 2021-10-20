@@ -674,13 +674,15 @@ def _mirror4(arr, negativex=False, negativey=False):
     arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
     return arr4
 
-def fill_neighbors(hsv, replaceable):
+def fill_neighbors(hsv, replaceable, fillblack=True): # TODO: make this cupy if possible
     ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
+        THIS FUNCTION OPERATES ON HSV VALUES, AND RETURNS HSV AS WELL!!! NOT RGB HERE!
         The 2D array <replaceable> is True at the positions of hsv which can be overwritten by this function.
         The 3D array <hsv> has the same first two dimensions as <replaceable>, with the third dimension having size 3 (h, s, v).
         Then this function overwrites the replaceables with the surrounding values at the nearest neighbors (cross neighbors ⁛),
         but only if all those neighbors are equal. This is useful for very large simulations where each cell
         occupies less than 1 pixel when plotted: by removing the replaceables, visual issues can be prevented.
+        @param fillblack [bool] (True): If True, white pixels next to black pixels are colored black regardless of other neighbors.
         @return [2D np.array]: The interpolated array.
     '''
     hsv = hsv.get() if type(hsv) == cp.ndarray else np.asarray(hsv)
@@ -689,17 +691,23 @@ def fill_neighbors(hsv, replaceable):
     # Extend arrays a bit to fill NaNs near boundaries as well
     a = np.insert(hsv, 0, hsv[1], axis=0)
     a = np.insert(a, 0, a[:,1], axis=1)
-    a = np.append(a, a[-2].reshape(1,-1,3), axis=0)
-    a = np.append(a, a[:,-2].reshape(-1,1,3), axis=1)
+    a = cp.append(a, a[-2].reshape(1,-1,3), axis=0)
+    a = cp.append(a, a[:,-2].reshape(-1,1,3), axis=1)
 
     N = a[:-2, 1:-1, :]
     E = a[1:-1, 2:, :]
     S = a[2:, 1:-1, :]
     W = a[1:-1, :-2, :]
-    equal_neighbors = np.logical_and(np.logical_and(np.isclose(N, E), np.isclose(E, S)), np.isclose(S, W))
-    equal_neighbors = np.logical_and(np.logical_and(equal_neighbors[:,:,0], equal_neighbors[:,:,1]), equal_neighbors[:,:,2])
+    equal_neighbors = cp.logical_and(cp.logical_and(cp.isclose(N, E), cp.isclose(E, S)), cp.isclose(S, W))
+    equal_neighbors = cp.logical_and(cp.logical_and(equal_neighbors[:,:,0], equal_neighbors[:,:,1]), equal_neighbors[:,:,2])
 
-    return np.where(np.repeat(np.logical_and(replaceable, equal_neighbors)[:,:,np.newaxis], 3, axis=2), N, hsv)
+    result = cp.where(cp.repeat(cp.logical_and(cp.asarray(replaceable), equal_neighbors)[:,:,cp.newaxis], 3, axis=2), N, cp.asarray(hsv))
+
+    if fillblack:
+        blacks = cp.where(cp.logical_or(cp.logical_or(N[:,:,2] == 0, E[:,:,2] == 0), cp.logical_or(S[:,:,2] == 0, W[:,:,2] == 0)))
+        result[blacks[0], blacks[1], 2] = 0
+
+    return result.get()
 
 
 @dataclass
