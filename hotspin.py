@@ -23,6 +23,7 @@ class Magnets:
             The meaning of <a> is as follows: # TODO: should the meaning of nx also be changed then? Or do we use an optional 'truncate=True' argument that crops nx to an integer amount of unit cells?
                 For config='pinwheel', 'square' or 'full': the smallest distance between two magnets with the same orientation.
                                                        (so for 'full' this is dx, for the others 2*dx, with dx the cell size)
+                           'Ising': the distance between two spins, assuming they are on a square grid (this is dx).
                            'kagome':   distance between the centers of two adjacent hexagons (this is 4*dx).
                            'triangle': side length of the triangles (this is also 4*dx).
             If ny is not explicitly specified, the simulation domain is made as square as possible.
@@ -30,7 +31,7 @@ class Magnets:
              1) m_type:  Magnets can be in-plane or out-of-plane: 'ip' or 'op', respectively.
              2) config:  The placement of magnets on the grid can be
                     if m_type is 'op': 'full', 'chess',
-                    if m_type is 'ip': 'square', 'pinwheel', 'kagome' or 'triangle'.
+                    if m_type is 'ip': 'square', 'pinwheel', 'Ising', 'kagome' or 'triangle'.
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
@@ -54,13 +55,15 @@ class Magnets:
             else:
                 raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'op'.")
         elif self.m_type == 'ip':
-            if config in ['square', 'squareASI']:
+            if config.lower() in map(str.lower, ['square', 'squareASI']):
                 self.config = 'square'
-            elif config in ['pinwheel', 'pinwheelASI']:
+            elif config.lower() in map(str.lower, ['pinwheel', 'pinwheelASI']):
                 self.config = 'pinwheel'
-            elif config in ['kagome', 'kagomeASI']:
+            elif config.lower() in map(str.lower, ['Ising', 'IsingASI']):
+                self.config = 'Ising'
+            elif config.lower() in map(str.lower, ['kagome', 'kagomeASI']):
                 self.config = 'kagome'
-            elif config in ['triangle', 'triangleASI']:
+            elif config.lower() in map(str.lower, ['triangle', 'triangleASI']):
                 self.config = 'triangle'
             else:
                 raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'ip'.")
@@ -69,7 +72,7 @@ class Magnets:
         
         # initialize the coordinates based on nx, (ny) and L
         self.nx, self.ny = nx, ny
-        if self.config in ['full']:
+        if self.config in ['full', 'Ising']:
             if a is None: a = 1
             self.dx = self.dy = a
             if ny is None: self.ny = self.nx
@@ -87,7 +90,7 @@ class Magnets:
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.xx.shape[1]), cp.arange(0, self.yy.shape[0]))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
-        if self.config in ['full']:
+        if self.config in ['full', 'Ising']:
             self.mask = cp.ones_like(self.xx)
             self.unitcell = Vec2D(1,1)
         elif self.config in ['chess', 'square', 'pinwheel']:
@@ -113,6 +116,8 @@ class Magnets:
                 self._initialize_ip('square', 0)
             elif self.config == 'pinwheel':
                 self._initialize_ip('square', cp.pi/4)
+            elif self.config == 'Ising':
+                self._initialize_ip('full', 0)
             elif self.config == 'kagome':
                 self._initialize_ip('kagome', 0)
             elif self.config == 'triangle':
@@ -142,7 +147,7 @@ class Magnets:
             if self.config in ['kagome', 'triangle']:
                 self.m[(self.ixx - self.iyy) % 4 == 1] = -1
         elif pattern == 'AFM':
-            if self.config in ['full']:
+            if self.config in ['full', 'Ising']:
                 self.m = ((self.xx + self.yy) % 2)*2 - 1
             elif self.config in ['chess', 'square', 'pinwheel']:
                 self.m = ((self.xx - self.yy)//2 % 2)*2 - 1
@@ -167,6 +172,9 @@ class Magnets:
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         mask = self.mask.get()
         yy = self.yy.get()
+        if config == 'full':
+            self.orientation[:,0] = math.cos(angle)
+            self.orientation[:,1] = math.sin(angle)
         if config == 'square':
             self.orientation[yy % 2 == 0,0] = math.cos(angle)
             self.orientation[yy % 2 == 0,1] = math.sin(angle)
@@ -323,13 +331,15 @@ class Magnets:
         if self.m_type == 'op': 
             self.Exchange_interaction = cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
         elif self.m_type == 'ip':
+            if self.config in ['Ising']:
+                self.Exchange_interaction = cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
             # if self.config in ['square', 'pinwheel']:
             #     self.Exchange_interaction = cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
             # elif self.config in ['kagome', 'triangle']:
             #     self.Exchange_interaction = cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
             self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
 
-    def energy_exchange_update(self):
+    def energy_exchange_update(self): # TODO: allow for 'ip' by taking into account orientation of magnets
         self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill'), self.m)
 
 
@@ -423,7 +433,7 @@ class Magnets:
         
     def _get_appropriate_avg(self):
         ''' Auto-detect the most appropriate averaging mask based on self.config '''
-        if self.config in ['full']:
+        if self.config in ['full', 'Ising']:
             avg = 'point'
         elif self.config in ['chess', 'square', 'pinwheel']:
             avg = 'cross'
@@ -651,8 +661,8 @@ class Magnets:
             @return [float]: The average normalized AFM-ness.
         '''
         if AFM_mask is None:
-            if self.config in ['full']:
-                AFM_mask = cp.array([[1, -1], [-1, 1]], dtype='float')
+            if self.config in ['full', 'Ising']:
+                AFM_mask = cp.array([[1, -1], [-1, 1]], dtype='float') # TODO: this might need a change
             elif self.config in ['chess', 'square', 'pinwheel']:
                 AFM_mask = cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
             elif self.config in ['kagome', 'triangle']:
