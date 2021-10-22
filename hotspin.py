@@ -37,7 +37,6 @@ class Magnets:
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
             # TODO: linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy
             #       see https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html for the imshows then
-            # TODO: add Ising config for comparison with analytical solution
         '''
         self.T = T
         self.t = 0.
@@ -138,17 +137,16 @@ class Magnets:
 
 
     def initialize_m(self, pattern):
-        ''' Initializes the magnetization (-1, 0 or 1), mask and unit cell dimensions.
+        ''' Initializes the magnetization (-1, 0 or 1!!!), mask and unit cell dimensions.
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
-        # WARN: it is important that self.m is normalized to -1, 0 or 1!!! To get the magnitude, just multiply with Msat afterwards.
         if pattern == 'uniform':
             self.m = cp.ones(cp.shape(self.xx)) # For full, chess, square, pinwheel: this is already ok
             if self.config in ['kagome', 'triangle']:
                 self.m[(self.ixx - self.iyy) % 4 == 1] = -1
         elif pattern == 'AFM':
             if self.config in ['full', 'Ising']:
-                self.m = ((self.xx + self.yy) % 2)*2 - 1
+                self.m = (self.yy % 2)*2 - 1
             elif self.config in ['chess', 'square', 'pinwheel']:
                 self.m = ((self.xx - self.yy)//2 % 2)*2 - 1
             elif self.config in ['kagome', 'triangle']:
@@ -173,8 +171,8 @@ class Magnets:
         mask = self.mask.get()
         yy = self.yy.get()
         if config == 'full':
-            self.orientation[:,0] = math.cos(angle)
-            self.orientation[:,1] = math.sin(angle)
+            self.orientation[:,:,0] = math.cos(angle)
+            self.orientation[:,:,1] = math.sin(angle)
         if config == 'square':
             self.orientation[yy % 2 == 0,0] = math.cos(angle)
             self.orientation[yy % 2 == 0,1] = math.sin(angle)
@@ -607,7 +605,12 @@ class Magnets:
             ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
             ax2.set_aspect('equal')
             nonzero = self.m.get().nonzero()
-            quiverscale = 0.5 if self.config in ['triangle'] else 0.7
+            if self.config in ['triangle']:
+                quiverscale = 0.5
+            elif self.config in ['Ising']: 
+                quiverscale = 1.1
+            else:
+                quiverscale = 0.7
             ax2.quiver(self.xx.get()[nonzero], self.yy.get()[nonzero], 
                     cp.multiply(m, self.orientation[:,:,0]).get()[nonzero], cp.multiply(m, self.orientation[:,:,1]).get()[nonzero],
                     pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
@@ -661,15 +664,19 @@ class Magnets:
             @return [float]: The average normalized AFM-ness.
         '''
         if AFM_mask is None:
-            if self.config in ['full', 'Ising']:
-                AFM_mask = cp.array([[1, -1], [-1, 1]], dtype='float') # TODO: this might need a change
+            if self.config in ['full']:
+                AFM_mask = cp.array([[1, -1], [-1, 1]], dtype='float') # TODO: this might need a change?
+                # TODO: add normalization factor here dependent on config
+            elif self.config in ['Ising']:
+                # AFM_mask = cp.array([[1, -1, 1], [-1, 0, -1], [1, -1, 1]]) # random: average .25
+                AFM_mask = cp.array([[1, 1], [-1, -1]]) # anisotropy only occurs in x-direction
             elif self.config in ['chess', 'square', 'pinwheel']:
                 AFM_mask = cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
             elif self.config in ['kagome', 'triangle']:
                 AFM_mask = cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
         else:
             AFM_mask = cp.asarray(AFM_mask)
-        AFM_ness = cp.mean(cp.abs(signal.convolve2d(self.m, AFM_mask, mode='same', boundary='fill')))
+        AFM_ness = cp.mean(cp.abs(signal.convolve2d(self.m, AFM_mask, mode='same', boundary='wrap' if self.PBC else 'fill')))
         return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(self.mask)*self.m.size)
 
 
