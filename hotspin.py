@@ -94,7 +94,7 @@ class Magnets:
             self.unitcell = Vec2D(1,1)
         elif self.config in ['chess', 'square', 'pinwheel']:
             self.mask = cp.zeros_like(self.xx)
-            self.mask[(self.xx + self.yy) % 2 == 1] = 1
+            self.mask[(self.ixx + self.iyy) % 2 == 1] = 1
             self.unitcell = Vec2D(2,2)
         elif self.config in ['kagome', 'triangle']:
             self.mask = cp.zeros_like(self.xx)
@@ -145,7 +145,9 @@ class Magnets:
             if self.config in ['kagome', 'triangle']:
                 self.m[(self.ixx - self.iyy) % 4 == 1] = -1
         elif pattern == 'AFM':
-            if self.config in ['full', 'Ising']:
+            if self.config in ['full']:
+                self.m = ((self.xx - self.yy) % 2)*2 - 1
+            elif self.config in ['Ising']:
                 self.m = (self.yy % 2)*2 - 1
             elif self.config in ['chess', 'square', 'pinwheel']:
                 self.m = ((self.xx - self.yy)//2 % 2)*2 - 1
@@ -240,8 +242,8 @@ class Magnets:
         rr_inv3 = rr_inv**3
         rinv3 = _mirror4(rr_inv3)
         # Now we determine the normalized rx and ry
-        ux = _mirror4(rrx*rr_inv, negativex=True) # THE BUG WAS HERE OMG
-        uy = _mirror4(rry*rr_inv, negativey=True) # HOLY FLYING GUACAMOLE
+        ux = _mirror4(rrx*rr_inv, negativex=True)
+        uy = _mirror4(rry*rr_inv, negativey=True)
         # Now we initialize the full ox
         if self.m_type == 'ip':
             unitcell_ox = self.orientation[:self.unitcell.y,:self.unitcell.x,0]
@@ -272,7 +274,7 @@ class Magnets:
                     kernel2 = oy1*oy2*(3*uy**2 - 1)
                     kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
                     kernel = -(kernel1 + kernel2 + kernel3)*rinv3
-                if self.PBC:
+                if self.PBC: # Just copy the kernel 8 times, for the 8 'nearest simulations'
                     kernelcopy = kernel.copy()
                     kernel[:,self.nx:] += kernelcopy[:,:self.nx-1]
                     kernel[self.ny:,self.nx:] += kernelcopy[:self.ny-1,:self.nx-1]
@@ -335,7 +337,8 @@ class Magnets:
             #     self.Exchange_interaction = cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
             # elif self.config in ['kagome', 'triangle']:
             #     self.Exchange_interaction = cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
-            self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
+            else:
+                self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
 
     def energy_exchange_update(self): # TODO: allow for 'ip' by taking into account orientation of magnets
         self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill'), self.m)
@@ -703,7 +706,7 @@ def fill_neighbors(hsv, replaceable, fillblack=True): # TODO: make this cupy if 
         @return [2D np.array]: The interpolated array.
     '''
     hsv = hsv.get() if type(hsv) == cp.ndarray else np.asarray(hsv)
-    replaceable = replaceable.get() if type(replaceable) == cp.ndarray else np.asarray(replaceable)
+    replaceable = replaceable if type(replaceable) == cp.ndarray else cp.asarray(replaceable)
 
     # Extend arrays a bit to fill NaNs near boundaries as well
     a = np.insert(hsv, 0, hsv[1], axis=0)
@@ -718,10 +721,10 @@ def fill_neighbors(hsv, replaceable, fillblack=True): # TODO: make this cupy if 
     equal_neighbors = cp.logical_and(cp.logical_and(cp.isclose(N, E), cp.isclose(E, S)), cp.isclose(S, W))
     equal_neighbors = cp.logical_and(cp.logical_and(equal_neighbors[:,:,0], equal_neighbors[:,:,1]), equal_neighbors[:,:,2])
 
-    result = cp.where(cp.repeat(cp.logical_and(cp.asarray(replaceable), equal_neighbors)[:,:,cp.newaxis], 3, axis=2), N, cp.asarray(hsv))
+    result = cp.where(cp.repeat(cp.logical_and(replaceable, equal_neighbors)[:,:,cp.newaxis], 3, axis=2), N, cp.asarray(hsv))
 
     if fillblack:
-        blacks = cp.where(cp.logical_or(cp.logical_or(N[:,:,2] == 0, E[:,:,2] == 0), cp.logical_or(S[:,:,2] == 0, W[:,:,2] == 0)))
+        blacks = cp.where(cp.logical_and(cp.logical_or(cp.logical_or(N[:,:,2] == 0, E[:,:,2] == 0), cp.logical_or(S[:,:,2] == 0, W[:,:,2] == 0)), replaceable))
         result[blacks[0], blacks[1], 2] = 0
 
     return result.get()
