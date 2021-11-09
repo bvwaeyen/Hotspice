@@ -18,7 +18,7 @@ n = 200
 
 ## Initialize main Magnets object
 t = time.time()
-mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='ip', config='square', pattern='AFM', energies=['dipolar'], PBC=True)
+mm = hotspin.ASI.SquareASI(n, 2, T=T, E_b=E_b, pattern='AFM', energies=['dipolar'], PBC=True)
 print(f'Initialization time: {time.time() - t} seconds.')
 
 
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # ef.run_a_bit(mm, N=4e3, T=100, show_m=False)
     # ef.run_a_bit(mm, N=20e3, T=0.2)
     # ef.neelTemperature(mm, T_max=2)
-    # ef.animate_quenching(mm, animate=3, speed=50, fill=True, pattern='uniform')
+    ef.animate_quenching(mm, animate=3, speed=50, fill=True, pattern='uniform')
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, T_min=0.1, T_max=1)

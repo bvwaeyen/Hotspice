@@ -8,7 +8,7 @@ import numpy as np
 # from cupyx.scipy import signal
 
 import examplefunctions as ef
-from context import hotspin, ASI
+from context import hotspin
 
 
 ## Parameters, meshgrid
@@ -18,7 +18,7 @@ nx = 25 *4+1 # Multiple of 4 + 1
 
 ## Initialize main Magnets object
 t = time.time()
-mm = ASI.KagomeASI(nx, 4, T=T, E_b=E_b, pattern='uniform', energies=['dipolar'], PBC=False)
+mm = hotspin.ASI.KagomeASI(nx, 4, T=T, E_b=E_b, pattern='uniform', energies=['dipolar'], PBC=False)
 print(f'Initialization time: {time.time() - t} seconds.')
 
 

@@ -8,7 +8,7 @@ from matplotlib import animation
 from cupyx.scipy import signal
 
 import examplefunctions as ef
-from context import hotspin, ASI
+from context import hotspin
 
 
 ## Parameters, meshgrid
@@ -18,7 +18,7 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.time()
-mm = ASI.IsingASI(n, 1, T=T, E_b=E_b, pattern='uniform', energies=['dipolar'], PBC=True)
+mm = hotspin.ASI.IsingASI(n, 1, T=T, E_b=E_b, pattern='uniform', energies=['dipolar'], PBC=True)
 print(f'Initialization time: {time.time() - t} seconds.')
 # mm.energy_exchange_init(J=0.2)
 

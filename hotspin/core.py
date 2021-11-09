@@ -26,6 +26,7 @@ TODO (summary):
 - sort out the AFM-ness and its normalization etc.
 . can implement linear transformations if I want to
 . can implement random defects if I want to
+- move plotting functions to a separate module 'hotspin.plottools'
 """
 
 class Magnets:
