@@ -8,7 +8,7 @@ from matplotlib import animation
 from cupyx.scipy import signal
 
 import examplefunctions as ef
-from context import hotspin
+from context import hotspin, ASI
 
 
 ## Parameters, meshgrid
@@ -18,11 +18,12 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.time()
-mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='ip', config='Ising', pattern='uniform', energies=['dipolar'], PBC=True)
+mm = ASI.IsingASI(n, 1, T=T, E_b=E_b, pattern='uniform', energies=['dipolar'], PBC=True)
 print(f'Initialization time: {time.time() - t} seconds.')
+# mm.energy_exchange_init(J=0.2)
 
 
-def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.0005, T_max=40): # TODO: update this function with modern methods
+def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005, T_max=4): # TODO: update this function with modern methods
     """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -74,7 +75,7 @@ if __name__ == "__main__":
 
     # ef.run_a_bit(mm, N=10e3, T=1)
     # ef.neelTemperature(mm, T_max=2)
-    # ef.animate_quenching(mm, animate=3, speed=50)
-    animate_temp_rise(mm, animate=3, speed=1000)
+    # ef.animate_quenching(mm, animate=3, speed=50, pattern='random')
+    # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, T_min=0.9, T_max=1.2)

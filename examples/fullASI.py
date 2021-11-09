@@ -8,7 +8,7 @@ from matplotlib import animation
 from cupyx.scipy import signal
 
 import examplefunctions as ef
-from context import hotspin
+from context import hotspin, ASI
 
 
 ## Parameters, meshgrid
@@ -18,7 +18,7 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.time()
-mm = hotspin.Magnets(n, T=T, E_b=E_b, m_type='op', config='full', pattern='uniform', energies=['dipolar'], PBC=True)
+mm = ASI.FullASI(n, 1, T=T, E_b=E_b, pattern='uniform', energies=['dipolar'], PBC=True)
 print(f'Initialization time: {time.time() - t} seconds.')
 
 
@@ -72,7 +72,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005
 if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
 
-    # ef.run_a_bit(mm, N=10e3, T=1)
+    # ef.run_a_bit(mm, N=10e3, T=.8, timeit=True)
     # ef.neelTemperature(mm, T_max=2)
     # ef.animate_quenching(mm, avg='square', animate=3, speed=50)
     # animate_temp_rise(mm, animate=3, speed=1000)

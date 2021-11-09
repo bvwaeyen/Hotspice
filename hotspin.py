@@ -16,22 +16,25 @@ from cupyx.scipy import signal
 ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
 matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
 
+"""
+TODO (summary):
+(!: priority, -: should do at some point in time, .: perhaps implement perhaps not)
+! use Glauber monte carlo markov chain on Ising model to determine which magnet will switch
+  (will not improve performance by much I think, since this will still only switch 1 magnet each time)
+- update the animate_temp_rise function with the modern 'API' or however to call this
+- in-plane exchange energy
+- sort out the AFM-ness and its normalization etc.
+. can implement linear transformations if I want to
+. can implement random defects if I want to
+"""
+
 class Magnets:
-    def __init__(self, nx, a=None, T=1, E_b=1, Msat=1, m_type='ip', config='square', pattern='random', energies=('dipolar'), ny=None, PBC=False):
+    def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=1, m_type='ip', pattern='random', energies=('dipolar',), PBC=False):
         '''
             The position of magnets is specified using <nx> and <a>. 
-            The meaning of <a> is as follows: # TODO: should the meaning of nx also be changed then? Or do we use an optional 'truncate=True' argument that crops nx to an integer amount of unit cells?
-                For config='pinwheel', 'square' or 'full': the smallest distance between two magnets with the same orientation.
-                                                       (so for 'full' this is dx, for the others 2*dx, with dx the cell size)
-                           'Ising': the distance between two spins, assuming they are on a square grid (this is dx).
-                           'kagome':   distance between the centers of two adjacent hexagons (this is 4*dx).
-                           'triangle': side length of the triangles (this is also 4*dx).
-            If ny is not explicitly specified, the simulation domain is made as square as possible.
             The initial configuration of a Magnets geometry consists of 3 parts:
              1) m_type:  Magnets can be in-plane or out-of-plane: 'ip' or 'op', respectively.
-             2) config:  The placement of magnets on the grid can be
-                    if m_type is 'op': 'full', 'chess',
-                    if m_type is 'ip': 'square', 'pinwheel', 'Ising', 'kagome' or 'triangle'.
+             2) config:  Now defined through subclasses. # TODO: deprecate this
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
@@ -44,155 +47,62 @@ class Magnets:
         self.Msat = Msat
         self.m_type = m_type
         self.energies = list(energies)
-
-        # config disambiguation
-        if self.m_type == 'op':
-            if config in ['full']:
-                self.config = 'full'
-            elif config in ['chess']:
-                self.config = 'chess'
-            else:
-                raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'op'.")
-        elif self.m_type == 'ip':
-            if config.lower() in map(str.lower, ['square', 'squareASI']):
-                self.config = 'square'
-            elif config.lower() in map(str.lower, ['pinwheel', 'pinwheelASI']):
-                self.config = 'pinwheel'
-            elif config.lower() in map(str.lower, ['Ising', 'IsingASI']):
-                self.config = 'Ising'
-            elif config.lower() in map(str.lower, ['kagome', 'kagomeASI']):
-                self.config = 'kagome'
-            elif config.lower() in map(str.lower, ['triangle', 'triangleASI']):
-                self.config = 'triangle'
-            else:
-                raise AssertionError(f"Invalid argument: config='{config}' not valid if m_type is 'ip'.")
-        else:
-            raise AssertionError(f"Invalid argument: m_type='{self.m_type}' not supported, instead use 'ip' or 'op'.")
         
         # initialize the coordinates based on nx, (ny) and L
-        self.nx, self.ny = nx, ny
-        if self.config in ['full', 'Ising']:
-            if a is None: a = 1
-            self.dx = self.dy = a
-            if ny is None: self.ny = self.nx
-        elif self.config in ['chess', 'square', 'pinwheel']:
-            if a is None: a = 2
-            self.dx = self.dy = a/2
-            if ny is None: self.ny = self.nx
-        elif self.config in ['kagome', 'triangle']:
-            if a is None: a = 4
-            self.dx = a/4
-            self.dy = math.sqrt(3)*self.dx
-            if ny is None: self.ny = int(self.nx/math.sqrt(3))//4*4 - (0 if PBC else 1)
-        self.xx, self.yy = cp.meshgrid(cp.linspace(0, self.dx*(self.nx-1), self.nx), cp.linspace(0, self.dy*(self.ny-1), self.ny))
+        self.xx, self.yy = cp.meshgrid(cp.linspace(0, dx*(nx-1), nx), cp.linspace(0, dy*(ny-1), ny))
         self.index = range(self.xx.size)
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.xx.shape[1]), cp.arange(0, self.yy.shape[0]))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
-        if self.config in ['full', 'Ising']:
-            self.mask = cp.ones_like(self.xx)
-            self.unitcell = Vec2D(1,1)
-        elif self.config in ['chess', 'square', 'pinwheel']:
-            self.mask = cp.zeros_like(self.xx)
-            self.mask[(self.ixx + self.iyy) % 2 == 1] = 1
-            self.unitcell = Vec2D(2,2)
-        elif self.config in ['kagome', 'triangle']:
-            self.mask = cp.zeros_like(self.xx)
-            self.mask[(self.ixx + self.iyy) % 4 == 1] = 1 # One bunch of diagonals \
-            self.mask[(self.ixx - self.iyy) % 4 == 3] = 1 # Other bunch of diagonals /
-            self.unitcell = Vec2D(4,4) # This could in theory be Vec2D(2,4) with a vertical offset of 2 for subsequent
-                                       # cells in the x-direction to use only half as much memory, but at the same time
-                                       # this would make the calculation and code much more complicated
-
+        self.unitcell = Vec2D(*self._get_unitcell())
         self.PBC = PBC
         if self.PBC:
-            if self.nx % self.unitcell.x != 0 or self.ny % self.unitcell.y != 0:
+            if nx % self.unitcell.x != 0 or ny % self.unitcell.y != 0:
                 warnings.warn(f"""Be careful with PBC, as there are not an integer number of unit cells in the simulation! Hence, the boundaries do not nicely fit together. Adjust nx or ny to alleviate this problem (unit cell has size {self.unitcell.x}x{self.unitcell.y}).""", stacklevel=2)
-
-        # Set the orientation of the islands corresponding to config
-        if m_type == 'ip': 
-            if self.config == 'square':
-                self._initialize_ip('square', 0)
-            elif self.config == 'pinwheel':
-                self._initialize_ip('square', cp.pi/4)
-            elif self.config == 'Ising':
-                self._initialize_ip('full', 0)
-            elif self.config == 'kagome':
-                self._initialize_ip('kagome', 0)
-            elif self.config == 'triangle':
-                self._initialize_ip('kagome', cp.pi/2)
-
-        # Initialize the specified energy components
-        if 'dipolar' in energies:
-            self.energy_dipolar_init()
-        if 'Zeeman' in energies:
-            self.energy_Zeeman_init()
-        if 'exchange' in energies:
-            self.energy_exchange_init(1)
-
-        # Initialize self.m and the correct self.mask, this also calculates the initial energy
-        self.initialize_m(pattern)
 
         self.history = History()
 
+        self.mask = self._get_mask().astype(bool).astype(int) # Make sure that it is either 0 or 1
+        if self.m_type == 'ip':
+            self._initialize_ip()
+        self.energy_init() # This needs self.orientation
+        self.initialize_m(pattern) # This needs energy kernels to be ready
 
-    def initialize_m(self, pattern):
-        ''' Initializes the magnetization (-1, 0 or 1!!!), mask and unit cell dimensions.
+    def _get_unitcell(self):
+        return Vec2D(1, 1)
+    
+    def _get_mask(self):
+        return cp.array([[1]])
+
+    def initialize_m(self, pattern='random'):
+        ''' Initializes the self.m (array of -1, 0 or 1) and mask.
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
-        if pattern == 'uniform':
-            self.m = cp.ones(cp.shape(self.xx)) # For full, chess, square, pinwheel: this is already ok
-            if self.config in ['kagome', 'triangle']:
-                self.m[(self.ixx - self.iyy) % 4 == 1] = -1
-        elif pattern == 'AFM':
-            if self.config in ['full']:
-                self.m = ((self.xx - self.yy) % 2)*2 - 1
-            elif self.config in ['Ising']:
-                self.m = (self.yy % 2)*2 - 1
-            elif self.config in ['chess', 'square', 'pinwheel']:
-                self.m = ((self.xx - self.yy)//2 % 2)*2 - 1
-            elif self.config in ['kagome', 'triangle']:
-                self.m = cp.ones(cp.shape(self.xx))
-                self.m[(self.ixx + self.iyy) % 4 == 3] = -1
-        else:
-            self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1 # Yields random -1 or 1
-            if pattern != 'random': warnings.warn('Config not recognized, defaulting to "random".', stacklevel=2)
-
+        self._set_m(pattern)
         self.m = cp.multiply(self.m, self.mask)
-        self.m_tot = cp.mean(self.m)
         self.energy() # Have to recalculate all the energies since m changed completely
-            
-      
-    def _initialize_ip(self, config, angle=0.):
+    
+    def _set_orientation(self):
+        return cp.ones((*self.xx.shape, 2))/math.sqrt(2)
+
+    def _initialize_ip(self):
         ''' Initialize the angles of all the magnets.
             This function should only be called by the Magnets() class itself, not by the user.
         '''
         # This sets the angle of all the magnets (this is of course only applicable in the in-plane case)
         assert self.m_type == 'ip', "Can not _initialize_ip() if m_type != 'ip'."
-        self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        mask = self.mask.get()
-        yy = self.yy.get()
-        if config == 'full':
-            self.orientation[:,:,0] = math.cos(angle)
-            self.orientation[:,:,1] = math.sin(angle)
-        if config == 'square':
-            self.orientation[yy % 2 == 0,0] = math.cos(angle)
-            self.orientation[yy % 2 == 0,1] = math.sin(angle)
-            self.orientation[yy % 2 == 1,0] = math.cos(angle + math.pi/2)
-            self.orientation[yy % 2 == 1,1] = math.sin(angle + math.pi/2)
-            self.orientation[mask == 0,0] = 0
-            self.orientation[mask == 0,1] = 0
-        elif config == 'kagome':
-            self.orientation[:,:,0] = math.cos(angle + math.pi/2)
-            self.orientation[:,:,1] = math.sin(angle + math.pi/2)
-            self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1).get(),0] = math.cos(angle - math.pi/6)
-            self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1).get(),1] = math.sin(angle - math.pi/6)
-            self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1).get(),0] = math.cos(angle + math.pi/6)
-            self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1).get(),1] = math.sin(angle + math.pi/6)
-            self.orientation[mask == 0,0] = 0
-            self.orientation[mask == 0,1] = 0
-        self.orientation = cp.asarray(self.orientation)
-    
+        self._set_orientation()
+
+
+    @property
+    def m_tot(self):
+        if self.m_type == 'op':
+            return cp.mean(self.m)
+        elif self.m_type == 'ip':
+            self.m_tot_x = cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))
+            self.m_tot_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
+            return (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
+
 
     def energy(self, single=False, index2D=None):
         assert not (single and index2D is None), "Provide the latest switch index to energy(single=True)"
@@ -212,6 +122,14 @@ class Magnets:
         self.E_int = E
         self.E_tot = cp.sum(E, axis=None)
         return self.E_tot
+    
+    def energy_init(self):
+        if 'dipolar' in self.energies:
+            self.energy_dipolar_init()
+        if 'Zeeman' in self.energies:
+            self.energy_Zeeman_init()
+        if 'exchange' in self.energies:
+            self.energy_exchange_init(1)
 
     def energy_Zeeman_init(self):
         if 'Zeeman' not in self.energies: self.energies.append('Zeeman')
@@ -321,7 +239,7 @@ class Magnets:
                     partial_m = cp.zeros_like(self.m)
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.m[y::self.unitcell.y, x::self.unitcell.x]
 
-                    total_energy += partial_m*signal.convolve2d(kernel, self.m, mode='valid')
+                    total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.m, mode='valid')
         self.E_dipolar = total_energy
         
     def energy_exchange_init(self, J):
@@ -331,16 +249,9 @@ class Magnets:
         if self.m_type == 'op': 
             self.Exchange_interaction = cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
         elif self.m_type == 'ip':
-            if self.config in ['Ising']:
-                self.Exchange_interaction = cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
-            # if self.config in ['square', 'pinwheel']:
-            #     self.Exchange_interaction = cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
-            # elif self.config in ['kagome', 'triangle']:
-            #     self.Exchange_interaction = cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
-            else:
-                self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
+            self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
 
-    def energy_exchange_update(self): # TODO: allow for 'ip' by taking into account orientation of magnets
+    def energy_exchange_update(self): # TODO: allow for 'ip' by taking into account orientation of magnets if that has physical meaning
         self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill'), self.m)
 
 
@@ -353,17 +264,13 @@ class Magnets:
         minBarrier = cp.min(self.barrier)
         self.barrier -= minBarrier # Energy is relative, so set min(E) to zero (this solves issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
-            taus = cp.random.exponential(cp.exp(self.barrier/self.T)) # TODO: search if less computationally expensive random generator exists
+            # There is no real speed difference between XORWOW or MRG32k3a or Philox4x3210 random generators, so we just don't bother.
+            taus = cp.random.uniform(size=self.barrier.shape) # TODO: use Glauber monte carlo model (i.e. choose random magnet, and switch if energy would decrease)
+            taus *= cp.exp(self.barrier/self.T)
             indexmin = cp.argmin(taus)
             indexmin2D = cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
             self.m[indexmin2D] = -self.m[indexmin2D]
-            self.t += taus[indexmin2D]*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
-        if self.m_type == 'op':
-            self.m_tot = cp.mean(self.m)
-        elif self.m_type == 'ip':
-            self.m_tot_x = cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))
-            self.m_tot_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
-            self.m_tot = (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
+            self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
         
         self.energy(single=True, index2D=indexmin2D)
 
@@ -420,12 +327,11 @@ class Magnets:
         corr_length = cp.sum(cp.multiply(abs(corr_binned), distances))
         return corr_binned.get(), distances.get(), float(corr_length)
 
-
     # Below here are some graphical functions (plot magnetization profile etc.)
     def _get_averaged_extent(self, avg):
         ''' Returns the extent that can be used in imshow when plotting an averaged quantity. '''
         avg = self._resolve_avg(avg)
-        mask = self._get_mask(avg=avg)
+        mask = self._get_avg_mask(avg=avg)
         if self.PBC:
             movex, movey = 0.5*self.dx, 0.5*self.dy
         else:
@@ -433,16 +339,8 @@ class Magnets:
         return [self.x_min-self.dx+movex,self.x_max-movex+self.dx,self.y_min-self.dy+movey,self.y_max-movey+self.dy]
         
     def _get_appropriate_avg(self):
-        ''' Auto-detect the most appropriate averaging mask based on self.config '''
-        if self.config in ['full', 'Ising']:
-            avg = 'point'
-        elif self.config in ['chess', 'square', 'pinwheel']:
-            avg = 'cross'
-        elif self.config in ['kagome']:
-            avg = 'hexagon'
-        elif self.config in ['triangle']:
-            avg = 'triangle'
-        return avg
+        ''' Returns the most appropriate averaging mask for a given type of ASI '''
+        return 'cross'
 
     def _resolve_avg(self, avg):
         ''' If avg is str then determine if it is valid, otherwise auto-determine which averaging method is appropriate. '''
@@ -452,7 +350,7 @@ class Magnets:
             avg = self._get_appropriate_avg() if avg else 'point'
         return avg
 
-    def _get_mask(self, avg=None):
+    def _get_avg_mask(self, avg=None):
         ''' Returns the raw averaging mask as a 2D array. Note that this obviously does not include
             any removal of excess zero-rows etc., that is the task of self.get_m_angles.
             Note that this returns a CuPy array for performance reasons, since this is a 'hidden' _function anyway.
@@ -485,12 +383,12 @@ class Magnets:
             If there are no magnets to average around a given cell, then the angle and magnitude are both NaN.
             @param m [2D array] (self.m): The magnetization profile that should be averaged.
             @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon':
-                True: automatically determines the appropriate averaging method corresponding to self.config.
+                True: automatically determines the appropriate averaging method.
                 False|'point': no averaging at all, just calculates the angle of each individual spin.
                 'cross': averages the spins north, east, south and west of each position.
                 'square': averages the 8 nearest neighbors of each cell.
                 'triangle': averages the three magnets connected to a corner of a hexagon in the kagome geometry.
-                'hexagon:' averages each hexagon in 'kagome' config, or each star in 'triangle' config.
+                'hexagon:' averages each hexagon in kagome ASI, or each star in triangle ASI.
             @return [(2D np.array, 2D np.array)]: a tuple containing two arrays, namely the (averaged) magnetization
                 angle and magnitude, respecively, for each relevant position in the simulation.
                 Angles lay between 0 and 2*pi, magnitudes between 0 and self.Msat.
@@ -505,7 +403,7 @@ class Magnets:
         else:
             x_comp = m
             y_comp = cp.zeros_like(m)
-        mask = self._get_mask(avg=avg)
+        mask = self._get_avg_mask(avg=avg)
         if self.PBC:
             magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode='same', boundary='wrap')
             x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='wrap')/magnets_in_avg
@@ -540,7 +438,7 @@ class Magnets:
         if angles is None or magnitudes is None:
             angles, magnitudes = self.get_m_polar(m=m, avg=avg)
             if autoscale:
-                avgmethod = self._resolve_avg(avg)
+                avgmethod = self._resolve_avg(avg) # TODO: make this independent of config
                 if self.config in ['pinwheel', 'square'] and avgmethod in ['cross', 'square']:
                     magnitudes *= math.sqrt(2)*.999
                 elif self.config in ['kagome', 'triangle'] and avgmethod in ['hexagon', 'triangle']:
@@ -572,6 +470,11 @@ class Magnets:
         if fill: hsv = fill_neighbors(hsv, cp.logical_and(NaNangles, NaNmagnitudes))
         rgb = hsv_to_rgb(hsv)
         return rgb
+    
+    def _get_plotting_params(self):
+        return {
+            'quiverscale': 0.7
+        }
 
     def show_m(self, m=None, avg=True, show_energy=True, fill=False):
         ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
@@ -608,12 +511,7 @@ class Magnets:
             ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
             ax2.set_aspect('equal')
             nonzero = self.m.get().nonzero()
-            if self.config in ['triangle']:
-                quiverscale = 0.5
-            elif self.config in ['Ising']: 
-                quiverscale = 1.1
-            else:
-                quiverscale = 0.7
+            quiverscale = self._get_plotting_params()['quiverscale']
             ax2.quiver(self.xx.get()[nonzero], self.yy.get()[nonzero], 
                     cp.multiply(m, self.orientation[:,:,0]).get()[nonzero], cp.multiply(m, self.orientation[:,:,1]).get()[nonzero],
                     pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
@@ -657,6 +555,9 @@ class Magnets:
         plt.gcf().tight_layout()
         plt.show()
     
+    def _get_AFMmask(self):
+        return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
+
     def get_AFMness(self, AFM_mask=None):
         ''' Returns the average AFM-ness of self.m at the current time step, normalized to 1.
             For a perfectly uniform configuration this is 0, while for random it is 0.375.
@@ -666,19 +567,7 @@ class Magnets:
                 provided explicitly, it is determined automatically based on self.config.
             @return [float]: The average normalized AFM-ness.
         '''
-        if AFM_mask is None:
-            if self.config in ['full']:
-                AFM_mask = cp.array([[1, -1], [-1, 1]], dtype='float') # TODO: this might need a change?
-                # TODO: add normalization factor here dependent on config
-            elif self.config in ['Ising']:
-                # AFM_mask = cp.array([[1, -1, 1], [-1, 0, -1], [1, -1, 1]]) # random: average .25
-                AFM_mask = cp.array([[1, 1], [-1, -1]]) # anisotropy only occurs in x-direction
-            elif self.config in ['chess', 'square', 'pinwheel']:
-                AFM_mask = cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
-            elif self.config in ['kagome', 'triangle']:
-                AFM_mask = cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
-        else:
-            AFM_mask = cp.asarray(AFM_mask)
+        AFM_mask = self._get_AFMmask() if AFM_mask is None else cp.asarray(AFM_mask)
         AFM_ness = cp.mean(cp.abs(signal.convolve2d(self.m, AFM_mask, mode='same', boundary='wrap' if self.PBC else 'fill')))
         return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(self.mask)*self.m.size)
 

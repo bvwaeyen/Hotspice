@@ -8,7 +8,7 @@ import numpy as np
 # from cupyx.scipy import signal
 
 import examplefunctions as ef
-from context import hotspin
+from context import hotspin, ASI
 
 
 ## Parameters, meshgrid
@@ -18,7 +18,7 @@ nx = 25 *4+1 # Multiple of 4 + 1
 
 ## Initialize main Magnets object
 t = time.time()
-mm = hotspin.Magnets(nx, T=T, E_b=E_b, m_type='ip', config='triangle', pattern='AFM', energies=['dipolar'], PBC=False)
+mm = ASI.TriangleASI(nx, 4, T=T, E_b=E_b, pattern='AFM', energies=['dipolar'], PBC=False)
 print(f'Initialization time: {time.time() - t} seconds.')
 
 
