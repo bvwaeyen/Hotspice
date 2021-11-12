@@ -3,14 +3,14 @@ import math
 import matplotlib
 import warnings
 
+import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
-import cupy as cp
 
-from dataclasses import dataclass, field
-from matplotlib.widgets import MultiCursor
-from matplotlib.colors import hsv_to_rgb
 from cupyx.scipy import signal
+from dataclasses import dataclass, field
+from matplotlib.colors import hsv_to_rgb
+from matplotlib.widgets import MultiCursor
 
 
 ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
@@ -27,6 +27,7 @@ TODO (summary):
 . can implement linear transformations if I want to
 . can implement random defects if I want to
 - move plotting functions to a separate module 'hotspin.plottools'
+- make unit tests
 """
 
 class Magnets:
@@ -84,7 +85,7 @@ class Magnets:
         self.energy() # Have to recalculate all the energies since m changed completely
     
     def _set_orientation(self):
-        return cp.ones((*self.xx.shape, 2))/math.sqrt(2)
+        self.orientation = cp.ones((*self.xx.shape, 2))/math.sqrt(2)
 
     def _initialize_ip(self):
         ''' Initialize the angles of all the magnets.
@@ -246,15 +247,17 @@ class Magnets:
     def energy_exchange_init(self, J):
         if 'exchange' not in self.energies: self.energies.append('exchange')
         self.Exchange_J = J
-        # self.Exchange_interaction is the mask for nearest neighbors
-        if self.m_type == 'op': 
-            self.Exchange_interaction = cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
+        self.Exchange_interaction = self._get_nearest_neighbors()
+
+    def energy_exchange_update(self):
+        if self.m_type == 'op':
+            self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill'), self.m)
         elif self.m_type == 'ip':
-            self.Exchange_interaction = cp.array([[0]]) # Exchange E doesn't have much meaning for differently oriented spins
-
-    def energy_exchange_update(self): # TODO: allow for 'ip' by taking into account orientation of magnets if that has physical meaning
-        self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill'), self.m)
-
+            mx = self.orientation[:,:,0]*self.m
+            my = self.orientation[:,:,1]*self.m
+            sum_mx = signal.convolve2d(mx, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill')
+            sum_my = signal.convolve2d(my, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill')
+            self.E_exchange = -self.Exchange_J*(cp.multiply(sum_mx, mx) + cp.multiply(sum_my, my))
 
     def update(self):
         """ Performs a single magnetization switch. """
@@ -327,6 +330,9 @@ class Magnets:
             corr_binned[i] = cp.mean(self.correlation[cp.where(cp.isclose(self.Distances_floor, d))])
         corr_length = cp.sum(cp.multiply(abs(corr_binned), distances))
         return corr_binned.get(), distances.get(), float(corr_length)
+
+    def _get_nearest_neighbors(self):
+        return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
 
     # Below here are some graphical functions (plot magnetization profile etc.)
     def _get_averaged_extent(self, avg):

@@ -36,6 +36,9 @@ class ASI(ABC, hotspin.Magnets):
         ''' Returns the (normalized) mask used to determine how anti-ferromagnetic the magnetization profile is. '''
         pass
 
+    def _get_nearest_neighbors(self):
+        ''' Returns a small mask full of zeros with the magnet at the center, and 1 at the positions of nearest neighbors. '''
+        pass
 
 class FullASI(ASI):
     ''' Out-of-plane ASI in a square arrangement. '''
@@ -71,6 +74,9 @@ class FullASI(ASI):
 
     def _get_AFMmask(self):
         return cp.array([[1, -1], [-1, 1]], dtype='float')/4 # TODO: this might need a change?
+    
+    def _get_nearest_neighbors(self):
+        return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
 
 
 class IsingASI(ASI):
@@ -113,6 +119,9 @@ class IsingASI(ASI):
 
     def _get_AFMmask(self):
         return cp.array([[1, 1], [-1, -1]])/4
+    
+    def _get_nearest_neighbors(self):
+        return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
 
 
 class SquareASI(ASI):
@@ -165,6 +174,9 @@ class SquareASI(ASI):
 
     def _get_AFMmask(self):
         return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+    
+    def _get_nearest_neighbors(self):
+        return cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
 
 
 class PinwheelASI(SquareASI):
@@ -236,6 +248,9 @@ class KagomeASI(ASI):
 
     def _get_AFMmask(self):
         return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+
+    def _get_nearest_neighbors(self):
+        return cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
 
 
 class TriangleASI(KagomeASI):
