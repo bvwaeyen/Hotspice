@@ -33,7 +33,7 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False,
 
     print('Energy:', mm.E_tot)
     if show_m:
-        mm.show_m(fill=fill)
+        hotspin.plottools.show_m(mm, fill=fill)
 
 
 def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=1):
@@ -54,7 +54,7 @@ def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=1):
         m_tot_x = np.mean(np.multiply(total_m, mm.orientation[:,:,0]))
         m_tot_y = np.mean(np.multiply(total_m, mm.orientation[:,:,1]))
         mm.save_history(E_tot=total_energy/N, m_tot=(m_tot_x**2 + m_tot_y**2)**(1/2))
-    mm.show_history()
+    hotspin.plottools.show_history(mm)
 
 
 def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=1):
@@ -70,7 +70,7 @@ def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=1):
         mm.update()
         AFM_ness.append(mm.get_AFMness())
         mm.save_history()
-    mm.show_history(y_quantity=AFM_ness, y_label=r'AFM-ness')
+    hotspin.plottools.show_history(mm, y_quantity=AFM_ness, y_label=r'AFM-ness')
 
 
 def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T_low=0.01, T_high=4, save=False, fill=False, avg=True, pattern=None):
@@ -93,11 +93,11 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(6, 4.8))
     ax1 = fig.add_subplot(111)
-    h = ax1.imshow(mm.polar_to_rgb(fill=fill, avg=avg),
-                   cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=mm._get_averaged_extent(avg))
+    h = ax1.imshow(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg),
+                   cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=hotspin.plottools._get_averaged_extent(mm, avg))
     c1 = plt.colorbar(h)
     c1.ax.get_yaxis().labelpad = 30
-    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{mm._resolve_avg(avg)}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{hotspin.plottools._resolve_avg(mm, avg)}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
     fig.suptitle('Temperature %.3f' % mm.T)
 
     # This is the function that gets called each frame
@@ -110,7 +110,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
             else: # Then cool down
                 mm.T = T_low*np.exp(exponent*(((n_sweep - j) % n_sweep2)/n_sweep2))
             mm.update()
-        h.set_array(mm.polar_to_rgb(fill=fill, avg=avg))
+        h.set_array(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg))
         fig.suptitle('Temperature %.3f' % mm.T)
         return h, # This has to be an iterable!
 
@@ -196,9 +196,6 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
 
 
 if __name__ == "__main__":
-    nx = ny = 29
-    x, y = np.linspace(0, nx - 1, nx), np.linspace(0, ny - 1, ny)
-    xx, yy = np.meshgrid(x, y)
-    mm = hotspin.Magnets(xx, yy, 0.2, 10., 'ip', 'pinwheel', 'uniform', energies=['dipolar'])
+    mm = hotspin.ASI.SquareASI(29, 2, T=0.2, E_b=10., pattern='uniform', energies=['dipolar'])
     autocorrelation_dist_dependence(mm)
     autocorrelation_temp_dependence(mm, N=41, T_min=0.05, T_max=0.45)
