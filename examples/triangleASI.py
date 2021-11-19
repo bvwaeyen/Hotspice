@@ -17,9 +17,9 @@ E_b = 10.
 nx = 25 *4+1 # Multiple of 4 + 1
 
 ## Initialize main Magnets object
-t = time.time()
+t = time.perf_counter()
 mm = hotspin.ASI.TriangleASI(nx, 4, T=T, E_b=E_b, pattern='AFM', energies=['dipolar'], PBC=False)
-print(f'Initialization time: {time.time() - t} seconds.')
+print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
 if __name__ == "__main__":

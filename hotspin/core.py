@@ -55,6 +55,7 @@ class Magnets:
         self.energies = list(energies)
         
         # initialize the coordinates based on nx, (ny) and L
+        self.nx, self.ny = nx, ny
         self.xx, self.yy = cp.meshgrid(cp.linspace(0, dx*(nx-1), nx), cp.linspace(0, dy*(ny-1), ny))
         self.index = range(self.xx.size)
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.xx.shape[1]), cp.arange(0, self.yy.shape[0]))

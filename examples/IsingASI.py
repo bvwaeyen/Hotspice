@@ -17,9 +17,9 @@ E_b = 10.
 n = 100
 
 ## Initialize main Magnets object
-t = time.time()
+t = time.perf_counter()
 mm = hotspin.ASI.IsingASI(n, 1, T=T, E_b=E_b, pattern='uniform', energies=['dipolar'], PBC=True)
-print(f'Initialization time: {time.time() - t} seconds.')
+print(f'Initialization time: {time.perf_counter() - t} seconds.')
 # mm.energy_exchange_init(J=0.2)
 
 

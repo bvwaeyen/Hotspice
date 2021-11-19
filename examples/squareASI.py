@@ -17,9 +17,9 @@ E_b = 10.
 n = 200
 
 ## Initialize main Magnets object
-t = time.time()
+t = time.perf_counter()
 mm = hotspin.ASI.SquareASI(n, 2, T=T, E_b=E_b, pattern='AFM', energies=['dipolar'], PBC=True)
-print(f'Initialization time: {time.time() - t} seconds.')
+print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
 def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005, T_max=3):
