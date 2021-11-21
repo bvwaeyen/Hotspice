@@ -94,7 +94,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     if m is None: m = mm.m
     avg = _resolve_avg(mm, avg)
 
-    if mm.m_type == 'ip':
+    if mm.in_plane:
         x_comp = cp.multiply(m, mm.orientation[:,:,0])
         y_comp = cp.multiply(m, mm.orientation[:,:,1])
     else:
@@ -182,7 +182,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
     '''
     avg = _resolve_avg(mm, avg)
     if m is None: m = mm.m
-    show_quiver = mm.m.size < 1e5 and mm.m_type == 'ip' # Quiver becomes very slow for more than 100k cells, so just dont show it then
+    show_quiver = mm.m.size < 1e5 and mm.in_plane # Quiver becomes very slow for more than 100k cells, so just dont show it then
     averaged_extent = _get_averaged_extent(mm, avg)
     full_extent = [mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dx/2]
 
@@ -193,7 +193,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
     fig = plt.figure(figsize=(3.5*num_plots, 3))
     ax1 = fig.add_subplot(1, num_plots, 1)
     im = polar_to_rgb(mm, m=m, avg=avg, fill=fill)
-    im1 = ax1.imshow(im, cmap='hsv' if mm.m_type == 'ip' else 'gray', origin='lower', vmin=0, vmax=2*cp.pi,
+    im1 = ax1.imshow(im, cmap='hsv' if mm.in_plane else 'gray', origin='lower', vmin=0, vmax=2*cp.pi,
                         extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
     c1 = plt.colorbar(im1)
     c1.ax.get_yaxis().labelpad = 30

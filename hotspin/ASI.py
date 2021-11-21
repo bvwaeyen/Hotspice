@@ -10,6 +10,9 @@ from .core import Magnets
 
 
 class ASI(ABC, Magnets):
+    def __init__(self, n, a, ny=None, **kwargs):
+        ''' This is a template class for implementing artificial spin ice geometries. '''
+
     @abstractmethod
     def _set_m(self, pattern):
         ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "AFM" or "random". '''
@@ -41,14 +44,14 @@ class ASI(ABC, Magnets):
         pass
 
 class FullASI(ASI):
-    ''' Out-of-plane ASI in a square arrangement. '''
     def __init__(self, n, a, ny=None, **kwargs):
+        ''' Out-of-plane ASI in a square arrangement. '''
         self.a = a
         self.nx = n
         self.ny = n if ny is None else ny
         self.dx = self.dy = a
         self.config = 'full'
-        super().__init__(self.nx, self.ny, self.dx, self.dy, m_type='op', **kwargs)
+        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
     
     def _set_m(self, pattern):
         if pattern == 'uniform':
@@ -81,14 +84,14 @@ class FullASI(ASI):
 
 
 class IsingASI(ASI):
-    ''' In-plane ASI with all spins on a square grid, all pointing in the same direction. '''
     def __init__(self, n, a, ny=None, **kwargs):
+        ''' In-plane ASI with all spins on a square grid, all pointing in the same direction. '''
         self.a = a
         self.nx = n
         self.ny = n if ny is None else ny
         self.dx = self.dy = a
         self.config = 'Ising'
-        super().__init__(self.nx, self.ny, self.dx, self.dy, m_type='ip', **kwargs)
+        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
     
     def _set_m(self, pattern):
         if pattern == 'uniform':
@@ -127,14 +130,14 @@ class IsingASI(ASI):
 
 
 class SquareASI(ASI):
-    ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares. '''
     def __init__(self, n, a, ny=None, **kwargs):
+        ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares. '''
         self.a = a
         self.nx = n
         self.ny = n if ny is None else ny
         self.dx = self.dy = a/2
         self.config = 'square' # TODO: deprecate this
-        super().__init__(self.nx, self.ny, self.dx, self.dy, m_type='ip', **kwargs)
+        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
     
     def _set_m(self, pattern):
         if pattern == 'uniform':
@@ -181,8 +184,8 @@ class SquareASI(ASI):
 
 
 class PinwheelASI(SquareASI):
-    ''' In-plane ASI similar to SquareASI, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
     def __init__(self, n, a, ny=None, **kwargs):
+        ''' In-plane ASI similar to SquareASI, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
         super().__init__(n, a, ny=ny, **kwargs)
         self.config = 'pinwheel'
         
@@ -191,8 +194,8 @@ class PinwheelASI(SquareASI):
 
 
 class KagomeASI(ASI):
-    ''' In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. '''
     def __init__(self, n, a, ny=None, **kwargs):
+        ''' In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. '''
         self.a = a
         self.nx = n
         if ny is None:
@@ -205,7 +208,7 @@ class KagomeASI(ASI):
         self.dx = a/4
         self.dy = math.sqrt(3)*self.dx
         self.config = 'kagome'
-        super().__init__(self.nx, self.ny, self.dx, self.dy, m_type='ip', **kwargs)
+        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
     
     def _set_m(self, pattern):
         if pattern == 'uniform':
@@ -257,6 +260,7 @@ class KagomeASI(ASI):
 
 class TriangleASI(KagomeASI):
     def __init__(self, n, a, ny=None, **kwargs):
+        ''' In-plane ASI with all spins placed on, and oriented along, the edges of triangles. '''
         super().__init__(n, a, ny=ny, **kwargs)
         self.config = 'triangle'
 

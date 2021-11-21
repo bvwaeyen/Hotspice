@@ -31,12 +31,12 @@ TODO (summary):
 """
 
 class Magnets:
-    def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=1, m_type='ip', pattern='random', energies=('dipolar',), PBC=False):
+    def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=1, in_plane=True, pattern='random', energies=('dipolar',), PBC=False):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx> and <a>. 
             The initial configuration of a Magnets geometry consists of 3 parts:
-             1) m_type:  Magnets can be in-plane or out-of-plane: 'ip' or 'op', respectively.
+             1) in_plane:  Magnets can be in-plane or out-of-plane: True or False, respectively.
              2) config:  Now defined through subclasses. # TODO: deprecate this
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
@@ -51,7 +51,7 @@ class Magnets:
         self.t = 0.
         self.E_b = E_b
         self.Msat = Msat
-        self.m_type = m_type
+        self.in_plane = in_plane
         self.energies = list(energies)
         
         # initialize the coordinates based on nx, (ny) and L
@@ -70,8 +70,8 @@ class Magnets:
         self.history = History()
 
         self.mask = self._get_mask().astype(bool).astype(int) # Make sure that it is either 0 or 1
-        if self.m_type == 'ip':
-            self._initialize_ip()
+        self.n = int(cp.sum(self.mask)) # Number of magnets in the simulation
+        if self.in_plane: self._initialize_ip()
         self.energy_init() # This needs self.orientation
         self.initialize_m(pattern) # This needs energy kernels to be ready
 
@@ -79,7 +79,7 @@ class Magnets:
         return Vec2D(1, 1)
     
     def _get_mask(self):
-        return cp.array([[1]])
+        return cp.ones_like(self.ixx)
 
     def initialize_m(self, pattern='random'):
         ''' Initializes the self.m (array of -1, 0 or 1) and mask.
@@ -97,18 +97,19 @@ class Magnets:
             This function should only be called by the Magnets() class itself, not by the user.
         '''
         # This sets the angle of all the magnets (this is of course only applicable in the in-plane case)
-        assert self.m_type == 'ip', "Can not _initialize_ip() if m_type != 'ip'."
+        assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
         self._set_orientation()
 
 
     @property
     def m_tot(self):
-        if self.m_type == 'op':
-            return cp.mean(self.m)
-        elif self.m_type == 'ip':
+        if self.in_plane:
             self.m_tot_x = cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))
             self.m_tot_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
             return (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
+        else:
+            return cp.mean(self.m)
+
 
 
     def energy(self, single=False, index2D=None):
@@ -141,17 +142,25 @@ class Magnets:
     def energy_Zeeman_init(self):
         if 'Zeeman' not in self.energies: self.energies.append('Zeeman')
         self.E_Zeeman = cp.empty_like(self.xx)
-        if self.m_type == 'op':
-            self.H_ext = 0.
-        elif self.m_type == 'ip':
+        if self.in_plane:
             self.H_ext = cp.zeros(2)
+        else:
+            self.H_ext = 0
         self.energy_Zeeman_update()
+    
+    def energy_Zeeman_setField(self, magnitude=0, angle=0): # TODO: is this a good name for setting the external field?
+        if self.in_plane:
+            self.H_ext = magnitude*cp.array([math.cos(angle), math.sin(angle)])
+        else:
+            self.H_ext = magnitude
+            if angle != 0: warnings.warn('You tried to set the angle of an out-of-plane field in Magnets.energy_Zeeman_setField().')
 
     def energy_Zeeman_update(self):
-        if self.m_type == 'op':
-            self.E_Zeeman = -self.m*self.H_ext
-        elif self.m_type == 'ip':
+        if self.in_plane:
             self.E_Zeeman = -cp.multiply(self.m, self.H_ext[0]*self.orientation[:,:,0] + self.H_ext[1]*self.orientation[:,:,1])
+        else:
+            self.E_Zeeman = -self.m*self.H_ext
+
 
     def energy_dipolar_init(self):
         if 'dipolar' not in self.energies: self.energies.append('dipolar')
@@ -170,7 +179,7 @@ class Magnets:
         ux = _mirror4(rrx*rr_inv, negativex=True)
         uy = _mirror4(rry*rr_inv, negativey=True)
         # Now we initialize the full ox
-        if self.m_type == 'ip':
+        if self.in_plane:
             unitcell_ox = self.orientation[:self.unitcell.y,:self.unitcell.x,0]
             unitcell_oy = self.orientation[:self.unitcell.y,:self.unitcell.x,1]
         else:
@@ -183,10 +192,7 @@ class Magnets:
         self.Dipolar_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
-                if self.m_type == 'op':
-                    kernel = rinv3 # 'kernel' for out-of-plane is very simple
-                    self.Dipolar_unitcell[y][x] = rinv3 # 'kernel' for out-of-plane is very simple
-                elif self.m_type == 'ip':
+                if self.in_plane:
                     ox1, oy1 = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
                     if ox1 == oy1 == 0:
                         continue # Empty cell in the unit cell, so keep self.Dipolar_unitcell[y][x] equal to None
@@ -199,6 +205,9 @@ class Magnets:
                     kernel2 = oy1*oy2*(3*uy**2 - 1)
                     kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
                     kernel = -(kernel1 + kernel2 + kernel3)*rinv3
+                else:
+                    kernel = rinv3 # 'kernel' for out-of-plane is very simple
+                    self.Dipolar_unitcell[y][x] = rinv3 # 'kernel' for out-of-plane is very simple
                 if self.PBC: # Just copy the kernel 8 times, for the 8 'nearest simulations'
                     kernelcopy = kernel.copy()
                     kernel[:,self.nx:] += kernelcopy[:,:self.nx-1]
@@ -255,14 +264,15 @@ class Magnets:
         self.Exchange_interaction = self._get_nearest_neighbors()
 
     def energy_exchange_update(self):
-        if self.m_type == 'op':
-            self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill'), self.m)
-        elif self.m_type == 'ip':
+        if self.in_plane:
             mx = self.orientation[:,:,0]*self.m
             my = self.orientation[:,:,1]*self.m
             sum_mx = signal.convolve2d(mx, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill')
             sum_my = signal.convolve2d(my, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill')
             self.E_exchange = -self.Exchange_J*(cp.multiply(sum_mx, mx) + cp.multiply(sum_my, my))
+        else:
+            self.E_exchange = -self.Exchange_J*cp.multiply(signal.convolve2d(self.m, self.Exchange_interaction, mode='same', boundary='wrap' if self.PBC else 'fill'), self.m)
+
 
     def update(self):
         """ Performs a single magnetization switch. """
@@ -317,12 +327,12 @@ class Magnets:
             self.corr_mask = maskcor[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)] # Lower right quadrant of maskcor because the other quadrants should be symmetrical
             self.corr_mask[self.corr_mask > 0] = 1
         # Now, convolve self.m with its point-mirrored/180°-rotated counterpart
-        if self.m_type == 'op':
-            corr = signal.convolve2d(self.m, cp.flipud(cp.fliplr(self.m)), mode='full', boundary='fill')*self.corr_norm
-        elif self.m_type == 'ip':
+        if self.in_plane:
             corr_x = signal.convolve2d(self.m*self.orientation[:,:,0], cp.flipud(cp.fliplr(self.m*self.orientation[:,:,0])), mode='full', boundary='fill')*self.corr_norm
             corr_y = signal.convolve2d(self.m*self.orientation[:,:,1], cp.flipud(cp.fliplr(self.m*self.orientation[:,:,1])), mode='full', boundary='fill')*self.corr_norm
             corr = corr_x + corr_y
+        else:
+            corr = signal.convolve2d(self.m, cp.flipud(cp.fliplr(self.m)), mode='full', boundary='fill')*self.corr_norm
         corr = corr*cp.size(self.m)/cp.sum(self.corr_mask) # Put between 0 and 1
         self.correlation = corr[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)]**2
         self.correlation = cp.multiply(self.correlation, self.corr_mask)
