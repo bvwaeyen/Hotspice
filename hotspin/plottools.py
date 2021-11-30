@@ -1,4 +1,6 @@
+import ctypes
 import math
+import matplotlib
 
 import cupy as cp
 import matplotlib.pyplot as plt
@@ -10,6 +12,10 @@ from matplotlib.widgets import MultiCursor
 
 from .core import Magnets
 
+ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
+matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
+
+# TODO: organize these functions better
 
 class Average:
     POINT = cp.array([[1]], dtype='float')

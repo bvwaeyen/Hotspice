@@ -1,34 +1,26 @@
-import ctypes
 import math
-import matplotlib
 import warnings
 
 import cupy as cp
-import matplotlib.pyplot as plt
 import numpy as np
 
 from cupyx.scipy import signal
 from dataclasses import dataclass, field
-from matplotlib.colors import hsv_to_rgb
-from matplotlib.widgets import MultiCursor
-
-
-ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
-matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
 
 """
 TODO (summary):
 (!: priority, -: should do at some point in time, .: perhaps implement perhaps not)
 ! use Glauber monte carlo markov chain on Ising model to determine which magnet will switch
   (will not improve performance by much I think, since this will still only switch 1 magnet each time)
+! develop the hotspin.io module
 - update the animate_temp_rise function with the modern 'API' or however to call this
-- in-plane exchange energy
 - sort out the AFM-ness and its normalization etc.
+- organize plotting functions better
 . can implement linear transformations if I want to
 . can implement random defects if I want to
-- move plotting functions to a separate module 'hotspin.plottools'
 - make unit tests
 """
+
 
 class Magnets:
     def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=1, in_plane=True, pattern='random', energies=('dipolar',), PBC=False):
@@ -45,7 +37,7 @@ class Magnets:
             #       see https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html for the imshows then
         '''
         if type(self) is Magnets:
-            raise Exception("Magnets() class can not be instantiated directly, and should instead be subclassed. Consider using a class from the hotspin.ASI module instead, or writing your own custom ASI class.")
+            raise Exception("Magnets() class can not be instantiated directly, and should instead be subclassed. Consider using a class from the hotspin.ASI module, or writing your own custom ASI class instead.")
 
         self.T = T
         self.t = 0.
@@ -232,10 +224,9 @@ class Magnets:
         if kernel is not None:
             # Multiply with the magnetization
             usefulkernel = kernel[self.ny-1-y:2*self.ny-1-y,self.nx-1-x:2*self.nx-1-x]
-            E_now = self.m[index2D]*cp.multiply(self.m, usefulkernel)
+            return self.m[index2D]*cp.multiply(self.m, usefulkernel)
         else:
-            E_now = cp.zeros_like(self.m)
-        return E_now
+            return cp.zeros_like(self.m)
     
     def energy_dipolar_update(self, index2D):
         ''' <i> is the index of the magnet that was switched. '''

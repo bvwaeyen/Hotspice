@@ -10,9 +10,6 @@ from .core import Magnets
 
 
 class ASI(ABC, Magnets):
-    def __init__(self, n, a, ny=None, **kwargs):
-        ''' This is a template class for implementing artificial spin ice geometries. '''
-
     @abstractmethod
     def _set_m(self, pattern):
         ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "AFM" or "random". '''
