@@ -18,6 +18,7 @@ matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for larg
 # TODO: organize these functions better
 
 class Average:
+    # Use dtype='float, because if mask would be int then output of convolve2d is also int instead of float
     POINT = cp.array([[1]], dtype='float')
     CROSS = cp.array([[0, 1, 0],
                       [1, 0, 1],
@@ -60,24 +61,15 @@ def _get_avg_mask(mm: Magnets, avg=None):
     '''
     avg = _resolve_avg(mm, avg)
     if avg == 'point':
-        mask = [[1]]
+        return Average.POINT
     elif avg == 'cross': # cross ⁛
-        mask = [[0, 1, 0], 
-                [1, 0, 1], 
-                [0, 1, 0]]
+        return Average.CROSS
     elif avg == 'square': # square □
-        mask = [[1, 1, 1], 
-                [1, 0, 1], 
-                [1, 1, 1]]
+        return Average.SQUARE
     elif avg == 'hexagon':
-        mask = [[0, 1, 0, 1, 0], 
-                [1, 0, 0, 0, 1], 
-                [0, 1, 0, 1, 0]]
+        return Average.HEXAGON
     elif avg == 'triangle':
-        mask = [[0, 1, 0], 
-                [1, 0, 1], 
-                [0, 1, 0]]
-    return cp.array(mask, dtype='float') # If mask would be int, then precision of convolve2d is also int instead of float
+        return Average.TRIANGLE
 
 def get_m_polar(mm: Magnets, m=None, avg=True):
     '''
