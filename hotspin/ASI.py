@@ -76,7 +76,8 @@ class FullASI(ASI):
     
     def _get_plotting_params(self):
         return {
-            'quiverscale': 1 # Actually not applicable, but keep it for now cause otherwise dict is empty which would be sad
+            'quiverscale': 1,
+            'max_mean_magnitude': 1
         }
 
     def _get_AFMmask(self):
@@ -124,7 +125,8 @@ class IsingASI(ASI):
     
     def _get_plotting_params(self):
         return {
-            'quiverscale': 1.1
+            'quiverscale': 1.1,
+            'max_mean_magnitude': 1
         }
 
     def _get_AFMmask(self):
@@ -176,11 +178,11 @@ class SquareASI(ASI):
     def _get_appropriate_avg(self):
         return 'cross'
     
-    def _get_plotting_params(self): # TODO: save these custom parameters in a better way (e.g. hotspin PlotParams dataclass with defaults?)
+    def _get_plotting_params(self):
         # examples of this include quiverscale, magnitude scale to normalize value in hsv, ...
-        # can even assimilate _get_appropriate_avg() into this
         return {
-            'quiverscale': 0.7
+            'quiverscale': 0.7,
+            'max_mean_magnitude': 1/math.sqrt(2)
         }
 
     def _get_AFMmask(self):
@@ -259,7 +261,8 @@ class KagomeASI(ASI):
     
     def _get_plotting_params(self):
         return {
-            'quiverscale': 0.7
+            'quiverscale': 0.7,
+            'max_mean_magnitude': 2/3
         }
 
     def _get_AFMmask(self):
@@ -285,7 +288,8 @@ class TriangleASI(KagomeASI):
     
     def _get_plotting_params(self):
         return {
-            'quiverscale': 0.5
+            'quiverscale': 0.5,
+            'max_mean_magnitude': 2/3
         }
     
     def _get_groundstate(self):

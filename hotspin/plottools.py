@@ -138,12 +138,8 @@ def polar_to_rgb(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fi
     if angles is None or magnitudes is None:
         angles, magnitudes = get_m_polar(mm, m=m, avg=avg)
         if autoscale:
-            avgmethod = _resolve_avg(mm, avg) # TODO: make this independent of config
-            if mm.config in ['pinwheel', 'square'] and avgmethod in ['cross', 'square']:
-                magnitudes *= math.sqrt(2)*.999
-            elif mm.config in ['kagome', 'triangle'] and avgmethod in ['hexagon', 'triangle']:
-                magnitudes *= 1.5*.999
-    assert angles.shape == magnitudes.shape, "polar_to_hsv() did not receive angle and magnitude arrays of the same shape."
+            magnitudes = magnitudes/mm._get_plotting_params()['max_mean_magnitude']*.999
+    assert angles.shape == magnitudes.shape, "polar_to_rgb() did not receive angle and magnitude arrays of the same shape."
     
     # Normalize to ranges between 0 and 1 and determine NaN-positions
     angles = angles/2/math.pi
