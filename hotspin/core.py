@@ -22,7 +22,7 @@ TODO (summary):
 """
 
 
-class Magnets:
+class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
     def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=1, in_plane=True, pattern='random', energies=('dipolar',), PBC=False):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
@@ -39,9 +39,7 @@ class Magnets:
         if type(self) is Magnets:
             raise Exception("Magnets() class can not be instantiated directly, and should instead be subclassed. Consider using a class from the hotspin.ASI module, or writing your own custom ASI class instead.")
 
-        self.T = T
-        self.t = 0.
-        self.E_b = E_b
+        self.t = 0. # TODO: decide if we are interested in the time, or not really
         self.Msat = Msat
         self.in_plane = in_plane
         self.energies = list(energies)
@@ -53,6 +51,20 @@ class Magnets:
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.xx.shape[1]), cp.arange(0, self.yy.shape[0]))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
+        # initialize temperature and energy barrier arrays
+        if isinstance(T, np.ndarray): # This detects both CuPy and NumPy arrays
+            assert T.shape == self.xx.shape, f"Specified temperature profile (shape {T.shape}) does not match shape ({nx}, {ny}) of simulation domain."
+            self.T = cp.asarray(T)
+        else:
+            self.T = cp.ones_like(self.xx)*T
+        
+        if isinstance(E_b, np.ndarray): # This detects both CuPy and NumPy arrays
+            assert E_b.shape == self.xx.shape, f"Specified energy barriers (shape {E_b.shape}) does not match shape ({nx}, {ny}) of simulation domain."
+            self.E_b = cp.asarray(E_b)
+        else:
+            self.E_b = cp.ones_like(self.xx)*E_b
+
+        # Unit cells and PBC
         self.unitcell = Vec2D(*self._get_unitcell())
         self.PBC = PBC
         if self.PBC:
@@ -280,7 +292,7 @@ class Magnets:
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
             # There is no real speed difference between XORWOW or MRG32k3a or Philox4x3210 random generators, so we just don't bother.
             taus = cp.random.uniform(size=self.barrier.shape)*cp.exp(self.barrier/self.T) # TODO: use Glauber monte carlo model (i.e. choose random magnet, and switch if energy would decrease)
-            indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing # TODO: THIS IS ULTRA SLOW ._.
+            indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
             self.m[indexmin2D] = -self.m[indexmin2D]
             self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
         
