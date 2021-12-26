@@ -121,7 +121,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     if save:
         mywriter = animation.FFMpegWriter(fps=30)
         if not os.path.exists('videos'): os.makedirs('videos')
-        anim.save(f'videos/{mm.config}_{mm.nx}x{mm.ny}_T{T_low}-{T_high}_N{n_sweep}x{save}.mp4', writer=mywriter, dpi=300)
+        anim.save(f'videos/{type(mm).__name__}_{mm.nx}x{mm.ny}_T{T_low}-{T_high}_N{n_sweep}x{save}.mp4', writer=mywriter, dpi=300)
 
     plt.show()
 

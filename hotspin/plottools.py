@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from cupyx.scipy import signal
+from enum import auto, Enum
 from matplotlib.colors import hsv_to_rgb
 from matplotlib.widgets import MultiCursor
 
@@ -255,7 +256,7 @@ def get_AFMness(mm: Magnets, AFM_mask=None):
         Note that the boundaries are not taken into account for the normalization, so the
         AFM-ness will often be slightly lower than the ideal values mentioned above.
         @param AFM_mask [2D array] (None): The mask used to determine the AFM-ness. If not
-            provided explicitly, it is determined automatically based on mm.config.
+            provided explicitly, it is determined automatically based on the type of ASI.
         @return [float]: The average normalized AFM-ness.
     '''
     AFM_mask = mm._get_AFMmask() if AFM_mask is None else cp.asarray(AFM_mask)

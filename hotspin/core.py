@@ -29,7 +29,7 @@ class Magnets:
             The position of magnets is specified using <nx> and <a>. 
             The initial configuration of a Magnets geometry consists of 3 parts:
              1) in_plane:  Magnets can be in-plane or out-of-plane: True or False, respectively.
-             2) config:  Now defined through subclasses. # TODO: deprecate this
+             2) ASI type:  Defined through subclasses (pinwheel, kagome, Ising...).
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
@@ -75,7 +75,7 @@ class Magnets:
         return cp.ones_like(self.ixx)
 
     def initialize_m(self, pattern='random'):
-        ''' Initializes the self.m (array of -1, 0 or 1) and mask.
+        ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
         self._set_m(pattern)

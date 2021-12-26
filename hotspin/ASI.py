@@ -47,7 +47,6 @@ class FullASI(ASI):
         self.nx = n
         self.ny = n if ny is None else ny
         self.dx = self.dy = a
-        self.config = 'full'
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
     
     def _set_m(self, pattern):
@@ -87,7 +86,6 @@ class IsingASI(ASI):
         self.nx = n
         self.ny = n if ny is None else ny
         self.dx = self.dy = a
-        self.config = 'Ising'
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
     
     def _set_m(self, pattern):
@@ -133,7 +131,6 @@ class SquareASI(ASI):
         self.nx = n
         self.ny = n if ny is None else ny
         self.dx = self.dy = a/2
-        self.config = 'square' # TODO: deprecate this
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
     
     def _set_m(self, pattern):
@@ -164,7 +161,7 @@ class SquareASI(ASI):
         return (self.ixx + self.iyy) % 2 == 1
 
     def _get_appropriate_avg(self):
-        return 'cross' # TODO: create enum-like object in hotspin which contains CROSS, POINT, etc. and hides arrays behind these names
+        return 'cross'
     
     def _get_plotting_params(self): # TODO: save these custom parameters in a better way (e.g. hotspin PlotParams dataclass with defaults?)
         # examples of this include quiverscale, magnitude scale to normalize value in hsv, ...
@@ -184,7 +181,6 @@ class PinwheelASI(SquareASI):
     def __init__(self, n, a, ny=None, **kwargs):
         ''' In-plane ASI similar to SquareASI, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
         super().__init__(n, a, ny=ny, **kwargs)
-        self.config = 'pinwheel'
         
     def _set_orientation(self, angle=0.):
         super()._set_orientation(angle + math.pi/4)
@@ -204,7 +200,6 @@ class KagomeASI(ASI):
             self.ny = ny
         self.dx = a/4
         self.dy = math.sqrt(3)*self.dx
-        self.config = 'kagome'
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
     
     def _set_m(self, pattern):
@@ -259,7 +254,6 @@ class TriangleASI(KagomeASI):
     def __init__(self, n, a, ny=None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of triangles. '''
         super().__init__(n, a, ny=ny, **kwargs)
-        self.config = 'triangle'
 
     def _set_orientation(self, angle=0.):
         super()._set_orientation(angle + math.pi/2)
