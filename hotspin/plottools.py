@@ -120,9 +120,9 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
         angles_avg = angles_avg[::2,::2]
         magnitudes_avg = magnitudes_avg[::2,::2]
         ixx, iyy = cp.meshgrid(cp.arange(0, angles_avg.shape[1]), cp.arange(0, angles_avg.shape[0])) # DO NOT REMOVE THIS, THIS IS NOT THE SAME AS mm.ixx, mm.iyy!
-        NaN_mask = (ixx + iyy) % 2 == 1 # These are not the centers of hexagons, so dont draw these
-        angles_avg[NaN_mask] = cp.NaN
-        magnitudes_avg[NaN_mask] = cp.NaN
+        NaN_occupation = (ixx + iyy) % 2 == 1 # These are not the centers of hexagons, so dont draw these
+        angles_avg[NaN_occupation] = cp.NaN
+        magnitudes_avg[NaN_occupation] = cp.NaN
     return angles_avg, magnitudes_avg
 
 def polar_to_rgb(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=False, autoscale=True):

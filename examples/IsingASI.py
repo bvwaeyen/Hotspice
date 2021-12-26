@@ -39,9 +39,9 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    mask = mm._get_mask()
-    h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get(),
-                             cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask))
+    occupation = mm._get_occupation()
+    h = ax1.imshow(signal.convolve2d(mm.m, occupation, mode='valid', boundary='fill').get(),
+                             cmap='gray', origin='lower', vmin=-np.sum(occupation), vmax=np.sum(occupation))
     ax1.set_title(r'Averaged magnetization')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -61,7 +61,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005
             mm.save_history()
             AFM_ness.append(mm.get_AFMness())
         p.set_data(mm.history.T, AFM_ness)
-        h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get())
+        h.set_array(signal.convolve2d(mm.m, occupation, mode='valid', boundary='fill').get())
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 

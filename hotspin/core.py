@@ -61,8 +61,9 @@ class Magnets:
 
         self.history = History()
 
-        self.mask = self._get_mask().astype(bool).astype(int) # Make sure that it is either 0 or 1
-        self.n = int(cp.sum(self.mask)) # Number of magnets in the simulation
+        # Main initialization steps that require calling other methods of this class
+        self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
+        self.n = int(cp.sum(self.occupation)) # Number of magnets in the simulation
         if self.in_plane: self._initialize_ip()
         self.energy_init() # This needs self.orientation
         self.initialize_m(pattern) # This needs energy kernels to be ready
@@ -70,7 +71,7 @@ class Magnets:
     def _get_unitcell(self):
         return Vec2D(1, 1)
     
-    def _get_mask(self):
+    def _get_occupation(self):
         return cp.ones_like(self.ixx)
 
     def initialize_m(self, pattern='random'):
@@ -270,7 +271,7 @@ class Magnets:
         if self.T == 0:
             warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
-        self.barrier = (self.E_b - self.E_int)/self.mask # Divide by mask to make non-occupied grid cells have infinite barrier
+        self.barrier = (self.E_b - self.E_int)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
         minBarrier = cp.min(self.barrier)
         self.barrier -= minBarrier # Energy is relative, so set min(E) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
@@ -311,10 +312,10 @@ class Magnets:
             self.Distances_floor = cp.floor(self.Distances)
             # Then, calculate how many multiplications hide behind each cell in the convolution matrix, so we can normalize.
             self.corr_norm = 1/signal.convolve2d(cp.ones_like(self.m), cp.ones_like(self.m), mode='full', boundary='fill')
-            # Then, calculate the correlation of the mask, since not each position contains a spin
-            maskcor = signal.convolve2d(self.mask, cp.flipud(cp.fliplr(self.mask)), mode='full', boundary='fill')*self.corr_norm
-            self.corr_mask = maskcor[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)] # Lower right quadrant of maskcor because the other quadrants should be symmetrical
-            self.corr_mask[self.corr_mask > 0] = 1
+            # Then, calculate the correlation of the occupation, since not each position contains a spin
+            fullcorr = signal.convolve2d(self.occupation, cp.flipud(cp.fliplr(self.occupation)), mode='full', boundary='fill')*self.corr_norm
+            self.corr_occupation = fullcorr[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)] # Lower right quadrant of occupationcor because the other quadrants should be symmetrical
+            self.corr_occupation[self.corr_occupation > 0] = 1
         # Now, convolve self.m with its point-mirrored/180°-rotated counterpart
         if self.in_plane:
             corr_x = signal.convolve2d(self.m*self.orientation[:,:,0], cp.flipud(cp.fliplr(self.m*self.orientation[:,:,0])), mode='full', boundary='fill')*self.corr_norm
@@ -322,9 +323,9 @@ class Magnets:
             corr = corr_x + corr_y
         else:
             corr = signal.convolve2d(self.m, cp.flipud(cp.fliplr(self.m)), mode='full', boundary='fill')*self.corr_norm
-        corr = corr*cp.size(self.m)/cp.sum(self.corr_mask) # Put between 0 and 1
+        corr = corr*cp.size(self.m)/cp.sum(self.corr_occupation) # Put between 0 and 1
         self.correlation = corr[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)]**2
-        self.correlation = cp.multiply(self.correlation, self.corr_mask)
+        self.correlation = cp.multiply(self.correlation, self.corr_occupation)
         
         # Prepare distance bins etc.
         corr_binned = cp.zeros(max_distance + 1) # How much the magnets correlate over a distance [i]

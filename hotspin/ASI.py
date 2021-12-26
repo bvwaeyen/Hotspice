@@ -21,8 +21,8 @@ class ASI(ABC, Magnets):
         pass
 
     @abstractmethod
-    def _get_mask(self):
-        ''' Returns a 2D CuPy array which contains 1 at the cells which are occupied by a magnet, and 0 otherwise. '''
+    def _get_occupation(self):
+        ''' Returns a 2D CuPy array which contains 1 at the cells which are occupied by a magnet, and 0 elsewhere. '''
         pass
 
     @abstractmethod
@@ -62,7 +62,7 @@ class FullASI(ASI):
     def _get_unitcell(self):
         return (1, 1)
 
-    def _get_mask(self):
+    def _get_occupation(self):
         return cp.ones_like(self.xx)
 
     def _get_appropriate_avg(self):
@@ -108,7 +108,7 @@ class IsingASI(ASI):
     def _get_unitcell(self):
         return (1, 1)
 
-    def _get_mask(self):
+    def _get_occupation(self):
         return cp.ones_like(self.xx)
 
     def _get_appropriate_avg(self):
@@ -147,20 +147,20 @@ class SquareASI(ASI):
     
     def _set_orientation(self, angle=0):
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        mask = self.mask.get()
+        occupation = self.occupation.get()
         iyy = self.iyy.get()
         self.orientation[iyy % 2 == 0,0] = math.cos(angle)
         self.orientation[iyy % 2 == 0,1] = math.sin(angle)
         self.orientation[iyy % 2 == 1,0] = math.cos(angle + math.pi/2)
         self.orientation[iyy % 2 == 1,1] = math.sin(angle + math.pi/2)
-        self.orientation[mask == 0,0] = 0
-        self.orientation[mask == 0,1] = 0
+        self.orientation[occupation == 0,0] = 0
+        self.orientation[occupation == 0,1] = 0
         self.orientation = cp.asarray(self.orientation)
 
     def _get_unitcell(self):
         return (2, 2)
 
-    def _get_mask(self): # TODO: perhaps rename this to 'occupation' instead of 'mask'
+    def _get_occupation(self): # TODO: perhaps rename this to 'occupied' instead of 'occupation'
         return (self.ixx + self.iyy) % 2 == 1
 
     def _get_appropriate_avg(self):
@@ -220,25 +220,25 @@ class KagomeASI(ASI):
         
     def _set_orientation(self, angle=0.):
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        mask = self.mask.get()
+        occupation = self.occupation.get()
         self.orientation[:,:,0] = math.cos(angle + math.pi/2)
         self.orientation[:,:,1] = math.sin(angle + math.pi/2)
         self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1).get(),0] = math.cos(angle - math.pi/6)
         self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1).get(),1] = math.sin(angle - math.pi/6)
         self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1).get(),0] = math.cos(angle + math.pi/6)
         self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1).get(),1] = math.sin(angle + math.pi/6)
-        self.orientation[mask == 0,0] = 0
-        self.orientation[mask == 0,1] = 0
+        self.orientation[occupation == 0,0] = 0
+        self.orientation[occupation == 0,1] = 0
         self.orientation = cp.asarray(self.orientation)
     
     def _get_unitcell(self):
         return (4, 4)
 
-    def _get_mask(self):
-        mask = cp.zeros_like(self.xx)
-        mask[(self.ixx + self.iyy) % 4 == 1] = 1 # One bunch of diagonals \
-        mask[(self.ixx - self.iyy) % 4 == 3] = 1 # Other bunch of diagonals /
-        return mask
+    def _get_occupation(self):
+        occupation = cp.zeros_like(self.xx)
+        occupation[(self.ixx + self.iyy) % 4 == 1] = 1 # One bunch of diagonals \
+        occupation[(self.ixx - self.iyy) % 4 == 3] = 1 # Other bunch of diagonals /
+        return occupation
 
     def _get_appropriate_avg(self):
         return 'hexagon'
