@@ -17,59 +17,63 @@ matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for larg
 
 # TODO: organize these functions better
 
-class Average:
-    # Use dtype='float, because if mask would be int then output of convolve2d is also int instead of float
-    POINT = cp.array([[1]], dtype='float')
-    CROSS = cp.array([[0, 1, 0],
-                      [1, 0, 1],
-                      [0, 1, 0]], dtype='float')
-    SQUARE = cp.array([[1, 1, 1],
-                       [1, 0, 1],
-                       [1, 1, 1]], dtype='float')
-    HEXAGON = cp.array([[0, 1, 0, 1, 0],
-                        [1, 0, 0, 0, 1],
-                        [0, 1, 0, 1, 0]], dtype='float')
-    TRIANGLE = cp.array([[0, 1, 0],
-                         [1, 0, 1],
-                         [0, 1, 0]], dtype='float')
+class Average(Enum):
+    POINT = auto()
+    CROSS = auto()
+    SQUARE = auto()
+    HEXAGON = auto()
+    TRIANGLE = auto()
+
+    def mask(self):
+        d = {
+            Average.POINT :    [[1]],
+            Average.CROSS :    [[0, 1, 0],
+                                [1, 0, 1],
+                                [0, 1, 0]],
+            Average.SQUARE :   [[1, 1, 1],
+                                [1, 0, 1],
+                                [1, 1, 1]],
+            Average.HEXAGON :  [[0, 1, 0, 1, 0],
+                                [1, 0, 0, 0, 1],
+                                [0, 1, 0, 1, 0]],
+            Average.TRIANGLE : [[0, 1, 0],
+                                [1, 0, 1],
+                                [0, 1, 0]]
+        }
+        # Use dtype='float', because if mask would be int then output of convolve2d is also int instead of float
+        return cp.array(d[self], dtype='float')
+    
+    @classmethod
+    def resolve(avg, mm: Magnets=None):
+        ''' <avg> can be any of [str], [bool-like], or [Average]. This function will
+            then return the [Average] instance that is most appropriate.
+        '''
+        if isinstance(avg, Average):
+            return avg
+        if isinstance(avg, str):
+            for average in Average:
+                if average.name.upper() == str.upper():
+                    return average
+            raise ValueError(f"Unsupported averaging mask: {avg}")
+        if avg: # Final option is that <avg> can be truthy or falsy
+            return Average.resolve(mm._get_appropriate_avg()) if mm is not None else Average.SQUARE
+        else:
+            return Average.POINT
+
+
+# TODO: class PlotParams which stores plotting parameters for each ASI? Some kind of dataclass or something idk
 
 
 # Below here are some graphical functions (plot magnetization profile etc.)
 def _get_averaged_extent(mm: Magnets, avg):
     ''' Returns the extent that can be used in imshow when plotting an averaged quantity. '''
-    avg = _resolve_avg(mm, avg)
-    mask = _get_avg_mask(mm, avg=avg)
+    avg = Average.resolve(avg, mm)
+    mask = avg.mask()
     if mm.PBC:
         movex, movey = 0.5*mm.dx, 0.5*mm.dy
     else:
         movex, movey = mask.shape[1]/2*mm.dx, mask.shape[0]/2*mm.dy # The averaged imshow should be displaced by this much
     return [mm.x_min-mm.dx+movex,mm.x_max-movex+mm.dx,mm.y_min-mm.dy+movey,mm.y_max-movey+mm.dy]
-
-def _resolve_avg(mm: Magnets, avg):
-    # TODO: do this better
-    ''' If avg is str then determine if it is valid, otherwise auto-determine which averaging method is appropriate. '''
-    if isinstance(avg, str):
-        assert avg in ['point', 'cross', 'square', 'hexagon', 'triangle'], "Unsupported averaging mask: %s" % avg
-    else: # It is something which can be truthy or falsy
-        avg = mm._get_appropriate_avg() if avg else 'point'
-    return avg
-
-def _get_avg_mask(mm: Magnets, avg=None):
-    ''' Returns the raw averaging mask as a 2D array. Note that this obviously does not include
-        any removal of excess zero-rows etc., that is the task of get_m_angles(mm).
-        Note that this returns a CuPy array for performance reasons, since this is a 'hidden' _function anyway.
-    '''
-    avg = _resolve_avg(mm, avg)
-    if avg == 'point':
-        return Average.POINT
-    elif avg == 'cross': # cross ⁛
-        return Average.CROSS
-    elif avg == 'square': # square □
-        return Average.SQUARE
-    elif avg == 'hexagon':
-        return Average.HEXAGON
-    elif avg == 'triangle':
-        return Average.TRIANGLE
 
 def get_m_polar(mm: Magnets, m=None, avg=True):
     '''
@@ -90,7 +94,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
             !! This does not necessarily have the same shape as <m> !!
     '''
     if m is None: m = mm.m
-    avg = _resolve_avg(mm, avg)
+    avg = Average.resolve(avg, mm)
 
     if mm.in_plane:
         x_comp = cp.multiply(m, mm.orientation[:,:,0])
@@ -98,7 +102,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     else:
         x_comp = m
         y_comp = cp.zeros_like(m)
-    mask = _get_avg_mask(mm, avg=avg)
+    mask = avg.mask()
     if mm.PBC:
         magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode='same', boundary='wrap')
         x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='wrap')/magnets_in_avg
@@ -178,7 +182,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
         @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
     '''
-    avg = _resolve_avg(mm, avg)
+    avg = Average.resolve(avg, mm)
     if m is None: m = mm.m
     show_quiver = mm.m.size < 1e5 and mm.in_plane # Quiver becomes very slow for more than 100k cells, so just dont show it then
     averaged_extent = _get_averaged_extent(mm, avg)
@@ -292,3 +296,7 @@ def fill_neighbors(hsv, replaceable, fillblack=True): # TODO: make this cupy if 
         result[blacks[0], blacks[1], 2] = 0
 
     return result.get()
+
+
+if __name__ == "__main__":
+    print(Average.TRIANGLE.mask())

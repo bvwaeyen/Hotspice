@@ -97,7 +97,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
                    cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=hotspin.plottools._get_averaged_extent(mm, avg))
     c1 = plt.colorbar(h)
     c1.ax.get_yaxis().labelpad = 30
-    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{hotspin.plottools._resolve_avg(mm, avg)}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{hotspin.plottools.Average.resolve(avg, mm)}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
     fig.suptitle('Temperature %.3f' % mm.T)
 
     # This is the function that gets called each frame

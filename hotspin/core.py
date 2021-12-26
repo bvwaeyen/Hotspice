@@ -79,7 +79,7 @@ class Magnets:
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
         self._set_m(pattern)
-        self.m = cp.multiply(self.m, self.mask)
+        self.m = cp.multiply(self.m, self.occupation)
         self.energy() # Have to recalculate all the energies since m changed completely
     
     def _set_orientation(self):
