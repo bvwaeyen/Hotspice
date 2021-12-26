@@ -155,10 +155,7 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
             correlation length.
     '''
     # Initialize in the ground state
-    if mm.config in ['pinwheel', 'kagome']:
-        mm.initialize_m('random')
-    elif mm.config in ['full', 'square', 'triangle']:
-        mm.initialize_m('AFM')
+    mm.initialize_m(mm._get_groundstate())
 
     # Calculate the correlation distance as a function of temperature
     TT = np.linspace(T_min, T_max, N)

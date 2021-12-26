@@ -73,6 +73,9 @@ class Magnets:
     
     def _get_occupation(self):
         return cp.ones_like(self.ixx)
+    
+    def _get_groundstate(self):
+        return 'random'
 
     def initialize_m(self, pattern='random'):
         ''' Initializes the self.m (array of -1, 0 or 1) and occupation.

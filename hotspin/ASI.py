@@ -37,7 +37,14 @@ class ASI(ABC, Magnets):
 
     @abstractmethod
     def _get_nearest_neighbors(self):
-        ''' Returns a small mask full of zeros with the magnet at the center, and 1 at the positions of nearest neighbors. '''
+        ''' Returns a small mask with the magnet at the center, and 1 at the positions of its nearest neighbors (elsewhere 0). '''
+        pass
+    
+    @abstractmethod
+    def _get_groundstate(self):
+        ''' Returns one of either strings: 'uniform', 'AFM', 'random'.
+            Use 'random' if the ground state is more complex than uniform or AFM.
+        '''
         pass
 
 class FullASI(ASI):
@@ -77,6 +84,9 @@ class FullASI(ASI):
     
     def _get_nearest_neighbors(self):
         return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
+    
+    def _get_groundstate(self):
+        return 'AFM'
 
 
 class IsingASI(ASI):
@@ -122,6 +132,9 @@ class IsingASI(ASI):
     
     def _get_nearest_neighbors(self):
         return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
+    
+    def _get_groundstate(self):
+        return 'uniform'
 
 
 class SquareASI(ASI):
@@ -175,6 +188,9 @@ class SquareASI(ASI):
     
     def _get_nearest_neighbors(self):
         return cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
+    
+    def _get_groundstate(self):
+        return 'AFM'
 
 
 class PinwheelASI(SquareASI):
@@ -184,6 +200,9 @@ class PinwheelASI(SquareASI):
         
     def _set_orientation(self, angle=0.):
         super()._set_orientation(angle + math.pi/4)
+    
+    def _get_groundstate(self):
+        return 'uniform'
 
 
 class KagomeASI(ASI):
@@ -248,6 +267,9 @@ class KagomeASI(ASI):
 
     def _get_nearest_neighbors(self):
         return cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
+    
+    def _get_groundstate(self):
+        return 'uniform'
 
 
 class TriangleASI(KagomeASI):
@@ -265,3 +287,6 @@ class TriangleASI(KagomeASI):
         return {
             'quiverscale': 0.5
         }
+    
+    def _get_groundstate(self):
+        return 'AFM'
