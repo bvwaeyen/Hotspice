@@ -4,3 +4,4 @@ from .core import Magnets
 # The following imports allow accessing everything in <name>.py through hotspin.<name>.<thing_in_<name>.py>
 from . import ASI
 from . import plottools
+from . import io
