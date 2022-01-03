@@ -282,16 +282,37 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
 
     def update(self):
-        """ Performs a single magnetization switch. """
         if self.T == 0:
             warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
+        
+        self._update_old()
+        # self._update_Glauber()
+    
+    def _update_Glauber(self):
+        # WARN: THIS ONLY WORKS IF self.E_int JUST BECOMES NEGATIVE WHEN SWITCHING THE MAGNET!!!
+        # 1) Choose a magnet at random
+        nonzero_x, nonzero_y = cp.nonzero(self.occupation)
+        nonzero_idx = np.random.choice(self.n, 1)
+        idx = (nonzero_x[nonzero_idx], nonzero_y[nonzero_idx])
+        # 2) Compute the change in energy if it were to flip.
+        energy_change = -2*self.E_int[idx] # TODO: revisit energy code, to make it easier to calculate the complete energy change if a single magnet would switch
+        # 3) Flip the spin with a certain exponential probability
+        exponential = math.exp(-energy_change/self.T)
+        prob = exponential/(1+exponential)
+        if cp.random.random() < prob: # Time is not defined in the Glauber model.
+            self.m[idx] = - self.m[idx]
+            self.energy(single=True, index2D=idx)
+        # TODO: glauber can easily be expanded to switch multiple at once, by using superposed supergrid
+    
+    def _update_old(self):
+        """ Performs a single magnetization switch. """
         self.barrier = (self.E_b - self.E_int)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
         minBarrier = cp.min(self.barrier)
         self.barrier -= minBarrier # Energy is relative, so set min(E) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
             # There is no real speed difference between XORWOW or MRG32k3a or Philox4x3210 random generators, so we just don't bother.
-            taus = cp.random.uniform(size=self.barrier.shape)*cp.exp(self.barrier/self.T) # TODO: use Glauber monte carlo model (i.e. choose random magnet, and switch if energy would decrease)
+            taus = cp.random.uniform(size=self.barrier.shape)*cp.exp(self.barrier/self.T)
             indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
             self.m[indexmin2D] = -self.m[indexmin2D]
             self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
