@@ -86,6 +86,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         @param pattern [str] (None): The initial magnetization pattern (any of 'random', 'uniform', 'AFM').
             Set to a False value to prevent initialization of the magnetization.
     """
+    avg = hotspin.plottools.Average.resolve(avg, mm)
     if pattern:
         mm.initialize_m(pattern)
     n_sweep2 = n_sweep/2
@@ -97,8 +98,8 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
                    cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=hotspin.plottools._get_averaged_extent(mm, avg))
     c1 = plt.colorbar(h)
     c1.ax.get_yaxis().labelpad = 30
-    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{hotspin.plottools.Average.resolve(avg, mm)}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
-    fig.suptitle('Temperature %.3f' % mm.T)
+    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+    fig.suptitle('Temperature %.3f' % mm.T.mean())
 
     # This is the function that gets called each frame
     def animate_quenching_update(i):

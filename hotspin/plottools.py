@@ -45,7 +45,7 @@ class Average(Enum):
         return cp.array(d[self], dtype='float')
     
     @classmethod
-    def resolve(avg, mm: Magnets=None):
+    def resolve(cls, avg, mm: Magnets=None):
         ''' <avg> can be any of [str], [bool-like], or [Average]. This function will
             then return the [Average] instance that is most appropriate.
         '''
@@ -53,7 +53,7 @@ class Average(Enum):
             return avg
         if isinstance(avg, str):
             for average in Average:
-                if average.name.upper() == str.upper():
+                if average.name.upper() == avg.upper():
                     return average
             raise ValueError(f"Unsupported averaging mask: {avg}")
         if avg: # Final option is that <avg> can be truthy or falsy
@@ -196,16 +196,16 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
                         extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
     c1 = plt.colorbar(im1)
     c1.ax.get_yaxis().labelpad = 30
-    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
     axes.append(ax1)
     if show_quiver:
         ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
         ax2.set_aspect('equal')
         nonzero = mm.m.get().nonzero()
-        quiverscale = mm._get_plotting_params()['quiverscale']
+        quiverscale = mm._get_plotting_params()['quiverscale']/min(mm.dx, mm.dy)
         ax2.quiver(mm.xx.get()[nonzero], mm.yy.get()[nonzero], 
                 cp.multiply(m, mm.orientation[:,:,0]).get()[nonzero], cp.multiply(m, mm.orientation[:,:,1]).get()[nonzero],
-                pivot='mid', scale=quiverscale*mm.a, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
+                pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
         ax2.set_title(r'$m$')
         axes.append(ax2)
     if show_energy:
@@ -259,7 +259,7 @@ def get_AFMness(mm: Magnets, AFM_mask=None):
     AFM_ness = cp.mean(cp.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='wrap' if mm.PBC else 'fill')))
     return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(mm.mask)*mm.m.size)
 
-def fill_neighbors(hsv, replaceable, fillblack=True): # TODO: make this cupy if possible
+def fill_neighbors(hsv, replaceable, fillblack=False): # TODO: make this cupy if possible
     ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
         THIS FUNCTION OPERATES ON HSV VALUES, AND RETURNS HSV AS WELL!!! NOT RGB HERE!
         The 2D array <replaceable> is True at the positions of hsv which can be overwritten by this function.
