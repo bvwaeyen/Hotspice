@@ -4,6 +4,7 @@ import warnings
 import cupy as cp
 import numpy as np
 
+from abc import ABC, abstractmethod
 from cupyx.scipy import signal
 from dataclasses import dataclass, field
 
@@ -389,7 +390,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
 
 
-def _mirror4(arr, negativex=False, negativey=False):
+def _mirror4(arr, negativex=False, negativey=False): # TODO: put this in some sort of utils library?
     ny, nx = arr.shape
     arr4 = cp.zeros((2*ny-1, 2*nx-1))
     xp = -1 if negativex else 1
@@ -399,6 +400,249 @@ def _mirror4(arr, negativex=False, negativey=False):
     arr4[ny-1::-1, nx-1:] = yp*arr
     arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
     return arr4
+
+
+class Energy(ABC):
+    def __init__(self, mm: Magnets):
+        self.initialize(mm)
+    
+    @abstractmethod
+    def initialize(self, mm: Magnets):
+        ''' Do all the things which can be done when given a certain Magnets object. '''
+        self.mm = mm # Like this
+        self.E = cp.zeros_like(mm.xx) # Or this
+    
+    @abstractmethod
+    def update(self):
+        ''' Calculates the entire self.E array, for the situation in self.mm.m. '''
+    
+    @abstractmethod
+    def energy_single_switch(self, index2D):
+        ''' Returns the change in energy experienced by the magnet at <index2D>, if it were to switch.
+            @param index2D [tuple(2)]: A tuple containing two elements: the x- and y-index of the switched magnet.
+        '''
+
+    @abstractmethod
+    def update_single(self, index2D):
+        ''' Updates self.E by only taking into account that a single magnet (at index2D) switched.
+            @param index2D [tuple(2)]: A tuple containing two elements: the x- and y-index of the switched magnet.
+        '''
+    
+    @abstractmethod
+    def update_multiple(self, indices2D):
+        ''' Updates self.E by only taking into account that some magnets (at indices2D) switched.
+            This seems like it is just multiple times self.update_single(), but sometimes an optimization is possible,
+            hence this required alternative function for updating multiple magnets at once.
+            @param indices2D [list]: A list containing two elements: an array containing the x-indices of each switched
+                magnet, and a similar array for y (so indices2D is basically a 2xN array, with N the number of switches).
+        '''
+    
+    @classmethod
+    def clean_indices(cls, indices2D):
+        ''' Reshapes <indices2D> into a 2xN array.
+            @param <indices2D> [iterable]: an iterable which can have any shape, as long as it contains
+                at most 2 dimensions of a size greater than 1, of which exactly one has size 2. It is 
+                this size-2 dimension which will become the primary dimension of the returned array.
+            @return [np.array(2xN)]: A 2xN array, where the 1st sub-array indicates x-indices, the 2nd y-indices.
+        '''
+        indices2D = np.asarray(indices2D).squeeze()
+        assert len(indices2D.shape) <= 2, "An array with more than 2 dimensions can not be used to represent a list of indices."
+        assert np.any(np.asarray(indices2D.shape) == 2), "The list of indices has an incorrect shape. At least one dimension should have length 2."
+        if indices2D.shape[0] == 2: # The only ambiguous case is for a 2x2 input array, but in that case we assume the array is already correct.
+            return indices2D.reshape(2, -1)
+        elif indices2D.shape[1] == 2:
+            return indices2D.T
+        else:
+            raise ValueError("Structure of attribute <indices2D> could not be recognized.")
+    
+    @classmethod
+    def clean_index(cls, index2D):
+        ''' Reshapes <index2D> into a length 2 one-dimensional array.
+            @param <index2D> [iterable]: an iterable which can have any shape, as long as it contains exactly 2 elements.
+            @return [tuple(2)]: A length 2 tuple, whose elements correspond to the x- and y-index, respectively.
+        '''
+        index2D = np.asarray(index2D)
+        assert index2D.size == 2, "The <index2D> argument should contain exactly two values: the x- and y-index."
+        return tuple(index2D.reshape(2))
+
+
+class ZeemanEnergy(Energy):
+    def __init__(self, mm: Magnets, magnitude=0, angle=0):
+        self.set_field(magnitude, angle)
+        super().__init__(self, mm)
+    
+    def initialize(self, mm=None):
+        self.mm = self.mm if mm is None else mm
+        self.update()
+
+    def set_field(self, magnitude=0, angle=0):
+        if self.mm.in_plane:
+            self.H_ext = magnitude*cp.array([math.cos(angle), math.sin(angle)])
+        else:
+            self.H_ext = magnitude
+            if angle != 0: warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.')
+
+    def update(self):
+        if self.mm.in_plane:
+            self.E = -cp.multiply(self.mm.m, self.H_ext[0]*self.mm.orientation[:,:,0] + self.H_ext[1]*self.mm.orientation[:,:,1])
+        else:
+            self.E = -self.mm.m*self.H_ext
+    
+    def energy_single_switch(self, index2D):
+        index2D = Energy.clean_index(index2D)
+        return -2*self.E[index2D]
+
+    def update_single(self, index2D):
+        index2D = Energy.clean_index(index2D)
+        self.E[index2D] *= -1
+    
+    def update_multiple(self, indices2D):
+        indices2D = Energy.clean_indices(indices2D)
+        self.E[indices2D[0], indices2D[1]] *= -1
+
+
+class DipolarEnergy(Energy):
+    def __init__(self, mm: Magnets, prefactor=1):
+        self.prefactor = prefactor
+        super().__init__(self, mm)
+
+    def initialize(self, mm=None):
+        self.mm = self.mm if mm is None else mm
+        self.unitcell = self.mm.unitcell
+
+        self.E = cp.zeros_like(self.mm.xx)
+        # Let us first make the four-mirrored distance matrix rinv3
+        # WARN: this four-mirrored technique only works if (dx, dy) is the same for every cell everywhere!
+        # This could be generalized by calculating a separate rrx and rry for each magnet in a unit cell similar to toolargematrix_o{x,y}
+        rrx = self.mm.xx - self.mm.xx[0,0]
+        rry = self.mm.yy - self.mm.yy[0,0]
+        rr_sq = rrx**2 + rry**2
+        rr_sq[0,0] = cp.inf
+        rr_inv = rr_sq**(-1/2) # Due to the previous line, this is now never infinite
+        rr_inv3 = rr_inv**3
+        rinv3 = _mirror4(rr_inv3)
+        # Now we determine the normalized rx and ry
+        ux = _mirror4(rrx*rr_inv, negativex=True)
+        uy = _mirror4(rry*rr_inv, negativey=True)
+        # Now we initialize the full ox
+        if self.mm.in_plane:
+            unitcell_ox = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,0]
+            unitcell_oy = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,1]
+        else:
+            unitcell_ox = unitcell_oy = cp.zeros((self.unitcell.y, self.unitcell.x))
+        num_unitcells_x = 2*math.ceil(self.mm.nx/self.unitcell.x) + 1
+        num_unitcells_y = 2*math.ceil(self.mm.ny/self.unitcell.y) + 1
+        toolargematrix_ox = cp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
+        toolargematrix_oy = cp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
+        # Now comes the part where we start splitting the different cells in the unit cells
+        self.kernel_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
+        for y in range(self.unitcell.y):
+            for x in range(self.unitcell.x):
+                if self.mm.in_plane:
+                    ox1, oy1 = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
+                    if ox1 == oy1 == 0:
+                        continue # Empty cell in the unit cell, so keep self.kernel_unitcell[y][x] equal to None
+                    # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
+                    slice_startx = (self.unitcell.x - ((self.mm.nx-1) % self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
+                    slice_starty = (self.unitcell.y - ((self.mm.ny-1) % self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
+                    ox2 = toolargematrix_ox[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
+                    oy2 = toolargematrix_oy[slice_starty:slice_starty+2*self.ny-1,slice_startx:slice_startx+2*self.nx-1]
+                    kernel1 = ox1*ox2*(3*ux**2 - 1)
+                    kernel2 = oy1*oy2*(3*uy**2 - 1)
+                    kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
+                    kernel = -(kernel1 + kernel2 + kernel3)*rinv3
+                else:
+                    kernel = rinv3 # 'kernel' for out-of-plane is very simple
+
+                if self.mm.PBC: # Just copy the kernel 8 times, for the 8 'nearest simulations'
+                    kernelcopy = kernel.copy()
+                    kernel[:,self.mm.nx:] += kernelcopy[:,:self.mm.nx-1]
+                    kernel[self.mm.ny:,self.mm.nx:] += kernelcopy[:self.mm.ny-1,:self.mm.nx-1]
+                    kernel[self.mm.ny:,:] += kernelcopy[:self.mm.ny-1,:]
+                    kernel[self.mm.ny:,:self.mm.nx-1] += kernelcopy[:self.mm.ny-1,self.mm.nx:]
+                    kernel[:,:self.mm.nx-1] += kernelcopy[:,self.mm.nx:]
+                    kernel[:self.mm.ny-1,:self.mm.nx-1] += kernelcopy[self.mm.ny:,self.mm.nx:]
+                    kernel[:self.mm.ny-1,:] += kernelcopy[self.mm.ny:,:]
+                    kernel[:self.mm.ny-1,self.mm.nx:] += kernelcopy[self.mm.ny:,:self.mm.nx-1]
+
+                self.kernel_unitcell[y][x] = kernel
+        self.update()
+    
+    def update(self):
+        total_energy = cp.zeros_like(self.mm.m)
+        for y in range(self.unitcell.y):
+            for x in range(self.unitcell.x):
+                kernel = self.kernel_unitcell[y][x]
+                if kernel is None:
+                    continue
+                else:
+                    partial_m = cp.zeros_like(self.mm.m)
+                    partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
+
+                    total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')
+        self.E = total_energy
+    
+    def energy_single_switch(self, index2D):
+        index2D = Energy.clean_index(index2D)
+        return -2*self.E[index2D]
+    
+    def update_single(self, index2D):
+        index2D = Energy.clean_index(index2D)
+        # First we get the x and y coordinates of magnet <i> in its unit cell
+        y, x = index2D
+        x_unitcell = int(x) % self.unitcell.x
+        y_unitcell = int(y) % self.unitcell.y
+        # The kernel to use is then
+        kernel = self.kernel_unitcell[y_unitcell][x_unitcell]
+        if kernel is not None:
+            # Multiply with the magnetization
+            usefulkernel = kernel[self.ny-1-y:2*self.ny-1-y,self.nx-1-x:2*self.nx-1-x]
+            interaction = self.mm.m[index2D]*cp.multiply(self.mm.m, usefulkernel)
+        else:
+            interaction = cp.zeros_like(self.mm.m)
+
+        self.E += 2*interaction
+        self.E[index2D] *= -1 # This magnet switched, so all its interactions are inverted
+    
+    def update_multiple(self, indices2D):
+        indices2D = Energy.clean_indices(indices2D)
+        # TODO: Use a convolution to do this more efficiently
+        # For now, let's just naively use
+        for i in range(len(indices2D)):
+            self.update_single((indices2D[0,i], indices2D[1,i]))
+
+
+class ExchangeEnergy(Energy):
+    def __init__(self, mm: Magnets, J=1):
+        self.J = J
+        super().__init__(self, mm)
+
+    def initialize(self, mm=None):
+        self.mm = self.mm if mm is None else mm
+        self.local_interaction = self.mm._get_nearest_neighbors()
+        self.update()
+    
+    def update(self):
+        if self.mm.in_plane:
+            mx = self.mm.orientation[:,:,0]*self.mm.m
+            my = self.mm.orientation[:,:,1]*self.mm.m
+            sum_mx = signal.convolve2d(mx, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
+            sum_my = signal.convolve2d(my, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
+            self.E = -self.J*(cp.multiply(sum_mx, mx) + cp.multiply(sum_my, my))
+        else:
+            self.E = -self.J*cp.multiply(signal.convolve2d(self.mm.m, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill'), self.mm.m)
+
+    def energy_single_switch(self, index2D):
+        index2D = Energy.clean_index(index2D)
+        return -2*self.E[index2D]
+    
+    def update_single(self, index2D):
+        # TODO: custom efficient function for switching a single magnet
+        self.update()
+    
+    def update_multiple(self, indices2D):
+        # TODO: custom efficient function for switching multiple magnets
+        self.update()
 
 
 @dataclass
