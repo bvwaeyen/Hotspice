@@ -24,14 +24,14 @@ print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
 def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005, T_max=4): # TODO: update this function with modern methods
-    """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
+    ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
         line indicates the AFM-ness of a perfectly random state.
         @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
-    """
+    '''
     mm.initialize_m('AFM')
     mm.clear_history()
     AFM_ness = []

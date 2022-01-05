@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 TODO (summary):
 (!: priority, -: should do at some point in time, .: perhaps implement perhaps not)
 ! use Glauber monte carlo markov chain on Ising model to determine which magnet will switch
-  (will not improve performance by much I think, since this will still only switch 1 magnet each time)
+  (this allows for switching multiple magnets at once, if we use some convolutions in a clever and fast way)
 ! develop the hotspin.io module
 - update the animate_temp_rise function with the modern 'API' or however to call this
 - sort out the AFM-ness and its normalization etc.
@@ -69,7 +69,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.PBC = PBC
         if self.PBC:
             if nx % self.unitcell.x != 0 or ny % self.unitcell.y != 0:
-                warnings.warn(f"""Be careful with PBC, as there are not an integer number of unit cells in the simulation! Hence, the boundaries do not nicely fit together. Adjust nx or ny to alleviate this problem (unit cell has size {self.unitcell.x}x{self.unitcell.y}).""", stacklevel=2)
+                warnings.warn(f"Be careful with PBC, as there are not an integer number of unit cells in the simulation! Hence, the boundaries do not nicely fit together. Adjust nx or ny to alleviate this problem (unit cell has size {self.unitcell.x}x{self.unitcell.y}).", stacklevel=2)
 
         self.history = History()
 
@@ -306,7 +306,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         # TODO: glauber can easily be expanded to switch multiple at once, by using superposed supergrid
     
     def _update_old(self):
-        """ Performs a single magnetization switch. """
+        ''' Performs a single magnetization switch. '''
         self.barrier = (self.E_b - self.E_int)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
         minBarrier = cp.min(self.barrier)
         self.barrier -= minBarrier # Energy is relative, so set min(E) to zero (this prevents issues at low T)
@@ -326,9 +326,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     
 
     def save_history(self, *, E_tot=None, t=None, T=None, m_tot=None):
-        """ Records E_tot, t, T and m_tot as they were last calculated. This default behavior can be overruled: if
+        ''' Records E_tot, t, T and m_tot as they were last calculated. This default behavior can be overruled: if
             passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T|m_tot> value(s).
-        """
+        '''
         self.history.E.append(float(self.E_tot) if E_tot is None else float(E_tot))
         self.history.t.append(float(self.t) if t is None else float(t))
         self.history.T.append(float(self.T) if T is None else float(T))
@@ -403,7 +403,7 @@ def _mirror4(arr, negativex=False, negativey=False):
 
 @dataclass
 class History:
-    """ Stores the history of the energy, temperature, time, and average magnetization. """
+    ''' Stores the history of the energy, temperature, time, and average magnetization. '''
     E: list = field(default_factory=list)
     T: list = field(default_factory=list)
     t: list = field(default_factory=list)
@@ -417,6 +417,6 @@ class History:
 
 @dataclass
 class Vec2D:
-    """ Stores x and y components, so we don't need to index [0] or [1] in a tuple, which would be unclear. """
+    ''' Stores x and y components, so we don't need to index [0] or [1] in a tuple, which would be unclear. '''
     x: float
     y: float

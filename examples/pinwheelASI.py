@@ -23,7 +23,7 @@ print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
 def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
-    """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
+    ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Curie temperature. Caution has to be taken, however, since the graph shows
         the average magnetization, which above the Curie temperature is expected to approach 0, but this
         can also happen well below the Curie temperature if the spins settle in a vortex-like geometry,
@@ -34,7 +34,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00000
         @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
-    """
+    '''
     mm.initialize_m('uniform')
     mm.clear_history()
 
