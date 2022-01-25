@@ -390,18 +390,6 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
 
 
-def _mirror4(arr, negativex=False, negativey=False): # TODO: put this in some sort of utils library?
-    ny, nx = arr.shape
-    arr4 = cp.zeros((2*ny-1, 2*nx-1))
-    xp = -1 if negativex else 1
-    yp = -1 if negativey else 1
-    arr4[ny-1:, nx-1:] = arr
-    arr4[ny-1:, nx-1::-1] = xp*arr
-    arr4[ny-1::-1, nx-1:] = yp*arr
-    arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
-    return arr4
-
-
 class Energy(ABC):
     def __init__(self, mm: Magnets):
         self.initialize(mm)
@@ -511,6 +499,18 @@ class DipolarEnergy(Energy):
         self.unitcell = self.mm.unitcell
 
         self.E = cp.zeros_like(self.mm.xx)
+
+        def mirror4(arr, negativex=False, negativey=False):
+            ny, nx = arr.shape
+            arr4 = cp.zeros((2*ny-1, 2*nx-1))
+            xp = -1 if negativex else 1
+            yp = -1 if negativey else 1
+            arr4[ny-1:, nx-1:] = arr
+            arr4[ny-1:, nx-1::-1] = xp*arr
+            arr4[ny-1::-1, nx-1:] = yp*arr
+            arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
+            return arr4
+        
         # Let us first make the four-mirrored distance matrix rinv3
         # WARN: this four-mirrored technique only works if (dx, dy) is the same for every cell everywhere!
         # This could be generalized by calculating a separate rrx and rry for each magnet in a unit cell similar to toolargematrix_o{x,y}
@@ -520,10 +520,10 @@ class DipolarEnergy(Energy):
         rr_sq[0,0] = cp.inf
         rr_inv = rr_sq**(-1/2) # Due to the previous line, this is now never infinite
         rr_inv3 = rr_inv**3
-        rinv3 = _mirror4(rr_inv3)
+        rinv3 = mirror4(rr_inv3)
         # Now we determine the normalized rx and ry
-        ux = _mirror4(rrx*rr_inv, negativex=True)
-        uy = _mirror4(rry*rr_inv, negativey=True)
+        ux = mirror4(rrx*rr_inv, negativex=True)
+        uy = mirror4(rry*rr_inv, negativey=True)
         # Now we initialize the full ox
         if self.mm.in_plane:
             unitcell_ox = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,0]
