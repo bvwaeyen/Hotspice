@@ -391,18 +391,22 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
 
 class Energy(ABC):
-    def __init__(self, mm: Magnets):
-        self.initialize(mm)
+    def __init__(self):
+        ''' The __init__ method contains all initialization of variables which do not depend
+            on a specific given Magnets() object. It is not required to override this method.
+        '''
+        pass
     
     @abstractmethod
     def initialize(self, mm: Magnets):
-        ''' Do all the things which can be done when given a certain Magnets object. '''
+        ''' Do all the things which can be done when given a certain Magnets() object. '''
         self.mm = mm # Like this
-        self.E = cp.zeros_like(mm.xx) # Or this
+        self.update() # And this, to initialize the energies etc.
     
     @abstractmethod
     def update(self):
         ''' Calculates the entire self.E array, for the situation in self.mm.m. '''
+        self.E = cp.zeros_like(self.mm.xx)
     
     @abstractmethod
     def energy_single_switch(self, index2D):
@@ -421,7 +425,7 @@ class Energy(ABC):
         ''' Updates self.E by only taking into account that some magnets (at indices2D) switched.
             This seems like it is just multiple times self.update_single(), but sometimes an optimization is possible,
             hence this required alternative function for updating multiple magnets at once.
-            @param indices2D [list]: A list containing two elements: an array containing the x-indices of each switched
+            @param indices2D [list(2xN)]: A list containing two elements: an array containing the x-indices of each switched
                 magnet, and a similar array for y (so indices2D is basically a 2xN array, with N the number of switches).
         '''
     
@@ -455,12 +459,16 @@ class Energy(ABC):
 
 
 class ZeemanEnergy(Energy):
-    def __init__(self, mm: Magnets, magnitude=0, angle=0):
+    def __init__(self, magnitude=0, angle=0):
+        ''' This ZeemanEnergy class implements the Zeeman energy for a spatially uniform external field, whose magnitude
+            (and angle, if the magnetization is in-plane) can be set using the set_field method.
+            @param magnitude [float] (0): The magnitude of the external field.
+            @param angle [float] (0): The angle (in radians) of the external field.
+        '''
         self.set_field(magnitude, angle)
-        super().__init__(self, mm)
     
-    def initialize(self, mm=None):
-        self.mm = self.mm if mm is None else mm
+    def initialize(self, mm: Magnets):
+        self.mm = mm
         self.update()
 
     def set_field(self, magnitude=0, angle=0):
@@ -490,14 +498,16 @@ class ZeemanEnergy(Energy):
 
 
 class DipolarEnergy(Energy):
-    def __init__(self, mm: Magnets, prefactor=1):
+    def __init__(self, prefactor=1):
+        ''' This DipolarEnergy class implements the interaction between the magnets of the simulation themselves.
+            It should therefore always be included in the simulations.
+            @param prefactor [float] (1): The relative strength of the dipolar interaction.
+        '''
         self.prefactor = prefactor
-        super().__init__(self, mm)
 
-    def initialize(self, mm=None):
-        self.mm = self.mm if mm is None else mm
+    def initialize(self, mm: Magnets):
+        self.mm = mm
         self.unitcell = self.mm.unitcell
-
         self.E = cp.zeros_like(self.mm.xx)
 
         def mirror4(arr, negativex=False, negativey=False):
@@ -580,7 +590,7 @@ class DipolarEnergy(Energy):
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
 
                     total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')
-        self.E = total_energy
+        self.E = total_energy*self.prefactor
     
     def energy_single_switch(self, index2D):
         index2D = Energy.clean_index(index2D)
@@ -597,7 +607,7 @@ class DipolarEnergy(Energy):
         if kernel is not None:
             # Multiply with the magnetization
             usefulkernel = kernel[self.ny-1-y:2*self.ny-1-y,self.nx-1-x:2*self.nx-1-x]
-            interaction = self.mm.m[index2D]*cp.multiply(self.mm.m, usefulkernel)
+            interaction = self.prefactor*self.mm.m[index2D]*cp.multiply(self.mm.m, usefulkernel)
         else:
             interaction = cp.zeros_like(self.mm.m)
 
@@ -613,12 +623,11 @@ class DipolarEnergy(Energy):
 
 
 class ExchangeEnergy(Energy):
-    def __init__(self, mm: Magnets, J=1):
+    def __init__(self, J=1):
         self.J = J
-        super().__init__(self, mm)
 
-    def initialize(self, mm=None):
-        self.mm = self.mm if mm is None else mm
+    def initialize(self, mm: Magnets):
+        self.mm = mm
         self.local_interaction = self.mm._get_nearest_neighbors()
         self.update()
     
