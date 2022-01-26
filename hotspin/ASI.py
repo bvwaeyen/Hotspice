@@ -58,7 +58,7 @@ class FullASI(ASI):
     
     def _set_m(self, pattern):
         if pattern == 'uniform':
-            self.m = cp.ones(cp.shape(self.xx))
+            self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy) % 2)*2 - 1
         else:
@@ -101,7 +101,7 @@ class IsingASI(ASI):
     
     def _set_m(self, pattern):
         if pattern == 'uniform':
-            self.m = cp.ones(cp.shape(self.xx))
+            self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
             self.m = (self.iyy % 2)*2 - 1
         else:
@@ -150,7 +150,7 @@ class SquareASI(ASI):
     
     def _set_m(self, pattern):
         if pattern == 'uniform':
-            self.m = cp.ones(cp.shape(self.xx))
+            self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy)//2 % 2)*2 - 1
         else:
@@ -225,10 +225,10 @@ class KagomeASI(ASI):
     
     def _set_m(self, pattern):
         if pattern == 'uniform':
-            self.m = cp.ones(cp.shape(self.xx))
+            self.m = cp.ones_like(self.xx)
             self.m[(self.ixx - self.iyy) % 4 == 1] = -1
         elif pattern == 'AFM':
-            self.m = cp.ones(cp.shape(self.xx))
+            self.m = cp.ones_like(self.xx)
             self.m[(self.ixx + self.iyy) % 4 == 3] = -1
         else:
             self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1

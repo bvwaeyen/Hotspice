@@ -18,9 +18,9 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.IsingASI(n, 1, T=T, E_b=E_b, pattern='uniform', energies=['dipolar'], PBC=True)
+mm = hotspin.ASI.IsingASI(n, 1, T=T, E_b=E_b, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
-# mm.energy_exchange_init(J=0.2)
+# mm.add_energy(hotspin.ExchangeEnergy(J=0.2))
 
 
 def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005, T_max=4): # TODO: update this function with modern methods

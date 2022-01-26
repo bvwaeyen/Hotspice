@@ -210,8 +210,8 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
         axes.append(ax2)
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
-        im3 = ax3.imshow(mm.E_int.get(), origin='lower',
-                            extent=full_extent)
+        im3 = ax3.imshow(np.where(mm.m.get() != 0, mm.E.get(), np.nan), origin='lower',
+                            extent=full_extent, interpolation_stage='rgba')
         plt.colorbar(im3)
         ax3.set_title(r'$E_{int}$')
         axes.append(ax3)
@@ -270,8 +270,8 @@ def fill_neighbors(hsv, replaceable, fillblack=False): # TODO: make this cupy if
         @param fillblack [bool] (True): If True, white pixels next to black pixels are colored black regardless of other neighbors.
         @return [2D np.array]: The interpolated array.
     '''
-    hsv = hsv.get() if type(hsv) == cp.ndarray else np.asarray(hsv)
-    replaceable = replaceable if type(replaceable) == cp.ndarray else cp.asarray(replaceable)
+    hsv = hsv.get() if isinstance(hsv, cp.ndarray) else np.asarray(hsv)
+    replaceable = replaceable if isinstance(replaceable, cp.ndarray) else cp.asarray(replaceable)
 
     # Extend arrays a bit to fill NaNs near boundaries as well
     a = np.insert(hsv, 0, hsv[1], axis=0)

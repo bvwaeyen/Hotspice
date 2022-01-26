@@ -18,7 +18,7 @@ nx = 25 *4+1 # Multiple of 4 + 1
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.KagomeASI(nx, 4, T=T, E_b=E_b, pattern='uniform', energies=['dipolar'], PBC=False)
+mm = hotspin.ASI.KagomeASI(nx, 4, T=T, E_b=E_b, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=False)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 

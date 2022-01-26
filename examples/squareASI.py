@@ -18,7 +18,7 @@ n = 200
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.SquareASI(n, 2, T=T, E_b=E_b, pattern='AFM', energies=['dipolar'], PBC=True)
+mm = hotspin.ASI.SquareASI(n, 2, T=T, E_b=E_b, pattern='AFM', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
