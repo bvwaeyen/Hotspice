@@ -184,6 +184,31 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def E_tot(self):
         return cp.sum(self.E, axis=None)
 
+
+    def select(self, r=16):
+        ''' @param r [int]: minimal distance between magnets '''
+        # return self._select_grid(r=r)
+        return self._select_single()
+    
+    def _select_single(self):
+        nonzero_x, nonzero_y = cp.nonzero(self.occupation)
+        nonzero_idx = np.random.choice(self.n, 1)
+        return cp.asarray([nonzero_x[nonzero_idx], nonzero_y[nonzero_idx]]).reshape(2, -1)
+
+    def _select_grid(self, r): # TODO: optimize size of supergrid so we don't generate too much (though this doesn't matter much)
+        ''' @param r [int]: minimal distance between two magnets, specified as a number of grid cells. '''
+        r = math.ceil(r - 1) # - 1 because effective minimal distance turns out to be actually r + 1
+        move_grid = -cp.random.randint(-r, r, size=(2,))
+        supergrid_nx = (self.nx - 2)//(2*r) + 2
+        supergrid_ny = (self.ny - 2)//(2*r) + 2
+        offsets_x = move_grid[0] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*r
+        offsets_y = move_grid[1] + self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*r
+        random_positions = cp.random.randint(0, r**2, size=(supergrid_ny*supergrid_nx))
+        pos_x = offsets_x + (random_positions % r)
+        pos_y = offsets_y + (random_positions // r)
+        ok = cp.logical_and(cp.logical_and(pos_x >= 0, pos_y >= 0), cp.logical_and(pos_x < self.nx, pos_y < self.ny))
+        return cp.asarray([pos_x[ok], pos_y[ok]])
+
     def update(self):
         if self.T == 0:
             warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
@@ -192,7 +217,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         # self._update_old()
         self._update_Glauber()
     
-    def _update_Glauber(self):
+    def _update_Glauber(self): # TODO: rewrite this function using self.select() with support for multiple switches
         # 1) Choose a magnet at random
         nonzero_x, nonzero_y = cp.nonzero(self.occupation)
         nonzero_idx = np.random.choice(self.n, 1)
@@ -205,7 +230,6 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         if cp.random.random() < prob: # Time is not defined in the Glauber model.
             self.m[idx] *= -1
             self.update_energy(index=idx)
-        # TODO: glauber can easily be expanded to switch multiple at once, by using superposed supergrid
     
     def _update_old(self):
         ''' Performs a single magnetization switch. '''
