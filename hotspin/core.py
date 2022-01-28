@@ -25,7 +25,7 @@ TODO (summary):
 
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
-    def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=1, in_plane=True, pattern='random', energies=('dipolar',), PBC=False):
+    def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=1, in_plane=True, pattern='random', energies=None, PBC=False):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx> and <a>. 
@@ -44,6 +44,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.t = 0. # TODO: decide if we are interested in the time, or not really
         self.Msat = Msat
         self.in_plane = in_plane
+        energies = (DipolarEnergy(),) if energies is None else energies
         
         # initialize the coordinates based on nx, (ny) and L
         self.nx, self.ny = nx, ny
@@ -118,10 +119,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.orientation = cp.ones((*self.xx.shape, 2))/math.sqrt(2)
 
     def _initialize_ip(self):
-        ''' Initialize the angles of all the magnets.
+        ''' Initialize the angles of all the magnets (only applicable in the in-plane case).
             This function should only be called by the Magnets() class itself, not by the user.
         '''
-        # This sets the angle of all the magnets (this is of course only applicable in the in-plane case)
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
         self._set_orientation()
 
