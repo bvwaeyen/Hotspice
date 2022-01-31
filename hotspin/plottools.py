@@ -193,7 +193,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
     ax1 = fig.add_subplot(1, num_plots, 1)
     im = polar_to_rgb(mm, m=m, avg=avg, fill=fill)
     im1 = ax1.imshow(im, cmap='hsv' if mm.in_plane else 'gray', origin='lower', vmin=0, vmax=2*cp.pi,
-                        extent=averaged_extent) # extent doesnt work perfectly with triangle or kagome but is still ok
+                        extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
     c1 = plt.colorbar(im1)
     c1.ax.get_yaxis().labelpad = 30
     c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
@@ -211,7 +211,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
         im3 = ax3.imshow(np.where(mm.m.get() != 0, mm.E.get(), np.nan), origin='lower',
-                            extent=full_extent, interpolation_stage='rgba')
+                            extent=full_extent, interpolation='antialiased', interpolation_stage='rgba')
         plt.colorbar(im3)
         ax3.set_title(r'$E_{int}$')
         axes.append(ax3)
