@@ -1,4 +1,5 @@
 import time
+import warnings
 
 import cupy as cp
 import numpy as np
@@ -18,6 +19,7 @@ def test(n:int=10000, L:int=400, r=16):
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     '''
+    if L < r*3: warnings.warn(f"Simulation of size L={L} might be too small for r={r}!")
     mm = hotspin.ASI.FullASI(L, 1)
     INTEGER_BINS = False # If true, the bins are pure integers, otherwise they can be finer than this.
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
@@ -31,8 +33,8 @@ def test(n:int=10000, L:int=400, r=16):
     field = cp.zeros_like(mm.xx)
     
     t = time.perf_counter()
-    total = 0
-    min_dist = cp.inf
+    total = 0 # Number of samples
+    min_dist = cp.inf # Minimal distance between 2 samples in 1 mm.select() call
     for _ in range(n):
         pos = mm.select(r) # MODIFY THIS LINE TO SELECT A SPECIFIC SELECTION ALGORITHM
         total += pos.shape[1]
@@ -52,7 +54,7 @@ def test(n:int=10000, L:int=400, r=16):
     print(f'Time required for {n} runs of this test: {t:.3f}s.')
     print(f'--- TEST RESULTS ---')
     print(f'Total number of samples: {total}')
-    print(f'Minimal distance between two samples in a single selection: {min_dist} (r={r})')
+    print(f'Empirical minimal distance between two samples in a single selection: {min_dist} (r={r})')
     
     fig = plt.figure(figsize=(7, 3))
     ax1 = fig.add_subplot(1, 2, 1)
@@ -90,5 +92,5 @@ def test_speed(n: int=10000, L:int=400, r=16):
 
 
 if __name__ == "__main__":
-    # test_speed()
+    test_speed(L=400)
     test(L=400)
