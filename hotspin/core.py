@@ -74,6 +74,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
                 warnings.warn(f"Be careful with PBC, as there are not an integer number of unit cells in the simulation! Hence, the boundaries do not nicely fit together. Adjust nx or ny to alleviate this problem (unit cell has size {self.unitcell.x}x{self.unitcell.y}).", stacklevel=2)
 
         self.history = History()
+        self.switches = 0
 
         # Main initialization steps that require calling other methods of this class
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
@@ -236,6 +237,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         idx = idx[:,cp.where(cp.random.random(prob.shape) < prob)[0]]
         if idx.shape[1] > 0:
             self.m[idx[0], idx[1]] *= -1
+            self.switches += idx.shape[1]
             self.update_energy(index=idx)
     
     def _update_old(self):
@@ -248,9 +250,12 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             taus = cp.random.uniform(size=self.barrier.shape)*cp.exp(self.barrier/self.T)
             indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
             self.m[indexmin2D] = -self.m[indexmin2D]
+            self.switches += 1
             self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
         
         self.update_energy(index=indexmin2D)
+
+    # TODO: create function 'calc_r' to determine the minimal acceptable r for choosing multiple magnets in the current simulation.
 
     def minimize(self):
         self.update_energy()
