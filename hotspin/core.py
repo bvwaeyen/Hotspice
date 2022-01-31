@@ -156,7 +156,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             @param index [np.array] (None): if specified, only the magnets at these indices are considered in the calculation.
                 We need a NumPy or CuPy array (to easily determine its size: if =2, then only a single switch is considered.)
         '''
-        index = Energy.clean_indices(index) # TODO: now we are cleaning twice, so remove this in Energy classes maybe?
+        if index is not None: index = Energy.clean_indices(index) # TODO: now we are cleaning twice, so remove this in Energy classes maybe?
         self.E = cp.zeros_like(self.xx)
         for energy in self.energies:
             if index is None: # No index specified, so update fully
@@ -186,17 +186,25 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
 
     def select(self, r=16):
-        ''' @param r [int]: minimal distance between magnets '''
-        # return self._select_grid(r=r)
-        return self._select_single()
+        ''' @param r [int] (16): minimal distance between magnets 
+            @return [cp.array]: a 2xN array, where the 2 rows represent x- and y-coordinates, respectively.
+        '''
+        # TODO: make it so this function never returns something empty (but look at performance impact of this also)
+        return self._select_grid(r=r)
+        # return self._select_single()
     
     def _select_single(self):
+        ''' Selects just a single magnet from the simulation domain. '''
         nonzero_x, nonzero_y = cp.nonzero(self.occupation)
         nonzero_idx = np.random.choice(self.n, 1)
         return cp.asarray([nonzero_x[nonzero_idx], nonzero_y[nonzero_idx]]).reshape(2, -1)
 
     def _select_grid(self, r): # TODO: optimize size of supergrid so we don't generate too much (though this doesn't matter much)
-        ''' @param r [int]: minimal distance between two magnets, specified as a number of grid cells. '''
+        ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
+            Warning: there is no guarantee that this function returns a non-empty array! (WIP)
+        '''
+        # TODO: rewrite this to take into account self.occupation
+        # TODO: add an if statement to use self._select_single() if the simulation is too small (self.nx < 3*r, I think)
         r = math.ceil(r - 1) # - 1 because effective minimal distance turns out to be actually r + 1
         move_grid = -cp.random.randint(-r, r, size=(2,))
         supergrid_nx = (self.nx - 2)//(2*r) + 2
@@ -216,19 +224,18 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         
         # self._update_old()
         self._update_Glauber()
-    
-    def _update_Glauber(self): # TODO: rewrite this function using self.select() with support for multiple switches
-        # 1) Choose a magnet at random
-        nonzero_x, nonzero_y = cp.nonzero(self.occupation)
-        nonzero_idx = np.random.choice(self.n, 1)
-        idx = (nonzero_x[nonzero_idx], nonzero_y[nonzero_idx])
-        # 2) Compute the change in energy if it were to flip.
-        energy_change = float(self.switch_energy(idx))
-        # 3) Flip the spin with a certain exponential probability
-        exponential = math.exp(-energy_change/self.T)
+
+    def _update_Glauber(self):
+        # 1) Choose a bunch of magnets at random
+        idx = self.select()
+        # 2) Compute the change in energy if they were to flip.
+        energy_change = self.switch_energy(idx)
+        # 3) Flip the spins with a certain exponential probability
+        exponential = cp.exp(-energy_change/self.T)
         prob = exponential/(1+exponential)
-        if cp.random.random() < prob: # Time is not defined in the Glauber model.
-            self.m[idx] *= -1
+        idx = idx[:,cp.where(cp.random.random(prob.shape) < prob)[0]]
+        if idx.shape[1] > 0:
+            self.m[idx[0], idx[1]] *= -1
             self.update_energy(index=idx)
     
     def _update_old(self):
@@ -545,7 +552,7 @@ class DipolarEnergy(Energy):
         indices2D = Energy.clean_indices(indices2D)
         # TODO: Use a convolution to do this more efficiently
         # For now, let's just naively use
-        for i in range(len(indices2D)):
+        for i in range(indices2D.shape[1]):
             self.update_single((indices2D[0,i], indices2D[1,i]))
 
 
