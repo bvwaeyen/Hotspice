@@ -556,10 +556,38 @@ class DipolarEnergy(Energy):
     
     def update_multiple(self, indices2D):
         indices2D = Energy.clean_indices(indices2D)
-        # TODO: Use a convolution to do this more efficiently
-        # For now, let's just naively use
-        for i in range(indices2D.shape[1]):
-            self.update_single((indices2D[0,i], indices2D[1,i]))
+        self.E[indices2D[0], indices2D[1]] *= -1
+
+        indices2D_unitcell = cp.empty_like(indices2D)
+        indices2D_unitcell[0,:] = indices2D[0,:] % self.unitcell.x
+        indices2D_unitcell[1,:] = indices2D[1,:] % self.unitcell.y
+        indices2D_unitcell_raveled = indices2D_unitcell[0] + indices2D_unitcell[1]*self.unitcell.x
+        for i in range(self.unitcell.x*self.unitcell.y):
+            if i not in indices2D_unitcell_raveled: continue
+            # So now that we know that a
+            y_unitcell, x_unitcell = divmod(i, self.unitcell.x)
+            kernel = self.kernel_unitcell[y_unitcell][x_unitcell]
+            if kernel is None: continue
+            indices_here = indices2D[:,indices2D_unitcell_raveled == i]
+            switched_field = cp.zeros_like(self.mm.m)
+            switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
+            usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid')
+            interaction = self.prefactor*cp.multiply(self.mm.m, usefulkernel)
+            self.E += 2*interaction
+
+            # import matplotlib.pyplot as plt
+            # plt.imshow(switched_field.get())
+            # plt.show()
+            # plt.imshow(kernel.get())
+            # plt.show()
+            # plt.imshow(usefulkernel.get())
+            # plt.show()
+
+        # # TODO: Use a convolution to do this more efficiently
+        # # For now, let's just naively use
+        # for i in range(indices2D.shape[1]):
+        #     self.update_single((indices2D[0,i], indices2D[1,i]))
+        # TODO: take a look at all the unitcell code and see if we can't make it 1D or if that will cause issues
 
 
 class ExchangeEnergy(Energy):
