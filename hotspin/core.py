@@ -113,6 +113,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
         self._set_m(pattern)
+        self.m = self.m.astype(float)
         self.m = cp.multiply(self.m, self.occupation)
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
     
