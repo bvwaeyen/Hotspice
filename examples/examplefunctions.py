@@ -24,12 +24,13 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False,
     if T is not None: mm.T = T
 
     if timeit: t = time.perf_counter()
+    n_start = mm.switches
     for i in range(int(N)):
         mm.update()
         if save_history:
             if i % save_history == 0:
                 mm.save_history()
-    if timeit: print(f"Simulated {N} switches (on {mm.m.shape[0]}x{mm.m.shape[1]} grid) in {time.perf_counter() - t} seconds.")
+    if timeit: print(f"Simulated {mm.switches - n_start:.0f} switches ({N:.0f} steps on {mm.m.shape[0]:.0f}x{mm.m.shape[1]:.0f} grid) in {time.perf_counter() - t:.3f} seconds.")
 
     print('Energy:', mm.E_tot)
     if show_m:
