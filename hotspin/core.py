@@ -557,22 +557,29 @@ class DipolarEnergy(Energy):
     def update_multiple(self, indices2D):
         indices2D = Energy.clean_indices(indices2D)
         self.E[indices2D[0], indices2D[1]] *= -1
-
         indices2D_unitcell = cp.empty_like(indices2D)
-        indices2D_unitcell[0,:] = indices2D[0,:] % self.unitcell.x
-        indices2D_unitcell[1,:] = indices2D[1,:] % self.unitcell.y
-        indices2D_unitcell_raveled = indices2D_unitcell[0] + indices2D_unitcell[1]*self.unitcell.x
-        for i in range(self.unitcell.x*self.unitcell.y):
-            if i not in indices2D_unitcell_raveled: continue
-            # So now that we know that a
-            y_unitcell, x_unitcell = divmod(i, self.unitcell.x)
+        indices2D_unitcell[0,:] = indices2D[0,:] % self.unitcell.y
+        indices2D_unitcell[1,:] = indices2D[1,:] % self.unitcell.x
+        indices2D_unitcell_raveled = indices2D_unitcell[1] + indices2D_unitcell[0]*self.unitcell.x
+        binned_unitcell_raveled = cp.bincount(indices2D_unitcell_raveled) # Is nonzero for those indices where choices exist
+        for i in binned_unitcell_raveled.nonzero()[0]:
+            y_unitcell, x_unitcell = divmod(int(i), self.unitcell.x)
             kernel = self.kernel_unitcell[y_unitcell][x_unitcell]
             if kernel is None: continue
             indices_here = indices2D[:,indices2D_unitcell_raveled == i]
-            switched_field = cp.zeros_like(self.mm.m)
-            switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
-            usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid')
-            interaction = self.prefactor*cp.multiply(self.mm.m, usefulkernel)
+            ### EITHER WE DO THIS (CONVOLUTION)
+            # switched_field = cp.zeros_like(self.mm.m)
+            # switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
+            # usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid') # TODO: this is extremely EXTREMELY slow
+            # TODO: a possible speed-up is to shrink the kernel to the relevant area, and convolve anyway
+            # interaction = self.prefactor*cp.multiply(self.mm.m, usefulkernel)
+            # self.E += 2*interaction
+            ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY FOR-LOOP) 
+            interaction = cp.zeros_like(self.mm.m)
+            for j in range(indices_here.shape[1]):
+                y, x = indices_here[0,j], indices_here[1,j]
+                interaction += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
+            interaction = self.prefactor*cp.multiply(self.mm.m, interaction)
             self.E += 2*interaction
 
             # import matplotlib.pyplot as plt
@@ -583,10 +590,6 @@ class DipolarEnergy(Energy):
             # plt.imshow(usefulkernel.get())
             # plt.show()
 
-        # # TODO: Use a convolution to do this more efficiently
-        # # For now, let's just naively use
-        # for i in range(indices2D.shape[1]):
-        #     self.update_single((indices2D[0,i], indices2D[1,i]))
         # TODO: take a look at all the unitcell code and see if we can't make it 1D or if that will cause issues
 
 
