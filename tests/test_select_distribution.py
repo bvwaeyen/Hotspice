@@ -1,3 +1,4 @@
+import os
 import time
 import warnings
 
@@ -81,16 +82,17 @@ def test(n:int=10000, L:int=400, r=16, show_plot=True, save=False):
     if ONLY_SMALLEST_DISTANCE:
         ax1.bar(distance_bins.get(), cp.cumsum(distances_binned).get()/total, align='edge', width=bin_width)
         ax1.bar(distance_bins.get(), distances_binned.get()/total, align='edge', width=bin_width)
-        ax1.set_xlabel('Distance to any other sample (binned)')
+        ax1.set_xlabel('Distance to nearest neighbor (binned)')
         ax1.legend(['Cumulative prob.', 'Probability'])
     else:
         ax1.bar(distance_bins.get(), distances_binned.get(), align='edge', width=bin_width)
-        ax1.set_xlabel('Distance to nearest neighbor (binned)')
+        ax1.set_xlabel('Distance to any other sample (binned)')
         ax1.set_ylabel('# occurences')
     ax1.set_xlim([0, max_dist_bin])
+    ax1.set_title('Nearest-neighbor distances')
     ax2 = fig.add_subplot(1, 3, 2)
     im2 = ax2.imshow(field.get(), vmin=0, interpolation_stage='rgba', interpolation='antialiased')
-    ax2.set_title(f"# choices over {n} runs")
+    ax2.set_title(f"# choices in entire simulation")
     plt.colorbar(im2)
     ax3 = fig.add_subplot(1, 3, 3)
     im3 = ax3.imshow(field_local.get(), extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], vmin=0, interpolation_stage='rgba', interpolation='antialiased')
@@ -98,11 +100,17 @@ def test(n:int=10000, L:int=400, r=16, show_plot=True, save=False):
     plt.colorbar(im3)
     plt.suptitle(f'{L}x{L} grid, r={r}, {n} runs')
     plt.gcf().tight_layout()
-    plt.show()
+    if save:
+        save_path = f"results/test_select_distribution/{type(mm).__name__}_{L}x{L}_r={r}.pdf"
+        dirname = os.path.dirname(save_path)
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        plt.savefig(save_path)
+    if show_plot:
+        plt.show()
 
 
 def test_speed(n: int=10000, L:int=400, r=16):
-    ''' Tests the speed of selecting magnets without any other calculations in between.
+    ''' Tests the speed of selecting magnets without any other test-related calculations in between.
         @param n [int] (10000): the number of times the select() method is executed.
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
@@ -116,5 +124,5 @@ def test_speed(n: int=10000, L:int=400, r=16):
 
 
 if __name__ == "__main__":
-    test_speed(L=400)
-    test(L=400)
+    # test_speed(L=400)
+    test(L=400, save=True)
