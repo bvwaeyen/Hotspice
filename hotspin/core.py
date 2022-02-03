@@ -189,7 +189,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     def select(self, r=16):
         ''' @param r [int] (16): minimal distance between magnets 
-            @return [cp.array]: a 2xN array, where the 2 rows represent x- and y-coordinates, respectively.
+            @return [cp.array]: a 2xN array, where the 2 rows represent y- and x-coordinates (!), respectively.
+                (this is because the indexing of 2D arrays is e.g. self.m[y,x])
         '''
         # TODO: make it so this function never returns something empty (but look at performance impact of this also)
         return self._select_grid(r=r)
@@ -197,9 +198,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     
     def _select_single(self):
         ''' Selects just a single magnet from the simulation domain. '''
-        nonzero_x, nonzero_y = cp.nonzero(self.occupation)
-        nonzero_idx = np.random.choice(self.n, 1)
-        return cp.asarray([nonzero_x[nonzero_idx], nonzero_y[nonzero_idx]]).reshape(2, -1)
+        nonzero_y, nonzero_x = cp.nonzero(self.occupation)
+        nonzero_idx = cp.random.choice(self.n, 1)
+        return cp.asarray([nonzero_y[nonzero_idx], nonzero_x[nonzero_idx]]).reshape(2, -1)
 
     def _select_grid(self, r): # TODO: optimize size of supergrid so we don't generate too much (though this doesn't matter much)
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
@@ -208,7 +209,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         # TODO: rewrite this to take into account self.occupation
         # TODO: add an if statement to use self._select_single() if the simulation is too small (self.nx < 3*r, I think)
         r = math.ceil(r - 1) # - 1 because effective minimal distance turns out to be actually r + 1
-        move_grid = -cp.random.randint(-r, r, size=(2,))
+        move_grid = -cp.random.randint(-r, r, size=(2,)) # (y,x)
         supergrid_nx = (self.nx - 2)//(2*r) + 2
         supergrid_ny = (self.ny - 2)//(2*r) + 2
         offsets_x = move_grid[0] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*r
@@ -217,7 +218,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         pos_x = offsets_x + (random_positions % r)
         pos_y = offsets_y + (random_positions // r)
         ok = cp.logical_and(cp.logical_and(pos_x >= 0, pos_y >= 0), cp.logical_and(pos_x < self.nx, pos_y < self.ny))
-        return cp.asarray([pos_x[ok], pos_y[ok]])
+        return cp.asarray([pos_y[ok], pos_x[ok]])
 
     def update(self):
         if self.T == 0:
