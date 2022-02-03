@@ -206,17 +206,20 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
             Warning: there is no guarantee that this function returns a non-empty array! (WIP)
         '''
-        # TODO: rewrite this to take into account self.occupation
-        # TODO: add an if statement to use self._select_single() if the simulation is too small (self.nx < 3*r, I think)
         r = math.ceil(r - 1) # - 1 because effective minimal distance turns out to be actually r + 1
+        lcm = self.unitcell.x*self.unitcell.y // math.gcd(self.unitcell.x, self.unitcell.y) # Smallest square that fits integer amount of unit cells
+        r = r - (r % lcm) + lcm # To have an integer number of unit cells to fit in a supercell (necessary for occupation_supercell)
+        if 3*r - 1 > min(self.nx, self.ny): return self._select_single() # _select_grid() would not guarantee at least 1 switch
         move_grid = -cp.random.randint(-r, r, size=(2,)) # (y,x)
         supergrid_nx = (self.nx - 2)//(2*r) + 2
         supergrid_ny = (self.ny - 2)//(2*r) + 2
-        offsets_x = move_grid[0] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*r
-        offsets_y = move_grid[1] + self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*r
-        random_positions = cp.random.randint(0, r**2, size=(supergrid_ny*supergrid_nx))
-        pos_x = offsets_x + (random_positions % r)
-        pos_y = offsets_y + (random_positions // r)
+        offsets_x = move_grid[1] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*r
+        offsets_y = move_grid[0] + self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*r
+        occupation_supercell = self.occupation[move_grid[0] + 2*r:move_grid[0] + 3*r, move_grid[1] + 2*r:move_grid[1] + 3*r]
+        occupation_nonzero = occupation_supercell.nonzero()
+        random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, supergrid_ny*supergrid_nx)
+        pos_x = offsets_x + occupation_nonzero[1][random_nonzero_indices]
+        pos_y = offsets_y + occupation_nonzero[0][random_nonzero_indices]
         ok = cp.logical_and(cp.logical_and(pos_x >= 0, pos_y >= 0), cp.logical_and(pos_x < self.nx, pos_y < self.ny))
         return cp.asarray([pos_y[ok], pos_x[ok]])
 
@@ -562,17 +565,17 @@ class DipolarEnergy(Energy):
         indices2D_unitcell[0,:] = indices2D[0,:] % self.unitcell.y
         indices2D_unitcell[1,:] = indices2D[1,:] % self.unitcell.x
         indices2D_unitcell_raveled = indices2D_unitcell[1] + indices2D_unitcell[0]*self.unitcell.x
-        binned_unitcell_raveled = cp.bincount(indices2D_unitcell_raveled) # Is nonzero for those indices where choices exist
-        for i in binned_unitcell_raveled.nonzero()[0]:
+        binned_unitcell_raveled = cp.bincount(indices2D_unitcell_raveled)
+        for i in binned_unitcell_raveled.nonzero()[0]: # Iterate over the unitcell indices present in indices2D
             y_unitcell, x_unitcell = divmod(int(i), self.unitcell.x)
             kernel = self.kernel_unitcell[y_unitcell][x_unitcell]
-            if kernel is None: continue
+            if kernel is None: continue # This should never happen, but check anyway in case indices2D includes empty cells
             indices_here = indices2D[:,indices2D_unitcell_raveled == i]
             ### EITHER WE DO THIS (CONVOLUTION)
             # switched_field = cp.zeros_like(self.mm.m)
             # switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
             # usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid') # TODO: this is extremely EXTREMELY slow
-            # TODO: a possible speed-up is to shrink the kernel to the relevant area, and convolve anyway
+            # TODO: a possible speed-up is to shrink the kernel to the relevant area (e.g. radius r or 2r), and convolve anyway
             # interaction = self.prefactor*cp.multiply(self.mm.m, usefulkernel)
             # self.E += 2*interaction
             ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY FOR-LOOP) 
