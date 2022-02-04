@@ -153,6 +153,18 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
                 return
         raise KeyError(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[key for key, _ in self.energies.items()]}")
 
+    def get_energy(self, name: str):
+        ''' Returns the specified energy from self.energies.
+            @param name [str]: the name of the energy to be returned. Case-insensitive and may or may not include
+                the 'energy' part of the class name. Valid options include e.g. 'dipolar', 'DipolarEnergy'...
+            @returns [Energy]: the requested energy object.
+        '''
+        name = name.lower().replace('energy', '')
+        for e in self.energies:
+            name_e = type(e).__name__.lower().replace('energy', '')
+            if name == name_e: return e
+        raise KeyError(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[key for key, _ in self.energies.items()]}")
+
     def update_energy(self, index: np.ndarray=None):
         ''' Updates all the energies which are currently present in the simulation.
             @param index [np.array] (None): if specified, only the magnets at these indices are considered in the calculation.
