@@ -258,7 +258,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         # 2) Compute the change in energy if they were to flip.
         energy_change = self.switch_energy(idx)
         # 3) Flip the spins with a certain exponential probability
-        exponential = cp.exp(-energy_change/self.T)
+        exponential = cp.exp(-energy_change/self.T[idx[0], idx[1]])
         prob = exponential/(1+exponential)
         idx = idx[:,cp.where(cp.random.random(prob.shape) < prob)[0]]
         if idx.shape[1] > 0:
