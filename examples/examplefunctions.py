@@ -113,7 +113,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
                 mm.T = T_low*np.exp(exponent*(((n_sweep - j) % n_sweep2)/n_sweep2))
             mm.update()
         h.set_array(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg))
-        fig.suptitle('Temperature %.3f' % mm.T)
+        fig.suptitle('Temperature %.3f' % mm.T.mean())
         return h, # This has to be an iterable!
 
     # Assign the animation to a variable, to prevent it from getting garbage-collected
@@ -125,6 +125,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         if not os.path.exists('videos'): os.makedirs('videos')
         anim.save(f'videos/{type(mm).__name__}_{mm.nx}x{mm.ny}_T{T_low}-{T_high}_N{n_sweep}x{save}.mp4', writer=mywriter, dpi=300)
 
+    print(f"Performed {mm.switches} switches.")
     plt.show()
 
 
@@ -135,7 +136,7 @@ def autocorrelation_dist_dependence(mm: hotspin.Magnets):
     print("Correlation length:", corr_length)
 
     fig = plt.figure(figsize=(10, 4))
-    fig.suptitle('T=%.2f' % mm.T, font={"size":12})
+    fig.suptitle('T=%.2f' % mm.T.mean(), font={"size":12})
     ax1 = fig.add_subplot(121)
     ax1.plot(d, corr)
     ax1.set_xlabel(r'Distance [a.u.]')
@@ -195,6 +196,6 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
 
 
 if __name__ == "__main__":
-    mm = hotspin.ASI.SquareASI(29, 2, T=0.2, E_b=10., pattern='uniform', energies=['dipolar'])
+    mm = hotspin.ASI.SquareASI(29, 2, T=0.2, E_b=10., pattern='uniform', energies=[hotspin.DipolarEnergy()])
     autocorrelation_dist_dependence(mm)
     autocorrelation_temp_dependence(mm, N=41, T_min=0.05, T_max=0.45)

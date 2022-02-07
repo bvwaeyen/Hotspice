@@ -21,6 +21,7 @@ TODO (summary):
 . can implement linear transformations if I want to
 . can implement random defects if I want to
 - make unit tests
+! use real units
 """
 
 
@@ -214,7 +215,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         nonzero_idx = cp.random.choice(self.n, 1)
         return cp.asarray([nonzero_y[nonzero_idx], nonzero_x[nonzero_idx]]).reshape(2, -1)
 
-    def _select_grid(self, r): # TODO: optimize size of supergrid so we don't generate too much (though this doesn't matter much)
+    def _select_grid(self, r): # TODO: make r two-dimensional (necessary for e.g. kagome)
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
             Warning: there is no guarantee that this function returns a non-empty array! (WIP)
         '''
@@ -223,8 +224,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         r = r - (r % lcm) + lcm # To have an integer number of unit cells to fit in a supercell (necessary for occupation_supercell)
         if 3*r - 1 > min(self.nx, self.ny): return self._select_single() # _select_grid() would not guarantee at least 1 switch
         move_grid = -cp.random.randint(-r, r, size=(2,)) # (y,x)
-        supergrid_nx = (self.nx - 2)//(2*r) + 2
-        supergrid_ny = (self.ny - 2)//(2*r) + 2
+        supergrid_nx = (self.nx - 2)//(2*r) + 2 # This might be a bit too large, but that does not matter much, since
+        supergrid_ny = (self.ny - 2)//(2*r) + 2 # we have to crop anyway (see line 'ok = ...'), which is parallelized.
         offsets_x = move_grid[1] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*r
         offsets_y = move_grid[0] + self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*r
         occupation_supercell = self.occupation[move_grid[0] + 2*r:move_grid[0] + 3*r, move_grid[1] + 2*r:move_grid[1] + 3*r]
@@ -236,7 +237,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return cp.asarray([pos_y[ok], pos_x[ok]])
 
     def update(self):
-        if self.T == 0:
+        if cp.all(self.T == 0):
             warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
         
@@ -421,13 +422,15 @@ class ZeemanEnergy(Energy):
             @param magnitude [float] (0): The magnitude of the external field.
             @param angle [float] (0): The angle (in radians) of the external field.
         '''
-        self.set_field(magnitude, angle)
+        self.magnitude, self.angle = magnitude, angle
     
     def initialize(self, mm: Magnets):
         self.mm = mm
+        self.set_field(self.magnitude, self.angle)
         self.update()
 
     def set_field(self, magnitude=0, angle=0):
+        self.magnitude, self.angle = magnitude, angle
         if self.mm.in_plane:
             self.H_ext = magnitude*cp.array([math.cos(angle), math.sin(angle)])
         else:
