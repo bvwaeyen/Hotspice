@@ -54,12 +54,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.xx.shape[1]), cp.arange(0, self.yy.shape[0]))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
-        # initialize temperature and energy barrier arrays
-        if isinstance(T, np.ndarray): # This detects both CuPy and NumPy arrays
-            assert T.shape == self.xx.shape, f"Specified temperature profile (shape {T.shape}) does not match shape ({nx}, {ny}) of simulation domain."
-            self.T = cp.asarray(T)
-        else:
-            self.T = cp.ones_like(self.xx)*T
+        # initialize temperature and energy barrier arrays (!!! needs self.xx etc. to exist, since this is an array itself)
+        self.T = T
         
         if isinstance(E_b, np.ndarray): # This detects both CuPy and NumPy arrays
             assert E_b.shape == self.xx.shape, f"Specified energy barriers (shape {E_b.shape}) does not match shape ({nx}, {ny}) of simulation domain."
@@ -199,6 +195,18 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def E_tot(self):
         return cp.sum(self.E, axis=None)
 
+    @property
+    def T(self):
+        return self._T
+    
+    @T.setter
+    def T(self, value):
+        if isinstance(value, np.ndarray): # This detects both CuPy and NumPy arrays
+            assert value.shape == self.xx.shape, f"Specified temperature profile (shape {value.shape}) does not match shape ({self.nx}, {self.ny}) of simulation domain."
+            self._T = cp.asarray(value)
+        else:
+            self._T = cp.ones_like(self.xx)*value
+
 
     def select(self, r=16):
         ''' @param r [int] (16): minimal distance between magnets 
@@ -287,7 +295,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         '''
         self.history.E.append(float(self.E_tot) if E_tot is None else float(E_tot))
         self.history.t.append(float(self.t) if t is None else float(t))
-        self.history.T.append(float(self.T) if T is None else float(T))
+        self.history.T.append(float(cp.mean(self.T)) if T is None else float(cp.mean(T)))
         self.history.m.append(float(self.m_tot) if m_tot is None else float(m_tot))
     
     def clear_history(self):
