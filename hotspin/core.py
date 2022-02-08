@@ -245,8 +245,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return cp.asarray([pos_y[ok], pos_x[ok]])
 
     def update(self):
-        if cp.all(self.T == 0):
-            warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
+        if cp.any(self.T == 0):
+            warnings.warn('Temperature is zero somewhere, so no switch will be simulated to prevent DIV/0 errors.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
         # idx = self._update_old()
         idx = self._update_Glauber()
@@ -285,7 +285,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     # TODO: create function 'calc_r' to determine the minimal acceptable r for choosing multiple magnets in the current simulation.
 
-    def minimize(self):
+    def minimize(self): # TODO: this function seems a bit outdated
         self.update_energy()
         indexmax = cp.argmax(self.E, axis=None)
         self.m.flat[indexmax] = -self.m.flat[indexmax]

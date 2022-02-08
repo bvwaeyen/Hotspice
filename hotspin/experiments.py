@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 
 from .core import Magnets
 from .io import DataStream, Inputter, OutputReader, RandomDataStream, PerpFieldInputter, RegionalOutputReader
+from .plottools import show_m
 
 
 class Experiment(ABC):

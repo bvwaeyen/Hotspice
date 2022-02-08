@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 # from cupyx.scipy import signal
 
 from .core import Magnets
+from .plottools import show_m
 
 
 class DataStream(ABC):
@@ -91,7 +92,7 @@ class PerpFieldInputter(Inputter):
         if bit is None: bit = self.datastream.get_next()
         angle = self.phi + bit*math.pi/2
         mm.energy_Zeeman_setField(magnitude=self.magnitude, angle=angle)
-        for _ in range(int(self.n*mm.n)):
+        for _ in range(int(self.n*mm.n)): # TODO: make this r-dependent (r in Magnets.select())
             mm.update()
 
 
@@ -103,7 +104,7 @@ class RegionalOutputReader(OutputReader):
             @param mm [hotspin.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
         '''
         self.nx, self.ny = nx, ny
-        self.grid = np.zeros((self.nx, self.ny))
+        self.grid = np.zeros((self.nx, self.ny)) # We use this to ndenumerate, but CuPy does not have this, so use NumPy
         if mm is not None: self.configure_for(mm)
         
     @property
