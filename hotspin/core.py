@@ -248,9 +248,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         if cp.all(self.T == 0):
             warnings.warn('Temperature is zero, so no switch will be simulated.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
-        
-        # self._update_old()
-        self._update_Glauber()
+        # idx = self._update_old()
+        idx = self._update_Glauber()
+        return Energy.clean_indices(idx)
 
     def _update_Glauber(self):
         # 1) Choose a bunch of magnets at random
@@ -265,6 +265,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             self.m[idx[0], idx[1]] *= -1
             self.switches += idx.shape[1]
             self.update_energy(index=idx)
+        return idx
     
     def _update_old(self):
         ''' Performs a single magnetization switch. '''
@@ -280,6 +281,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
         
         self.update_energy(index=indexmin2D)
+        return indexmin2D
 
     # TODO: create function 'calc_r' to determine the minimal acceptable r for choosing multiple magnets in the current simulation.
 
