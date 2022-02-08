@@ -8,7 +8,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 # from cupyx.scipy import signal
 
-from .core import Magnets
+from .core import DipolarEnergy, Magnets, ZeemanEnergy
 from .io import DataStream, Inputter, OutputReader, RandomDataStream, PerpFieldInputter, RegionalOutputReader
 from .plottools import show_m
 
@@ -40,9 +40,11 @@ class KernelQualityExperiment(Experiment):
                 self.inputter.input_bit(self.mm)
                 if verbose: print(f'Row {i}, bit {j}...')
             state = self.outputreader.read_state()
-            self.results['all_states'] = state
-            self.results['all_states_flat'] = state.reshape(-1)
-            self.results['rank'] = np.linalg.matrix_rank(experiment.all_states)
+            self.all_states[i,:] = state.reshape(-1)
+            self.results['all_states'] = self.all_states
+            self.results['rank'] = np.linalg.matrix_rank(self.all_states)
+            # print(self.mm.switches)
+            # show_m(self.mm)
         
         if save is not None:
             dirname = os.path.dirname(save)
@@ -55,7 +57,7 @@ class KernelQualityExperiment(Experiment):
 
 if __name__ == "__main__": # Run this file from the parent directory using cmd 'python -m hotspin.experiments'
     from .ASI import PinwheelASI
-    mm = PinwheelASI(25, 1)
+    mm = PinwheelASI(25, 1, energies=(DipolarEnergy(), ZeemanEnergy()))
     datastream = RandomDataStream()
     inputter = PerpFieldInputter(datastream, magnitude=1, phi=math.pi/180*7, n=2)
     outputreader = RegionalOutputReader(5, 5, mm)
@@ -63,4 +65,8 @@ if __name__ == "__main__": # Run this file from the parent directory using cmd '
     experiment.run(10, save='results/KernelQualityExperiment/TEST.npy')
     print(experiment.results['rank'])
     np.set_printoptions(threshold=np.inf)
-    # print(np.load('results/KernelQualityExperiment/TEST.npy'))
+
+    import matplotlib.pyplot as plt
+    result = np.load('results/KernelQualityExperiment/TEST.npy')
+    plt.imshow(result) # TODO: this is a nice figure, add some text to the axes etc.
+    plt.show()

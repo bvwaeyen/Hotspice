@@ -91,7 +91,7 @@ class PerpFieldInputter(Inputter):
     def input_bit(self, mm: Magnets, bit=None):
         if bit is None: bit = self.datastream.get_next()
         angle = self.phi + bit*math.pi/2
-        mm.energy_Zeeman_setField(magnitude=self.magnitude, angle=angle)
+        mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
         for _ in range(int(self.n*mm.n)): # TODO: make this r-dependent (r in Magnets.select())
             mm.update()
 
