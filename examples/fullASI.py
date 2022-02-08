@@ -78,3 +78,7 @@ if __name__ == "__main__":
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, T_min=0.9, T_max=1.2)
+
+    #### Commands which do some specific thing which yields nice saved figures or videos
+    # factor = 1 # Approximately how many switches occur per mm.update()
+    # ef.animate_quenching(mm, pattern='uniform', T_low=0.01, T_high=4, animate=3, speed=50//factor, n_sweep=80000//factor, avg='square', fill=True, save=2) # Optimized for nx = ny = 100

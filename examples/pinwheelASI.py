@@ -80,4 +80,4 @@ if __name__ == "__main__":
 
     #### Commands which do some specific thing which yields nice saved figures or videos
     # factor = 10 # Approximately how many switches occur per mm.update()
-    # ef.animate_quenching(mm, pattern='random', T_low=0.15, T_high=0.15, animate=3, speed=500//factor, fill=True, save=25, n_sweep=40000//factor) # Optimized for nx = ny = 400
+    # ef.animate_quenching(mm, pattern='random', T_low=0.15, T_high=0.15, animate=3, speed=500//factor, n_sweep=40000//factor, fill=True, save=25) # Optimized for nx = ny = 400
