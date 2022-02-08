@@ -8,7 +8,8 @@ import numpy as np
 
 from cupyx.scipy import signal
 from enum import auto, Enum
-from matplotlib.colors import hsv_to_rgb
+from matplotlib import cm
+from matplotlib.colors import hsv_to_rgb, LinearSegmentedColormap
 from matplotlib.widgets import MultiCursor
 
 from .core import Magnets
@@ -192,11 +193,31 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
     fig = plt.figure(figsize=(3.5*num_plots, 3))
     ax1 = fig.add_subplot(1, num_plots, 1)
     im = polar_to_rgb(mm, m=m, avg=avg, fill=fill)
-    im1 = ax1.imshow(im, cmap='hsv' if mm.in_plane else 'gray', origin='lower', vmin=0, vmax=2*cp.pi,
+    cmap = cm.get_cmap('hsv')
+    if mm.in_plane:
+        im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
                         extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
-    c1 = plt.colorbar(im1)
-    c1.ax.get_yaxis().labelpad = 30
-    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+        c1 = plt.colorbar(im1)
+        c1.ax.get_yaxis().labelpad = 30
+        c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+    else:
+        r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
+        r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
+        cdict = {'red':   [[0.0,  r0, r0], # x, value_left, value_right
+                   [0.5,  0.0, 0.0],
+                   [1.0,  r1, r1]],
+         'green': [[0.0,  g0, g0],
+                   [0.5, 0.0, 0.0],
+                   [1.0,  g1, g1]],
+         'blue':  [[0.0,  b0, b0],
+                   [0.5,  0.0, 0.0],
+                   [1.0,  b1, b1]]}
+        newcmap = LinearSegmentedColormap('testCmap', segmentdata=cdict, N=256)
+        im1 = ax1.imshow(im, cmap=newcmap, origin='lower', vmin=-1, vmax=1,
+                         extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba')
+        c1 = plt.colorbar(im1)
+        c1.ax.get_yaxis().labelpad = 30
+        c1.ax.set_ylabel(f"Averaged magnetization\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
     axes.append(ax1)
     if show_quiver:
         ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)

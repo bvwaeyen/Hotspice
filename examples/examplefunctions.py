@@ -4,7 +4,8 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib import animation
+from matplotlib import animation, cm
+from matplotlib.colors import LinearSegmentedColormap
 
 from context import hotspin
 
@@ -95,11 +96,31 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(6, 4.8))
     ax1 = fig.add_subplot(111)
-    h = ax1.imshow(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg),
-                   cmap='hsv', origin='lower', vmin=0, vmax=2*np.pi, extent=hotspin.plottools._get_averaged_extent(mm, avg))
-    c1 = plt.colorbar(h)
-    c1.ax.get_yaxis().labelpad = 30
-    c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+    cmap = cm.get_cmap('hsv')
+    if mm.in_plane:
+        h = ax1.imshow(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg),
+                       cmap=cmap, origin='lower', vmin=0, vmax=2*np.pi, extent=hotspin.plottools._get_averaged_extent(mm, avg))
+        c1 = plt.colorbar(h)
+        c1.ax.get_yaxis().labelpad = 30
+        c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+    else:
+        r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
+        r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
+        cdict = {'red':   [[0.0,  r0, r0], # x, value_left, value_right
+                   [0.5,  0.0, 0.0],
+                   [1.0,  r1, r1]],
+         'green': [[0.0,  g0, g0],
+                   [0.5, 0.0, 0.0],
+                   [1.0,  g1, g1]],
+         'blue':  [[0.0,  b0, b0],
+                   [0.5,  0.0, 0.0],
+                   [1.0,  b1, b1]]}
+        newcmap = LinearSegmentedColormap('testCmap', segmentdata=cdict, N=256)
+        h = ax1.imshow(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg),
+                       cmap=newcmap, origin='lower', vmin=-1, vmax=1, extent=hotspin.plottools._get_averaged_extent(mm, avg))
+        c1 = plt.colorbar(h)
+        c1.ax.get_yaxis().labelpad = 30
+        c1.ax.set_ylabel(f"Averaged magnetization\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
     fig.suptitle('Temperature %.3f' % mm.T.mean())
 
     # This is the function that gets called each frame
