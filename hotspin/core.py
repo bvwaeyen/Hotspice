@@ -224,6 +224,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return cp.asarray([nonzero_y[nonzero_idx], nonzero_x[nonzero_idx]]).reshape(2, -1)
 
     def _select_grid(self, r): # TODO: make r two-dimensional (necessary for e.g. kagome)
+        # TODO: this does not guarantee sufficient spacing in case of PBC!
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
             Warning: there is no guarantee that this function returns a non-empty array! (WIP)
         '''
@@ -599,8 +600,7 @@ class DipolarEnergy(Energy):
             ### EITHER WE DO THIS (CONVOLUTION)
             # switched_field = cp.zeros_like(self.mm.m)
             # switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
-            # usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid') # TODO: this is extremely EXTREMELY slow
-            # TODO: a possible speed-up is to shrink the kernel to the relevant area (e.g. radius r or 2r), and convolve anyway
+            # usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid') # TODO: this is extremely EXTREMELY slow, a possible speed-up is to shrink the kernel to the relevant area (e.g. radius r or 2r), and convolve anyway
             # interaction = self.prefactor*cp.multiply(self.mm.m, usefulkernel)
             # self.E += 2*interaction
             ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY FOR-LOOP) 

@@ -11,9 +11,15 @@ from scipy.spatial.distance import pdist, cdist
 from context import hotspin
 
 
-def calculate_any_neighbors(pos, shape):
+def calculate_any_neighbors(pos, shape, center:int=0):
     ''' @param pos [cp.array(2xN)]: the array of coordinates (row 0: y, row 1: x)
         @param shape [tuple(2)]: the maximum values in y- and x- direction
+        @param center [int]: if 0, then the full neighbor array is returned. If nonzero, only the 
+            middle region (of at most <center> cells away from the middle) is returned.
+        @return [cp.array2D]: an array representing where the other samples are relative to every
+            other sample. To this end, each sample is placed in the middle of the array, and all
+            positions where another sample exists are incremented by 1. As such, the array is
+            point-symmetric about its middle.
     '''
     # Note that this function can entirely be replaced by
     # signal.convolve2d(arr, arr, mode='full')
@@ -24,10 +30,10 @@ def calculate_any_neighbors(pos, shape):
     pairwise_distances_flat = (pairwise_distances[0] + shape[0] - 1)*(2*shape[0]-1) + (pairwise_distances[1] + shape[1] - 1)
     pairwise_distances_flat_binned = cp.bincount(pairwise_distances_flat)
     final_array[:pairwise_distances_flat_binned.size] = pairwise_distances_flat_binned
-    return final_array.reshape((2*shape[0]-1, 2*shape[1]-1))
+    final_array = final_array.reshape((2*shape[0]-1, 2*shape[1]-1))
+    return final_array if center == 0 else final_array[shape[0]-1-center:shape[0]+center, shape[1]-1-center:shape[1]+center]
 
-
-def test(n:int=10000, L:int=400, r=16, show_plot=True, save=False):
+def test(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True):
     ''' In this test, the multiple-magnet-selection algorithm of hotspin.Magnets.select() is tested.
         The spatial distribution is calculated by performing <n> runs of the select() method.
         Also the probability distribution of the distance between two samples is calculated,
@@ -38,7 +44,7 @@ def test(n:int=10000, L:int=400, r=16, show_plot=True, save=False):
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     '''
     if L < r*3: warnings.warn(f"Simulation of size L={L} might be too small for r={r}!")
-    mm = hotspin.ASI.FullASI(L, 1)
+    mm = hotspin.ASI.FullASI(L, 1, PBC=PBC)
     INTEGER_BINS = False # If true, the bins are pure integers, otherwise they can be finer than this.
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
     scale: int = 3 if ONLY_SMALLEST_DISTANCE else 4 # The distances are stored up to scale*r, beyond that we dont keep in memory
@@ -58,24 +64,35 @@ def test(n:int=10000, L:int=400, r=16, show_plot=True, save=False):
         pos = mm.select(r) # MODIFY THIS LINE TO SELECT A SPECIFIC SELECTION ALGORITHM
         total += pos.shape[1]
         field[pos[0], pos[1]] += 1
-        field_local += calculate_any_neighbors(pos, (mm.ny, mm.nx))[mm.ny-1-r*scale:mm.ny+r*scale, mm.nx-1-r*scale:mm.nx+r*scale] # Cropped to center
         if pos.shape[1] > 1: # if there is more than 1 sample
+            if PBC:
+                _, n_pos = pos.shape # The following approach is quite suboptimal, but it works :)
+                all_pos = cp.zeros((2, n_pos*4), dtype=int)
+                all_pos[:,:n_pos] = pos
+                all_pos[0,n_pos:n_pos*2] = all_pos[0,:n_pos] + mm.nx
+                all_pos[1,n_pos:n_pos*2] = all_pos[1,:n_pos]
+                all_pos[0,n_pos*2:] = all_pos[0,:n_pos*2]
+                all_pos[1,n_pos*2:] = all_pos[1,:n_pos*2] + mm.ny
+            else:
+                all_pos = pos
             if ONLY_SMALLEST_DISTANCE:
-                dist_matrix = cp.asarray(cdist(pos.T.get(), pos.T.get()))
+                dist_matrix = cp.asarray(cdist(all_pos.T.get(), all_pos.T.get()))
                 dist_matrix[dist_matrix==0] = np.inf
                 distances = cp.min(dist_matrix, axis=1)
             else:
-                distances = cp.asarray(pdist(pos.T.get()))
+                distances = cp.asarray(pdist(all_pos.T.get()))
             min_dist = min(min_dist, cp.min(distances))
             bin_counts = cp.bincount(get_bin(distances[distances < max_dist_bin]))
             distances_binned[:bin_counts.size] += bin_counts
+            field_local += calculate_any_neighbors(all_pos, (mm.ny*(1+PBC), mm.nx*(1+PBC)), center=r*scale)
+        
     field_local[r*scale, r*scale] = 0 # set center value to zero
     t = time.perf_counter() - t
     
     print(f'Time required for {n} runs of this test: {t:.3f}s.')
     print(f'--- TEST RESULTS ---')
     print(f'Total number of samples: {total}')
-    print(f'Empirical minimal distance between two samples in a single selection: {min_dist} (r={r})')
+    print(f'Empirical minimal distance between two samples in a single selection: {min_dist:.2f} (r={r})')
     
     fig = plt.figure(figsize=(10, 3))
     ax1 = fig.add_subplot(1, 3, 1)
