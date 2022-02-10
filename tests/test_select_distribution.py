@@ -6,6 +6,7 @@ import cupy as cp
 import numpy as np
 import matplotlib.pyplot as plt
 
+from matplotlib import cm
 from scipy.spatial.distance import pdist, cdist
 
 from context import hotspin
@@ -94,27 +95,31 @@ def test(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC
     print(f'Total number of samples: {total}')
     print(f'Empirical minimal distance between two samples in a single selection: {min_dist:.2f} (r={r})')
     
+    cmap = cm.get_cmap('viridis').copy()
+    cmap.set_under(color='black')
     fig = plt.figure(figsize=(10, 3))
     ax1 = fig.add_subplot(1, 3, 1)
     if ONLY_SMALLEST_DISTANCE:
-        ax1.bar(distance_bins.get(), cp.cumsum(distances_binned).get()/total, align='edge', width=bin_width)
-        ax1.bar(distance_bins.get(), distances_binned.get()/total, align='edge', width=bin_width)
+        ax1.bar(distance_bins.get(), cp.cumsum(distances_binned/cp.sum(distances_binned)).get(), align='edge', width=bin_width)
+        ax1.bar(distance_bins.get(), (distances_binned/cp.sum(distances_binned)).get()/bin_width, align='edge', width=bin_width)
         ax1.set_xlabel('Distance to nearest neighbor (binned)')
-        ax1.legend(['Cumulative prob.', 'Probability'])
+        ax1.legend(['Cum. prob.', 'Prob. dens.'])
     else:
         ax1.bar(distance_bins.get(), distances_binned.get(), align='edge', width=bin_width)
         ax1.set_xlabel('Distance to any other sample (binned)')
         ax1.set_ylabel('# occurences')
     ax1.set_xlim([0, max_dist_bin])
     ax1.set_title('Nearest-neighbor distances')
+    ax1.axvline(r, color='black', linestyle=':', linewidth=1, label=None)
     ax2 = fig.add_subplot(1, 3, 2)
-    im2 = ax2.imshow(field.get(), vmin=0, interpolation_stage='rgba', interpolation='antialiased')
+    im2 = ax2.imshow(field.get(), vmin=1e-10, interpolation_stage='rgba', interpolation='antialiased', cmap=cmap)
     ax2.set_title(f"# choices in entire simulation")
     plt.colorbar(im2)
     ax3 = fig.add_subplot(1, 3, 3)
-    im3 = ax3.imshow(field_local.get(), extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], vmin=0, interpolation_stage='rgba', interpolation='antialiased')
+    im3 = ax3.imshow(field_local.get(), vmin=1e-10, extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='antialiased', cmap=cmap)
     ax3.set_title(f'Distribution of neighbors around a sample')
-    plt.colorbar(im3)
+    ax3.add_patch(plt.Circle((0, 0), .707, linewidth=0.5, fill=False, color='white'))
+    plt.colorbar(im3, extend='min')
     plt.suptitle(f'{L}x{L} grid, r={r}, {n} runs')
     plt.gcf().tight_layout()
     if save:
@@ -142,4 +147,4 @@ def test_speed(n: int=10000, L:int=400, r=16):
 
 if __name__ == "__main__":
     # test_speed(L=400)
-    test(L=400, save=True)
+    test(L=400, n=5000, save=True)
