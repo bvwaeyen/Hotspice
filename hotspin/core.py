@@ -237,7 +237,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         supergrid_ny = (self.ny - 2)//(2*r) + 2 # we have to crop anyway (see line 'ok = ...'), which is parallelized.
         offsets_x = move_grid[1] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*r
         offsets_y = move_grid[0] + self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*r
-        occupation_supercell = self.occupation[move_grid[0] + 2*r:move_grid[0] + 3*r, move_grid[1] + 2*r:move_grid[1] + 3*r]
+        disp_x, disp_y = move_grid[1]%self.unitcell.x, move_grid[0]%self.unitcell.y
+        occupation_supercell = self.occupation[disp_y:disp_y + r, disp_x:disp_x + r]
         occupation_nonzero = occupation_supercell.nonzero()
         random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, supergrid_ny*supergrid_nx)
         pos_x = offsets_x + occupation_nonzero[1][random_nonzero_indices]
