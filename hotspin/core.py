@@ -132,7 +132,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         energy.initialize(self)
         for i, e in enumerate(self.energies):
             if type(e) == type(energy):
-                warnings.warn(f'An instance of {type(energy).__name__} was already included in the simulation, and has now been overwritten.')
+                warnings.warn(f'An instance of {type(energy).__name__} was already included in the simulation, and has now been overwritten.', stacklevel=2)
                 self.energies[i] = energy
                 return
         self.energies.append(energy)
@@ -446,7 +446,7 @@ class ZeemanEnergy(Energy):
             self.H_ext = magnitude*cp.array([math.cos(angle), math.sin(angle)])
         else:
             self.H_ext = magnitude
-            if angle != 0: warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.')
+            if angle != 0: warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.', stacklevel=2)
 
     def update(self):
         if self.mm.in_plane:
@@ -618,8 +618,6 @@ class DipolarEnergy(Energy):
             # plt.show()
             # plt.imshow(usefulkernel.get())
             # plt.show()
-
-        # TODO: take a look at all the unitcell code and see if we can't make it 1D or if that will cause issues
 
 
 class ExchangeEnergy(Energy):

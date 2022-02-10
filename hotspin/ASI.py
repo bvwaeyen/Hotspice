@@ -172,7 +172,7 @@ class SquareASI(ASI):
     def _get_unitcell(self):
         return (2, 2)
 
-    def _get_occupation(self): # TODO: perhaps rename this to 'occupied' instead of 'occupation'
+    def _get_occupation(self):
         return (self.ixx + self.iyy) % 2 == 1
 
     def _get_appropriate_avg(self):

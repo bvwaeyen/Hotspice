@@ -44,7 +44,7 @@ def test(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     '''
-    if L < r*3: warnings.warn(f"Simulation of size L={L} might be too small for r={r}!")
+    if L < r*3: warnings.warn(f"Simulation of size L={L} might be too small for r={r}!", stacklevel=2)
     mm = hotspin.ASI.FullASI(L, 1, PBC=PBC)
     INTEGER_BINS = False # If true, the bins are pure integers, otherwise they can be finer than this.
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
