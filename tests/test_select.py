@@ -34,7 +34,8 @@ def calculate_any_neighbors(pos, shape, center:int=0):
     final_array = final_array.reshape((2*shape[0]-1, 2*shape[1]-1))
     return final_array if center == 0 else final_array[shape[0]-1-center:shape[0]+center, shape[1]-1-center:shape[1]+center]
 
-def test(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True):
+
+def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True):
     ''' In this test, the multiple-magnet-selection algorithm of hotspin.Magnets.select() is tested.
         The spatial distribution is calculated by performing <n> runs of the select() method.
         Also the probability distribution of the distance between two samples is calculated,
@@ -83,8 +84,10 @@ def test(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC
             else:
                 distances = cp.asarray(pdist(all_pos.T.get()))
             min_dist = min(min_dist, cp.min(distances))
-            bin_counts = cp.bincount(get_bin(distances[distances < max_dist_bin]))
-            distances_binned[:bin_counts.size] += bin_counts
+            near_distances = distances[distances < max_dist_bin]
+            if near_distances.size != 0:
+                bin_counts = cp.bincount(get_bin(near_distances))
+                distances_binned[:bin_counts.size] += bin_counts
             field_local += calculate_any_neighbors(all_pos, (mm.ny*(1+PBC), mm.nx*(1+PBC)), center=r*scale)
         
     field_local[r*scale, r*scale] = 0 # set center value to zero
@@ -97,7 +100,7 @@ def test(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC
     
     cmap = cm.get_cmap('viridis').copy()
     cmap.set_under(color='black')
-    fig = plt.figure(figsize=(10, 3))
+    fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(1, 3, 1)
     if ONLY_SMALLEST_DISTANCE:
         ax1.bar(distance_bins.get(), cp.cumsum(distances_binned/cp.sum(distances_binned)).get(), align='edge', width=bin_width)
@@ -113,17 +116,18 @@ def test(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC
     ax1.axvline(r, color='black', linestyle=':', linewidth=1, label=None)
     ax2 = fig.add_subplot(1, 3, 2)
     im2 = ax2.imshow(field.get(), vmin=1e-10, interpolation_stage='rgba', interpolation='antialiased', cmap=cmap)
-    ax2.set_title(f"# choices in entire simulation")
-    plt.colorbar(im2)
+    ax2.set_title(f"# choices for each cell")
+    plt.colorbar(im2, extend='min')
     ax3 = fig.add_subplot(1, 3, 3)
-    im3 = ax3.imshow(field_local.get(), vmin=1e-10, extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='antialiased', cmap=cmap)
-    ax3.set_title(f'Distribution of neighbors around a sample')
-    ax3.add_patch(plt.Circle((0, 0), .707, linewidth=0.5, fill=False, color='white'))
+    im3 = ax3.imshow(field_local.get()/total, vmin=1e-10, extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='nearest', cmap=cmap)
+    ax3.set_title(f'Prob. dens. of neighbors\naround any sample')
+    ax3.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
+    ax3.add_patch(plt.Circle((0, 0), r, linewidth=1, fill=False, color='white', linestyle=':'))
     plt.colorbar(im3, extend='min')
-    plt.suptitle(f'{L}x{L} grid, r={r}, {n} runs')
+    plt.suptitle(f'{L}x{L} grid, r={r}: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
     plt.gcf().tight_layout()
     if save:
-        save_path = f"results/test_select_distribution/{type(mm).__name__}_{L}x{L}_r={r}.pdf"
+        save_path = f"results/test_select_distribution/{type(mm).__name__}_{L}x{L}_r={r}{'_PBC' if PBC else ''}.pdf"
         dirname = os.path.dirname(save_path)
         if not os.path.exists(dirname): os.makedirs(dirname)
         plt.savefig(save_path)
@@ -131,7 +135,7 @@ def test(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC
         plt.show()
 
 
-def test_speed(n: int=10000, L:int=400, r=16):
+def test_select_speed(n: int=10000, L:int=400, r=16):
     ''' Tests the speed of selecting magnets without any other test-related calculations in between.
         @param n [int] (10000): the number of times the select() method is executed.
         @param L [int] (400): the size of the simulation.
@@ -146,5 +150,5 @@ def test_speed(n: int=10000, L:int=400, r=16):
 
 
 if __name__ == "__main__":
-    # test_speed(L=400)
-    test(L=400, n=5000, save=True)
+    # test_select_speed(L=400)
+    test_select_distribution(L=400, n=5000, save=True, PBC=True)

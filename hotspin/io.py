@@ -52,8 +52,9 @@ class OutputReader(ABC):
 ######## Below are subclasses of the superclasses above
 # TODO: class FileDataStream(DataStream) which reads bits from a file? Can use package 'bitstring' for this.
 # TODO: class SemiRepeatingDataStream(DataStream) which has first <n> random bits and then <m> bits which are the same for all runs
+# TODO: how to neatly incorporate continuous data streams (i.e. not binary)?
 class RandomDataStream(DataStream):
-    def __init__(self, p0=.5):
+    def __init__(self, p0=.5): # TODO: save history somehow?
         ''' Generates random bits, with <p0> probability of getting 0, and 1-<p0> probability of getting 1.
             @param p0 [float] (0.5): the probability of 0 when generating a random bit.
         '''

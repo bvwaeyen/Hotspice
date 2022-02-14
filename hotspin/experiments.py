@@ -47,6 +47,8 @@ class KernelQualityExperiment(Experiment):
             # show_m(self.mm)
         
         if save is not None:
+            if not isinstance(save, str) and save:
+                save = f'results/{type(self).__name__}/{type(self.inputter).__name__}/{type(self.outputreader).__name__}_{mm.nx}x{mm.ny}_out{outputreader.nx}x{outputreader.nx}_in{bits}bits.npy'
             dirname = os.path.dirname(save)
             if not os.path.exists(dirname): os.makedirs(dirname)
             with open(save, 'wb') as f:
@@ -57,16 +59,24 @@ class KernelQualityExperiment(Experiment):
 
 if __name__ == "__main__": # Run this file from the parent directory using cmd 'python -m hotspin.experiments'
     from .ASI import PinwheelASI
-    mm = PinwheelASI(25, 1, energies=(DipolarEnergy(), ZeemanEnergy()))
+    mm = PinwheelASI(25, 1, T=1, energies=(DipolarEnergy(), ZeemanEnergy()))
     datastream = RandomDataStream()
     inputter = PerpFieldInputter(datastream, magnitude=1, phi=math.pi/180*7, n=2)
     outputreader = RegionalOutputReader(5, 5, mm)
     experiment = KernelQualityExperiment(inputter, outputreader, mm)
-    experiment.run(10, save='results/KernelQualityExperiment/TEST.npy')
+    bits = 100
+
+    filename = f'results/{type(experiment).__name__}/{type(inputter).__name__}/{type(outputreader).__name__}_{mm.nx}x{mm.ny}_out{outputreader.nx}x{outputreader.nx}_in{bits}bits.npy'
+    
+    experiment.run(bits, save=filename)
     print(experiment.results['rank'])
     np.set_printoptions(threshold=np.inf)
 
     import matplotlib.pyplot as plt
-    result = np.load('results/KernelQualityExperiment/TEST.npy')
-    plt.imshow(result) # TODO: this is a nice figure, add some text to the axes etc.
+    result = np.load(filename)
+    plt.imshow(result, interpolation='nearest')
+    plt.title(f'{mm.nx}x{mm.ny} {type(mm).__name__}\nField {inputter.magnitude}T $\\rightarrow$ rank {np.linalg.matrix_rank(result)}')
+    plt.xlabel('Output feature')
+    plt.ylabel(f'Input # ({bits} bits each)')
+    plt.savefig(f'{os.path.splitext(filename)[0]}.pdf')
     plt.show()
