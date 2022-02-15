@@ -13,8 +13,8 @@ from context import hotspin
 
 
 def calculate_any_neighbors(pos, shape, center:int=0):
-    ''' @param pos [cp.array(2xN)]: the array of coordinates (row 0: y, row 1: x)
-        @param shape [tuple(2)]: the maximum values in y- and x- direction
+    ''' @param pos [cp.array(2xN)]: the array of indices (row 0: y, row 1: x)
+        @param shape [tuple(2)]: the maximum indices (+1) in y- and x- direction
         @param center [int]: if 0, then the full neighbor array is returned. If nonzero, only the 
             middle region (of at most <center> cells away from the middle) is returned.
         @return [cp.array2D]: an array representing where the other samples are relative to every
@@ -45,7 +45,7 @@ def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, 
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     '''
-    if L < r*3: warnings.warn(f"Simulation of size L={L} might be too small for r={r}!", stacklevel=2)
+    if L < r*3: warnings.warn(f"Simulation of size {L}x{L} might be too small for r={r} cells!", stacklevel=2)
     mm = hotspin.ASI.FullASI(L, 1, PBC=PBC)
     INTEGER_BINS = False # If true, the bins are pure integers, otherwise they can be finer than this.
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
@@ -124,7 +124,7 @@ def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, 
     ax3.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
     ax3.add_patch(plt.Circle((0, 0), r, linewidth=1, fill=False, color='white', linestyle=':'))
     plt.colorbar(im3, extend='min')
-    plt.suptitle(f'{L}x{L} grid, r={r}: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
+    plt.suptitle(f'{L}x{L} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
     plt.gcf().tight_layout()
     if save:
         save_path = f"results/test_select_distribution/{type(mm).__name__}_{L}x{L}_r={r}{'_PBC' if PBC else ''}.pdf"

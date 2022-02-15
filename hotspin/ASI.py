@@ -50,7 +50,7 @@ class ASI(ABC, Magnets):
 class FullASI(ASI):
     def __init__(self, n, a, ny=None, **kwargs):
         ''' Out-of-plane ASI in a square arrangement. '''
-        self.a = a
+        self.a = a # [m] The distance between two nearest neighboring spins
         self.nx = n
         self.ny = n if ny is None else ny
         self.dx = self.dy = a
@@ -93,7 +93,7 @@ class FullASI(ASI):
 class IsingASI(ASI):
     def __init__(self, n, a, ny=None, **kwargs):
         ''' In-plane ASI with all spins on a square grid, all pointing in the same direction. '''
-        self.a = a
+        self.a = a # [m] The distance between two nearest neighboring spins
         self.nx = n
         self.ny = n if ny is None else ny
         self.dx = self.dy = a
@@ -142,7 +142,7 @@ class IsingASI(ASI):
 class SquareASI(ASI):
     def __init__(self, n, a, ny=None, **kwargs):
         ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares. '''
-        self.a = a
+        self.a = a # [m] The side length of the squares (i.e. side length of a unit cell)
         self.nx = n
         self.ny = n if ny is None else ny
         self.dx = self.dy = a/2
@@ -210,7 +210,7 @@ class PinwheelASI(SquareASI):
 class KagomeASI(ASI):
     def __init__(self, n, a, ny=None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. '''
-        self.a = a
+        self.a = a # [m] The distance between opposing sides of a hexagon
         self.nx = n
         if ny is None:
             self.ny = int(self.nx/math.sqrt(3))//4*4

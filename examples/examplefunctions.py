@@ -33,7 +33,7 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False,
                 mm.save_history()
     if timeit: print(f"Simulated {mm.switches - n_start:.0f} switches ({N:.0f} steps on {mm.m.shape[0]:.0f}x{mm.m.shape[1]:.0f} grid) in {time.perf_counter() - t:.3f} seconds.")
 
-    print('Energy:', mm.E_tot)
+    print(f'Energy: {mm.E_tot} J')
     if show_m:
         hotspin.plottools.show_m(mm, fill=fill)
 
@@ -88,6 +88,8 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         @param pattern [str] (None): The initial magnetization pattern (any of 'random', 'uniform', 'AFM').
             Set to a False value to prevent initialization of the magnetization.
     """
+    assert T_low != 0, "T_low must be strictly positive for exponential quenching."
+    assert T_high >= T_low, "T_high must be larger than or equal to T_low."
     avg = hotspin.plottools.Average.resolve(avg, mm)
     if pattern:
         mm.initialize_m(pattern)
@@ -121,7 +123,9 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         c1 = plt.colorbar(h)
         c1.ax.get_yaxis().labelpad = 30
         c1.ax.set_ylabel(f"Averaged magnetization\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
-    fig.suptitle('Temperature %.3f' % mm.T.mean())
+    ax1.set_xlabel('x [m]')
+    ax1.set_ylabel('y [m]')
+    fig.suptitle(f'Temperature {mm.T.mean():.3f} K')
 
     # This is the function that gets called each frame
     def animate_quenching_update(i):
@@ -134,7 +138,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
                 mm.T = T_low*np.exp(exponent*(((n_sweep - j) % n_sweep2)/n_sweep2))
             mm.update()
         h.set_array(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg))
-        fig.suptitle('Temperature %.3f' % mm.T.mean())
+        fig.suptitle(f'Temperature {mm.T.mean():.3f} K')
         return h, # This has to be an iterable!
 
     # Assign the animation to a variable, to prevent it from getting garbage-collected
@@ -188,7 +192,7 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
     niter = np.ones(N, dtype=int)*10*L
     niter[0] = 40*L
     for j, T in enumerate(TT):
-        print('Temperature step %d/%d (T = %.2f) ...' % (j+1, N, T))
+        print(f'Temperature step {j+1:d}/{N:d} (T = {T:.2f} K) ...')
         mm.T = T
         for _ in range(niter[j]): # Update for a while to ensure that the different temperatures are not very correlated
             mm.update()
@@ -206,11 +210,11 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
     im1 = ax1.imshow(corr_length, origin='lower', interpolation='nearest', cmap='bone', extent=extent, aspect='auto')
     c1 = plt.colorbar(im1) 
     c1.set_label(r'Correlation length [a.u.]', rotation=270, labelpad=15)
-    ax1.set_xlabel('Step (x%d)' % L)
-    ax1.set_ylabel('Temperature [a.u.]')
+    ax1.set_xlabel(f'Step (x{L:d})')
+    ax1.set_ylabel('Temperature [K]')
     ax2 = fig.add_subplot(122)
     ax2.plot(TT, corr_ll)
-    ax2.set_xlabel('Temperature [a.u.]')
+    ax2.set_xlabel('Temperature [K]')
     ax2.set_ylabel(r'$\langle$Correlation length$\rangle$ [a.u.]')
     plt.gcf().tight_layout()
     plt.show()

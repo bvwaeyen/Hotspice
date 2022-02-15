@@ -68,14 +68,14 @@ class Average(Enum):
 
 # Below here are some graphical functions (plot magnetization profile etc.)
 def _get_averaged_extent(mm: Magnets, avg):
-    ''' Returns the extent that can be used in imshow when plotting an averaged quantity. '''
+    ''' Returns the extent (in meters) that can be used in imshow when plotting an averaged quantity. '''
     avg = Average.resolve(avg, mm)
     mask = avg.mask()
     if mm.PBC:
         movex, movey = 0.5*mm.dx, 0.5*mm.dy
     else:
         movex, movey = mask.shape[1]/2*mm.dx, mask.shape[0]/2*mm.dy # The averaged imshow should be displaced by this much
-    return [mm.x_min-mm.dx+movex,mm.x_max-movex+mm.dx,mm.y_min-mm.dy+movey,mm.y_max-movey+mm.dy]
+    return [mm.x_min-mm.dx+movex,mm.x_max-movex+mm.dx,mm.y_min-mm.dy+movey,mm.y_max-movey+mm.dy] # [m]
 
 def get_m_polar(mm: Magnets, m=None, avg=True):
     '''
@@ -132,7 +132,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     return angles_avg, magnitudes_avg
 
 def polar_to_rgb(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=False, autoscale=True):
-    ''' Returns the rgb values for the polar coordinates defined by angles and magnitudes. 
+    ''' Returns the rgb values for the polar coordinates defined by angles [rad] and magnitudes [A/m]. 
         TAKES CUPY ARRAYS AS INPUT, YIELDS NUMPY ARRAYS AS OUTPUT
         @param angles [2D cp.array()] (None): The averaged angles.
     '''
@@ -199,7 +199,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
                         extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
         c1 = plt.colorbar(im1)
         c1.ax.get_yaxis().labelpad = 30
-        c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+        c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=10)
     else:
         r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
         r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
@@ -217,7 +217,9 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
                          extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba')
         c1 = plt.colorbar(im1)
         c1.ax.get_yaxis().labelpad = 30
-        c1.ax.set_ylabel(f"Averaged magnetization\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
+        c1.ax.set_ylabel(f"Averaged magnetization\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=10)
+    ax1.set_xlabel('x [m]')
+    ax1.set_ylabel('y [m]')
     axes.append(ax1)
     if show_quiver:
         ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
@@ -228,13 +230,19 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
                 cp.multiply(m, mm.orientation[:,:,0]).get()[nonzero], cp.multiply(m, mm.orientation[:,:,1]).get()[nonzero],
                 pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
         ax2.set_title(r'$m$')
+        ax2.set_xlabel('x [m]')
+        ax2.set_ylabel('y [m]')
         axes.append(ax2)
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
         im3 = ax3.imshow(np.where(mm.m.get() != 0, mm.E.get(), np.nan), origin='lower',
                             extent=full_extent, interpolation='antialiased', interpolation_stage='rgba')
-        plt.colorbar(im3)
+        c3 = plt.colorbar(im3)
+        c3.ax.get_yaxis().labelpad = 15
+        c3.ax.set_ylabel("Local energy [J]", rotation=270, fontsize=10)
         ax3.set_title(r'$E_{int}$')
+        ax3.set_xlabel('x [m]')
+        ax3.set_ylabel('y [m]')
         axes.append(ax3)
     multi = MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
     plt.gcf().tight_layout()
@@ -250,9 +258,9 @@ def show_history(mm: Magnets, y_quantity=None, y_label=r'Average magnetization')
     if y_quantity is None:
         y_quantity = mm.history.m
     if cp.all(cp.isclose(mm.history.T, mm.history.T[0])):
-        x_quantity, x_label = mm.history.t, 'Time [a.u.]'
+        x_quantity, x_label = mm.history.t, 'Time [s]'
     else:
-        x_quantity, x_label = mm.history.T, 'Temperature [a.u.]'
+        x_quantity, x_label = mm.history.T, 'Temperature [K]'
     assert len(y_quantity) == len(x_quantity), "Error in show_history: <y_quantity> has different length than %s history." % x_label.split(' ')[0].lower()
 
     fig = plt.figure(figsize=(4, 6))
@@ -263,7 +271,7 @@ def show_history(mm: Magnets, y_quantity=None, y_label=r'Average magnetization')
     ax2 = fig.add_subplot(212)
     ax2.plot(x_quantity, mm.history.E)
     ax2.set_xlabel(x_label)
-    ax2.set_ylabel('Total energy [a.u.]')
+    ax2.set_ylabel('Total energy [J]')
     plt.gcf().tight_layout()
     plt.show()
 

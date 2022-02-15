@@ -46,8 +46,8 @@ class KernelQualityExperiment(Experiment):
             # print(self.mm.switches)
             # show_m(self.mm)
         
-        if save is not None:
-            if not isinstance(save, str) and save:
+        if save:
+            if not isinstance(save, str):
                 save = f'results/{type(self).__name__}/{type(self.inputter).__name__}/{type(self.outputreader).__name__}_{mm.nx}x{mm.ny}_out{outputreader.nx}x{outputreader.nx}_in{bits}bits.npy'
             dirname = os.path.dirname(save)
             if not os.path.exists(dirname): os.makedirs(dirname)

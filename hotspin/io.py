@@ -76,14 +76,14 @@ class PerpFieldInputter(Inputter):
         # TODO: decide whether to use n, or t, or something else?
     
     @property
-    def phi(self):
+    def phi(self): # [rad]
         return self._phi
     @phi.setter
     def phi(self, value):
         self._phi = value % (2*math.pi)
     
     @property
-    def magnitude(self):
+    def magnitude(self): # [T]
         return self._magnitude
     @magnitude.setter
     def magnitude(self, value):
@@ -128,12 +128,12 @@ class RegionalOutputReader(OutputReader):
     def read_state(self, m=None):
         if m is None: m = self.mm.m
         if self.mm.in_plane:
-            m_x = m*self.mm.orientation[:,:,0]
-            m_y = m*self.mm.orientation[:,:,1]
+            m_x = m*self.mm.orientation[:,:,0]*self.mm.Msat*self.mm.V
+            m_y = m*self.mm.orientation[:,:,1]*self.mm.Msat*self.mm.V
             for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
-                self.state[i[0], i[1], 0] = cp.mean(m_x[np.logical_and(self.region_x == i[0], self.region_y == i[1])]) # Average m_x
-                self.state[i[0], i[1], 1] = cp.mean(m_y[np.logical_and(self.region_x == i[0], self.region_y == i[1])]) # Average m_y
+                self.state[i[0], i[1], 0] = cp.sum(m_x[np.logical_and(self.region_x == i[0], self.region_y == i[1])]) # Average m_x
+                self.state[i[0], i[1], 1] = cp.sum(m_y[np.logical_and(self.region_x == i[0], self.region_y == i[1])]) # Average m_y
         else:
             for i, _ in np.ndenumerate(self.grid):
-                self.state[i[0], i[1]] = cp.mean(m[np.logical_and(self.region_x == i[0], self.region_y == i[1])])
-        return self.state
+                self.state[i[0], i[1]] = cp.sum(m[np.logical_and(self.region_x == i[0], self.region_y == i[1])])
+        return self.state # [Am²]

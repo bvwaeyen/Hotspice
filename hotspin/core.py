@@ -26,7 +26,7 @@ TODO (summary):
 
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
-    def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=1, in_plane=True, pattern='random', energies=None, PBC=False):
+    def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx> and <a>. 
@@ -36,32 +36,34 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
-            # TODO: linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy
+            # TODO: linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy, but unit cells might be an issue
             #       see https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html for the imshows then
         '''
         if type(self) is Magnets:
             raise Exception("Magnets() class can not be instantiated directly, and should instead be subclassed. Consider using a class from the hotspin.ASI module, or writing your own custom ASI class instead.")
 
-        self.t = 0. # TODO: decide if we are interested in the time, or not really
-        self.Msat = Msat
+        self.t = 0. # [s] # TODO: decide if we are interested in the time, or not really
+        self.Msat = Msat # [A/m]
+        self.V = V # [m³] # TODO: can we compress Msat and V into one parameter? (unit Am² = Nm/T)
         self.in_plane = in_plane
-        energies = (DipolarEnergy(),) if energies is None else energies
+        energies = (DipolarEnergy(),) if energies is None else energies # [J]
         
         # initialize the coordinates based on nx, (ny) and L
         self.nx, self.ny = nx, ny
-        self.xx, self.yy = cp.meshgrid(cp.linspace(0, dx*(nx-1), nx), cp.linspace(0, dy*(ny-1), ny))
+        self.xx, self.yy = cp.meshgrid(cp.linspace(0, dx*(nx-1), nx), cp.linspace(0, dy*(ny-1), ny)) # [m]
         self.index = range(self.xx.size)
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.xx.shape[1]), cp.arange(0, self.yy.shape[0]))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
         # initialize temperature and energy barrier arrays (!!! needs self.xx etc. to exist, since this is an array itself)
-        self.T = T
+        self.T = T # [K]
         
         if isinstance(E_b, np.ndarray): # This detects both CuPy and NumPy arrays
             assert E_b.shape == self.xx.shape, f"Specified energy barriers (shape {E_b.shape}) does not match shape ({nx}, {ny}) of simulation domain."
-            self.E_b = cp.asarray(E_b)
+            self.E_b = cp.asarray(E_b) # [J]
         else:
-            self.E_b = cp.ones_like(self.xx)*E_b
+            self.E_b = cp.ones_like(self.xx)*E_b # [J]
+            # TODO: this is not used in Glauber update scheme, but is that correct?
 
         # Unit cells and PBC
         self.unitcell = Vec2D(*self._get_unitcell())
@@ -82,7 +84,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
         # Some energies might require self.orientation etc., so only initialize energy at the end
         self.energies: List[Energy] = []
-        self.E = cp.zeros_like(self.xx)
+        self.E = cp.zeros_like(self.xx) # [J]
         for energy in energies:
             self.add_energy(energy)
             self.E = self.E + energy.E
@@ -114,7 +116,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.m = cp.multiply(self.m, self.occupation)
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
     
-    def _set_orientation(self):
+    def _set_orientation(self): # TODO: could perhaps make this 3D to avoid possible errors for OOP ASI where self.orientation is now undefined
         self.orientation = cp.ones((*self.xx.shape, 2))/math.sqrt(2)
 
     def _initialize_ip(self):
@@ -168,7 +170,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
                 We need a NumPy or CuPy array (to easily determine its size: if =2, then only a single switch is considered.)
         '''
         if index is not None: index = Energy.clean_indices(index) # TODO: now we are cleaning twice, so remove this in Energy classes maybe?
-        self.E = cp.zeros_like(self.xx)
+        self.E = cp.zeros_like(self.xx) # [J]
         for energy in self.energies:
             if index is None: # No index specified, so update fully
                 energy.update()
@@ -207,6 +209,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         else:
             self._T = cp.ones_like(self.xx)*value
 
+    @property
+    def kBT(self):
+        return 1.380649e-23*self._T
 
     def select(self, r=16):
         ''' @param r [int] (16): minimal distance between magnets 
@@ -227,6 +232,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         # TODO: this does not guarantee sufficient spacing in case of PBC!
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
             Warning: there is no guarantee that this function returns a non-empty array! (WIP)
+            ! <r> is a number of cells, not a length in meters ! (optional) Conversion is responsibility of caller !
         '''
         r = math.ceil(r - 1) # - 1 because effective minimal distance turns out to be actually r + 1
         lcm = self.unitcell.x*self.unitcell.y // math.gcd(self.unitcell.x, self.unitcell.y) # Smallest square that fits integer amount of unit cells
@@ -241,10 +247,10 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         occupation_supercell = self.occupation[disp_y:disp_y + r, disp_x:disp_x + r]
         occupation_nonzero = occupation_supercell.nonzero()
         random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, supergrid_ny*supergrid_nx)
-        pos_x = offsets_x + occupation_nonzero[1][random_nonzero_indices]
-        pos_y = offsets_y + occupation_nonzero[0][random_nonzero_indices]
-        ok = cp.logical_and(cp.logical_and(pos_x >= 0, pos_y >= 0), cp.logical_and(pos_x < self.nx, pos_y < self.ny))
-        return cp.asarray([pos_y[ok], pos_x[ok]])
+        idx_x = offsets_x + occupation_nonzero[1][random_nonzero_indices]
+        idx_y = offsets_y + occupation_nonzero[0][random_nonzero_indices]
+        ok = cp.logical_and(cp.logical_and(idx_x >= 0, idx_y >= 0), cp.logical_and(idx_x < self.nx, idx_y < self.ny))
+        return cp.asarray([idx_y[ok], idx_x[ok]])
 
     def update(self):
         if cp.any(self.T == 0):
@@ -257,12 +263,11 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def _update_Glauber(self):
         # 1) Choose a bunch of magnets at random
         idx = self.select()
-        # 2) Compute the change in energy if they were to flip.
-        energy_change = self.switch_energy(idx)
-        # 3) Flip the spins with a certain exponential probability
-        exponential = cp.clip(cp.exp(-energy_change/self.T[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
-        prob = exponential/(1+exponential)
-        idx = idx[:,cp.where(cp.random.random(prob.shape) < prob)[0]]
+        # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
+        exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
+        # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
+        # idx = idx[:,cp.where(cp.random.random(exponential.shape) < (exponential/(1+exponential)))[0]] # https://en.wikipedia.org/wiki/Glauber_dynamics
+        idx = idx[:,cp.where(cp.random.random(exponential.shape) < exponential)[0]] # http://bit-player.org/2019/glaubers-dynamics
         if idx.shape[1] > 0:
             self.m[idx[0], idx[1]] *= -1
             self.switches += idx.shape[1]
@@ -271,16 +276,16 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     
     def _update_old(self):
         ''' Performs a single magnetization switch. '''
-        self.barrier = (self.E_b - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
-        minBarrier = cp.min(self.barrier)
-        self.barrier -= minBarrier # Energy is relative, so set min(E) to zero (this prevents issues at low T)
+        barrier = (self.E_b - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
+        minBarrier = cp.min(barrier)
+        barrier -= minBarrier # Energy is relative, so set min(E) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
             # There is no real speed difference between XORWOW or MRG32k3a or Philox4x3210 random generators, so we just don't bother.
-            taus = cp.random.uniform(size=self.barrier.shape)*cp.exp(self.barrier/self.T)
+            taus = cp.random.uniform(size=barrier.shape)*cp.exp(barrier/self.kBT)
             indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
             self.m[indexmin2D] = -self.m[indexmin2D]
             self.switches += 1
-            self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.T) # This can become cp.inf quite quickly if T is small
+            self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.kBT) # This can become cp.inf quite quickly if T is small
         
         self.update_energy(index=indexmin2D)
         return indexmin2D
@@ -306,7 +311,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.history.clear()
     
 
-    def autocorrelation_fast(self, max_distance):
+    def autocorrelation_fast(self, max_distance): # TODO: update this (and examplefunctions autocorrelation funcs) to SI unit system (and improve the function here and there)
         max_distance = round(max_distance)
         s = cp.shape(self.xx)
         if not(hasattr(self, 'Distances')):
@@ -350,7 +355,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     def _get_plotting_params(self):
         return {
-            'quiverscale': 0.7
+            'quiverscale': 0.7,
+            'max_mean_magnitude': 1
         }
 
     def _get_AFMmask(self):
@@ -373,7 +379,7 @@ class Energy(ABC):
     @abstractmethod
     def update(self):
         ''' Calculates the entire self.E array, for the situation in self.mm.m. '''
-        self.E = cp.zeros_like(self.mm.xx)
+        self.E = cp.zeros_like(self.mm.xx) # [J]
 
     @abstractmethod
     def energy_switch(self, indices2D):
@@ -434,7 +440,7 @@ class ZeemanEnergy(Energy):
             @param magnitude [float] (0): The magnitude of the external field.
             @param angle [float] (0): The angle (in radians) of the external field.
         '''
-        self.magnitude, self.angle = magnitude, angle
+        self.magnitude, self.angle = magnitude, angle # [T], [rad]
     
     def initialize(self, mm: Magnets):
         self.mm = mm
@@ -444,16 +450,16 @@ class ZeemanEnergy(Energy):
     def set_field(self, magnitude=0, angle=0):
         self.magnitude, self.angle = magnitude, angle
         if self.mm.in_plane:
-            self.H_ext = magnitude*cp.array([math.cos(angle), math.sin(angle)])
+            self.B_ext = magnitude*cp.array([math.cos(angle), math.sin(angle)]) # [T]
         else:
-            self.H_ext = magnitude
+            self.B_ext = magnitude # [T]
             if angle != 0: warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.', stacklevel=2)
 
     def update(self):
         if self.mm.in_plane:
-            self.E = -cp.multiply(self.mm.m, self.H_ext[0]*self.mm.orientation[:,:,0] + self.H_ext[1]*self.mm.orientation[:,:,1])
+            self.E = -self.mm.Msat*self.mm.V*cp.multiply(self.mm.m, self.B_ext[0]*self.mm.orientation[:,:,0] + self.B_ext[1]*self.mm.orientation[:,:,1])
         else:
-            self.E = -self.mm.m*self.H_ext
+            self.E = -self.mm.Msat*self.mm.V*self.mm.m*self.B_ext
 
     def energy_switch(self, indices2D):
         indices2D = Energy.clean_indices(indices2D)
@@ -546,6 +552,7 @@ class DipolarEnergy(Energy):
                     kernel[:self.mm.ny-1,:] += kernelcopy[self.mm.ny:,:]
                     kernel[:self.mm.ny-1,self.mm.nx:] += kernelcopy[self.mm.ny:,:self.mm.nx-1]
 
+                kernel *= 1e-7*(self.mm.Msat*self.mm.V)**2 # [J], 1e-7 is mu_0/4Pi
                 self.kernel_unitcell[y][x] = kernel
         self.update()
     
@@ -561,7 +568,7 @@ class DipolarEnergy(Energy):
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
 
                     total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')
-        self.E = total_energy*self.prefactor
+        self.E = self.prefactor*total_energy
     
     def energy_switch(self, indices2D):
         indices2D = Energy.clean_indices(indices2D)
@@ -623,7 +630,7 @@ class DipolarEnergy(Energy):
 
 class ExchangeEnergy(Energy):
     def __init__(self, J=1):
-        self.J = J
+        self.J = J # [J]
 
     def initialize(self, mm: Magnets):
         self.mm = mm
