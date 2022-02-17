@@ -12,17 +12,17 @@ from context import hotspin
 
 
 ## Parameters, meshgrid
-T = 0.1
+T = 300
 E_b = 10.
 n = 200
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.SquareASI(n, 2, T=T, E_b=E_b, pattern='AFM', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspin.ASI.SquareASI(n, 2e-6, T=T, E_b=E_b, pattern='AFM', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
-def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005, T_max=3):
+def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.01, T_max=600):
     ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -70,14 +70,14 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005
 if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
 
-    # ef.run_a_bit(mm, N=4e3, T=100, show_m=False)
-    # ef.run_a_bit(mm, N=20e3, T=0.2)
-    # ef.neelTemperature(mm, T_max=2)
+    # ef.run_a_bit(mm, N=4e3, T=10000, show_m=False)
+    # ef.run_a_bit(mm, N=20e3, T=40)
+    # ef.neelTemperature(mm, T_max=400)
     # ef.animate_quenching(mm, animate=3, speed=50, fill=True, pattern='uniform')
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
-    # autocorrelation_temp_dependence(mm, T_min=0.1, T_max=1)
+    # autocorrelation_temp_dependence(mm, T_min=20, T_max=200)
 
     #### Commands which do some specific thing which yields nice saved figures or videos
     # factor = 10 # Approximately how many switches occur per mm.update()
-    # ef.animate_quenching(mm, pattern='uniform', T_low=0.01, T_high=4, animate=3, speed=50//factor, n_sweep=80000//factor, fill=True, save=2) # Optimized for nx = ny = 200
+    # ef.animate_quenching(mm, pattern='uniform', T_low=2, T_high=800, animate=3, speed=50//factor, n_sweep=80000//factor, fill=True, save=2) # Optimized for nx = ny = 200

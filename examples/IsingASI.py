@@ -12,18 +12,19 @@ from context import hotspin
 
 
 ## Parameters, meshgrid
-T = 0.1
+T = 300
 E_b = 10.
 n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.IsingASI(n, 1, T=T, E_b=E_b, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspin.ASI.IsingASI(n, 1e-6, T=T, E_b=E_b, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
-# mm.add_energy(hotspin.ExchangeEnergy(J=0.2))
+# mm.add_energy(hotspin.ExchangeEnergy(J=hotspin.Energy.eV_to_J(0.0258/7)))
+# mm.remove_energy('dipolar')
 
 
-def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005, T_max=4): # TODO: update this function with modern methods
+def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.01, T_max=800): # TODO: update this function with modern methods
     ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -73,9 +74,9 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00005
 if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
 
-    # ef.run_a_bit(mm, N=10e3, T=1)
-    # ef.neelTemperature(mm, T_max=2)
+    # ef.run_a_bit(mm, N=10e3, T=300)
+    # ef.neelTemperature(mm, T_max=400)
     # ef.animate_quenching(mm, animate=3, speed=50, pattern='random')
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
-    # autocorrelation_temp_dependence(mm, T_min=0.9, T_max=1.2)
+    # autocorrelation_temp_dependence(mm, T_min=150, T_max=200)

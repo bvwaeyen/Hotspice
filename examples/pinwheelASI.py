@@ -12,17 +12,17 @@ from context import hotspin
 
 
 ## Parameters, meshgrid
-T = 0.2
+T = 300
 E_b = 10.
 n = 400
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.PinwheelASI(n, 2, T=T, E_b=E_b, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspin.ASI.PinwheelASI(n, 2e-6, T=T, E_b=E_b, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
-def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.000005, T_max=0.4):
+def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.001, T_max=80):
     ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Curie temperature. Caution has to be taken, however, since the graph shows
         the average magnetization, which above the Curie temperature is expected to approach 0, but this
@@ -71,13 +71,13 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.00000
 if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
 
-    # ef.run_a_bit(mm, N=5000, T=0.3, timeit=True, fill=True)
+    # ef.run_a_bit(mm, N=5000, T=60, timeit=True, fill=True)
     # ef.curieTemperature(mm)
-    # ef.animate_quenching(mm, pattern='random', T_low=0.15, T_high=0.15, animate=3, speed=500, fill=True)
+    # ef.animate_quenching(mm, pattern='random', T_low=30, T_high=30, animate=1, speed=50, fill=True)
     # animate_temp_rise(mm, animate=3, speed=1000)
     # ef.autocorrelation_dist_dependence(mm)
-    # autocorrelation_temp_dependence(mm, T_min=0.1, T_max=0.4)
+    # autocorrelation_temp_dependence(mm, T_min=20, T_max=80)
 
     #### Commands which do some specific thing which yields nice saved figures or videos
     # factor = 10 # Approximately how many switches occur per mm.update()
-    # ef.animate_quenching(mm, pattern='random', T_low=0.15, T_high=0.15, animate=3, speed=500//factor, n_sweep=40000//factor, fill=True, save=25) # Optimized for nx = ny = 400
+    # ef.animate_quenching(mm, pattern='random', T_low=30, T_high=30, animate=3, speed=500//factor, n_sweep=40000//factor, fill=True, save=25) # Optimized for nx = ny = 400

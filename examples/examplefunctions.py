@@ -38,13 +38,13 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False,
         hotspin.plottools.show_m(mm, fill=fill)
 
 
-def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=1):
+def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=200):
     ''' A naive attempt at determining the Curie temperature, by looking at the average magnetization.
         @param N [int] (5000): The number of simulated switches at each individual temperature
     '''
     mm.clear_history()
     mm.initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_tot
-    for T in np.linspace(T_min, T_max, 100):
+    for T in np.linspace(T_min, T_max, 101):
         total_m = np.zeros_like(mm.m)
         total_energy = 0
         mm.T = T
@@ -59,7 +59,7 @@ def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=1):
     hotspin.plottools.show_history(mm)
 
 
-def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=1):
+def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=200):
     ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
         @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.
     '''
@@ -67,7 +67,7 @@ def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=1):
     mm.initialize_m('AFM')
     AFM_ness = []
 
-    for T in np.linspace(T_min, T_max, N):
+    for T in np.linspace(T_min, T_max, N+1):
         mm.T = T
         mm.update()
         AFM_ness.append(mm.get_AFMness())
@@ -75,7 +75,7 @@ def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=1):
     hotspin.plottools.show_history(mm, y_quantity=AFM_ness, y_label=r'AFM-ness')
 
 
-def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T_low=0.01, T_high=4, save=False, fill=False, avg=True, pattern=None):
+def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T_low=2, T_high=1000, save=False, fill=False, avg=True, pattern=None):
     """ Shows an animation of repeatedly sweeping the simulation between quite low and high temperatures,
         WITH a smooth temperature transition in between (exponential between T_low and T_high).
         @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
@@ -150,8 +150,9 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         if not os.path.exists('videos'): os.makedirs('videos')
         anim.save(f'videos/{type(mm).__name__}_{mm.nx}x{mm.ny}_T{T_low}-{T_high}_N{n_sweep}x{save}.mp4', writer=mywriter, dpi=300)
 
-    print(f"Performed {mm.switches} switches.")
+    t = time.perf_counter()
     plt.show()
+    print(f"Performed {mm.switches} switches in {time.perf_counter() - t:.3f} seconds.")
 
 
 def autocorrelation_dist_dependence(mm: hotspin.Magnets):
@@ -174,7 +175,7 @@ def autocorrelation_dist_dependence(mm: hotspin.Magnets):
     plt.show()
 
 
-def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_min=0, T_max=2):
+def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_min=0, T_max=400):
     ''' Shows how the correlation distance depends on the temperature. 
         @param N [int] (31): Number of temperature steps between <T_min> and <T_max>.
         @param M [int] (50): How many times to do <L> switches at each temperature,
@@ -221,6 +222,6 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
 
 
 if __name__ == "__main__":
-    mm = hotspin.ASI.SquareASI(29, 2, T=0.2, E_b=10., pattern='uniform', energies=[hotspin.DipolarEnergy()])
+    mm = hotspin.ASI.SquareASI(29, 2e-6, T=40, pattern='uniform', energies=[hotspin.DipolarEnergy()])
     autocorrelation_dist_dependence(mm)
-    autocorrelation_temp_dependence(mm, N=41, T_min=0.05, T_max=0.45, L=100)
+    autocorrelation_temp_dependence(mm, N=41, T_min=10, T_max=90, L=100)

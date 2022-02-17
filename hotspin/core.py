@@ -26,7 +26,7 @@ TODO (summary):
 
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
-    def __init__(self, nx, ny, dx, dy, T=1, E_b=1, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False):
+    def __init__(self, nx, ny, dx, dy, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx> and <a>. 
@@ -262,8 +262,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     def _update_Glauber(self):
         # 1) Choose a bunch of magnets at random
-        idx = self.select()
+        idx = self.select(r=16)
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
+        # TODO: can adapt this to work at T=0 by first checking if energy would drop
         exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
         # idx = idx[:,cp.where(cp.random.random(exponential.shape) < (exponential/(1+exponential)))[0]] # https://en.wikipedia.org/wiki/Glauber_dynamics
@@ -431,6 +432,13 @@ class Energy(ABC):
         index2D = cp.asarray(index2D)
         assert index2D.size == 2, "The <index2D> argument should contain exactly two values: the x- and y-index."
         return tuple(index2D.reshape(2))
+    
+    @classmethod
+    def J_to_eV(cls, E):
+        return E/1.602176634e-19
+    @classmethod
+    def eV_to_J(cls, E): # This function might be superfluous, but it can't hurt to have it anyway
+        return E*1.602176634e-19
 
 
 class ZeemanEnergy(Energy):
