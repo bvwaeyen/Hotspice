@@ -10,7 +10,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from context import hotspin
 
 
-def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False, show_m=True, fill=False):
+def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False, show_m=True, **kwargs):
     ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
         This end plot can be disabled by setting <show_m> to False.
         @param N [int] (50000): the number of update steps to run.
@@ -20,7 +20,6 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False,
             If 0, no history is recorded.
         @param timeit [bool] (False): whether or not to time how long it takes to simulate the <N> switches.
         @param show_m [bool] (True): whether or not to plot the magnetization profile after the <N> switches.
-        @param fill [bool] (False): whether or not to fill in the empty pixels in the <show_m> plot.
     '''
     if T is not None: mm.T = T
 
@@ -35,7 +34,7 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False,
 
     print(f'Energy: {mm.E_tot} J')
     if show_m:
-        hotspin.plottools.show_m(mm, fill=fill)
+        hotspin.plottools.show_m(mm, **kwargs)
 
 
 def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=200):
@@ -100,7 +99,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     ax1 = fig.add_subplot(111)
     cmap = cm.get_cmap('hsv')
     if mm.in_plane:
-        h = ax1.imshow(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg),
+        h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=fill, avg=avg),
                        cmap=cmap, origin='lower', vmin=0, vmax=2*np.pi, extent=hotspin.plottools._get_averaged_extent(mm, avg))
         c1 = plt.colorbar(h)
         c1.ax.get_yaxis().labelpad = 30
@@ -118,7 +117,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
                    [0.5,  0.0, 0.0],
                    [1.0,  b1, b1]]}
         newcmap = LinearSegmentedColormap('testCmap', segmentdata=cdict, N=256)
-        h = ax1.imshow(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg),
+        h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=fill, avg=avg),
                        cmap=newcmap, origin='lower', vmin=-1, vmax=1, extent=hotspin.plottools._get_averaged_extent(mm, avg))
         c1 = plt.colorbar(h)
         c1.ax.get_yaxis().labelpad = 30
@@ -137,7 +136,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
             else: # Then cool down
                 mm.T = T_low*np.exp(exponent*(((n_sweep - j) % n_sweep2)/n_sweep2))
             mm.update()
-        h.set_array(hotspin.plottools.polar_to_rgb(mm, fill=fill, avg=avg))
+        h.set_array(hotspin.plottools.get_rgb(mm, fill=fill, avg=avg))
         fig.suptitle(f'Temperature {mm.T.mean():.3f} K')
         return h, # This has to be an iterable!
 

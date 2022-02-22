@@ -76,8 +76,7 @@ class FullASI(ASI):
     
     def _get_plotting_params(self):
         return {
-            'quiverscale': 1,
-            'max_mean_magnitude': 1
+            'quiverscale': 1
         }
 
     def _get_AFMmask(self):
@@ -125,8 +124,7 @@ class IsingASI(ASI):
     
     def _get_plotting_params(self):
         return {
-            'quiverscale': 1.1,
-            'max_mean_magnitude': 1
+            'quiverscale': 1.1
         }
 
     def _get_AFMmask(self):
@@ -181,8 +179,7 @@ class SquareASI(ASI):
     def _get_plotting_params(self):
         # examples of this include quiverscale, magnitude scale to normalize value in hsv, ...
         return {
-            'quiverscale': 0.7,
-            'max_mean_magnitude': 1/math.sqrt(2)
+            'quiverscale': 0.7
         }
 
     def _get_AFMmask(self):
@@ -261,8 +258,7 @@ class KagomeASI(ASI):
     
     def _get_plotting_params(self):
         return {
-            'quiverscale': 0.7,
-            'max_mean_magnitude': 2/3
+            'quiverscale': 0.7
         }
 
     def _get_AFMmask(self):
@@ -288,8 +284,7 @@ class TriangleASI(KagomeASI):
     
     def _get_plotting_params(self):
         return {
-            'quiverscale': 0.5,
-            'max_mean_magnitude': 2/3
+            'quiverscale': 0.5
         }
     
     def _get_groundstate(self):

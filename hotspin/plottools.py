@@ -23,9 +23,11 @@ class Average(Enum):
     POINT = auto()
     CROSS = auto()
     SQUARE = auto()
+    SQUAREFOUR = auto()
     HEXAGON = auto()
     TRIANGLE = auto()
 
+    @property
     def mask(self):
         d = {
             Average.POINT :    [[1]],
@@ -34,6 +36,9 @@ class Average(Enum):
                                 [0, 1, 0]],
             Average.SQUARE :   [[1, 1, 1],
                                 [1, 0, 1],
+                                [1, 1, 1]],
+            Average.SQUAREFOUR:[[1, 1, 1], # Because nearly all ASIs have cells with 4 neighbors, this can come in handy
+                                [1, 4, 1],
                                 [1, 1, 1]],
             Average.HEXAGON :  [[0, 1, 0, 1, 0],
                                 [1, 0, 0, 0, 1],
@@ -70,7 +75,7 @@ class Average(Enum):
 def _get_averaged_extent(mm: Magnets, avg):
     ''' Returns the extent (in meters) that can be used in imshow when plotting an averaged quantity. '''
     avg = Average.resolve(avg, mm)
-    mask = avg.mask()
+    mask = avg.mask
     if mm.PBC:
         movex, movey = 0.5*mm.dx, 0.5*mm.dy
     else:
@@ -104,7 +109,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     else:
         x_comp = m
         y_comp = cp.zeros_like(m)
-    mask = avg.mask()
+    mask = avg.mask
     if mm.PBC:
         magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode='same', boundary='wrap')
         x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='wrap')/magnets_in_avg
@@ -131,16 +136,25 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
         magnitudes_avg[NaN_occupation] = cp.NaN
     return angles_avg, magnitudes_avg
 
-def polar_to_rgb(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=False, autoscale=True):
-    ''' Returns the rgb values for the polar coordinates defined by angles [rad] and magnitudes [A/m]. 
+def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=False, autoscale=True):
+    ''' Returns the hsv values for the polar coordinates defined by angles [rad] and magnitudes [A/m]. 
         TAKES CUPY ARRAYS AS INPUT, YIELDS NUMPY ARRAYS AS OUTPUT
         @param angles [2D cp.array()] (None): The averaged angles.
     '''
     if angles is None or magnitudes is None:
         angles, magnitudes = get_m_polar(mm, m=m, avg=avg)
         if autoscale:
-            magnitudes = magnitudes/mm._get_plotting_params()['max_mean_magnitude']*.999
-    assert angles.shape == magnitudes.shape, "polar_to_rgb() did not receive angle and magnitude arrays of the same shape."
+            s = cp.sign(mm.orientation[:,:,0])
+            mask = Average.resolve(avg).mask
+            n = signal.convolve2d(mm.occupation, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
+            max_mag_x = signal.convolve2d(mm.orientation[:,:,0]*s, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
+            max_mag_y = signal.convolve2d(mm.orientation[:,:,1]*s, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
+            max_mean_magnitude = cp.sqrt(max_mag_x**2 + max_mag_y**2)/n
+            ny, nx = magnitudes.shape
+            shape = max_mean_magnitude.shape
+            max_mean_magnitude = max_mean_magnitude[(shape[0]-ny)//2:(shape[0]-ny)//2+ny, (shape[1]-nx)//2:(shape[1]-nx)//2+nx]
+            magnitudes = magnitudes/max_mean_magnitude*.9999 # times .9999 to prevent rounding errors yielding values larger than 1
+    assert angles.shape == magnitudes.shape, "get_hsv() did not receive angle and magnitude arrays of the same shape."
     
     # Normalize to ranges between 0 and 1 and determine NaN-positions
     angles = angles/2/math.pi
@@ -164,11 +178,13 @@ def polar_to_rgb(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fi
     value[affectedpositions] = 1
     # Create the hsv matrix with correct axes ordering for matplotlib.color.hsv_to_rgb:
     hsv = np.array([hue.get(), saturation.get(), value.get()]).swapaxes(0, 2).swapaxes(0, 1)
-    if fill: hsv = fill_neighbors(hsv, cp.logical_and(NaNangles, NaNmagnitudes))
-    rgb = hsv_to_rgb(hsv)
-    return rgb
+    if fill: hsv = fill_neighbors(hsv, cp.logical_and(NaNangles, NaNmagnitudes), mm=mm)
+    return hsv
 
-def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
+def get_rgb(*args, **kwargs):
+    return hsv_to_rgb(get_hsv(*args, **kwargs))
+
+def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False, overlay_quiver=False):
     ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
         the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -179,6 +195,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
         @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon'.
         @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
+        @param overlay_quiver [bool] (False): if True, the quiver plot is shown overlaid on the color average plot.
     '''
     avg = Average.resolve(avg, mm)
     if m is None: m = mm.m
@@ -188,11 +205,11 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
 
     num_plots = 1
     num_plots += 1 if show_energy else 0
-    num_plots += 1 if show_quiver else 0
+    num_plots += (0 if overlay_quiver else 1) if show_quiver else 0
     axes = []
     fig = plt.figure(figsize=(3.5*num_plots, 3))
     ax1 = fig.add_subplot(1, num_plots, 1)
-    im = polar_to_rgb(mm, m=m, avg=avg, fill=fill)
+    im = get_rgb(mm, m=m, avg=avg, fill=fill)
     cmap = cm.get_cmap('hsv')
     if mm.in_plane:
         im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
@@ -222,17 +239,20 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False):
     ax1.set_ylabel('y [m]')
     axes.append(ax1)
     if show_quiver:
-        ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
-        ax2.set_aspect('equal')
+        if overlay_quiver:
+            ax2 = ax1
+        else:
+            ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
+            ax2.set_aspect('equal')
+            ax2.set_title(r'$m$')
+            ax2.set_xlabel('x [m]')
+            ax2.set_ylabel('y [m]')
+            axes.append(ax2)
         nonzero = mm.m.get().nonzero()
         quiverscale = mm._get_plotting_params()['quiverscale']/min(mm.dx, mm.dy)
         ax2.quiver(mm.xx.get()[nonzero], mm.yy.get()[nonzero], 
                 cp.multiply(m, mm.orientation[:,:,0]).get()[nonzero], cp.multiply(m, mm.orientation[:,:,1]).get()[nonzero],
                 pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
-        ax2.set_title(r'$m$')
-        ax2.set_xlabel('x [m]')
-        ax2.set_ylabel('y [m]')
-        axes.append(ax2)
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
         im3 = ax3.imshow(np.where(mm.m.get() != 0, mm.E.get(), np.nan), origin='lower',
@@ -288,7 +308,7 @@ def get_AFMness(mm: Magnets, AFM_mask=None):
     AFM_ness = cp.mean(cp.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='wrap' if mm.PBC else 'fill')))
     return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(mm.mask)*mm.m.size)
 
-def fill_neighbors(hsv, replaceable, fillblack=False): # TODO: make this cupy if possible
+def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=True): # TODO: make this cupy if possible
     ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
         THIS FUNCTION OPERATES ON HSV VALUES, AND RETURNS HSV AS WELL!!! NOT RGB HERE!
         The 2D array <replaceable> is True at the positions of hsv which can be overwritten by this function.
@@ -296,7 +316,8 @@ def fill_neighbors(hsv, replaceable, fillblack=False): # TODO: make this cupy if
         Then this function overwrites the replaceables with the surrounding values at the nearest neighbors (cross neighbors ⁛),
         but only if all those neighbors are equal. This is useful for very large simulations where each cell
         occupies less than 1 pixel when plotted: by removing the replaceables, visual issues can be prevented.
-        @param fillblack [bool] (True): If True, white pixels next to black pixels are colored black regardless of other neighbors.
+        @param fillblack [bool] (False): If True, white pixels next to black pixels are colored black regardless of other neighbors.
+        @param fillwhite [bool] (False): If True, white pixels are colored in using the Average.SQUAREFULL rule.
         @return [2D np.array]: The interpolated array.
     '''
     hsv = hsv.get() if isinstance(hsv, cp.ndarray) else np.asarray(hsv)
@@ -320,9 +341,13 @@ def fill_neighbors(hsv, replaceable, fillblack=False): # TODO: make this cupy if
     if fillblack:
         blacks = cp.where(cp.logical_and(cp.logical_or(cp.logical_or(N[:,:,2] == 0, E[:,:,2] == 0), cp.logical_or(S[:,:,2] == 0, W[:,:,2] == 0)), replaceable))
         result[blacks[0], blacks[1], 2] = 0
+    if fillwhite: # If any NaNs remain, they will be white, and we might want to fill them as well
+        whites = cp.where(cp.logical_and(result[:,:,1] == 0, result[:,:,2] == 1))
+        substitution_colors = cp.asarray(get_hsv(mm, fill=False, avg=Average.SQUAREFOUR))
+        result[whites[0], whites[1], :] = substitution_colors[whites[0], whites[1], :]
 
     return result.get()
 
 
 if __name__ == "__main__":
-    print(Average.TRIANGLE.mask())
+    print(Average.TRIANGLE.mask)

@@ -356,8 +356,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     def _get_plotting_params(self):
         return {
-            'quiverscale': 0.7,
-            'max_mean_magnitude': 1
+            'quiverscale': 0.7
         }
 
     def _get_AFMmask(self):
