@@ -71,7 +71,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.001, 
 if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
 
-    # ef.run_a_bit(mm, N=5000, T=60, timeit=True, fill=True)
+    # ef.run_a_bit(mm, N=5000, T=60, verbose=True, fill=True)
     # ef.curieTemperature(mm)
     # ef.animate_quenching(mm, pattern='random', T_low=30, T_high=30, animate=1, speed=50, fill=True)
     # animate_temp_rise(mm, animate=3, speed=1000)

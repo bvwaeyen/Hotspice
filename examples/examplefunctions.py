@@ -10,7 +10,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from context import hotspin
 
 
-def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False, show_m=True, **kwargs):
+def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, verbose=False, show_m=True, **kwargs):
     ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
         This end plot can be disabled by setting <show_m> to False.
         @param N [int] (50000): the number of update steps to run.
@@ -18,23 +18,25 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, timeit=False,
             If not specified, the current temperature of the simulation is retained.
         @param save_history [int] (1): the number of steps between two recorded entries in mm.history.
             If 0, no history is recorded.
-        @param timeit [bool] (False): whether or not to time how long it takes to simulate the <N> switches.
+        @param verbose [bool] (False): whether or not to print supporting information about the run.
         @param show_m [bool] (True): whether or not to plot the magnetization profile after the <N> switches.
     '''
     if T is not None: mm.T = T
 
-    if timeit: t = time.perf_counter()
+    t = time.perf_counter()
     n_start = mm.switches
     for i in range(int(N)):
         mm.update()
         if save_history:
             if i % save_history == 0:
                 mm.save_history()
-    if timeit: print(f"Simulated {mm.switches - n_start:.0f} switches ({N:.0f} steps on {mm.m.shape[0]:.0f}x{mm.m.shape[1]:.0f} grid) in {time.perf_counter() - t:.3f} seconds.")
-
-    print(f'Energy: {mm.E_tot} J')
+    dt = time.perf_counter() - t
+    if verbose:
+        print(f"Simulated {mm.switches - n_start:.0f} switches ({N:.0f} steps on {mm.m.shape[0]:.0f}x{mm.m.shape[1]:.0f} grid) in {dt:.3f} seconds.")
+        print(f'Energy: {mm.E_tot} J')
     if show_m:
         hotspin.plottools.show_m(mm, **kwargs)
+    return dt
 
 
 def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=200):
@@ -141,6 +143,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         return h, # This has to be an iterable!
 
     # Assign the animation to a variable, to prevent it from getting garbage-collected
+    t = time.perf_counter()
     anim = animation.FuncAnimation(fig, animate_quenching_update, 
                                     frames=int(n_sweep//speed)*max(1, save), interval=speed/animate, 
                                     blit=False, repeat=True)
@@ -148,8 +151,8 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         mywriter = animation.FFMpegWriter(fps=30)
         if not os.path.exists('videos'): os.makedirs('videos')
         anim.save(f'videos/{type(mm).__name__}_{mm.nx}x{mm.ny}_T{T_low}-{T_high}_N{n_sweep}x{save}.mp4', writer=mywriter, dpi=300)
+        print(f"Performed {mm.switches} switches in {time.perf_counter() - t:.3f} seconds.")
 
-    t = time.perf_counter()
     plt.show()
     print(f"Performed {mm.switches} switches in {time.perf_counter() - t:.3f} seconds.")
 

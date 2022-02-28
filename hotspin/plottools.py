@@ -19,7 +19,7 @@ matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for larg
 
 # TODO: organize these functions better
 
-class Average(Enum):
+class Average(Enum): # TODO: maybe create an Average class which can be extended, and a AVERAGE enum that subclasses it or something
     POINT = auto()
     CROSS = auto()
     SQUARE = auto()
@@ -31,19 +31,19 @@ class Average(Enum):
     def mask(self):
         d = {
             Average.POINT :    [[1]],
-            Average.CROSS :    [[0, 1, 0],
+            Average.CROSS :    [[0, 1, 0], # For Pinwheel and Square ASI
                                 [1, 0, 1],
                                 [0, 1, 0]],
-            Average.SQUARE :   [[1, 1, 1],
+            Average.SQUARE :   [[1, 1, 1], # Often not very useful, just the same as CROSS in most cases
                                 [1, 0, 1],
                                 [1, 1, 1]],
             Average.SQUAREFOUR:[[1, 1, 1], # Because nearly all ASIs have cells with 4 neighbors, this can come in handy
                                 [1, 4, 1],
                                 [1, 1, 1]],
-            Average.HEXAGON :  [[0, 1, 0, 1, 0],
+            Average.HEXAGON :  [[0, 1, 0, 1, 0], # For Kagome ASI
                                 [1, 0, 0, 0, 1],
                                 [0, 1, 0, 1, 0]],
-            Average.TRIANGLE : [[0, 1, 0],
+            Average.TRIANGLE : [[0, 1, 0], # For Triangle ASI
                                 [1, 0, 1],
                                 [0, 1, 0]]
         }
@@ -143,7 +143,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
     '''
     if angles is None or magnitudes is None:
         angles, magnitudes = get_m_polar(mm, m=m, avg=avg)
-        if autoscale:
+        if autoscale and mm.in_plane:
             s = cp.sign(mm.orientation[:,:,0])
             mask = Average.resolve(avg).mask
             n = signal.convolve2d(mm.occupation, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
@@ -154,6 +154,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
             shape = max_mean_magnitude.shape
             max_mean_magnitude = max_mean_magnitude[(shape[0]-ny)//2:(shape[0]-ny)//2+ny, (shape[1]-nx)//2:(shape[1]-nx)//2+nx]
             magnitudes = magnitudes/max_mean_magnitude*.9999 # times .9999 to prevent rounding errors yielding values larger than 1
+    assert angles is not None and magnitudes is not None, "When you provide angles, you should also provide magnitudes, and vice versa."
     assert angles.shape == magnitudes.shape, "get_hsv() did not receive angle and magnitude arrays of the same shape."
     
     # Normalize to ranges between 0 and 1 and determine NaN-positions
@@ -184,7 +185,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
 def get_rgb(*args, **kwargs):
     return hsv_to_rgb(get_hsv(*args, **kwargs))
 
-def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=False, overlay_quiver=False):
+def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_quiver=False):
     ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
         the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -308,7 +309,7 @@ def get_AFMness(mm: Magnets, AFM_mask=None):
     AFM_ness = cp.mean(cp.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='wrap' if mm.PBC else 'fill')))
     return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(mm.mask)*mm.m.size)
 
-def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=True): # TODO: make this cupy if possible
+def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False): # TODO: make this cupy if possible
     ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
         THIS FUNCTION OPERATES ON HSV VALUES, AND RETURNS HSV AS WELL!!! NOT RGB HERE!
         The 2D array <replaceable> is True at the positions of hsv which can be overwritten by this function.

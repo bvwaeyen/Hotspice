@@ -12,8 +12,7 @@ from typing import List
 """
 TODO (summary):
 (!: priority, -: should do at some point in time, .: perhaps implement perhaps not)
-! use Glauber monte carlo markov chain on Ising model to determine which magnet will switch
-  (this allows for switching multiple magnets at once, if we use some convolutions in a clever and fast way)
+! improve Glauber model
 ! develop the hotspin.io module
 - update the animate_temp_rise function with the modern 'API' or however to call this
 - sort out the AFM-ness and its normalization etc.
@@ -21,7 +20,6 @@ TODO (summary):
 . can implement linear transformations if I want to
 . can implement random defects if I want to
 - make unit tests
-! use real units
 """
 
 
@@ -50,9 +48,10 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         
         # initialize the coordinates based on nx, (ny) and L
         self.nx, self.ny = nx, ny
+        self.dx, self.dy = dx, dy
         self.xx, self.yy = cp.meshgrid(cp.linspace(0, dx*(nx-1), nx), cp.linspace(0, dy*(ny-1), ny)) # [m]
         self.index = range(self.xx.size)
-        self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.xx.shape[1]), cp.arange(0, self.yy.shape[0]))
+        self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.nx), cp.arange(0, self.ny))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
         # initialize temperature and energy barrier arrays (!!! needs self.xx etc. to exist, since this is an array itself)
@@ -212,6 +211,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     @property
     def kBT(self):
         return 1.380649e-23*self._T
+    
+    # TODO: function set_T which takes a function(x,y,center=False) and sets T array taking into account dx and dy etc. (center=True places x,y=0,0 in center of simulation)
 
     def select(self, r=16):
         ''' @param r [int] (16): minimal distance between magnets 
