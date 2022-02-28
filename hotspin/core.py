@@ -22,6 +22,9 @@ TODO (summary):
 - make unit tests
 """
 
+# Some global variables for hotspin:
+SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = 20 # If there are less than <this> switches in a single iteration, the energies are just summed, otherwise a convolution is used.
+REDUCED_KERNEL_SIZE = 20 # If the dipolar kernel is truncated, it becomes a shape (2*<this>-1, 2*<this>-1) array.
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
     def __init__(self, nx, ny, dx, dy, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False):
@@ -263,7 +266,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     def _update_Glauber(self):
         # 1) Choose a bunch of magnets at random
-        idx = self.select(r=16)
+        idx = self.select(r=max(self.calc_RxRy(0.01)))
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
         # TODO: can adapt this to work at T=0 by first checking if energy would drop
         exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
@@ -292,7 +295,21 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.update_energy(index=indexmin2D)
         return indexmin2D
 
-    # TODO: create function 'calc_r' to determine the minimal acceptable r for choosing multiple magnets in the current simulation.
+    def calc_r(self, Q): # r: a distance in meters
+        ''' Calculates the minimal value of r (IN METERS). Considering two nearby sampled magnets, the switching probability
+            of the first magnet will depend on the state of the second. For magnets further than <calc_r(Q)> apart, the switching
+            probability of the first will not change by more than <Q> if the second magnet switches.
+            @param Q [float]: (0<Q<1) the maximum allowed change in switching probability of a sample if any other sample switches.
+            @return [float]: the minimal distance (in meters) between two samples, if their mutual influence on their switching
+                probabilities is to be less than <Q>.
+        '''
+        return (8e-7*self.Msat**2*self.V**2/(Q*cp.min(self.kBT)))**(1/3)
+    
+    def calc_RxRy(self, Q): # Rx, Ry: an amount of cells
+        ''' Calculates the number of cells that simultaneous samples need to be apart along x and y. '''
+        r = self.calc_r(Q)
+        return cp.ceil(r/self.dx), cp.ceil(r/self.dy)
+
 
     def minimize(self): # TODO: this function seems a bit outdated
         self.update_energy()
@@ -613,19 +630,23 @@ class DipolarEnergy(Energy):
             kernel = self.kernel_unitcell[y_unitcell][x_unitcell]
             if kernel is None: continue # This should never happen, but check anyway in case indices2D includes empty cells
             indices_here = indices2D[:,indices2D_unitcell_raveled == i]
-            ### EITHER WE DO THIS (CONVOLUTION)
-            # switched_field = cp.zeros_like(self.mm.m)
-            # switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
-            # usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid') # TODO: this is extremely EXTREMELY slow, a possible speed-up is to shrink the kernel to the relevant area (e.g. radius r or 2r), and convolve anyway
-            # interaction = self.prefactor*cp.multiply(self.mm.m, usefulkernel)
-            # self.E += 2*interaction
-            ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY FOR-LOOP) 
-            interaction = cp.zeros_like(self.mm.m)
-            for j in range(indices_here.shape[1]):
-                y, x = indices_here[0,j], indices_here[1,j]
-                interaction += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-            interaction = self.prefactor*cp.multiply(self.mm.m, interaction)
-            self.E += 2*interaction
+            if indices_here.shape[1] > SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: # THIS NUMBER IS EMPIRICALLY DETERMINED
+                ### EITHER WE DO THIS (CONVOLUTION) (starts to be better at approx. 40 simultaneous switches for 41x41 kernel, taking into account the need for complete recalculation every <something> steps, so especially for large T this is good)
+                switched_field = cp.zeros_like(self.mm.m)
+                switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
+                n = REDUCED_KERNEL_SIZE
+                usefulkernel = signal.convolve2d(switched_field, kernel[self.mm.ny-1-n:self.mm.ny+n, self.mm.nx-1-n:self.mm.nx+n], mode='same', boundary='wrap' if self.mm.PBC else 'fill')
+                # usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid') # TODO: this is extremely EXTREMELY slow, a possible speed-up is to shrink the kernel to the relevant area (e.g. radius r or 2r), and convolve anyway
+                interaction = self.prefactor*cp.multiply(self.mm.m, usefulkernel)
+                self.E += 2*interaction
+            else:
+                ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY NONPARALLEL) 
+                interaction = cp.zeros_like(self.mm.m)
+                for j in range(indices_here.shape[1]):
+                    y, x = indices_here[0,j], indices_here[1,j]
+                    interaction += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
+                interaction = self.prefactor*cp.multiply(self.mm.m, interaction)
+                self.E += 2*interaction
 
             # import matplotlib.pyplot as plt
             # plt.imshow(switched_field.get())
