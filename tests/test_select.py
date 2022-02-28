@@ -62,10 +62,13 @@ def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, 
     min_dist = cp.inf # Minimal distance between 2 samples in 1 mm.select() call
     field = cp.zeros_like(mm.m) # The number of times each given cell was chosen
     field_local = cp.zeros((2*r*scale+1, 2*r*scale+1)) # Basically distances_binned, but in 2D (distribution of neighbors around a choice)
+    spectrum = cp.zeros_like(field)
     for _ in range(n):
         pos = mm.select(r) # MODIFY THIS LINE TO SELECT A SPECIFIC SELECTION ALGORITHM
         total += pos.shape[1]
-        field[pos[0], pos[1]] += 1
+        choices = cp.zeros_like(field)
+        choices[pos[0], pos[1]] += 1
+        field += choices
         if pos.shape[1] > 1: # if there is more than 1 sample
             if PBC:
                 _, n_pos = pos.shape # The following approach is quite suboptimal, but it works :)
@@ -89,6 +92,7 @@ def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, 
                 bin_counts = cp.bincount(get_bin(near_distances))
                 distances_binned[:bin_counts.size] += bin_counts
             field_local += calculate_any_neighbors(all_pos, (mm.ny*(1+PBC), mm.nx*(1+PBC)), center=r*scale)
+            spectrum += cp.log(cp.abs(cp.fft.fftshift(cp.fft.fft2(choices)))) # Not sure if this should be done always or only if more than 1 sample exists
         
     field_local[r*scale, r*scale] = 0 # set center value to zero
     t = time.perf_counter() - t
@@ -100,37 +104,48 @@ def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, 
     
     cmap = cm.get_cmap('viridis').copy()
     cmap.set_under(color='black')
-    fig = plt.figure(figsize=(10, 4))
-    ax1 = fig.add_subplot(1, 3, 1)
+    fig = plt.figure(figsize=(8, 7))
+    ax1 = fig.add_subplot(2, 2, 1)
     if ONLY_SMALLEST_DISTANCE:
         ax1.bar(distance_bins.get(), cp.cumsum(distances_binned/cp.sum(distances_binned)).get(), align='edge', width=bin_width)
         ax1.bar(distance_bins.get(), (distances_binned/cp.sum(distances_binned)).get()/bin_width, align='edge', width=bin_width)
         ax1.set_xlabel('Distance to nearest neighbor (binned)')
+        ax1.set_title('Nearest-neighbor distances')
         ax1.legend(['Cum. prob.', 'Prob. dens.'])
     else:
         ax1.bar(distance_bins.get(), distances_binned.get(), align='edge', width=bin_width)
         ax1.set_xlabel('Distance to any other sample (binned)')
+        ax1.set_title('Inter-sample distances')
         ax1.set_ylabel('# occurences')
     ax1.set_xlim([0, max_dist_bin])
-    ax1.set_title('Nearest-neighbor distances')
+    ax1.set_xticks([r*n for n in range(scale+1)])
+    ax1.set_xticklabels(['0', 'r'] + [f'{n}r' for n in range(2, scale+1)])
     ax1.axvline(r, color='black', linestyle=':', linewidth=1, label=None)
-    ax2 = fig.add_subplot(1, 3, 2)
-    im2 = ax2.imshow(field.get(), vmin=1e-10, interpolation_stage='rgba', interpolation='antialiased', cmap=cmap)
+    ax2 = fig.add_subplot(2, 2, 3)
+    im2 = ax2.imshow(field.get(), vmin=1e-10, origin='lower', interpolation_stage='rgba', interpolation='none', cmap=cmap)
     ax2.set_title(f"# choices for each cell")
     plt.colorbar(im2, extend='min')
-    ax3 = fig.add_subplot(1, 3, 3)
+    ax3 = fig.add_subplot(2, 2, 2)
     im3 = ax3.imshow(field_local.get()/total, vmin=1e-10, extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='nearest', cmap=cmap)
     ax3.set_title(f'Prob. dens. of neighbors\naround any sample')
     ax3.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
     ax3.add_patch(plt.Circle((0, 0), r, linewidth=1, fill=False, color='white', linestyle=':'))
     plt.colorbar(im3, extend='min')
+    ax4 = fig.add_subplot(2, 2, 4)
+    freq = cp.fft.fftshift(cp.fft.fftfreq(mm.nx, d=1)).get() # use fftshift to get ascending frequency order
+    im4 = ax4.imshow(spectrum.get()/total, extent=[-.5+freq[0], .5+freq[-1], -.5+freq[0], .5+freq[-1]], interpolation_stage='rgba', interpolation='none', cmap='gray')
+    ax4.set_title(f'Periodogram')
+    plt.colorbar(im4)
     plt.suptitle(f'{L}x{L} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
     plt.gcf().tight_layout()
     if save:
         save_path = f"results/test_select_distribution/{type(mm).__name__}_{L}x{L}_r={r}{'_PBC' if PBC else ''}.pdf"
         dirname = os.path.dirname(save_path)
         if not os.path.exists(dirname): os.makedirs(dirname)
-        plt.savefig(save_path)
+        try:
+            plt.savefig(save_path)
+        except PermissionError:
+            warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)
     if show_plot:
         plt.show()
 
