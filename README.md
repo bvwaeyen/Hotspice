@@ -1,6 +1,6 @@
 # Hotspin
 
-Hotspin is a tool for simulating artificial spin ices, using a macrospin approximation and Glauber dynamics to model their statistical behavior.
+Hotspin is a tool for simulating thermally active artificial spin ices, using an Ising-like approximation with Glauber dynamics to model their statistical behavior. The axis and position of each spin is fixed, only their binary state can switch.
 
 ## Getting started
 
