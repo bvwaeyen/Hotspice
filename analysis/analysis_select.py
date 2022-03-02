@@ -35,8 +35,8 @@ def calculate_any_neighbors(pos, shape, center:int=0):
     return final_array if center == 0 else final_array[shape[0]-1-center:shape[0]+center, shape[1]-1-center:shape[1]+center]
 
 
-def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True):
-    ''' In this test, the multiple-magnet-selection algorithm of hotspin.Magnets.select() is tested.
+def analysis_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True):
+    ''' In this analysis, the multiple-magnet-selection algorithm of hotspin.Magnets.select() is analyzed.
         The spatial distribution is calculated by performing <n> runs of the select() method.
         Also the probability distribution of the distance between two samples is calculated,
         as well as the probablity distrbution of their relative positions.
@@ -64,6 +64,8 @@ def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, 
     field_local = cp.zeros((2*r*scale+1, 2*r*scale+1)) # Basically distances_binned, but in 2D (distribution of neighbors around a choice)
     spectrum = cp.zeros_like(field)
     for _ in range(n):
+        # from poisson_disc import Bridson_sampling
+        # pos = cp.asarray(Bridson_sampling(dims=np.array([L, L]), radius=r, k=5).T, dtype=int) # POISSON DISC SAMPLING BRIDSON2007
         pos = mm.select(r) # MODIFY THIS LINE TO SELECT A SPECIFIC SELECTION ALGORITHM
         total += pos.shape[1]
         choices = cp.zeros_like(field)
@@ -97,7 +99,7 @@ def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, 
     field_local[r*scale, r*scale] = 0 # set center value to zero
     t = time.perf_counter() - t
     
-    print(f'Time required for {n} runs of this test: {t:.3f}s.')
+    print(f'Time required for {n} runs of this analysis: {t:.3f}s.')
     print(f'--- TEST RESULTS ---')
     print(f'Total number of samples: {total}')
     print(f'Empirical minimal distance between two samples in a single selection: {min_dist:.2f} (r={r})')
@@ -139,7 +141,7 @@ def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, 
     plt.suptitle(f'{L}x{L} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
     plt.gcf().tight_layout()
     if save:
-        save_path = f"results/test_select_distribution/{type(mm).__name__}_{L}x{L}_r={r}{'_PBC' if PBC else ''}.pdf"
+        save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{L}x{L}_r={r}{'_PBC' if PBC else ''}.pdf"
         dirname = os.path.dirname(save_path)
         if not os.path.exists(dirname): os.makedirs(dirname)
         try:
@@ -150,8 +152,8 @@ def test_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, 
         plt.show()
 
 
-def test_select_speed(n: int=10000, L:int=400, r=16):
-    ''' Tests the speed of selecting magnets without any other test-related calculations in between.
+def analysis_select_speed(n: int=10000, L:int=400, r=16):
+    ''' Tests the speed of selecting magnets without any other analysis-related calculations in between.
         @param n [int] (10000): the number of times the select() method is executed.
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
@@ -165,5 +167,5 @@ def test_select_speed(n: int=10000, L:int=400, r=16):
 
 
 if __name__ == "__main__":
-    # test_select_speed(L=400)
-    test_select_distribution(L=400, n=5000, save=True, PBC=True)
+    # analysis_select_speed(L=400)
+    analysis_select_distribution(L=400, n=5000, save=True, PBC=True)

@@ -44,7 +44,7 @@ def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=200):
         @param N [int] (5000): The number of simulated switches at each individual temperature
     '''
     mm.clear_history()
-    mm.initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_tot
+    mm.initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_avg
     for T in np.linspace(T_min, T_max, 101):
         total_m = np.zeros_like(mm.m)
         total_energy = 0
@@ -54,9 +54,9 @@ def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=200):
             total_m += mm.m
             total_energy += mm.E_tot
         total_m = total_m/N
-        m_tot_x = np.mean(np.multiply(total_m, mm.orientation[:,:,0]))
-        m_tot_y = np.mean(np.multiply(total_m, mm.orientation[:,:,1]))
-        mm.save_history(E_tot=total_energy/N, m_tot=(m_tot_x**2 + m_tot_y**2)**(1/2))
+        m_avg_x = np.mean(np.multiply(total_m, mm.orientation[:,:,0]))
+        m_avg_y = np.mean(np.multiply(total_m, mm.orientation[:,:,1]))
+        mm.save_history(E_tot=total_energy/N, m_avg=(m_avg_x**2 + m_avg_y**2)**(1/2))
     hotspin.plottools.show_history(mm)
 
 

@@ -189,11 +189,11 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return cp.sum(cp.asarray([energy.energy_switch(indices2D) for energy in self.energies]), axis=0)
 
     @property
-    def m_tot(self):
+    def m_avg(self):
         if self.in_plane:
-            self.m_tot_x = cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))
-            self.m_tot_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
-            return (self.m_tot_x**2 + self.m_tot_y**2)**(1/2)
+            self.m_avg_x = cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))
+            self.m_avg_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
+            return (self.m_avg_x**2 + self.m_avg_y**2)**(1/2)
         else:
             return cp.mean(self.m)
     
@@ -331,14 +331,14 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.m.flat[indexmax] = -self.m.flat[indexmax]
     
 
-    def save_history(self, *, E_tot=None, t=None, T=None, m_tot=None):
-        ''' Records E_tot, t, T and m_tot as they were last calculated. This default behavior can be overruled: if
-            passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T|m_tot> value(s).
+    def save_history(self, *, E_tot=None, t=None, T=None, m_avg=None):
+        ''' Records E_tot, t, T and m_avg as they were last calculated. This default behavior can be overruled: if
+            passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T|m_avg> value(s).
         '''
         self.history.E.append(float(self.E_tot) if E_tot is None else float(E_tot))
         self.history.t.append(float(self.t) if t is None else float(t))
         self.history.T.append(float(cp.mean(self.T)) if T is None else float(cp.mean(T)))
-        self.history.m.append(float(self.m_tot) if m_tot is None else float(m_tot))
+        self.history.m.append(float(self.m_avg) if m_avg is None else float(m_avg))
     
     def clear_history(self):
         self.history.clear()
