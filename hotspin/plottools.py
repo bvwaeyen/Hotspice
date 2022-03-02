@@ -230,7 +230,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
          'blue':  [[0.0,  b0, b0],
                    [0.5,  0.0, 0.0],
                    [1.0,  b1, b1]]}
-        newcmap = LinearSegmentedColormap('testCmap', segmentdata=cdict, N=256)
+        newcmap = LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
         im1 = ax1.imshow(im, cmap=newcmap, origin='lower', vmin=-1, vmax=1,
                          extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba')
         c1 = plt.colorbar(im1)
@@ -309,7 +309,7 @@ def get_AFMness(mm: Magnets, AFM_mask=None):
     AFM_ness = cp.mean(cp.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='wrap' if mm.PBC else 'fill')))
     return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(mm.mask)*mm.m.size)
 
-def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False): # TODO: make this cupy if possible
+def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False): # TODO: this is quite messy because we are working with color here instead of angles/magnitudes
     ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
         THIS FUNCTION OPERATES ON HSV VALUES, AND RETURNS HSV AS WELL!!! NOT RGB HERE!
         The 2D array <replaceable> is True at the positions of hsv which can be overwritten by this function.
@@ -325,7 +325,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
     replaceable = replaceable if isinstance(replaceable, cp.ndarray) else cp.asarray(replaceable)
 
     # Extend arrays a bit to fill NaNs near boundaries as well
-    a = np.insert(hsv, 0, hsv[1], axis=0)
+    a = np.insert(hsv, 0, hsv[1], axis=0) # TODO: make this cupy once cupy supports the .insert function
     a = np.insert(a, 0, a[:,1], axis=1)
     a = cp.append(a, a[-2].reshape(1,-1,3), axis=0)
     a = cp.append(a, a[:,-2].reshape(-1,1,3), axis=1)

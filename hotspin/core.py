@@ -20,6 +20,8 @@ TODO (summary):
 . can implement linear transformations if I want to
 . can implement random defects if I want to
 - make unit tests
+- multiswitch: analyze influence of Q on resulting physical behavior to see which values are acceptable
+- check numerical correctness with e.g. square lattice Ising model analytical solution
 """
 
 # Some global variables for hotspin:
@@ -215,7 +217,20 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def kBT(self):
         return 1.380649e-23*self._T
     
-    # TODO: function set_T which takes a function(x,y,center=False) and sets T array taking into account dx and dy etc. (center=True places x,y=0,0 in center of simulation)
+    def set_T(self, f, center=False, noSIunits=False):
+        ''' Sets the temperature field according to a spatial function.
+            @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy arrays as x and y).
+            @param center [bool] (False): if True, the origin is put in the middle of the simulation,
+                otherwise it is in the usual lower left corner.
+            @param noSIunits [bool] (False): if True, x and y are assumed to be a number of cells instead of a distance in meters (but still float).
+        '''
+        if center:
+            xx = self.xx + self.dx*self.nx/2
+            yy = self.yy + self.dy*self.ny/2
+        else:
+            xx, yy = self.xx, self.yy
+        if noSIunits: xx, yy = xx/self.dx, xx/self.dy
+        self._T = f(xx, yy)
 
     def select(self, r=16):
         ''' @param r [int] (16): minimal distance between magnets 
@@ -256,17 +271,17 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         ok = cp.logical_and(cp.logical_and(idx_x >= 0, idx_y >= 0), cp.logical_and(idx_x < self.nx, idx_y < self.ny))
         return cp.asarray([idx_y[ok], idx_x[ok]])
 
-    def update(self):
+    def update(self, *args, **kwargs):
         if cp.any(self.T == 0):
             warnings.warn('Temperature is zero somewhere, so no switch will be simulated to prevent DIV/0 errors.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
-        # idx = self._update_old()
-        idx = self._update_Glauber()
+        # idx = self._update_old(*args, **kwargs)
+        idx = self._update_Glauber(*args, **kwargs)
         return Energy.clean_indices(idx)
 
-    def _update_Glauber(self):
+    def _update_Glauber(self, Q=0.01):
         # 1) Choose a bunch of magnets at random
-        idx = self.select(r=max(self.calc_RxRy(0.01)))
+        idx = self.select(r=max(self.calc_RxRy(Q)))
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
         # TODO: can adapt this to work at T=0 by first checking if energy would drop
         exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
@@ -290,8 +305,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
             self.m[indexmin2D] = -self.m[indexmin2D]
             self.switches += 1
-            self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.kBT) # This can become cp.inf quite quickly if T is small
-        
+            self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.kBT[indexmin2D]) # This can become cp.inf quite quickly if T is small
         self.update_energy(index=indexmin2D)
         return indexmin2D
 
@@ -636,7 +650,7 @@ class DipolarEnergy(Energy):
                 switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
                 n = REDUCED_KERNEL_SIZE
                 usefulkernel = signal.convolve2d(switched_field, kernel[self.mm.ny-1-n:self.mm.ny+n, self.mm.nx-1-n:self.mm.nx+n], mode='same', boundary='wrap' if self.mm.PBC else 'fill')
-                # usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid') # TODO: this is extremely EXTREMELY slow, a possible speed-up is to shrink the kernel to the relevant area (e.g. radius r or 2r), and convolve anyway
+                # usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid') # this one is extremely EXTREMELY slow
                 interaction = self.prefactor*cp.multiply(self.mm.m, usefulkernel)
                 self.E += 2*interaction
             else:
@@ -647,14 +661,7 @@ class DipolarEnergy(Energy):
                     interaction += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
                 interaction = self.prefactor*cp.multiply(self.mm.m, interaction)
                 self.E += 2*interaction
-
-            # import matplotlib.pyplot as plt
-            # plt.imshow(switched_field.get())
-            # plt.show()
-            # plt.imshow(kernel.get())
-            # plt.show()
-            # plt.imshow(usefulkernel.get())
-            # plt.show()
+            # TODO: fully recalculate the dipolar energy after every <something> switches that were calculated with a cut-off kernel
 
 
 class ExchangeEnergy(Energy):

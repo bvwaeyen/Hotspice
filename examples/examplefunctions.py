@@ -118,7 +118,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
          'blue':  [[0.0,  b0, b0],
                    [0.5,  0.0, 0.0],
                    [1.0,  b1, b1]]}
-        newcmap = LinearSegmentedColormap('testCmap', segmentdata=cdict, N=256)
+        newcmap = LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
         h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=fill, avg=avg),
                        cmap=newcmap, origin='lower', vmin=-1, vmax=1, extent=hotspin.plottools._get_averaged_extent(mm, avg))
         c1 = plt.colorbar(h)
