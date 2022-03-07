@@ -1,6 +1,8 @@
 import ctypes
 import math
 import matplotlib
+import os
+import warnings
 
 import cupy as cp
 import matplotlib.pyplot as plt
@@ -306,7 +308,7 @@ def get_AFMness(mm: Magnets, AFM_mask=None):
     '''
     AFM_mask = mm._get_AFMmask() if AFM_mask is None else cp.asarray(AFM_mask)
     AFM_ness = cp.mean(cp.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='wrap' if mm.PBC else 'fill')))
-    return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(mm.mask)*mm.m.size)
+    return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(mm.occupation)*mm.m.size)
 
 def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False): # TODO: this is quite messy because we are working with color here instead of angles/magnitudes
     ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
@@ -347,6 +349,33 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
         result[whites[0], whites[1], :] = substitution_colors[whites[0], whites[1], :]
 
     return result.get()
+
+
+def init_fonts():
+    # Call this function before instantiating subplots!
+    smol = 10
+    medium = 11
+    chonk = 12
+
+    plt.rc('font', size=smol)          # controls default text sizes
+    plt.rc('axes', titlesize=medium)     # fontsize of the axes title
+    plt.rc('axes', labelsize=smol)   # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=smol)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=smol)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=smol)    # legend fontsize
+    plt.rc('figure', titlesize=chonk)  # fontsize of the figure title
+
+
+def save_plot(save_path):
+    ''' <save_path> is a full relative pathname, usually something like 
+        "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
+    '''
+    dirname = os.path.dirname(save_path)
+    if not os.path.exists(dirname): os.makedirs(dirname)
+    try:
+        plt.savefig(save_path)
+    except PermissionError:
+        warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)
 
 
 if __name__ == "__main__":

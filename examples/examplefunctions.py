@@ -71,7 +71,7 @@ def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=200):
     for T in np.linspace(T_min, T_max, N+1):
         mm.T = T
         mm.update()
-        AFM_ness.append(mm.get_AFMness())
+        AFM_ness.append(hotspin.plottools.get_AFMness(mm))
         mm.save_history()
     hotspin.plottools.show_history(mm, y_quantity=AFM_ness, y_label=r'AFM-ness')
 

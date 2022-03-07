@@ -24,7 +24,7 @@ print(f'Initialization time: {time.perf_counter() - t} seconds.')
 # mm.remove_energy('dipolar')
 
 
-def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.01, T_max=800): # TODO: update this function with modern methods
+def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_max=800):
     ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -40,9 +40,9 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.01, T
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    occupation = mm._get_occupation()
-    h = ax1.imshow(signal.convolve2d(mm.m, occupation, mode='valid', boundary='fill').get(),
-                             cmap='gray', origin='lower', vmin=-np.sum(occupation), vmax=np.sum(occupation))
+    mask = hotspin.plottools.Average.resolve(mm._get_appropriate_avg()).mask
+    h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='wrap' if mm.PBC else 'fill').get(),
+                             cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask), interpolation_stage='rgba', interpolation='antialiased')
     ax1.set_title(r'Averaged magnetization')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -60,9 +60,9 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.01, T
             mm.T = j*T_step
             mm.update()
             mm.save_history()
-            AFM_ness.append(mm.get_AFMness())
+            AFM_ness.append(hotspin.plottools.get_AFMness(mm))
         p.set_data(mm.history.T, AFM_ness)
-        h.set_array(signal.convolve2d(mm.m, occupation, mode='valid', boundary='fill').get())
+        h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get())
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 
@@ -77,6 +77,6 @@ if __name__ == "__main__":
     # ef.run_a_bit(mm, N=10e3, T=300)
     # ef.neelTemperature(mm, T_max=400)
     # ef.animate_quenching(mm, animate=3, speed=50, pattern='random')
-    # animate_temp_rise(mm, animate=3, speed=1000)
+    # animate_temp_rise(mm, animate=3, speed=100, T_step=0.05)
     # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, T_min=150, T_max=200)

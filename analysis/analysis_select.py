@@ -106,6 +106,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=Tr
     
     cmap = cm.get_cmap('viridis').copy()
     cmap.set_under(color='black')
+    hotspin.plottools.init_fonts()
     fig = plt.figure(figsize=(8, 7))
     ax1 = fig.add_subplot(2, 2, 1)
     if ONLY_SMALLEST_DISTANCE:

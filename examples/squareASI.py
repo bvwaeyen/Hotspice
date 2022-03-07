@@ -22,7 +22,7 @@ mm = hotspin.ASI.SquareASI(n, 2e-6, T=T, E_b=E_b, pattern='AFM', energies=[hotsp
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
-def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.01, T_max=600):
+def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_max=600):
     ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -38,7 +38,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.01, T
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=True), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi)
+    h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=True), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi, interpolation_stage='rgba', interpolation='antialiased')
     ax1.set_title(r'Averaged magnetization angle [rad]')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -56,7 +56,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=1000, T_step=0.01, T
             mm.T = j*T_step
             mm.update()
             mm.save_history()
-            AFM_ness.append(mm.get_AFMness())
+            AFM_ness.append(hotspin.plottools.get_AFMness(mm))
         p.set_data(mm.history.T, AFM_ness)
         h.set_array(hotspin.plottools.get_rgb(mm, fill=True))
         return h, p
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     # ef.run_a_bit(mm, N=20e3, T=40)
     # ef.neelTemperature(mm, T_max=400)
     # ef.animate_quenching(mm, animate=3, speed=50, fill=True, pattern='uniform')
-    # animate_temp_rise(mm, animate=3, speed=1000)
+    # animate_temp_rise(mm, animate=3, speed=100, T_step=0.05)
     # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, T_min=20, T_max=200)
 
