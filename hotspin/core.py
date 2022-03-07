@@ -9,20 +9,6 @@ from cupyx.scipy import signal
 from dataclasses import dataclass, field
 from typing import List
 
-"""
-TODO (summary):
-(!: priority, -: should do at some point in time, .: perhaps implement perhaps not)
-! improve Glauber model
-! develop the hotspin.io module
-- update the animate_temp_rise function with the modern 'API' or however to call this
-- sort out the AFM-ness and its normalization etc.
-- organize plotting functions better
-. can implement linear transformations if I want to
-. can implement random defects if I want to
-- make unit tests
-- multiswitch: analyze influence of Q on resulting physical behavior to see which values are acceptable
-- check numerical correctness with e.g. square lattice Ising model analytical solution
-"""
 
 # Some global variables for hotspin:
 SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = 20 # If there are less than <this> switches in a single iteration, the energies are just summed, otherwise a convolution is used.
@@ -32,22 +18,20 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def __init__(self, nx, ny, dx, dy, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
-            The position of magnets is specified using <nx> and <a>. 
+            The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are allowed currently. 
             The initial configuration of a Magnets geometry consists of 3 parts:
              1) in_plane:  Magnets can be in-plane or out-of-plane: True or False, respectively.
              2) ASI type:  Defined through subclasses (pinwheel, kagome, Ising...).
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
-            # TODO: linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy, but unit cells might be an issue
-            #       see https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html for the imshows then
         '''
         if type(self) is Magnets:
             raise Exception("Magnets() class can not be instantiated directly, and should instead be subclassed. Consider using a class from the hotspin.ASI module, or writing your own custom ASI class instead.")
 
-        self.t = 0. # [s] # TODO: decide if we are interested in the time, or not really
+        self.t = 0. # [s]
         self.Msat = Msat # [A/m]
-        self.V = V # [m³] # TODO: can we compress Msat and V into one parameter? (unit Am² = Nm/T)
+        self.V = V # [m³]
         self.in_plane = in_plane
         energies = (DipolarEnergy(),) if energies is None else energies # [J]
         
@@ -247,8 +231,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         nonzero_idx = cp.random.choice(self.n, 1)
         return cp.asarray([nonzero_y[nonzero_idx], nonzero_x[nonzero_idx]]).reshape(2, -1)
 
-    def _select_grid(self, r): # TODO: make r two-dimensional (necessary for e.g. kagome)
-        # TODO: this does not guarantee sufficient spacing in case of PBC!
+    def _select_grid(self, r):
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
             Warning: there is no guarantee that this function returns a non-empty array! (WIP)
             ! <r> is a number of cells, not a length in meters ! (optional) Conversion is responsibility of caller !
@@ -347,7 +330,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.history.clear()
     
 
-    def autocorrelation_fast(self, max_distance): # TODO: update this (and examplefunctions autocorrelation funcs) to SI unit system (and improve the function here and there)
+    def autocorrelation_fast(self, max_distance):
         max_distance = round(max_distance)
         s = cp.shape(self.xx)
         if not(hasattr(self, 'Distances')):
@@ -471,7 +454,7 @@ class Energy(ABC):
     def J_to_eV(cls, E):
         return E/1.602176634e-19
     @classmethod
-    def eV_to_J(cls, E): # This function might be superfluous, but it can't hurt to have it anyway
+    def eV_to_J(cls, E):
         return E*1.602176634e-19
 
 
@@ -664,7 +647,6 @@ class DipolarEnergy(Energy):
                     interaction += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
                 interaction = self.prefactor*cp.multiply(self.mm.m, interaction)
                 self.E += 2*interaction
-            # TODO: fully recalculate the dipolar energy after every <something> switches that were calculated with a cut-off kernel
 
 
 class ExchangeEnergy(Energy):
@@ -691,11 +673,9 @@ class ExchangeEnergy(Energy):
         return -2*self.E[indices2D[0], indices2D[1]]
     
     def update_single(self, index2D):
-        # TODO: custom efficient function for switching a single magnet
-        self.update()
+        self.update() # There are much faster ways of doing this, but this becomes difficult with PBC and in/out-of-plane
     
     def update_multiple(self, indices2D):
-        # TODO: custom efficient function for switching multiple magnets
         self.update()
 
 

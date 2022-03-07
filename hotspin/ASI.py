@@ -80,7 +80,7 @@ class FullASI(ASI):
         }
 
     def _get_AFMmask(self):
-        return cp.array([[1, -1], [-1, 1]], dtype='float')/4 # TODO: this might need a change?
+        return cp.array([[0, -1], [-1, 2]], dtype='float')/4 # Possible situations: ▚/▞ -> 1, ▀▀/▄▄/█ / █ -> 0.5, ██ -> 0 
     
     def _get_nearest_neighbors(self):
         return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
