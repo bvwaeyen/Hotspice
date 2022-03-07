@@ -325,10 +325,13 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return cp.ceil(r/self.dx), cp.ceil(r/self.dy)
 
 
-    def minimize(self): # TODO: this function seems a bit outdated
-        self.update_energy()
-        indexmax = cp.argmax(self.E, axis=None)
-        self.m.flat[indexmax] = -self.m.flat[indexmax]
+    def minimize(self, N=1):
+        ''' Switches the magnet which has the highest switching probability. Repeat this <N> times. '''
+        all_indices = cp.asarray([self.iyy.reshape(-1), self.ixx.reshape(-1)])
+        for _ in range(N):
+            indexmin2D = divmod(cp.argmin(self.switch_energy(all_indices)), self.nx)
+            self.m[indexmin2D] = -self.m[indexmin2D]
+            self.update_energy(index=indexmin2D)
     
 
     def save_history(self, *, E_tot=None, t=None, T=None, m_avg=None):
