@@ -163,7 +163,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             if index is None: # No index specified, so update fully
                 energy.update()
             elif index.size == 2: # Index contains 2 ints, so it represents the coordinates of a single magnet
-                energy.update_single(index)
+                energy.update_single(Energy.clean_index(index))
             else: # Index is specified and does not contain 2 ints, so interpret it as coordinates of multiple magnets
                 energy.update_multiple(index)
             self.E = self.E + energy.E
@@ -424,13 +424,13 @@ class Energy(ABC):
     
     @classmethod
     def clean_indices(cls, indices2D):
-        ''' Reshapes <indices2D> into a 2xN array.
+        ''' Reshapes <indices2D> into a 2xN two-dimensional array.
             @param <indices2D> [iterable]: an iterable which can have any shape, as long as it contains
                 at most 2 dimensions of a size greater than 1, of which exactly one has size 2. It is 
                 this size-2 dimension which will become the primary dimension of the returned array.
             @return [np.array(2xN)]: A 2xN array, where the 1st sub-array indicates x-indices, the 2nd y-indices.
         '''
-        indices2D = cp.asarray(indices2D).squeeze()
+        indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze())
         assert len(indices2D.shape) <= 2, "An array with more than 2 non-empty dimensions can not be used to represent a list of indices."
         assert cp.any(cp.asarray(indices2D.shape) == 2), "The list of indices has an incorrect shape. At least one dimension should have length 2."
         if indices2D.shape[0] == 2: # The only ambiguous case is for a 2x2 input array, but in that case we assume the array is already correct.

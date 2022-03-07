@@ -3,12 +3,11 @@
 ## Core functionality
 
 1. High priority
-    - Glauber model
-        - [ ] Determine if $E_B$ needs to be taken into account
-        - Multi-switching
-            - [ ] Fix PBC issue in Grid multi-switching
-            - [ ] Make r in Grid multi-switching different for x and y
-            - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*)
+    - [ ] Determine if $E_B$ needs to be taken into account in Glauber model
+    - Multi-switching
+        - [ ] Fix PBC issue in Grid multi-switching
+        - [ ] Make r in Grid multi-switching different for x and y
+        - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*)
     - [ ] Create parameter system which user can set, maybe module-wide but better might be `Magnets()`-wide, which controls implementation-related things like whether to use Glauber or Néel-Arrhenius, or how many to multi-switch at once, or how many steps between full kernel recalculations, or how hard to truncate the kernel, or... (probably a dataclass or something)
 
     - [ ] Develop .io and .experiments modules
