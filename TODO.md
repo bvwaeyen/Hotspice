@@ -8,7 +8,7 @@
         - [ ] Fix PBC issue in Grid multi-switching
         - [ ] Make r in Grid multi-switching different for x and y
         - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*)
-    - [ ] Create parameter system which user can set, maybe module-wide but better might be `Magnets()`-wide, which controls implementation-related things like whether to use Glauber or Néel-Arrhenius, or how many to multi-switch at once, or how many steps between full kernel recalculations, or how hard to truncate the kernel, or... (probably a dataclass or something)
+    - [x] Create parameter system which user can set, maybe module-wide but better might be `Magnets()`-wide, which controls implementation-related things like whether to use Glauber or Néel-Arrhenius, or how many to multi-switch at once, or how many steps between full kernel recalculations, or how hard to truncate the kernel, or... (probably a dataclass or something)
 
     - [ ] Develop .io and .experiments modules
         - [x] Kernel rank experiment
@@ -29,13 +29,16 @@
 ## Analysis and tests
 
 1. High priority
-    - [ ] Test physical accuracy of Hotspin
+    - Test physical accuracy of Hotspin
         - [x] 2D square Ising model
         - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization?)
+        - [ ] Pinwheel reversal in external field (cfr. flatspin paper)
     - [ ] Learn to use pandas (or something similar) to save results in a structured manner
 
 2. Medium priority
-    - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable
+    - Test physical accuracy of Hotspin
+        - [ ] Domain size of square and pinwheel? As a function of time? (is there a maximum size or do they keep growing)
+    - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???)
 
 3. Low priority
     - [x] Distribution of sampling method
