@@ -268,9 +268,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             idx = self._update_Néel(*args, **kwargs)
         return Energy.clean_indices(idx)
 
-    def _update_Glauber(self, Q=0.01):
+    def _update_Glauber(self, Q=0.05, idx=None):
         # 1) Choose a bunch of magnets at random
-        idx = self.select(r=max(self.calc_RxRy(Q)))
+        if idx is None: idx = self.select(r=max(self.calc_RxRy(Q)))
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
         # TODO: can adapt this to work at T=0 by first checking if energy would drop
         exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf

@@ -12,6 +12,7 @@ J = kB*300
 T_c = 2*J/kB/math.log(1+math.sqrt(2))
 T_lim = [0.9, 1.1] # Relative to T_c
 a = 1 # Lattice spacing, chosen large to get many simultaneous switches, it doesn't matter for exchange energy anyway
+size = 800
 
 def get_m_theory(T_min, T_max):
     m_theory_range = np.linspace(T_min, T_max, 1000)
@@ -22,7 +23,7 @@ def get_m_theory(T_min, T_max):
 
 
 def test_magnetization(T_steps=30, N=1000, verbose=False, plot=True):
-    mm = hotspin.ASI.FullASI(800, a, energies=[hotspin.ExchangeEnergy(J=J)], PBC=True, pattern='uniform')
+    mm = hotspin.ASI.FullASI(size, a, energies=[hotspin.ExchangeEnergy(J=J)], PBC=True, pattern='uniform')
 
     T_range = np.linspace(T_lim[0], T_lim[1], T_steps)
     m_avg = np.zeros_like(T_range)
@@ -63,7 +64,7 @@ def test_N_influence(*args, plot=True, save=False, **kwargs):
         ax.set_ylim([-0.01, 1])
         plt.gcf().tight_layout()
         if save:
-            hotspin.plottools.save_plot(f"results/test_squareIsing/J={J/kB:.0f}kB_Tsweep{len(T_range)}_Nsweep{len(N_range)}_a={a:.2g}.pdf")
+            hotspin.plottools.save_plot(f"results/test_squareIsing/J={J/kB:.0f}kB_Tsweep{len(T_range)}_Nsweep{len(N_range)}_a={a:.2g}_{size}x{size}.pdf")
         plt.show()
 
 

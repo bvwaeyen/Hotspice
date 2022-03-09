@@ -12,8 +12,8 @@ from context import hotspin
 
 
 ## Parameters, meshgrid
-T = 300
-E_b = 10.
+T = 300 # [K]
+E_b = 5e-22 # [J]
 n = 200
 
 ## Initialize main Magnets object
@@ -80,4 +80,4 @@ if __name__ == "__main__":
 
     #### Commands which do some specific thing which yields nice saved figures or videos
     # factor = 10 # Approximately how many switches occur per mm.update()
-    # ef.animate_quenching(mm, pattern='uniform', T_low=2, T_high=800, animate=3, speed=50//factor, n_sweep=80000//factor, fill=True, save=2) # Optimized for nx = ny = 200
+    # ef.animate_quenching(mm, pattern='uniform', T_low=20, T_high=400, animate=3, speed=50//factor, n_sweep=80000//factor, fill=True, save=2) # Optimized for nx = ny = 200

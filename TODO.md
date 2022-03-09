@@ -7,7 +7,7 @@
     - Multi-switching
         - [ ] Fix PBC issue in Grid multi-switching
         - [ ] Make r in Grid multi-switching different for x and y
-        - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*)
+        - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel since the last calculation I did, did not seem to correspond to reality very well)
     - [x] Create parameter system which user can set, maybe module-wide but better might be `Magnets()`-wide, which controls implementation-related things like whether to use Glauber or Néel-Arrhenius, or how many to multi-switch at once, or how many steps between full kernel recalculations, or how hard to truncate the kernel, or... (probably a dataclass or something)
 
     - [ ] Develop .io and .experiments modules
@@ -20,6 +20,7 @@
     - [ ] Organize plotting functions better (standardization of fonts, saving, ...)
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state because the current method is behaving similarly as when a cheese grater is used as ship
     - [ ] Update autocorrelation function to use SI units etc.
+    - [ ] Make a plottools function which clearly shows the basic lattice of an ASI (not full, just a couple of unit cells), with grid points and such indicated, to include in $\LaTeX$.
 
 3. Low priority
     - [ ] Compress $M_{sat}$ and $V$ into one parameter (unit Am² = Nm/T) (or is there some reason why they need to be separate?)
@@ -41,4 +42,6 @@
     - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???)
 
 3. Low priority
+    - Test physical accuracy of Hotspin
+        - [ ] Angle between 0° and 45° between SquareASI and PinwheelASI where AFM alignment changes to uniform and vice versa? Can be useful to compare to experiment
     - [x] Distribution of sampling method

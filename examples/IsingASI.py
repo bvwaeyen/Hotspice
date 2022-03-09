@@ -12,8 +12,8 @@ from context import hotspin
 
 
 ## Parameters, meshgrid
-T = 300
-E_b = 10.
+T = 300 # [K]
+E_b = 5e-22 # [J]
 n = 100
 
 ## Initialize main Magnets object

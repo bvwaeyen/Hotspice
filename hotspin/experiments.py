@@ -59,12 +59,12 @@ class KernelQualityExperiment(Experiment):
 
 if __name__ == "__main__": # Run this file from the parent directory using cmd 'python -m hotspin.experiments'
     from .ASI import PinwheelASI
-    mm = PinwheelASI(25, 1, T=1, energies=(DipolarEnergy(), ZeemanEnergy()))
+    mm = PinwheelASI(25, 5e-3, T=1, energies=(DipolarEnergy(), ZeemanEnergy()))
     datastream = RandomDataStream()
     inputter = PerpFieldInputter(datastream, magnitude=1, phi=math.pi/180*7, n=2)
     outputreader = RegionalOutputReader(5, 5, mm)
     experiment = KernelQualityExperiment(inputter, outputreader, mm)
-    bits = 100
+    bits = 11
 
     filename = f'results/{type(experiment).__name__}/{type(inputter).__name__}/{type(outputreader).__name__}_{mm.nx}x{mm.ny}_out{outputreader.nx}x{outputreader.nx}_in{bits}bits.npy'
     
