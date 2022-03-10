@@ -6,7 +6,7 @@
     - [ ] Determine if $E_B$ needs to be taken into account in Glauber model
     - Multi-switching
         - [ ] Fix PBC issue in Grid multi-switching
-        - [ ] Make r in Grid multi-switching different for x and y
+        - [x] Make r in Grid multi-switching different for x and y
         - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel since the last calculation I did, did not seem to correspond to reality very well)
     - [x] Create parameter system which user can set, maybe module-wide but better might be `Magnets()`-wide, which controls implementation-related things like whether to use Glauber or Néel-Arrhenius, or how many to multi-switch at once, or how many steps between full kernel recalculations, or how hard to truncate the kernel, or... (probably a dataclass or something)
 
@@ -24,8 +24,9 @@
 
 3. Low priority
     - [ ] Compress $M_{sat}$ and $V$ into one parameter (unit Am² = Nm/T) (or is there some reason why they need to be separate?)
-    - [ ] Linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy, but unit cells might be an issue ([plt imshow](https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html "Affine transform of an image for skewed geometries"))
+    - [ ] Linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy, but unit cells and more advanced calculations might become an issue ([plt imshow](https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html "Affine transform of an image for skewed geometries"))
     - [ ] Random defects (i.e. missing magnets, because other randomness will interfere with the unit cells)
+    - [ ] Turn Vec2D into a Unitcell class that includes more information than just nx and ny
 
 ## Analysis and tests
 
@@ -40,6 +41,7 @@
     - Test physical accuracy of Hotspin
         - [ ] Domain size of square and pinwheel? As a function of time? (is there a maximum size or do they keep growing)
     - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???)
+    - [ ] Simulation speed (samples/sec) for different grid sizes? Are certain nicely factorable lengths preferable?
 
 3. Low priority
     - Test physical accuracy of Hotspin

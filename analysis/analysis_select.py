@@ -28,25 +28,32 @@ def calculate_any_neighbors(pos, shape, center:int=0):
     final_array = cp.zeros((2*shape[0]-1)*(2*shape[1]-1))
     pairwise_distances = (pos.T[:,None,:] - pos.T).reshape(-1,2).T # The real distances as coordinates
     # But we need to bin them, so we have to increase everything so there are no nonzero elements, and flatten:
-    pairwise_distances_flat = (pairwise_distances[0] + shape[0] - 1)*(2*shape[0]-1) + (pairwise_distances[1] + shape[1] - 1)
+    pairwise_distances_flat = (pairwise_distances[0] + shape[0] - 1)*(2*shape[1]-1) + (pairwise_distances[1] + shape[1] - 1)
     pairwise_distances_flat_binned = cp.bincount(pairwise_distances_flat)
     final_array[:pairwise_distances_flat_binned.size] = pairwise_distances_flat_binned
     final_array = final_array.reshape((2*shape[0]-1, 2*shape[1]-1))
-    return final_array if center == 0 else final_array[shape[0]-1-center:shape[0]+center, shape[1]-1-center:shape[1]+center]
+    if center == 0:
+        return final_array # No need to center it at all
+    else:
+        pad_x, pad_y = -(shape[1] - center - 1), -(shape[0] - center - 1) # How much padding(>0)/cropping(<0) needed to center the array
+        final_array = final_array[:,-pad_x:-pad_x + 2*center+1] if pad_x < 0 else cp.pad(final_array, ((0,0), (pad_x,pad_x))) # x cropping/padding
+        final_array = final_array[-pad_y:-pad_y + 2*center+1,:] if pad_y < 0 else cp.pad(final_array, ((pad_y,pad_y), (0,0))) # y cropping/padding
+        return final_array
 
 
-def analysis_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True):
+def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True):
     ''' In this analysis, the multiple-magnet-selection algorithm of hotspin.Magnets.select() is analyzed.
         The spatial distribution is calculated by performing <n> runs of the select() method.
         Also the probability distribution of the distance between two samples is calculated,
         as well as the probablity distrbution of their relative positions.
             (note that this becomes expensive to calculate for large L)
         @param n [int] (10000): the number of times the select() method is executed.
-        @param L [int] (400): the size of the simulation.
+        @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify <L> for square domain.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     '''
-    if L < r*3: warnings.warn(f"Simulation of size {L}x{L} might be too small for r={r} cells!", stacklevel=2)
-    mm = hotspin.ASI.FullASI(L, 1, PBC=PBC)
+    if Ly is None: Ly = L
+    if Lx is None: Lx = L
+    mm = hotspin.ASI.FullASI(Lx, 1, ny=Ly, PBC=PBC)
     INTEGER_BINS = False # If true, the bins are pure integers, otherwise they can be finer than this.
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
     scale: int = 3 if ONLY_SMALLEST_DISTANCE else 4 # The distances are stored up to scale*r, beyond that we dont keep in memory
@@ -65,7 +72,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=Tr
     spectrum = cp.zeros_like(field)
     for _ in range(n):
         # from poisson_disc import Bridson_sampling
-        # pos = cp.asarray(Bridson_sampling(dims=np.array([L, L]), radius=r, k=5).T, dtype=int) # POISSON DISC SAMPLING BRIDSON2007
+        # pos = cp.asarray(Bridson_sampling(dims=np.array([Ly, Lx]), radius=r, k=5).T, dtype=int) # POISSON DISC SAMPLING BRIDSON2007
         pos = mm.select(r) # MODIFY THIS LINE TO SELECT A SPECIFIC SELECTION ALGORITHM
         total += pos.shape[1]
         choices = cp.zeros_like(field)
@@ -76,10 +83,10 @@ def analysis_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=Tr
                 _, n_pos = pos.shape # The following approach is quite suboptimal, but it works :)
                 all_pos = cp.zeros((2, n_pos*4), dtype=int)
                 all_pos[:,:n_pos] = pos
-                all_pos[0,n_pos:n_pos*2] = all_pos[0,:n_pos] + mm.nx
+                all_pos[0,n_pos:n_pos*2] = all_pos[0,:n_pos] + mm.ny
                 all_pos[1,n_pos:n_pos*2] = all_pos[1,:n_pos]
                 all_pos[0,n_pos*2:] = all_pos[0,:n_pos*2]
-                all_pos[1,n_pos*2:] = all_pos[1,:n_pos*2] + mm.ny
+                all_pos[1,n_pos*2:] = all_pos[1,:n_pos*2] + mm.nx
             else:
                 all_pos = pos
             if ONLY_SMALLEST_DISTANCE:
@@ -139,10 +146,10 @@ def analysis_select_distribution(n:int=10000, L:int=400, r=16, show_plot:bool=Tr
     im4 = ax4.imshow(spectrum.get()/total, extent=[-.5+freq[0], .5+freq[-1], -.5+freq[0], .5+freq[-1]], interpolation_stage='rgba', interpolation='none', cmap='gray')
     ax4.set_title(f'Periodogram')
     plt.colorbar(im4)
-    plt.suptitle(f'{L}x{L} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
+    plt.suptitle(f'{Lx}x{Ly} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
     plt.gcf().tight_layout()
     if save:
-        save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{L}x{L}_r={r}{'_PBC' if PBC else ''}.pdf"
+        save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{Lx}x{Ly}_r={r}{'_PBC' if PBC else ''}.pdf"
         dirname = os.path.dirname(save_path)
         if not os.path.exists(dirname): os.makedirs(dirname)
         try:
@@ -164,9 +171,9 @@ def analysis_select_speed(n: int=10000, L:int=400, r=16):
     for _ in range(n):
         mm.select(r)
     t = time.perf_counter() - t
-    print(f'Time required for {n} runs of hotspin.Magnets.select(): {t:.3f}s.')
+    print(f'Time required for {n} runs of hotspin.Magnets.select() on {L}x{L} grid: {t:.3f}s.')
 
 
 if __name__ == "__main__":
     # analysis_select_speed(L=400)
-    analysis_select_distribution(L=400, n=5000, save=True, PBC=True)
+    analysis_select_distribution(Lx=300, Ly=200, n=5000, save=True, PBC=True)

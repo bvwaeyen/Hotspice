@@ -220,12 +220,14 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         if noSIunits: xx, yy = xx/self.dx, xx/self.dy
         self._T = f(xx, yy)
 
-    def select(self, r=16):
-        ''' @param r [int] (16): minimal distance between magnets 
+
+    def select(self, r=None):
+        ''' @param r [float] (self.calc_r(0.01)): minimal distance between magnets, in meters
             @return [cp.array]: a 2xN array, where the 2 rows represent y- and x-coordinates (!), respectively.
                 (this is because the indexing of 2D arrays is e.g. self.m[y,x])
         '''
-        # TODO: make it so this function never returns something empty (but look at performance impact of this also)
+        if r is None: r = self.calc_r(0.01)
+
         return self._select_grid(r=r)
         # return self._select_single()
     
@@ -237,25 +239,26 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     def _select_grid(self, r):
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
-            Warning: there is no guarantee that this function returns a non-empty array! (WIP)
-            ! <r> is a number of cells, not a length in meters ! (optional) Conversion is responsibility of caller !
+            ! <r> is a distance in meters, not a number of cells !
         '''
-        r = math.ceil(r - 1) # - 1 because effective minimal distance turns out to be actually r + 1
-        lcm = self.unitcell.x*self.unitcell.y // math.gcd(self.unitcell.x, self.unitcell.y) # Smallest square that fits integer amount of unit cells
-        r = r - (r % lcm) + lcm # To have an integer number of unit cells to fit in a supercell (necessary for occupation_supercell)
-        if 3*r - 1 > min(self.nx, self.ny): return self._select_single() # _select_grid() would not guarantee at least 1 switch
-        move_grid = -cp.random.randint(-r, r, size=(2,)) # (y,x)
-        supergrid_nx = (self.nx - 2)//(2*r) + 2 # This might be a bit too large, but that does not matter much, since
-        supergrid_ny = (self.ny - 2)//(2*r) + 2 # we have to crop anyway (see line 'ok = ...'), which is parallelized.
-        offsets_x = move_grid[1] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*r
-        offsets_y = move_grid[0] + self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*r
-        disp_x, disp_y = move_grid[1]%self.unitcell.x, move_grid[0]%self.unitcell.y
-        occupation_supercell = self.occupation[disp_y:disp_y + r, disp_x:disp_x + r]
+        Rx, Ry = math.ceil(r/self.dx) - 1, math.ceil(r/self.dy) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
+        Rx, Ry = self.unitcell.x * math.ceil(Rx/self.unitcell.x), self.unitcell.y * math.ceil(Ry/self.unitcell.y) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
+        Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
+        supergrid_nx = (self.nx + Rx - 1)//(2*Rx) + 1
+        supergrid_ny = (self.ny + Ry - 1)//(2*Ry) + 1
+        move_grid = -np.random.randint([-Ry, -Rx], [Ry, Rx])
+        if Rx >= self.nx: move_grid[1] = 0 # If the grid is perfectly fit along an axis, then
+        if Ry >= self.ny: move_grid[0] = 0 # just don't move in that coordinate direction
+        offsets_x = move_grid[1] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*Rx
+        offsets_y = move_grid[0] + self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*Ry
+        disp_x, disp_y = move_grid[1] % self.unitcell.x, move_grid[0] % self.unitcell.y
+        occupation_supercell = self.occupation[disp_y:disp_y + Ry, disp_x:disp_x + Rx]
         occupation_nonzero = occupation_supercell.nonzero()
         random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, supergrid_ny*supergrid_nx)
         idx_x = offsets_x + occupation_nonzero[1][random_nonzero_indices]
         idx_y = offsets_y + occupation_nonzero[0][random_nonzero_indices]
         ok = cp.logical_and(cp.logical_and(idx_x >= 0, idx_y >= 0), cp.logical_and(idx_x < self.nx, idx_y < self.ny))
+        if cp.sum(ok) == 0: return self._select_grid(r) # If no samples were taken, try again
         return cp.asarray([idx_y[ok], idx_x[ok]])
 
     def update(self, *args, **kwargs):
@@ -270,7 +273,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     def _update_Glauber(self, Q=0.05, idx=None):
         # 1) Choose a bunch of magnets at random
-        if idx is None: idx = self.select(r=max(self.calc_RxRy(Q)))
+        if idx is None: idx = self.select(r=self.calc_r(Q))
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
         # TODO: can adapt this to work at T=0 by first checking if energy would drop
         exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
@@ -307,11 +310,6 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
                 probabilities is to be less than <Q>.
         '''
         return (8e-7*self.Msat**2*self.V**2/(Q*cp.min(self.kBT)))**(1/3)
-    
-    def calc_RxRy(self, Q): # Rx, Ry: an amount of cells
-        ''' Calculates the number of cells that simultaneous samples need to be apart along x and y. '''
-        r = self.calc_r(Q)
-        return cp.ceil(r/self.dx), cp.ceil(r/self.dy)
 
 
     def minimize(self, N=1):
