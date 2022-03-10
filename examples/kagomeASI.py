@@ -29,3 +29,6 @@ if __name__ == "__main__":
     # ef.animate_quenching(mm, animate=3, speed=50, avg='triangle')
     # ef.autocorrelation_dist_dependence(mm)
     # autocorrelation_temp_dependence(mm, T_min=20, T_max=60) # Since kagome is quite sparse behind-the-scenes, it is doubtable whether the autocorrelation has a significant meaning
+    
+    #### Commands which do some specific thing which yields nice saved figures or videos
+    # hotspin.plottools.show_lattice(mm, 5, 3, save=True, fall_off=.5)

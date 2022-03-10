@@ -7,6 +7,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from cupyx.scipy import signal
 from dataclasses import dataclass, field
+from scipy.spatial.distance import pdist
 from typing import List
 
 
@@ -98,6 +99,12 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     
     def _get_groundstate(self):
         return 'random'
+    
+    def _get_closest_dist(self):
+        ''' Returns the closest distance between two magnets in the simulation. '''
+        slice = cp.where(self.occupation[:self.unitcell.y*2,:self.unitcell.x*2]) # We only need at most two unit cells
+        pos_x, pos_y = self.xx[slice], self.yy[slice]
+        return pdist(cp.asarray([pos_x, pos_y]).get().T).min()
 
     def initialize_m(self, pattern='random', update_energy=True):
         ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
@@ -663,13 +670,13 @@ class ExchangeEnergy(Energy):
         self.update()
     
     def update(self):
-        if self.mm.in_plane:
+        if self.mm.in_plane: # Use the XY hamiltonian (but spin has fixed axis so model is still Ising-like)
             mx = self.mm.orientation[:,:,0]*self.mm.m
             my = self.mm.orientation[:,:,1]*self.mm.m
             sum_mx = signal.convolve2d(mx, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
             sum_my = signal.convolve2d(my, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
             self.E = -self.J*(cp.multiply(sum_mx, mx) + cp.multiply(sum_my, my))
-        else:
+        else: # Use Ising hamiltonian
             self.E = -self.J*cp.multiply(signal.convolve2d(self.mm.m, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill'), self.mm.m)
 
     def energy_switch(self, indices2D):

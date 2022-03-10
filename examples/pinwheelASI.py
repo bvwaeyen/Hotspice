@@ -79,5 +79,6 @@ if __name__ == "__main__":
     # autocorrelation_temp_dependence(mm, T_min=20, T_max=80)
 
     #### Commands which do some specific thing which yields nice saved figures or videos
+    # hotspin.plottools.show_lattice(mm, 5, 5, save=True)
     # factor = 10 # Approximately how many switches occur per mm.update()
     # ef.animate_quenching(mm, pattern='random', T_low=30, T_high=30, animate=3, speed=500//factor, n_sweep=40000//factor, fill=True, save=25) # Optimized for nx = ny = 400

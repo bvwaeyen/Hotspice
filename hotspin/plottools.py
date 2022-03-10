@@ -12,6 +12,7 @@ from cupyx.scipy import signal
 from enum import auto, Enum
 from matplotlib import cm
 from matplotlib.colors import hsv_to_rgb, LinearSegmentedColormap
+from matplotlib.patches import Ellipse
 from matplotlib.widgets import MultiCursor
 
 from .core import Magnets
@@ -268,6 +269,49 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
         axes.append(ax3)
     multi = MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
     plt.gcf().tight_layout()
+    plt.show()
+
+def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, scale: float = .8, save: bool = False):
+    ''' Shows a minimalistic rendition of the lattice on which the spins are placed.
+        @param mm [Magnets]: an instance of the ASI class whose lattice should be plotted.
+        @param nx, ny [int] (3): the number of unit cells that will be shown.
+        @param fall_off [float] (1): how many unit cells it takes for the opacity to drop from 1 to 0 near the edge.
+        @param scale [float] (.8): how long the shown ellipses are, as a multiple of the distance between nearest neighbors.
+        @param save [bool] (False): if True, the figure is saved as "results/lattices/<ASI_name>_<nx>x<ny>.pdf
+    '''
+    nx, ny = nx*mm.unitcell.x+1, ny*mm.unitcell.y+1
+    if mm.nx < nx or mm.ny < ny:
+        raise ValueError(f"Lattice of {type(mm).__name__} is too small: ({mm.nx}x{mm.ny})<({nx}x{ny}).")
+
+    occupation = mm.occupation[:ny,:nx]
+    positions_x = mm.xx[np.where(occupation)].get()
+    positions_y = mm.yy[np.where(occupation)].get()
+    xmin, xmax, ymin, ymax = positions_x.min(), positions_x.max(), positions_y.min(), positions_y.max()
+    ux, uy = mm.unitcell.x*mm.dx, mm.unitcell.y*mm.dy
+
+    figsize = 3
+    fig = plt.figure(figsize=(figsize, figsize*uy*ny/ux/nx))
+    ax = fig.add_subplot(111)
+    ax.set_aspect('equal')
+    ax.set_axis_off()
+    size = mm._get_closest_dist()*scale
+    if mm.in_plane:
+        ox = mm.orientation[:,:,0][np.where(occupation)].get()
+        oy = mm.orientation[:,:,1][np.where(occupation)].get()
+        angles = np.arctan2(oy, ox)*180/math.pi
+    else:
+        angles = np.zeros_like(positions_x)
+
+    for i in range(positions_x.size):
+        px, py = positions_x[i], positions_y[i]
+        edgedist = min([(px-xmin)/ux, (xmax-px)/ux, (py-ymin)/uy, (ymax-py)/uy, fall_off])/fall_off # Normalized distance to edge of figure (between 0 and 1)
+        alpha = max(edgedist, 0.1)
+        ax.add_artist(Ellipse((px, py), size, (size/2 if mm.in_plane else size), angle=angles[i], alpha=alpha, ec=None))
+    ax.set_xlim(xmin-mm.dx/2, xmax+mm.dx/2)
+    ax.set_ylim(ymin-mm.dy/2, ymax+mm.dy/2)
+
+    plt.gcf().tight_layout()
+    if save: save_plot(f'results/lattices/{type(mm).__name__}_{nx//mm.unitcell.x:.0f}x{ny//mm.unitcell.y:.0f}.pdf')
     plt.show()
 
 def show_history(mm: Magnets, y_quantity=None, y_label=r'Average magnetization'):

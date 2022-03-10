@@ -20,7 +20,7 @@
     - [ ] Organize plotting functions better (standardization of fonts, saving, ...)
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state because the current method is behaving similarly as when a cheese grater is used as ship
     - [ ] Update autocorrelation function to use SI units etc.
-    - [ ] Make a plottools function which clearly shows the basic lattice of an ASI (not full, just a couple of unit cells), with grid points and such indicated, to include in $\LaTeX$.
+    - [x] Make a plottools function which clearly shows the basic lattice of an ASI (not full, just a couple of unit cells), with grid points and such indicated, to include in $\LaTeX$.
 
 3. Low priority
     - [ ] Compress $M_{sat}$ and $V$ into one parameter (unit Am² = Nm/T) (or is there some reason why they need to be separate?)
