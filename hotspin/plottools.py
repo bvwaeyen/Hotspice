@@ -252,10 +252,9 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
             ax2.set_ylabel('y [m]')
             axes.append(ax2)
         nonzero = mm.m.get().nonzero()
-        quiverscale = mm._get_plotting_params()['quiverscale']/min(mm.dx, mm.dy)
         ax2.quiver(mm.xx.get()[nonzero], mm.yy.get()[nonzero], 
                 cp.multiply(m, mm.orientation[:,:,0]).get()[nonzero], cp.multiply(m, mm.orientation[:,:,1]).get()[nonzero],
-                pivot='mid', scale=quiverscale, headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
+                pivot='mid', scale=1.1/mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
         im3 = ax3.imshow(np.where(mm.m.get() != 0, mm.E.get(), np.nan), origin='lower',

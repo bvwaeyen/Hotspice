@@ -19,7 +19,7 @@ class SimParams:
 
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
-    def __init__(self, nx, ny, dx, dy, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False):
+    def __init__(self, nx, ny, dx, dy, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False, params: SimParams = None):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are allowed currently. 
@@ -33,7 +33,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         if type(self) is Magnets:
             raise Exception("Magnets() class can not be instantiated directly, and should instead be subclassed. Consider using a class from the hotspin.ASI module, or writing your own custom ASI class instead.")
 
-        self.params = SimParams() # This can just be edited and accessed normally since it is just a dataclass
+        self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
         self.t = 0. # [s]
         self.Msat = Msat # [A/m]
         self.V = V # [m³]
@@ -382,11 +382,6 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def _get_appropriate_avg(self):
         ''' Returns the most appropriate averaging mask for a given type of ASI '''
         return 'cross'
-
-    def _get_plotting_params(self):
-        return {
-            'quiverscale': 0.7
-        }
 
     def _get_AFMmask(self):
         return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')

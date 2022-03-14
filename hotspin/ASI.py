@@ -39,7 +39,7 @@ class ASI(ABC, Magnets):
     def _get_nearest_neighbors(self):
         ''' Returns a small mask with the magnet at the center, and 1 at the positions of its nearest neighbors (elsewhere 0). '''
         pass
-    
+
     @abstractmethod
     def _get_groundstate(self):
         ''' Returns one of either strings: 'uniform', 'AFM', 'random'.
@@ -55,7 +55,7 @@ class FullASI(ASI):
         self.ny = n if ny is None else ny
         self.dx = self.dy = a
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
-    
+
     def _set_m(self, pattern):
         if pattern == 'uniform':
             self.m = cp.ones_like(self.xx)
@@ -64,7 +64,7 @@ class FullASI(ASI):
         else:
             self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
-    
+
     def _get_unitcell(self):
         return (1, 1)
 
@@ -73,18 +73,13 @@ class FullASI(ASI):
 
     def _get_appropriate_avg(self):
         return 'point'
-    
-    def _get_plotting_params(self):
-        return {
-            'quiverscale': 1
-        }
 
     def _get_AFMmask(self):
         return cp.array([[0, -1], [-1, 2]], dtype='float')/4 # Possible situations: ▚/▞ -> 1, ▀▀/▄▄/█ / █ -> 0.5, ██ -> 0 
-    
+
     def _get_nearest_neighbors(self):
         return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
-    
+
     def _get_groundstate(self):
         return 'AFM'
 
@@ -97,7 +92,7 @@ class IsingASI(ASI):
         self.ny = n if ny is None else ny
         self.dx = self.dy = a
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
-    
+
     def _set_m(self, pattern):
         if pattern == 'uniform':
             self.m = cp.ones_like(self.xx)
@@ -106,13 +101,13 @@ class IsingASI(ASI):
         else:
             self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
-        
+
     def _set_orientation(self, angle=0.):
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         self.orientation[:,:,0] = math.cos(angle)
         self.orientation[:,:,1] = math.sin(angle)
         self.orientation = cp.asarray(self.orientation)
-    
+
     def _get_unitcell(self):
         return (1, 1)
 
@@ -121,18 +116,13 @@ class IsingASI(ASI):
 
     def _get_appropriate_avg(self):
         return 'point'
-    
-    def _get_plotting_params(self):
-        return {
-            'quiverscale': 1.1
-        }
 
     def _get_AFMmask(self):
         return cp.array([[1, 1], [-1, -1]])/4
-    
+
     def _get_nearest_neighbors(self):
         return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
-    
+
     def _get_groundstate(self):
         return 'uniform'
 
@@ -145,7 +135,7 @@ class SquareASI(ASI):
         self.ny = n if ny is None else ny
         self.dx = self.dy = a/2
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
-    
+
     def _set_m(self, pattern):
         if pattern == 'uniform':
             self.m = cp.ones_like(self.xx)
@@ -154,7 +144,7 @@ class SquareASI(ASI):
         else:
             self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
-    
+
     def _set_orientation(self, angle=0):
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         occupation = self.occupation.get()
@@ -175,19 +165,13 @@ class SquareASI(ASI):
 
     def _get_appropriate_avg(self):
         return 'cross'
-    
-    def _get_plotting_params(self):
-        # examples of this include quiverscale, magnitude scale to normalize value in hsv, ...
-        return {
-            'quiverscale': 0.7
-        }
 
     def _get_AFMmask(self):
         return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
-    
+
     def _get_nearest_neighbors(self):
         return cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
-    
+
     def _get_groundstate(self):
         return 'AFM'
 
@@ -196,10 +180,10 @@ class PinwheelASI(SquareASI):
     def __init__(self, n, a, ny=None, **kwargs):
         ''' In-plane ASI similar to SquareASI, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
         super().__init__(n, a, ny=ny, **kwargs)
-        
+
     def _set_orientation(self, angle=0.):
         super()._set_orientation(angle + math.pi/4)
-    
+
     def _get_groundstate(self):
         return 'uniform'
 
@@ -219,7 +203,7 @@ class KagomeASI(ASI):
         self.dx = a/4
         self.dy = math.sqrt(3)*self.dx
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
-    
+
     def _set_m(self, pattern):
         if pattern == 'uniform':
             self.m = cp.ones_like(self.xx)
@@ -230,7 +214,7 @@ class KagomeASI(ASI):
         else:
             self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
-        
+
     def _set_orientation(self, angle=0.):
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         occupation = self.occupation.get()
@@ -243,7 +227,7 @@ class KagomeASI(ASI):
         self.orientation[occupation == 0,0] = 0
         self.orientation[occupation == 0,1] = 0
         self.orientation = cp.asarray(self.orientation)
-    
+
     def _get_unitcell(self):
         return (4, 4)
 
@@ -255,18 +239,13 @@ class KagomeASI(ASI):
 
     def _get_appropriate_avg(self):
         return 'hexagon'
-    
-    def _get_plotting_params(self):
-        return {
-            'quiverscale': 0.7
-        }
 
     def _get_AFMmask(self):
         return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
 
     def _get_nearest_neighbors(self):
         return cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
-    
+
     def _get_groundstate(self):
         return 'uniform'
 
@@ -278,14 +257,9 @@ class TriangleASI(KagomeASI):
 
     def _set_orientation(self, angle=0.):
         super()._set_orientation(angle + math.pi/2)
-    
+
     def _get_appropriate_avg(self):
         return 'triangle'
-    
-    def _get_plotting_params(self):
-        return {
-            'quiverscale': 0.5
-        }
-    
+
     def _get_groundstate(self):
         return 'AFM'
