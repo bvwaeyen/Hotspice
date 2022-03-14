@@ -11,7 +11,7 @@ from .core import Magnets
 
 class ASI(ABC, Magnets):
     @abstractmethod
-    def _set_m(self, pattern):
+    def _set_m(self, pattern: str):
         ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "AFM" or "random". '''
         pass
 
@@ -48,7 +48,7 @@ class ASI(ABC, Magnets):
         pass
 
 class FullASI(ASI):
-    def __init__(self, n, a, ny=None, **kwargs):
+    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
         ''' Out-of-plane ASI in a square arrangement. '''
         self.a = a # [m] The distance between two nearest neighboring spins
         self.nx = n
@@ -56,7 +56,7 @@ class FullASI(ASI):
         self.dx = self.dy = a
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
 
-    def _set_m(self, pattern):
+    def _set_m(self, pattern: str):
         if pattern == 'uniform':
             self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
@@ -85,7 +85,7 @@ class FullASI(ASI):
 
 
 class IsingASI(ASI):
-    def __init__(self, n, a, ny=None, **kwargs):
+    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins on a square grid, all pointing in the same direction. '''
         self.a = a # [m] The distance between two nearest neighboring spins
         self.nx = n
@@ -93,7 +93,7 @@ class IsingASI(ASI):
         self.dx = self.dy = a
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
-    def _set_m(self, pattern):
+    def _set_m(self, pattern: str):
         if pattern == 'uniform':
             self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
@@ -102,7 +102,7 @@ class IsingASI(ASI):
             self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
-    def _set_orientation(self, angle=0.):
+    def _set_orientation(self, angle: float = 0.):
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         self.orientation[:,:,0] = math.cos(angle)
         self.orientation[:,:,1] = math.sin(angle)
@@ -128,7 +128,7 @@ class IsingASI(ASI):
 
 
 class SquareASI(ASI):
-    def __init__(self, n, a, ny=None, **kwargs):
+    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
         ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares. '''
         self.a = a # [m] The side length of the squares (i.e. side length of a unit cell)
         self.nx = n
@@ -136,7 +136,7 @@ class SquareASI(ASI):
         self.dx = self.dy = a/2
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
-    def _set_m(self, pattern):
+    def _set_m(self, pattern: str):
         if pattern == 'uniform':
             self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
@@ -145,7 +145,7 @@ class SquareASI(ASI):
             self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
-    def _set_orientation(self, angle=0):
+    def _set_orientation(self, angle: float = 0.):
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         occupation = self.occupation.get()
         iyy = self.iyy.get()
@@ -177,11 +177,11 @@ class SquareASI(ASI):
 
 
 class PinwheelASI(SquareASI):
-    def __init__(self, n, a, ny=None, **kwargs):
+    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
         ''' In-plane ASI similar to SquareASI, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
         super().__init__(n, a, ny=ny, **kwargs)
 
-    def _set_orientation(self, angle=0.):
+    def _set_orientation(self, angle: float = 0.):
         super()._set_orientation(angle + math.pi/4)
 
     def _get_groundstate(self):
@@ -189,7 +189,7 @@ class PinwheelASI(SquareASI):
 
 
 class KagomeASI(ASI):
-    def __init__(self, n, a, ny=None, **kwargs):
+    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. '''
         self.a = a # [m] The distance between opposing sides of a hexagon
         self.nx = n
@@ -204,7 +204,7 @@ class KagomeASI(ASI):
         self.dy = math.sqrt(3)*self.dx
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
-    def _set_m(self, pattern):
+    def _set_m(self, pattern: str):
         if pattern == 'uniform':
             self.m = cp.ones_like(self.xx)
             self.m[(self.ixx - self.iyy) % 4 == 1] = -1
@@ -215,7 +215,7 @@ class KagomeASI(ASI):
             self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
-    def _set_orientation(self, angle=0.):
+    def _set_orientation(self, angle: float = 0.):
         self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         occupation = self.occupation.get()
         self.orientation[:,:,0] = math.cos(angle + math.pi/2)
@@ -251,11 +251,11 @@ class KagomeASI(ASI):
 
 
 class TriangleASI(KagomeASI):
-    def __init__(self, n, a, ny=None, **kwargs):
+    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of triangles. '''
         super().__init__(n, a, ny=ny, **kwargs)
 
-    def _set_orientation(self, angle=0.):
+    def _set_orientation(self, angle: float = 0.):
         super()._set_orientation(angle + math.pi/2)
 
     def _get_appropriate_avg(self):

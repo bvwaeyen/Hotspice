@@ -19,7 +19,7 @@ class SimParams:
 
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
-    def __init__(self, nx, ny, dx, dy, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False, params: SimParams = None):
+    def __init__(self, nx, ny, dx, dy, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False, angle=None, params: SimParams = None):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are allowed currently. 
@@ -71,7 +71,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         # Main initialization steps that require calling other methods of this class
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
         self.n = int(cp.sum(self.occupation)) # Number of magnets in the simulation
-        if self.in_plane: self._initialize_ip()
+        if self.in_plane: self._initialize_ip(angle=angle)
 
         self.initialize_m(pattern, update_energy=False)
 
@@ -115,15 +115,17 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.m = cp.multiply(self.m, self.occupation)
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
     
-    def _set_orientation(self): # TODO: could perhaps make this 3D to avoid possible errors for OOP ASI where self.orientation is now undefined
+    def _set_orientation(self, angle: float = 0): # TODO: could perhaps make this 3D to avoid possible errors for OOP ASI where self.orientation is now undefined
         self.orientation = cp.ones((*self.xx.shape, 2))/math.sqrt(2)
 
-    def _initialize_ip(self):
+    def _initialize_ip(self, angle: float = None):
         ''' Initialize the angles of all the magnets (only applicable in the in-plane case).
             This function should only be called by the Magnets() class itself, not by the user.
+            @param angle [float] (0): optional parameter passed to self._set_orientation(), normally
+                used to define an angle (in radians) by which each spin in the system is rotated.
         '''
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
-        self._set_orientation()
+        self._set_orientation(angle=angle) if angle else self._set_orientation()
 
     def add_energy(self, energy: 'Energy'):
         ''' Adds an Energy object to self.energies. This object is stored under its reduced name,
