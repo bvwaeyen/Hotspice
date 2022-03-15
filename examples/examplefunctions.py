@@ -160,17 +160,18 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
 def autocorrelation_dist_dependence(mm: hotspin.Magnets):
     ''' Shows the full 2D autocorrelation, as well as the binned autocorrelation
         as a function of distance. '''
-    corr, d, corr_length = mm.autocorrelation_fast(20)
+    correlation = mm.autocorrelation()
+    corr_length = mm.correlation_length(correlation=correlation)
     print("Correlation length:", corr_length)
 
     fig = plt.figure(figsize=(10, 4))
     fig.suptitle('T=%.2f' % mm.T.mean(), font={"size":12})
     ax1 = fig.add_subplot(121)
-    ax1.plot(d, corr)
+    # ax1.plot(d, corr) # Let's leave this here for now, in case we calculate the distance dependence anyway later on
     ax1.set_xlabel(r'Distance [a.u.]')
     ax1.set_ylabel(r'Autocorrelation')
     ax2 = fig.add_subplot(122)
-    h1 = ax2.imshow(mm.correlation.get(), origin='lower', cmap='bone')
+    h1 = ax2.imshow(correlation.get(), origin='lower', cmap='bone')
     c2 = plt.colorbar(h1)
     c2.set_label(r'Correlation', rotation=270, labelpad=15)
     plt.gcf().tight_layout()
@@ -200,7 +201,7 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
         for _ in range(niter[j]): # Update for a while to ensure that the different temperatures are not very correlated
             mm.update()
         for k in range(M):
-            corr, d, corr_length[j,k] = mm.autocorrelation_fast(20)
+            corr_length[j,k] = mm.correlation_length()
             if k < M - 1: # Always except the last step
                 for i in range(L):
                     mm.update()

@@ -343,39 +343,31 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.history.clear()
     
 
-    def autocorrelation_fast(self, max_distance):
-        max_distance = round(max_distance)
-        s = cp.shape(self.xx)
-        if not(hasattr(self, 'Distances')):
-            # First calculate the distance between all spins in the simulation.
-            self.Distances = (self.xx**2 + self.yy**2)**(1/2)
-            self.Distance_range = math.ceil(cp.max(self.Distances))
-            self.Distances_floor = cp.floor(self.Distances)
-            # Then, calculate how many multiplications hide behind each cell in the convolution matrix, so we can normalize.
-            self.corr_norm = 1/signal.convolve2d(cp.ones_like(self.m), cp.ones_like(self.m), mode='full', boundary='fill')
-            # Then, calculate the correlation of the occupation, since not each position contains a spin
-            fullcorr = signal.convolve2d(self.occupation, cp.flipud(cp.fliplr(self.occupation)), mode='full', boundary='fill')*self.corr_norm
-            self.corr_occupation = fullcorr[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)] # Lower right quadrant of occupationcor because the other quadrants should be symmetrical
-            self.corr_occupation[self.corr_occupation > 0] = 1
+    def autocorrelation(self, normalize=True):
+        ''' In case of a 2D signal, this basically calculates the autocorrelation of the
+            self.m matrix, while taking into account self.orientation for the in-plane case.
+            Note that strictly speaking this assumes dx and dy to be the same for all cells.
+        '''
         # Now, convolve self.m with its point-mirrored/180°-rotated counterpart
         if self.in_plane:
-            corr_x = signal.convolve2d(self.m*self.orientation[:,:,0], cp.flipud(cp.fliplr(self.m*self.orientation[:,:,0])), mode='full', boundary='fill')*self.corr_norm
-            corr_y = signal.convolve2d(self.m*self.orientation[:,:,1], cp.flipud(cp.fliplr(self.m*self.orientation[:,:,1])), mode='full', boundary='fill')*self.corr_norm
-            corr = corr_x + corr_y
+            mx, my = self.m*self.orientation[:,:,0], self.m*self.orientation[:,:,1]
+            corr_xx = signal.correlate2d(mx, mx, boundary='wrap' if self.PBC else 'fill')
+            corr_yy = signal.correlate2d(my, my, boundary='wrap' if self.PBC else 'fill')
+            corr = corr_xx + corr_yy # Basically trace of autocorrelation matrix
         else:
-            corr = signal.convolve2d(self.m, cp.flipud(cp.fliplr(self.m)), mode='full', boundary='fill')*self.corr_norm
-        corr = corr*cp.size(self.m)/cp.sum(self.corr_occupation) # Put between 0 and 1
-        self.correlation = corr[(s[0]-1):(2*s[0]-1),(s[1]-1):(2*s[1]-1)]**2
-        self.correlation = cp.multiply(self.correlation, self.corr_occupation)
+            corr = signal.correlate2d(self.m, self.m, boundary='wrap' if self.PBC else 'fill')
+
+        if normalize:
+            corr_norm = signal.correlate2d(cp.ones_like(self.m), cp.ones_like(self.m), boundary='wrap' if self.PBC else 'fill') # Is this necessary? (this is number of occurences of each cell in correlation sum)
+            corr = corr*self.m.size/self.n/corr_norm # Put between 0 and 1
         
-        # Prepare distance bins etc.
-        corr_binned = cp.zeros(max_distance + 1) # How much the magnets correlate over a distance [i]
-        distances = cp.linspace(0, max_distance, num=max_distance+1) # Use cp.linspace to get float, cp.arange to get int
-        # Now loop over all the interesting distances
-        for i, d in enumerate(distances):
-            corr_binned[i] = cp.mean(self.correlation[cp.where(cp.isclose(self.Distances_floor, d))])
-        corr_length = cp.sum(cp.multiply(abs(corr_binned), distances))
-        return corr_binned.get(), distances.get(), float(corr_length)
+        return corr[(self.ny-1):(2*self.ny-1),(self.nx-1):(2*self.nx-1)]**2
+    
+    def correlation_length(self, correlation=None):
+        if correlation is None: correlation = self.autocorrelation()
+        # First calculate the distance between all spins in the simulation.
+        rr = (self.xx**2 + self.yy**2)**(1/2) # This only works if dx, dy is the same for every cell!
+        return float(cp.sum(cp.abs(correlation) * rr * rr)/cp.max(cp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
 
     ######## Now, some useful functions when subclassing this class
     def _get_nearest_neighbors(self):
