@@ -8,7 +8,6 @@
         - [ ] Fix PBC issue in Grid multi-switching
         - [x] Make r in Grid multi-switching different for x and y
         - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel since the last calculation I did, did not seem to correspond to reality very well)
-    - [x] Create parameter system which user can set, maybe module-wide but better might be `Magnets()`-wide, which controls implementation-related things like whether to use Glauber or Néel-Arrhenius, or how many to multi-switch at once, or how many steps between full kernel recalculations, or how hard to truncate the kernel, or... (probably a dataclass or something)
 
     - [ ] Develop .io and .experiments modules
         - [x] Kernel rank experiment

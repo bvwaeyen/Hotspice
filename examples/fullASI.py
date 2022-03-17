@@ -68,9 +68,16 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
                                     blit=False, repeat=False, init_func=lambda:0) # Provide empty init_func: otherwise the update func is used as init and is thus called twice for the 0th frame
     plt.show()
 
+def testWolff():
+    mm = hotspin.ASI.FullASI(400, 1, energies=[hotspin.ExchangeEnergy(J=1.380649e-23*300)], PBC=True, pattern='uniform', T=481)
+    while True: 
+        for _ in range(100): cluster = mm._update_Wolff()
+        hotspin.plottools.show_m(mm, fill=False)
+
 
 if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
+    # testWolff()
 
     # ef.run_a_bit(mm, N=10e3, T=160, verbose=True)
     # ef.neelTemperature(mm, T_max=400)

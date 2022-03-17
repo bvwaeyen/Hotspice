@@ -147,11 +147,10 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         '''
         name = name.lower().replace('energy', '')
         for i, e in enumerate(self.energies):
-            name_e = type(e).__name__.lower().replace('energy', '')
-            if name == name_e:
+            if name == e.shortname():
                 self.energies.pop(i)
                 return
-        raise KeyError(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[key for key, _ in self.energies.items()]}")
+        warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname() for e in self.energies]}", stacklevel=2)
 
     def get_energy(self, name: str):
         ''' Returns the specified energy from self.energies.
@@ -161,9 +160,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         '''
         name = name.lower().replace('energy', '')
         for e in self.energies:
-            name_e = type(e).__name__.lower().replace('energy', '')
-            if name == name_e: return e
-        raise KeyError(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[key for key, _ in self.energies.items()]}")
+            if name == e.shortname(): return e
+        warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname() for e in self.energies]}", stacklevel=2)
+        return None
 
     def update_energy(self, index: np.ndarray=None):
         ''' Updates all the energies which are currently present in the simulation.
@@ -310,6 +309,29 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.update_energy(index=indexmin2D)
         return indexmin2D
 
+    def _update_Wolff(self):
+        ''' Only works for Exchange-coupled 2D Ising system. '''
+        exchange: ExchangeEnergy = self.get_energy('exchange')
+        assert exchange, "Can not use Swendsen-Wang update scheme if there is no exchange energy in the system."
+        neighbors = exchange.local_interaction
+        seed = tuple(self._select_single().flat)
+        cluster = cp.zeros_like(self.m)
+        cluster[seed] = 1
+        checked = cp.copy(cluster)
+        checked[cp.where(self.m != self.m[seed])] = 1
+        growing = True
+        while growing:
+            current_frontier = signal.convolve2d(cluster, neighbors, mode='same', boundary='wrap' if self.PBC else 'fill')*(1-checked)
+            checked[current_frontier != 0] = 1
+            bond_prob = 1 - cp.exp(-2*exchange.J/self.kBT*current_frontier) # Swendsen-Wang bond probability
+            current_frontier[cp.random.random(cluster.shape) > bond_prob] = 0 # Rejected probabilistically
+            cluster[current_frontier != 0] = 1
+            growing = cp.any(current_frontier)
+        self.m[cluster == 1] *= -1
+        self.update_energy(index=cp.where(cluster == 1))
+        return cluster
+
+
     def calc_r(self, Q): # r: a distance in meters
         ''' Calculates the minimal value of r (IN METERS). Considering two nearby sampled magnets, the switching probability
             of the first magnet will depend on the state of the second. For magnets further than <calc_r(Q)> apart, the switching
@@ -421,6 +443,9 @@ class Energy(ABC):
             @param indices2D [list(2xN)]: A list containing two elements: an array containing the x-indices of each switched
                 magnet, and a similar array for y (so indices2D is basically a 2xN array, with N the number of switches).
         '''
+    
+    def shortname(self):
+        return type(self).__name__.lower().replace('energy', '')
     
     @classmethod
     def clean_indices(cls, indices2D):
