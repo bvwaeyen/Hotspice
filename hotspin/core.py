@@ -15,7 +15,7 @@ from typing import List
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are less than <this> switches in a single iteration, the energies are just summed, otherwise a convolution is used.
     REDUCED_KERNEL_SIZE: int = 20 # If the dipolar kernel is truncated, it becomes a shape (2*<this>-1, 2*<this>-1) array.
-    USE_GLAUBER: bool = True # If False use Néel-Arrhenius, if True use Glauber dynamics
+    UPDATE_SCHEME: str = 'Glauber' # Can be any of 'Néel', 'Glauber', 'Wolff'
 
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
@@ -251,7 +251,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         '''
         Rx, Ry = math.ceil(r/self.dx) - 1, math.ceil(r/self.dy) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
         Rx, Ry = self.unitcell.x * math.ceil(Rx/self.unitcell.x), self.unitcell.y * math.ceil(Ry/self.unitcell.y) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
-        Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
+        Rx, Ry = max(min(Rx, self.nx), 1), max(min(Ry, self.ny), 1) # No need to make supercell larger than simulation itself
         supergrid_nx = (self.nx + Rx - 1)//(2*Rx) + 1
         supergrid_ny = (self.ny + Ry - 1)//(2*Ry) + 1
         move_grid = -np.random.randint([-Ry, -Rx], [Ry, Rx])
@@ -273,10 +273,14 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         if cp.any(self.T == 0):
             warnings.warn('Temperature is zero somewhere, so no switch will be simulated to prevent DIV/0 errors.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
-        if self.params.USE_GLAUBER:
-            idx = self._update_Glauber(*args, **kwargs)
-        else:
+        if self.params.UPDATE_SCHEME == 'Néel':
             idx = self._update_Néel(*args, **kwargs)
+        elif self.params.UPDATE_SCHEME == 'Glauber':
+            idx = self._update_Glauber(*args, **kwargs)
+        elif self.params.UPDATE_SCHEME == 'Wolff':
+            idx = self._update_Wolff(*args, **kwargs)
+        else:
+            raise ValueError(f"The Magnets.params object has an invalid value for UPDATE_SCHEME='{self.params.UPDATE_SCHEME}'.")
         return Energy.clean_indices(idx)
 
     def _update_Glauber(self, Q=0.05, idx=None):
