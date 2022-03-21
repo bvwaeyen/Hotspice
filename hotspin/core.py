@@ -11,6 +11,9 @@ from scipy.spatial.distance import pdist
 from typing import List
 
 
+kB = 1.380649e-23
+
+
 @dataclass
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are less than <this> switches in a single iteration, the energies are just summed, otherwise a convolution is used.
@@ -185,13 +188,17 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return cp.sum(cp.asarray([energy.energy_switch(indices2D) for energy in self.energies]), axis=0)
 
     @property
+    def MCsteps(self): # Number of Monte Carlo steps
+        return self.switches/self.n
+
+    @property
     def m_avg(self):
         if self.in_plane:
             self.m_avg_x = cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))
             self.m_avg_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
-            return (self.m_avg_x**2 + self.m_avg_y**2)**(1/2)
+            return float((self.m_avg_x**2 + self.m_avg_y**2)**(1/2))
         else:
-            return cp.mean(self.m)
+            return float(cp.mean(self.m))
     
     @property
     def E_tot(self):

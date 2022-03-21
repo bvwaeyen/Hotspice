@@ -34,7 +34,6 @@
         - [x] 2D square Ising model
         - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization?)
         - [ ] Pinwheel reversal in external field (cfr. flatspin paper)
-    - [ ] Learn to use pandas (or something similar) to save results in a structured manner
 
 2. Medium priority
     - Test physical accuracy of Hotspin

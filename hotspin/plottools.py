@@ -410,10 +410,13 @@ def init_fonts():
     plt.rc('figure', titlesize=chonk)  # fontsize of the figure title
 
 
-def save_plot(save_path):
+def save_plot(save_path, ext=None):
     ''' <save_path> is a full relative pathname, usually something like
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     '''
+    if ext is not None: # Then a specific extension was requested, to override the one in save_path
+        if not ext.startswith('.'): ext = '.' + ext
+        save_path = os.path.splitext(save_path)[0] + ext
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     try:
         plt.savefig(save_path)
