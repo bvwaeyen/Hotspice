@@ -22,10 +22,14 @@ def get_m_theory(T_min, T_max):
     return m_theory_range, m_theory
 
 
-def test_magnetization(T_steps=30, N=1000, verbose=False, plot=True):
-    mm = hotspin.ASI.FullASI(size, a, energies=[hotspin.ExchangeEnergy(J=J)], PBC=True, pattern='uniform')
+def test_magnetization(T_steps=30, N=1000, verbose=False, plot=True, reverse=False):
+    ''' Performs a sweep of the temperature in <T_steps> steps. At each step, <N> Magnets.update() calls are performed.
+        @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.
+    '''
+    mm = hotspin.ASI.FullASI(size, a, energies=[hotspin.ExchangeEnergy(J=J)], PBC=True, pattern=('random' if reverse else 'uniform'))
 
     T_range = np.linspace(T_lim[0], T_lim[1], T_steps)
+    if reverse: T_range = np.flip(T_range)
     m_avg = np.zeros_like(T_range)
     for i, T in enumerate(T_range):
         if verbose: print(f'[{i+1}/{T_steps}] N={N}, T = {T:.2f}*T_c (= {T*T_c:.0f} K)...')
@@ -64,7 +68,8 @@ def test_N_influence(*args, plot=True, save=False, **kwargs):
         ax.set_ylim([-0.01, 1])
         plt.gcf().tight_layout()
         if save:
-            hotspin.plottools.save_plot(f"results/test_squareIsing/J={J/kB:.0f}kB_Tsweep{len(T_range)}_Nsweep{len(N_range)}_a={a:.2g}_{size}x{size}.pdf")
+            Tsweep_direction = 'reverse' if kwargs.get('reverse', False) else ''
+            hotspin.plottools.save_plot(f"results/test_squareIsing/J={J/kB:.0f}kB_Tsweep{len(T_range)}{Tsweep_direction}_Nsweep{len(N_range)}_a={a:.2g}_{size}x{size}.pdf")
         plt.show()
 
 
