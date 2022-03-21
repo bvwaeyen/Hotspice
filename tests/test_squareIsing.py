@@ -1,8 +1,9 @@
 import math
 
 import cupy as cp
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 from context import hotspin
 from examples import examplefunctions as ef
@@ -43,12 +44,15 @@ def test_magnetization(T_steps=30, N=1000, verbose=False, plot=True, reverse=Fal
         plt.plot(*get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black')
         plt.legend(['Hotspin', 'Theory'])
         plt.show()
-    return T_range, m_avg
+    
+    data = pd.DataFrame({"T": T_range, "m_avg": m_avg})
+    return data
 
-def test_N_influence(*args, plot=True, save=False, **kwargs):
+def test_N_influence(*args, plot=True, save=True, **kwargs):
     ''' Tests the influence of <N> (the number of iterations per value of T) on m_avg.
         Any arguments (not 'N') passed to this function are passed through to test_magnetization().
     '''
+    data = pd.DataFrame()
     if plot:
         hotspin.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
@@ -56,9 +60,13 @@ def test_N_influence(*args, plot=True, save=False, **kwargs):
     
     N_range = [1000, 2000, 4000]
     for N in N_range:
-        T_range, m_avg = test_magnetization(*args, N=N, plot=False, **kwargs)
-        if plot: ax.scatter(T_range, m_avg)
+        local_data = test_magnetization(*args, N=N, plot=False, **kwargs)
+        local_data["N"] = N
+        data = pd.concat([data, local_data])
+        if plot: ax.scatter(local_data["T"], local_data["m_avg"])
 
+    Tsweep_direction = 'reverse' if kwargs.get('reverse', False) else ''
+    savename = f"results/test_squareIsing/J={J/kB:.0f}kB_Tsweep{data['T'].nunique()}{Tsweep_direction}_Nsweep{len(N_range)}_a={a:.2g}_{size}x{size}"
     if plot:
         ax.plot(*get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black')
         ax.legend([f'N={N}' for N in N_range] + ['Theory'])
@@ -69,9 +77,13 @@ def test_N_influence(*args, plot=True, save=False, **kwargs):
         plt.gcf().tight_layout()
         if save:
             Tsweep_direction = 'reverse' if kwargs.get('reverse', False) else ''
-            hotspin.plottools.save_plot(f"results/test_squareIsing/J={J/kB:.0f}kB_Tsweep{len(T_range)}{Tsweep_direction}_Nsweep{len(N_range)}_a={a:.2g}_{size}x{size}.pdf")
+            hotspin.plottools.save_plot(f"{savename}.pdf")
         plt.show()
+    if save:
+        hotspin.plottools.save_data(data, f"{savename}.csv")
+    
+    return data
 
 
 if __name__ == "__main__":
-    test_N_influence(T_steps=21, verbose=True, save=True)
+    test_N_influence(T_steps=3, verbose=True, save=True)

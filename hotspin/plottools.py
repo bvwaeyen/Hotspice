@@ -7,6 +7,7 @@ import warnings
 import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from cupyx.scipy import signal
 from enum import auto, Enum
@@ -410,13 +411,24 @@ def init_fonts():
 
 
 def save_plot(save_path):
-    ''' <save_path> is a full relative pathname, usually something like 
+    ''' <save_path> is a full relative pathname, usually something like
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     '''
-    dirname = os.path.dirname(save_path)
-    if not os.path.exists(dirname): os.makedirs(dirname)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     try:
         plt.savefig(save_path)
+    except PermissionError:
+        warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)
+
+def save_data(df: pd.DataFrame, save_path): # This function doesn't really feel like it belongs in the 'plottools' module...
+    ''' <save_path> is a full relative pathname, usually something like
+        "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
+    '''
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    name, ext = os.path.splitext(save_path)
+    try:
+        df.to_csv(name + '.csv')
+        if ext != '.csv': warnings.warn(f'Saved pandas.DataFrame as .csv, while .{ext} was requested. Only csv is supported.')
     except PermissionError:
         warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)
 
