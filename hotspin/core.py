@@ -192,13 +192,17 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return self.switches/self.n
 
     @property
+    def m_avg_x(self):
+        return float(cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))) if self.in_plane else 0
+    @property
+    def m_avg_y(self):
+        return float(cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))) if self.in_plane else 0
+    @property
     def m_avg(self):
-        if self.in_plane:
-            self.m_avg_x = cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))
-            self.m_avg_y = cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))
-            return float((self.m_avg_x**2 + self.m_avg_y**2)**(1/2))
-        else:
-            return float(cp.mean(self.m))
+        return (self.m_avg_x**2 + self.m_avg_y**2)**(1/2) if self.in_plane else float(cp.mean(self.m))
+    @property
+    def m_avg_angle(self): # If m_avg=0, this is 0. For OOP ASI, this is 0 if m_avg > 0, and Pi if m_avg < 0
+        return math.atan2(self.m_avg_y, self.m_avg_x) if self.in_plane else 0. + (self.m_avg < 0)*math.pi
     
     @property
     def E_tot(self):
