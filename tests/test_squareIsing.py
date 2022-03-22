@@ -8,6 +8,12 @@ import pandas as pd
 from context import hotspin
 
 
+''' This file tests the correspondence between theory and simulation for a
+    two-dimensional square Ising model, with only exchange interactions,
+    by observing the average magnetization as a function of temperature.
+'''
+
+
 class test_squareIsing:
     def __init__(self, **kwargs):
         self.J = hotspin.kB*300 # This does not matter much, just dont take it too large to prevent float errors
@@ -113,4 +119,4 @@ class test_squareIsing:
 
 
 if __name__ == "__main__":
-    test_squareIsing().test(T_steps=21, verbose=True, save=True, reverse=True)
+    test_squareIsing().test(T_steps=21, verbose=True, save=True)

@@ -202,7 +202,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     
     @property
     def E_tot(self):
-        return cp.sum(self.E, axis=None)
+        return sum([e.E_tot for e in self.energies])
 
     @property
     def T(self):
@@ -454,10 +454,18 @@ class Energy(ABC):
             @param indices2D [list(2xN)]: A list containing two elements: an array containing the x-indices of each switched
                 magnet, and a similar array for y (so indices2D is basically a 2xN array, with N the number of switches).
         '''
-    
+
+    @property
+    @abstractmethod
+    def E_tot(self):
+        ''' Returns the total energy for this energy contribution. This function is necessary since this is not equal
+            for all energies: e.g. sum(E) in the DipolarEnergy would count each interaction twice, while sum(E) is
+            correct for ZeemanEnergy.
+        '''
+
     def shortname(self):
         return type(self).__name__.lower().replace('energy', '')
-    
+
     @classmethod
     def clean_indices(cls, indices2D):
         ''' Reshapes <indices2D> into a 2xN two-dimensional array.
@@ -533,6 +541,10 @@ class ZeemanEnergy(Energy):
     def update_multiple(self, indices2D):
         indices2D = Energy.clean_indices(indices2D)
         self.E[indices2D[0], indices2D[1]] *= -1
+    
+    @property
+    def E_tot(self):
+        return cp.sum(self.E)
 
 
 class DipolarEnergy(Energy):
@@ -683,6 +695,10 @@ class DipolarEnergy(Energy):
                     interaction += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
                 interaction = self.prefactor*cp.multiply(self.mm.m, interaction)
                 self.E += 2*interaction
+    
+    @property
+    def E_tot(self):
+        return cp.sum(self.E)/2
 
 
 class ExchangeEnergy(Energy):
@@ -713,6 +729,10 @@ class ExchangeEnergy(Energy):
     
     def update_multiple(self, indices2D):
         self.update()
+    
+    @property
+    def E_tot(self):
+        return cp.sum(self.E)/2
 
 
 @dataclass
