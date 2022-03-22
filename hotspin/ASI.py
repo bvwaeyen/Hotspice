@@ -57,7 +57,7 @@ class FullASI(ASI):
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
 
     def _set_m(self, pattern: str):
-        if pattern == 'uniform':
+        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
             self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy) % 2)*2 - 1
@@ -94,7 +94,7 @@ class IsingASI(ASI):
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str):
-        if pattern == 'uniform':
+        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
             self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
             self.m = (self.iyy % 2)*2 - 1
@@ -137,7 +137,7 @@ class SquareASI(ASI):
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str):
-        if pattern == 'uniform':
+        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
             self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy)//2 % 2)*2 - 1
@@ -205,7 +205,7 @@ class KagomeASI(ASI):
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str):
-        if pattern == 'uniform':
+        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
             self.m = cp.ones_like(self.xx)
             self.m[(self.ixx - self.iyy) % 4 == 1] = -1
         elif pattern == 'AFM':

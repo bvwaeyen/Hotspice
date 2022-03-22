@@ -33,7 +33,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
         '''
-        if type(self) is Magnets:
+        if type(self) is Magnets: # Need to check for Magnets without inheritance, hence we use type() instead of isinstance()
             raise Exception("Magnets() class can not be instantiated directly, and should instead be subclassed. Consider using a class from the hotspin.ASI module, or writing your own custom ASI class instead.")
 
         self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
@@ -79,14 +79,14 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.initialize_m(pattern, update_energy=False)
 
         # Some energies might require self.orientation etc., so only initialize energy at the end
-        self.energies: List[Energy] = []
+        self.energies = list[Energy]()
         self.E = cp.zeros_like(self.xx) # [J]
         for energy in energies:
             self.add_energy(energy)
             self.E = self.E + energy.E
 
     def _set_m(self, pattern):
-        if pattern == 'uniform':
+        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
             self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy) % 2)*2 - 1
@@ -137,7 +137,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         '''
         energy.initialize(self)
         for i, e in enumerate(self.energies):
-            if type(e) == type(energy):
+            if type(e) is type(energy):
                 warnings.warn(f'An instance of {type(energy).__name__} was already included in the simulation, and has now been overwritten.', stacklevel=2)
                 self.energies[i] = energy
                 return
@@ -175,6 +175,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         if index is not None: index = Energy.clean_indices(index) # TODO: now we are cleaning twice, so remove this in Energy classes maybe?
         self.E = cp.zeros_like(self.xx) # [J]
         for energy in self.energies:
+            # PYTHONUPDATE_3.10: use structural pattern matching
             if index is None: # No index specified, so update fully
                 energy.update()
             elif index.size == 2: # Index contains 2 ints, so it represents the coordinates of a single magnet
@@ -284,7 +285,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         if cp.any(self.T == 0):
             warnings.warn('Temperature is zero somewhere, so no switch will be simulated to prevent DIV/0 errors.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
-        if self.params.UPDATE_SCHEME == 'Néel':
+        if self.params.UPDATE_SCHEME == 'Néel': # PYTHONUPDATE_3.10: use structural pattern matching
             idx = self._update_Néel(*args, **kwargs)
         elif self.params.UPDATE_SCHEME == 'Glauber':
             idx = self._update_Glauber(*args, **kwargs)
@@ -481,6 +482,7 @@ class Energy(ABC):
         indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze())
         assert len(indices2D.shape) <= 2, "An array with more than 2 non-empty dimensions can not be used to represent a list of indices."
         assert cp.any(cp.asarray(indices2D.shape) == 2), "The list of indices has an incorrect shape. At least one dimension should have length 2."
+         # PYTHONUPDATE_3.10: use structural pattern matching
         if indices2D.shape[0] == 2: # The only ambiguous case is for a 2x2 input array, but in that case we assume the array is already correct.
             return indices2D
         elif indices2D.shape[1] == 2:

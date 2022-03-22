@@ -103,7 +103,7 @@ class test_squareIsing:
         ax.set_ylim([-0.01, 1])
         plt.gcf().tight_layout()
         if save:
-            if type(save) is not str:
+            if not isinstance(save, str):
                 reverse = '' if data["T"].iloc[0] < data["T"].iloc[-1] else 'reverse'
                 save = f"results/test_squareIsing/Tsweep{data['T'].nunique()}{reverse}_Nsweep{data['N'].nunique()}.pdf"
             hotspin.plottools.save_plot(save, ext='.pdf')

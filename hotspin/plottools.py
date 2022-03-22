@@ -58,9 +58,9 @@ class Average(Enum): # TODO: maybe create an Average class which can be extended
         ''' <avg> can be any of [str], [bool-like], or [Average]. This function will
             then return the [Average] instance that is most appropriate.
         '''
-        if isinstance(avg, Average):
+        if isinstance(avg, Average): # PYTHONUPDATE_3.10: use structural pattern matching
             return avg
-        if isinstance(avg, str):
+        elif isinstance(avg, str):
             for average in Average:
                 if average.name.upper() == avg.upper():
                     return average
@@ -415,8 +415,7 @@ def save_plot(save_path, ext=None):
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     '''
     if ext is not None: # Then a specific extension was requested, to override the one in save_path
-        if not ext.startswith('.'): ext = '.' + ext
-        save_path = os.path.splitext(save_path)[0] + ext
+        save_path = os.path.splitext(save_path)[0] + '.' + ext.removeprefix('.')
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     try:
         plt.savefig(save_path)

@@ -2,6 +2,10 @@
 
 Hotspin is a tool for simulating thermally active artificial spin ices, using an Ising-like approximation with Glauber dynamics to model their statistical behavior. The axis and position of each spin is fixed, only their binary state can switch.
 
+## Dependencies
+
+Hotspin makes heavy use of the `CuPy` library, which allows GPU-accelerated array computing with CUDA for NVIDIA GPUs. Installing it can be nontrivial, but the easiest method might be using conda and running `conda install -c conda-forge cupy`.
+
 ## Getting started
 
 Hotspin functions as a Python module, and can therefore be used through `import hotspin`.
