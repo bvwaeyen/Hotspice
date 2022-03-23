@@ -22,7 +22,7 @@ class SimParams:
 
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
-    def __init__(self, nx, ny, dx, dy, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False, angle=None, params: SimParams = None):
+    def __init__(self, nx, ny, dx, dy, *, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False, angle=None, params: SimParams = None):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are allowed currently. 
@@ -32,6 +32,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
              3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
             One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
+                By default, only the dipolar energy is active.
         '''
         if type(self) is Magnets: # Need to check for Magnets without inheritance, hence we use type() instead of isinstance()
             raise Exception("Magnets() class can not be instantiated directly, and should instead be subclassed. Consider using a class from the hotspin.ASI module, or writing your own custom ASI class instead.")
@@ -41,7 +42,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.Msat = Msat # [A/m]
         self.V = V # [m³]
         self.in_plane = in_plane
-        energies = (DipolarEnergy(),) if energies is None else energies # [J]
+        energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J]
         
         # initialize the coordinates based on nx, (ny) and L
         self.nx, self.ny = nx, ny
@@ -80,10 +81,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
         # Some energies might require self.orientation etc., so only initialize energy at the end
         self.energies = list[Energy]()
-        self.E = cp.zeros_like(self.xx) # [J]
-        for energy in energies:
-            self.add_energy(energy)
-            self.E = self.E + energy.E
+        for energy in energies: self.add_energy(energy)
 
     def _set_m(self, pattern):
         if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
@@ -109,7 +107,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         pos_x, pos_y = self.xx[slice], self.yy[slice]
         return pdist(cp.asarray([pos_x, pos_y]).get().T).min()
 
-    def initialize_m(self, pattern='random', update_energy=True):
+    def initialize_m(self, pattern='random', *, update_energy=True):
         ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
@@ -173,7 +171,6 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
                 We need a NumPy or CuPy array (to easily determine its size: if =2, then only a single switch is considered.)
         '''
         if index is not None: index = Energy.clean_indices(index) # TODO: now we are cleaning twice, so remove this in Energy classes maybe?
-        self.E = cp.zeros_like(self.xx) # [J]
         for energy in self.energies:
             # PYTHONUPDATE_3.10: use structural pattern matching
             if index is None: # No index specified, so update fully
@@ -182,7 +179,6 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
                 energy.update_single(Energy.clean_index(index))
             else: # Index is specified and does not contain 2 ints, so interpret it as coordinates of multiple magnets
                 energy.update_multiple(index)
-            self.E = self.E + energy.E
     
     def switch_energy(self, indices2D):
         ''' @return [cp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch. '''
@@ -193,24 +189,11 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return self.switches/self.n
 
     @property
-    def m_avg_x(self):
-        return float(cp.mean(cp.multiply(self.m, self.orientation[:,:,0]))) if self.in_plane else 0
-    @property
-    def m_avg_y(self):
-        return float(cp.mean(cp.multiply(self.m, self.orientation[:,:,1]))) if self.in_plane else 0
-    @property
-    def m_avg(self):
-        return (self.m_avg_x**2 + self.m_avg_y**2)**(1/2) if self.in_plane else float(cp.mean(self.m))
-    @property
-    def m_avg_angle(self): # If m_avg=0, this is 0. For OOP ASI, this is 0 if m_avg > 0, and Pi if m_avg < 0
-        return math.atan2(self.m_avg_y, self.m_avg_x) if self.in_plane else 0. + (self.m_avg < 0)*math.pi
-    
-    @property
-    def E_tot(self):
-        return sum([e.E_tot for e in self.energies])
+    def E(self) -> cp.ndarray:
+        return cp.sum(cp.asarray([energy.E for energy in self.energies]), axis=0)
 
     @property
-    def T(self):
+    def T(self) -> cp.ndarray:
         return self._T
     
     @T.setter
@@ -222,11 +205,32 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             self._T = cp.ones_like(self.xx)*value
 
     @property
-    def kBT(self):
+    def kBT(self) -> cp.ndarray:
         return 1.380649e-23*self._T
+
+    @property
+    def m_avg_x(self) -> float:
+        return float(cp.mean(cp.multiply(self.m, self.orientation[:,:,0])))*self.nx*self.ny/self.n if self.in_plane else 0
+    @property
+    def m_avg_y(self) -> float:
+        return float(cp.mean(cp.multiply(self.m, self.orientation[:,:,1])))*self.nx*self.ny/self.n if self.in_plane else 0
+    @property
+    def m_avg(self) -> float:
+        return (self.m_avg_x**2 + self.m_avg_y**2)**(1/2) if self.in_plane else float(cp.mean(self.m))
+    @property
+    def m_avg_angle(self) -> float: # If m_avg=0, this is 0. For OOP ASI, this is 0 if m_avg > 0, and Pi if m_avg < 0
+        return math.atan2(self.m_avg_y, self.m_avg_x) if self.in_plane else 0. + (self.m_avg < 0)*math.pi
+
+    @property
+    def E_tot(self) -> float:
+        return float(sum([e.E_tot for e in self.energies]))
+
+    @property
+    def T_avg(self) -> float:
+        return float(cp.mean(self.T))
     
-    def set_T(self, f, center=False, noSIunits=False):
-        ''' Sets the temperature field according to a spatial function.
+    def set_T(self, f, /, *, center=False, noSIunits=False):
+        ''' Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
             @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy arrays as x and y).
             @param center [bool] (False): if True, the origin is put in the middle of the simulation,
                 otherwise it is in the usual lower left corner.
@@ -280,6 +284,23 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         ok = cp.logical_and(cp.logical_and(idx_x >= 0, idx_y >= 0), cp.logical_and(idx_x < self.nx, idx_y < self.ny))
         if cp.sum(ok) == 0: return self._select_grid(r) # If no samples were taken, try again
         return cp.asarray([idx_y[ok], idx_x[ok]])
+    
+    def _select_cluster(self):
+        ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model. '''
+        exchange: ExchangeEnergy = self.get_energy('exchange')
+        assert exchange, "Can not select Wolff cluster if there is no exchange energy in the system."
+        neighbors = exchange.local_interaction
+        seed = tuple(self._select_single().flat)
+        cluster = cp.zeros_like(self.m)
+        cluster[seed] = 1
+        checked = cp.copy(cluster)
+        checked[cp.where(self.m != self.m[seed])] = 1
+        while cp.any(current_frontier := (1-checked)*signal.convolve2d(cluster, neighbors, mode='same', boundary='wrap' if self.PBC else 'fill')):
+            checked[current_frontier != 0] = 1
+            bond_prob = 1 - cp.exp(-2*exchange.J/self.kBT*current_frontier) # Swendsen-Wang bond probability
+            current_frontier[cp.random.random(cluster.shape) > bond_prob] = 0 # Rejected probabilistically
+            cluster[current_frontier != 0] = 1
+        return cp.where(cluster == 1)
 
     def update(self, *args, **kwargs):
         if cp.any(self.T == 0):
@@ -327,24 +348,10 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     def _update_Wolff(self):
         ''' Only works for Exchange-coupled 2D Ising system. '''
-        exchange: ExchangeEnergy = self.get_energy('exchange')
-        assert exchange, "Can not use Swendsen-Wang update scheme if there is no exchange energy in the system."
-        neighbors = exchange.local_interaction
-        seed = tuple(self._select_single().flat)
-        cluster = cp.zeros_like(self.m)
-        cluster[seed] = 1
-        checked = cp.copy(cluster)
-        checked[cp.where(self.m != self.m[seed])] = 1
-        growing = True
-        while growing:
-            current_frontier = signal.convolve2d(cluster, neighbors, mode='same', boundary='wrap' if self.PBC else 'fill')*(1-checked)
-            checked[current_frontier != 0] = 1
-            bond_prob = 1 - cp.exp(-2*exchange.J/self.kBT*current_frontier) # Swendsen-Wang bond probability
-            current_frontier[cp.random.random(cluster.shape) > bond_prob] = 0 # Rejected probabilistically
-            cluster[current_frontier != 0] = 1
-            growing = cp.any(current_frontier)
-        self.m[cluster == 1] *= -1
-        self.update_energy(index=cp.where(cluster == 1))
+        cluster = self._select_cluster()
+        self.m[cluster[0], cluster[1]] *= -1
+        self.switches += cluster.shape[1]
+        self.update_energy(index=cluster)
         return cluster
 
 
@@ -366,22 +373,26 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             indexmin2D = divmod(cp.argmin(self.switch_energy(all_indices)), self.nx)
             self.m[indexmin2D] = -self.m[indexmin2D]
             self.update_energy(index=indexmin2D)
-    
 
-    def save_history(self, *, E_tot=None, t=None, T=None, m_avg=None):
+
+    def history_save(self, *, E_tot=None, t=None, T=None, m_avg=None):
         ''' Records E_tot, t, T and m_avg as they were last calculated. This default behavior can be overruled: if
             passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T|m_avg> value(s).
         '''
-        self.history.E.append(float(self.E_tot) if E_tot is None else float(E_tot))
-        self.history.t.append(float(self.t) if t is None else float(t))
-        self.history.T.append(float(cp.mean(self.T)) if T is None else float(cp.mean(T)))
-        self.history.m.append(float(self.m_avg) if m_avg is None else float(m_avg))
+        self.history_entry()
+        if E_tot is not None: self.history.E[-1] = float(E_tot)
+        if t is not None: self.history.t[-1] = float(t)
+        if T is not None: self.history.T[-1] = float(cp.mean(T) if isinstance(T, cp.ndarray) else np.mean(T))
+        if m_avg is not None: self.history.m[-1] = float(m_avg)
     
-    def clear_history(self):
+    def history_entry(self):
+        self.history.entry(self)
+    
+    def history_clear(self):
         self.history.clear()
     
 
-    def autocorrelation(self, normalize=True):
+    def autocorrelation(self, *, normalize=True):
         ''' In case of a 2D signal, this basically calculates the autocorrelation of the
             self.m matrix, while taking into account self.orientation for the in-plane case.
             Note that strictly speaking this assumes dx and dy to be the same for all cells.
@@ -501,10 +512,10 @@ class Energy(ABC):
         return tuple(index2D.reshape(2))
     
     @classmethod
-    def J_to_eV(cls, E):
+    def J_to_eV(cls, E, /):
         return E/1.602176634e-19
     @classmethod
-    def eV_to_J(cls, E):
+    def eV_to_J(cls, E, /):
         return E*1.602176634e-19
 
 
@@ -520,15 +531,16 @@ class ZeemanEnergy(Energy):
     def initialize(self, mm: Magnets):
         self.mm = mm
         self.set_field(self.magnitude, self.angle)
-        self.update()
 
-    def set_field(self, magnitude=0, angle=0):
-        self.magnitude, self.angle = magnitude, angle
+    def set_field(self, magnitude=None, angle=None):
+        self.magnitude = self.magnitude if magnitude is None else magnitude
+        self.angle = self.angle if angle is None else angle
         if self.mm.in_plane:
-            self.B_ext = magnitude*cp.array([math.cos(angle), math.sin(angle)]) # [T]
+            self.B_ext = self.magnitude*cp.array([math.cos(self.angle), math.sin(self.angle)]) # [T]
         else:
-            self.B_ext = magnitude # [T]
-            if angle != 0: warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.', stacklevel=2)
+            self.B_ext = self.magnitude # [T]
+            if self.angle != 0: warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.', stacklevel=2)
+        self.update()
 
     def update(self):
         if self.mm.in_plane:
@@ -566,7 +578,7 @@ class DipolarEnergy(Energy):
         self.unitcell = self.mm.unitcell
         self.E = cp.zeros_like(self.mm.xx)
 
-        def mirror4(arr, negativex=False, negativey=False):
+        def mirror4(arr, /, *, negativex=False, negativey=False):
             ny, nx = arr.shape
             arr4 = cp.zeros((2*ny-1, 2*nx-1))
             xp = -1 if negativex else 1
@@ -744,10 +756,16 @@ class ExchangeEnergy(Energy):
 @dataclass
 class History:
     ''' Stores the history of the energy, temperature, time, and average magnetization. '''
-    E: list = field(default_factory=list)
-    T: list = field(default_factory=list)
-    t: list = field(default_factory=list)
-    m: list = field(default_factory=list)
+    E: list = field(default_factory=list) # Total energy
+    T: list = field(default_factory=list) # Average temperature
+    t: list = field(default_factory=list) # Elapsed time/switches
+    m: list = field(default_factory=list) # Average magnetization magnitude
+
+    def entry(self, mm: Magnets):
+        self.E.append(mm.E_tot)
+        self.T.append(mm.T_avg)
+        self.t.append(mm.t if mm.t != 0 else mm.switches)
+        self.m.append(mm.m_avg)
 
     def clear(self):
         self.E.clear()

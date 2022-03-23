@@ -29,7 +29,7 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, verbose=False
         mm.update()
         if save_history:
             if i % save_history == 0:
-                mm.save_history()
+                mm.history_save()
     dt = time.perf_counter() - t
     if verbose:
         print(f"Simulated {mm.switches - n_start:.0f} switches ({N:.0f} steps on {mm.m.shape[0]:.0f}x{mm.m.shape[1]:.0f} grid) in {dt:.3f} seconds.")
@@ -43,7 +43,7 @@ def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=200):
     ''' A naive attempt at determining the Curie temperature, by looking at the average magnetization.
         @param N [int] (5000): The number of simulated switches at each individual temperature
     '''
-    mm.clear_history()
+    mm.history_clear()
     mm.initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_avg
     for T in np.linspace(T_min, T_max, 101):
         total_m = np.zeros_like(mm.m)
@@ -56,7 +56,7 @@ def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=200):
         total_m = total_m/N
         m_avg_x = np.mean(np.multiply(total_m, mm.orientation[:,:,0]))
         m_avg_y = np.mean(np.multiply(total_m, mm.orientation[:,:,1]))
-        mm.save_history(E_tot=total_energy/N, m_avg=(m_avg_x**2 + m_avg_y**2)**(1/2))
+        mm.history_save(E_tot=total_energy/N, m_avg=(m_avg_x**2 + m_avg_y**2)**(1/2))
     hotspin.plottools.show_history(mm)
 
 
@@ -64,7 +64,7 @@ def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=200):
     ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
         @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.
     '''
-    mm.clear_history()
+    mm.history_clear()
     mm.initialize_m('AFM')
     AFM_ness = []
 
@@ -72,7 +72,7 @@ def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=200):
         mm.T = T
         mm.update()
         AFM_ness.append(hotspin.plottools.get_AFMness(mm))
-        mm.save_history()
+        mm.history_save()
     hotspin.plottools.show_history(mm, y_quantity=AFM_ness, y_label=r'AFM-ness')
 
 

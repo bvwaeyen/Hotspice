@@ -32,7 +32,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
         @param speed [int] (1000): How many switches are simulated between each frame.
     '''
     mm.initialize_m('AFM')
-    mm.clear_history()
+    mm.history_clear()
     AFM_ness = []
 
     # Set up the figure, the axis, and the plot element we want to animate
@@ -57,7 +57,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
         for j in range(currStep, min(currStep + speed, int(T_max//T_step)+1)):
             mm.T = j*T_step
             mm.update()
-            mm.save_history()
+            mm.history_save()
             AFM_ness.append(hotspin.plottools.get_AFMness(mm))
         p.set_data(mm.history.T, AFM_ness)
         h.set_array(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill').get())

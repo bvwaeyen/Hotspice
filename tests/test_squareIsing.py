@@ -1,3 +1,8 @@
+''' This file tests the correspondence between theory and simulation for a
+    two-dimensional square Ising model, with only exchange interactions,
+    by observing the average magnetization as a function of temperature.
+'''
+
 import math
 
 import cupy as cp
@@ -6,12 +11,6 @@ import numpy as np
 import pandas as pd
 
 from context import hotspin
-
-
-''' This file tests the correspondence between theory and simulation for a
-    two-dimensional square Ising model, with only exchange interactions,
-    by observing the average magnetization as a function of temperature.
-'''
 
 
 class test_squareIsing:

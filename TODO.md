@@ -26,6 +26,7 @@
     - [ ] Linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy, but unit cells and more advanced calculations might become an issue ([plt imshow](https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html "Affine transform of an image for skewed geometries"))
     - [ ] Random defects (i.e. missing magnets, because other randomness will interfere with the unit cells)
     - [ ] Turn Vec2D into a Unitcell class that includes more information than just nx and ny
+    - [ ] Plot that shows field direction at every cell taking into account Zeeman and dipolar field from all other magnets
 
 ## Analysis and tests
 

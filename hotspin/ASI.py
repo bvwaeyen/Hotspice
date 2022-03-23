@@ -48,7 +48,7 @@ class ASI(ABC, Magnets):
         pass
 
 class FullASI(ASI):
-    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
+    def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' Out-of-plane ASI in a square arrangement. '''
         self.a = a # [m] The distance between two nearest neighboring spins
         self.nx = n
@@ -85,7 +85,7 @@ class FullASI(ASI):
 
 
 class IsingASI(ASI):
-    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
+    def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins on a square grid, all pointing in the same direction. '''
         self.a = a # [m] The distance between two nearest neighboring spins
         self.nx = n
@@ -94,7 +94,8 @@ class IsingASI(ASI):
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str):
-        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
+        # PYTHONUPDATE_3.10: use structural pattern matching
+        if pattern == 'uniform': # Angle 0°
             self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
             self.m = (self.iyy % 2)*2 - 1
@@ -128,7 +129,7 @@ class IsingASI(ASI):
 
 
 class SquareASI(ASI):
-    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
+    def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares. '''
         self.a = a # [m] The side length of the squares (i.e. side length of a unit cell)
         self.nx = n
@@ -137,8 +138,9 @@ class SquareASI(ASI):
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str):
-        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
-            self.m = cp.ones_like(self.xx)
+        # PYTHONUPDATE_3.10: use structural pattern matching
+        if pattern == 'uniform': # Angle 45°
+            self.m = cp.ones_like(self.xx) 
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy)//2 % 2)*2 - 1
         else:
@@ -177,19 +179,19 @@ class SquareASI(ASI):
 
 
 class PinwheelASI(SquareASI):
-    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
+    def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI similar to SquareASI, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
         super().__init__(n, a, ny=ny, **kwargs)
 
     def _set_orientation(self, angle: float = 0.):
-        super()._set_orientation(angle + math.pi/4)
+        super()._set_orientation(angle - math.pi/4)
 
     def _get_groundstate(self):
         return 'uniform'
 
 
 class KagomeASI(ASI):
-    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
+    def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. '''
         self.a = a # [m] The distance between opposing sides of a hexagon
         self.nx = n
@@ -205,7 +207,8 @@ class KagomeASI(ASI):
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str):
-        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
+        # PYTHONUPDATE_3.10: use structural pattern matching
+        if pattern == 'uniform': # Angle 90°
             self.m = cp.ones_like(self.xx)
             self.m[(self.ixx - self.iyy) % 4 == 1] = -1
         elif pattern == 'AFM':
@@ -251,12 +254,12 @@ class KagomeASI(ASI):
 
 
 class TriangleASI(KagomeASI):
-    def __init__(self, n: int, a: float, ny: int = None, **kwargs):
+    def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of triangles. '''
         super().__init__(n, a, ny=ny, **kwargs)
 
     def _set_orientation(self, angle: float = 0.):
-        super()._set_orientation(angle + math.pi/2)
+        super()._set_orientation(angle - math.pi/2)
 
     def _get_appropriate_avg(self):
         return 'triangle'

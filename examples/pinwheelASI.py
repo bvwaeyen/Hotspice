@@ -36,7 +36,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
         @param speed [int] (1000): How many switches are simulated between each frame.
     '''
     mm.initialize_m('uniform')
-    mm.clear_history()
+    mm.history_clear()
 
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
@@ -57,7 +57,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
         for j in range(currStep, min(currStep + speed, int(T_max//T_step)+1)):
             mm.T = j*T_step
             mm.update()
-            mm.save_history()
+            mm.history_save()
         p.set_data(mm.history.T, mm.history.m)
         h.set_array(hotspin.plottools.get_rgb(mm, fill=True))
         return h, p
