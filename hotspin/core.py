@@ -83,7 +83,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.energies = list[Energy]()
         for energy in energies: self.add_energy(energy)
 
-    def _set_m(self, pattern):
+    def _set_m(self, pattern, angle=0):
         if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
             self.m = cp.ones_like(self.xx)
         elif pattern == 'AFM':
@@ -107,11 +107,11 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         pos_x, pos_y = self.xx[slice], self.yy[slice]
         return pdist(cp.asarray([pos_x, pos_y]).get().T).min()
 
-    def initialize_m(self, pattern='random', *, update_energy=True):
+    def initialize_m(self, pattern='random', *, angle=0, update_energy=True):
         ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
-        self._set_m(pattern)
+        self._set_m(pattern, angle=angle)
         self.m = self.m.astype(float)
         self.m = cp.multiply(self.m, self.occupation)
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely

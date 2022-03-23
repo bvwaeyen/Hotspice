@@ -14,12 +14,15 @@
         - [ ] Task Agnostic Metrics for RC
         - [ ] Allow analog inputs, not just binary
 
+    - [ ] Reconsider distribution of responsibilities between ASI() and Magnets() classes
+
 2. Medium priority
     - [ ] Make unit tests
     - [ ] Organize plotting functions better
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state because the current method is behaving similarly as when a cheese grater is used as ship
     - [ ] Implement metrics (average magnetization, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, ...) to compare with theory/experiment
     - [x] Make a plottools function which clearly shows the basic lattice of an ASI (not full, just a couple of unit cells), with grid points and such indicated, to include in $\LaTeX$.
+    - [ ] Possibly allow specifying angle also for pattern='AFM', if it makes any sense
 
 3. Low priority
     - [ ] Compress $M_{sat}$ and $V$ into one parameter (unit Am² = Nm/T) (or is there some reason why they need to be separate?)

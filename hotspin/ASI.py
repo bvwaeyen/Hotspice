@@ -56,9 +56,9 @@ class FullASI(ASI):
         self.dx = self.dy = a
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
 
-    def _set_m(self, pattern: str):
+    def _set_m(self, pattern: str, angle: float = 0):
         if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
-            self.m = cp.ones_like(self.xx)
+            self.m = cp.ones_like(self.xx)*(2*(math.cos(angle) >= 0) - 1)
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy) % 2)*2 - 1
         else:
@@ -93,10 +93,10 @@ class IsingASI(ASI):
         self.dx = self.dy = a
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
-    def _set_m(self, pattern: str):
+    def _set_m(self, pattern: str, angle: float = 0):
         # PYTHONUPDATE_3.10: use structural pattern matching
         if pattern == 'uniform': # Angle 0°
-            self.m = cp.ones_like(self.xx)
+            self.m = 2*((self.orientation[:,:,0]*math.cos(angle) + self.orientation[:,:,1]*math.sin(angle)) >= 0) - 1 # Setting empty cells to zero is responsibility of Magnets() class
         elif pattern == 'AFM':
             self.m = (self.iyy % 2)*2 - 1
         else:
@@ -137,10 +137,10 @@ class SquareASI(ASI):
         self.dx = self.dy = a/2
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
-    def _set_m(self, pattern: str):
+    def _set_m(self, pattern: str, angle: float = 0):
         # PYTHONUPDATE_3.10: use structural pattern matching
         if pattern == 'uniform': # Angle 45°
-            self.m = cp.ones_like(self.xx) 
+            self.m = 2*((self.orientation[:,:,0]*math.cos(angle) + self.orientation[:,:,1]*math.sin(angle)) >= 0) - 1
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy)//2 % 2)*2 - 1
         else:
@@ -197,25 +197,23 @@ class KagomeASI(ASI):
         self.nx = n
         if ny is None:
             self.ny = int(self.nx/math.sqrt(3))//4*4
-            if 'PBC' in kwargs:
-                if not kwargs['PBC']:
-                    self.ny -= 1
+            if not kwargs.get('PBC', False):
+                self.ny -= 1
         else:
             self.ny = ny
         self.dx = a/4
         self.dy = math.sqrt(3)*self.dx
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
-    def _set_m(self, pattern: str):
+    def _set_m(self, pattern: str, angle: float = 0):
         # PYTHONUPDATE_3.10: use structural pattern matching
+        self.m = 2*((self.orientation[:,:,0]*math.cos(angle) + self.orientation[:,:,1]*math.sin(angle)) >= 0) - 1
         if pattern == 'uniform': # Angle 90°
-            self.m = cp.ones_like(self.xx)
-            self.m[(self.ixx - self.iyy) % 4 == 1] = -1
+            self.m[(self.ixx - self.iyy) % 4 == 1] *= -1
         elif pattern == 'AFM':
-            self.m = cp.ones_like(self.xx)
-            self.m[(self.ixx + self.iyy) % 4 == 3] = -1
+            self.m[(self.ixx + self.iyy) % 4 == 3] *= -1
         else:
-            self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
+            self.m *= cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):
