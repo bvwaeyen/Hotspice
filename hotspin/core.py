@@ -72,7 +72,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
                 warnings.warn(f"Be careful with PBC, as there are not an integer number of unit cells in the simulation! Hence, the boundaries do not nicely fit together. Adjust nx or ny to alleviate this problem (unit cell has size {self.unitcell.x}x{self.unitcell.y}).", stacklevel=2)
 
         self.history = History()
-        self.switches = 0
+        self.switches, self.attempted_switches = 0, 0
 
         # Main initialization steps that require calling other methods of this class
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
@@ -188,7 +188,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
 
     @property
     def MCsteps(self): # Number of Monte Carlo steps
-        return self.switches/self.n
+        return self.attempted_switches/self.n
 
     @property
     def E(self) -> cp.ndarray: # This could be relatively expensive to calculate, so maybe not ideal
@@ -321,17 +321,18 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def _update_Glauber(self, idx=None, Q=0.05, r=0):
         # 1) Choose a bunch of magnets at random
         if idx is None: idx = self.select(r=self.calc_r(Q) if r == 0 else r)
+        self.attempted_switches += idx.shape[1]
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
         # TODO: can adapt this to work at T=0 by first checking if energy would drop
         exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
         # idx = idx[:,cp.where(cp.random.random(exponential.shape) < (exponential/(1+exponential)))[0]] # https://en.wikipedia.org/wiki/Glauber_dynamics
-        idx = idx[:,cp.where(cp.random.random(exponential.shape) < exponential)[0]] # http://bit-player.org/2019/glaubers-dynamics
-        if idx.shape[1] > 0:
-            self.m[idx[0], idx[1]] *= -1
-            self.switches += idx.shape[1]
-            self.update_energy(index=idx)
-        return idx
+        idx_switch = idx[:,cp.where(cp.random.random(exponential.shape) < exponential)[0]] # http://bit-player.org/2019/glaubers-dynamics
+        if idx_switch.shape[1] > 0:
+            self.m[idx_switch[0], idx_switch[1]] *= -1
+            self.switches += idx_switch.shape[1]
+            self.update_energy(index=idx_switch)
+        return idx_switch
     
     def _update_Néel(self):
         ''' Performs a single magnetization switch. '''
@@ -344,6 +345,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
             self.m[indexmin2D] = -self.m[indexmin2D]
             self.switches += 1
+            self.attempted_switches += 1
             self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.kBT[indexmin2D]) # This can become cp.inf quite quickly if T is small
         self.update_energy(index=indexmin2D)
         return indexmin2D
@@ -353,6 +355,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         cluster = self._select_cluster()
         self.m[cluster[0], cluster[1]] *= -1
         self.switches += cluster.shape[1]
+        self.attempted_switches += cluster.shape[1]
         self.update_energy(index=cluster)
         return cluster
 
