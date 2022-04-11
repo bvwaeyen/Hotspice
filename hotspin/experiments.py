@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 # from cupyx.scipy import signal
 
 from .core import DipolarEnergy, Magnets, ZeemanEnergy
-from .io import DataStream, Inputter, OutputReader, RandomDataStream, PerpFieldInputter, RegionalOutputReader
+from .io import Inputter, OutputReader, RandomBinaryDatastream, PerpFieldInputter, RegionalOutputReader
 from .plottools import show_m
 
 
@@ -57,11 +57,12 @@ class KernelQualityExperiment(Experiment):
         return self.results['rank']
 
 
-if __name__ == "__main__": # Run this file from the parent directory using cmd 'python -m hotspin.experiments'
+###############################################################################
+def main_kernelquality():
     from .ASI import PinwheelASI
-    mm = PinwheelASI(25, 5e-3, T=1, energies=(DipolarEnergy(), ZeemanEnergy()))
-    datastream = RandomDataStream()
-    inputter = PerpFieldInputter(datastream, magnitude=1, phi=math.pi/180*7, n=2)
+    mm = PinwheelASI(25, 1e-6, T=300, energies=(DipolarEnergy(), ZeemanEnergy()))
+    datastream = RandomBinaryDatastream()
+    inputter = PerpFieldInputter(datastream, magnitude=1, angle=math.pi/180*7, n=2)
     outputreader = RegionalOutputReader(5, 5, mm)
     experiment = KernelQualityExperiment(inputter, outputreader, mm)
     bits = 11
@@ -80,3 +81,6 @@ if __name__ == "__main__": # Run this file from the parent directory using cmd '
     plt.ylabel(f'Input # ({bits} bits each)')
     plt.savefig(f'{os.path.splitext(filename)[0]}.pdf')
     plt.show()
+
+if __name__ == "__main__": # Run this file from the parent directory using cmd 'python -m hotspin.experiments'
+    main_kernelquality()

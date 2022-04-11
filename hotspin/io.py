@@ -11,14 +11,20 @@ from .core import Magnets
 from .plottools import show_m
 
 
-class DataStream(ABC):
+class Datastream(ABC):
     @abstractmethod
     def get_next(self, n=1):
-        """ Calling this method returns a CuPy array containing exactly <n> elements, which are either 0 or 1 (int!). """
+        """ Calling this method returns a CuPy array containing exactly <n> elements, containing the requested data.
+            Depending on the specific subclass, these can be int or float.
+        """
+
+class BinaryDatastream(Datastream):
+    """ Just an alias for Datastream: a normal Datastream can contain floats, while this only yields 0 or 1. """
+    pass
 
 
 class Inputter(ABC):
-    def __init__(self, datastream: DataStream):
+    def __init__(self, datastream: Datastream):
         self.datastream = datastream
 
     @abstractmethod
@@ -50,10 +56,10 @@ class OutputReader(ABC):
 
 
 ######## Below are subclasses of the superclasses above
-# TODO: class FileDataStream(DataStream) which reads bits from a file? Can use package 'bitstring' for this.
-# TODO: class SemiRepeatingDataStream(DataStream) which has first <n> random bits and then <m> bits which are the same for all runs
-class RandomDataStream(DataStream):
-    def __init__(self, p0=.5): # TODO: save history somehow?
+# TODO: class FileDatastream(Datastream) which reads bits from a file? Can use package 'bitstring' for this.
+# TODO: class SemiRepeatingDatastream(Datastream) which has first <n> random bits and then <m> bits which are the same for all runs
+class RandomBinaryDatastream(BinaryDatastream):
+    def __init__(self, p0=.5): # TODO: save history?
         ''' Generates random bits, with <p0> probability of getting 0, and 1-<p0> probability of getting 1.
             @param p0 [float] (0.5): the probability of 0 when generating a random bit.
         '''
@@ -92,7 +98,9 @@ class PerpFieldInputter(Inputter):
         if bit is None: bit = self.datastream.get_next()
         angle = self.phi + bit*math.pi/2
         mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
-        for _ in range(int(self.n*mm.n)): # TODO: make this r-dependent (r in Magnets.select())
+        MCsteps0 = mm.MCsteps
+        while (progress := (mm.MCsteps - MCsteps0)/self.n) < 1:
+            if self.sine: mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*math.sin(progress*math.pi), angle=angle)
             mm.update()
 
 
