@@ -7,8 +7,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from cupyx.scipy import signal
 from dataclasses import dataclass, field
-from scipy.spatial.distance import pdist
-from typing import List
+from scipy.spatial import distance
 
 
 kB = 1.380649e-23
@@ -22,7 +21,10 @@ class SimParams:
 
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
-    def __init__(self, nx, ny, dx, dy, *, T=1, E_b=5e-20, Msat=800e3, V=2e-22, in_plane=True, pattern='random', energies=None, PBC=False, angle=None, params: SimParams = None):
+    def __init__(
+        self, nx: int, ny: int, dx: float, dy: float, *,
+        T: float = 1, E_b: float = 5e-20, Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
+        pattern: str = 'random', energies: tuple = None, PBC: bool = False, angle: float = None, params: SimParams = None):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are allowed currently. 
@@ -56,7 +58,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.T = T # [K]
         
         if isinstance(E_b, np.ndarray): # This detects both CuPy and NumPy arrays
-            assert E_b.shape == self.xx.shape, f"Specified energy barriers (shape {E_b.shape}) does not match shape ({nx}, {ny}) of simulation domain."
+            if E_b.shape != self.xx.shape: raise ValueError(f"Specified energy barriers (shape {E_b.shape}) does not match shape ({nx}, {ny}) of simulation domain.")
             self.E_b = cp.asarray(E_b) # [J]
         else:
             self.E_b = cp.ones_like(self.xx)*E_b # [J]
@@ -105,7 +107,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         ''' Returns the closest distance between two magnets in the simulation. '''
         slice = cp.where(self.occupation[:self.unitcell.y*2,:self.unitcell.x*2]) # We only need at most two unit cells
         pos_x, pos_y = self.xx[slice], self.yy[slice]
-        return pdist(cp.asarray([pos_x, pos_y]).get().T).min()
+        return distance.pdist(cp.asarray([pos_x, pos_y]).get().T).min()
 
     def initialize_m(self, pattern='random', *, angle=0, update_energy=True):
         ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
@@ -189,7 +191,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return self.switches/self.n
 
     @property
-    def E(self) -> cp.ndarray:
+    def E(self) -> cp.ndarray: # This could be relatively expensive to calculate, so maybe not ideal
         return cp.sum(cp.asarray([energy.E for energy in self.energies]), axis=0)
 
     @property
@@ -199,7 +201,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     @T.setter
     def T(self, value):
         if isinstance(value, np.ndarray): # This detects both CuPy and NumPy arrays
-            assert value.shape == self.xx.shape, f"Specified temperature profile (shape {value.shape}) does not match shape ({self.nx}, {self.ny}) of simulation domain."
+            if value.shape != self.xx.shape: raise ValueError(f"Specified temperature profile (shape {value.shape}) does not match shape ({self.nx}, {self.ny}) of simulation domain.")
             self._T = cp.asarray(value)
         else:
             self._T = cp.ones_like(self.xx)*value
@@ -491,8 +493,8 @@ class Energy(ABC):
             @return [np.array(2xN)]: A 2xN array, where the 1st sub-array indicates x-indices, the 2nd y-indices.
         '''
         indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze())
-        assert len(indices2D.shape) <= 2, "An array with more than 2 non-empty dimensions can not be used to represent a list of indices."
-        assert cp.any(cp.asarray(indices2D.shape) == 2), "The list of indices has an incorrect shape. At least one dimension should have length 2."
+        if len(indices2D.shape) > 2: raise ValueError("An array with more than 2 non-empty dimensions can not be used to represent a list of indices.")
+        if not cp.any(cp.asarray(indices2D.shape) == 2): raise ValueError("The list of indices has an incorrect shape. At least one dimension should have length 2.")
          # PYTHONUPDATE_3.10: use structural pattern matching
         if indices2D.shape[0] == 2: # The only ambiguous case is for a 2x2 input array, but in that case we assume the array is already correct.
             return indices2D
@@ -508,7 +510,7 @@ class Energy(ABC):
             @return [tuple(2)]: A length 2 tuple, whose elements correspond to the x- and y-index, respectively.
         '''
         index2D = cp.asarray(index2D)
-        assert index2D.size == 2, "The <index2D> argument should contain exactly two values: the x- and y-index."
+        if index2D.size != 2: raise ValueError("The <index2D> argument should contain exactly two values: the x- and y-index.")
         return tuple(index2D.reshape(2))
     
     @classmethod

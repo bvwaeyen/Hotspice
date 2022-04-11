@@ -73,6 +73,7 @@ if __name__ == "__main__":
     # ef.run_a_bit(mm, N=4e3, T=10000, show_m=False)
     # ef.run_a_bit(mm, N=20e3, T=40)
     # ef.neelTemperature(mm, T_max=400)
+    # ef.animate_quenching(mm, T_low=20, T_high=20, animate=3, speed=50, fill=True, pattern='uniform') # T=20 and T=100 are interesting
     # ef.animate_quenching(mm, animate=3, speed=50, fill=True, pattern='uniform')
     # animate_temp_rise(mm, animate=3, speed=100, T_step=0.05)
     # ef.autocorrelation_dist_dependence(mm)

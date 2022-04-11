@@ -4,8 +4,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib import animation, cm
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib import animation, cm, colors
 
 from context import hotspin
 
@@ -89,8 +88,8 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         @param pattern [str] (None): The initial magnetization pattern (any of 'random', 'uniform', 'AFM').
             Set to a False value to prevent initialization of the magnetization.
     """
-    assert T_low != 0, "T_low must be strictly positive for exponential quenching."
-    assert T_high >= T_low, "T_high must be larger than or equal to T_low."
+    if T_low <= 0: raise ValueError("T_low must be strictly positive for exponential quenching.")
+    if T_high < T_low: raise ValueError("T_high must be larger than or equal to T_low.")
     avg = hotspin.plottools.Average.resolve(avg, mm)
     if pattern:
         mm.initialize_m(pattern)
@@ -118,7 +117,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
          'blue':  [[0.0,  b0, b0],
                    [0.5,  0.0, 0.0],
                    [1.0,  b1, b1]]}
-        newcmap = LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
+        newcmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
         h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=fill, avg=avg),
                        cmap=newcmap, origin='lower', vmin=-1, vmax=1, extent=hotspin.plottools._get_averaged_extent(mm, avg))
         c1 = plt.colorbar(h)

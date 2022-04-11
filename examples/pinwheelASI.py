@@ -18,7 +18,7 @@ n = 400
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.PinwheelASI(n, 2e-6, T=T, E_b=E_b, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspin.ASI.PinwheelASI(n, 2e-6, T=T, E_b=E_b, pattern='uniform', energies=(hotspin.DipolarEnergy()), PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 

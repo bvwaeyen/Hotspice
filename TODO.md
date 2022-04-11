@@ -36,8 +36,8 @@
 1. High priority
     - Test physical accuracy of Hotspin
         - [x] 2D square Ising model
-        - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization?)
-        - [ ] Pinwheel reversal in external field (cfr. flatspin paper)
+        - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization? "Aging in a Two-Dimensional Ising Model with Dipolar Interactions"?)
+        - [x] Pinwheel reversal in external field (cfr. flatspin paper)
 
 2. Medium priority
     - Test physical accuracy of Hotspin

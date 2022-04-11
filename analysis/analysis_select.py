@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from matplotlib import cm
-from scipy.spatial.distance import pdist, cdist
+from scipy.spatial import distance
 
 from context import hotspin
 
@@ -62,7 +62,6 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     bin_width = r*scale/(n_bins-1)
     distance_bins = cp.linspace(0, r*scale-bin_width, n_bins)
     max_dist_bin = r*scale
-    get_bin = lambda x: cp.clip(cp.floor(x/r*(n_bins/scale)), 0, n_bins-1).astype(int)
     
     t = time.perf_counter()
     total = 0 # Number of samples
@@ -90,15 +89,15 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
             else:
                 all_pos = pos
             if ONLY_SMALLEST_DISTANCE:
-                dist_matrix = cp.asarray(cdist(all_pos.T.get(), all_pos.T.get()))
+                dist_matrix = cp.asarray(distance.cdist(all_pos.T.get(), all_pos.T.get()))
                 dist_matrix[dist_matrix==0] = np.inf
                 distances = cp.min(dist_matrix, axis=1)
             else:
-                distances = cp.asarray(pdist(all_pos.T.get()))
+                distances = cp.asarray(distance.pdist(all_pos.T.get()))
             min_dist = min(min_dist, cp.min(distances))
             near_distances = distances[distances < max_dist_bin]
             if near_distances.size != 0:
-                bin_counts = cp.bincount(get_bin(near_distances))
+                bin_counts = cp.bincount(cp.clip(cp.floor(near_distances/r*(n_bins/scale)), 0, n_bins-1).astype(int))
                 distances_binned[:bin_counts.size] += bin_counts
             field_local += calculate_any_neighbors(all_pos, (mm.ny*(1+PBC), mm.nx*(1+PBC)), center=r*scale)
             spectrum += cp.log(cp.abs(cp.fft.fftshift(cp.fft.fft2(choices)))) # Not sure if this should be done always or only if more than 1 sample exists

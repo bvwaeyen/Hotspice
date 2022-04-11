@@ -13,4 +13,3 @@ dependencies:
   - pip:
     - pip==22.0.4
     - setuptools==60.10.0
-prefix: C:\Users\jonat\Anaconda3\envs\hotspin

@@ -11,10 +11,7 @@ import pandas as pd
 
 from cupyx.scipy import signal
 from enum import auto, Enum
-from matplotlib import cm
-from matplotlib.colors import hsv_to_rgb, LinearSegmentedColormap
-from matplotlib.patches import Ellipse
-from matplotlib.widgets import MultiCursor
+from matplotlib import cm, colors, patches, widgets
 
 from .core import Magnets
 
@@ -157,8 +154,8 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
             shape = max_mean_magnitude.shape
             max_mean_magnitude = max_mean_magnitude[(shape[0]-ny)//2:(shape[0]-ny)//2+ny, (shape[1]-nx)//2:(shape[1]-nx)//2+nx]
             magnitudes = magnitudes/max_mean_magnitude*.9999 # times .9999 to prevent rounding errors yielding values larger than 1
-    assert angles is not None and magnitudes is not None, "When you provide angles, you should also provide magnitudes, and vice versa."
-    assert angles.shape == magnitudes.shape, "get_hsv() did not receive angle and magnitude arrays of the same shape."
+    assert angles is not None and magnitudes is not None, "Angles and/or magnitudes could not be resolved."
+    if angles.shape != magnitudes.shape: raise ValueError(f"Angle and/or magnitude arrays have different shape: {angles.shape} and {magnitudes.shape}.")
     
     # Normalize to ranges between 0 and 1 and determine NaN-positions
     angles = angles/2/math.pi
@@ -180,13 +177,13 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
     affectedpositions = cp.where(cp.logical_and(NaNangles, NaNmagnitudes))
     saturation[affectedpositions] = 0
     value[affectedpositions] = 1
-    # Create the hsv matrix with correct axes ordering for matplotlib.color.hsv_to_rgb:
+    # Create the hsv matrix with correct axes ordering for matplotlib.colors.hsv_to_rgb:
     hsv = np.array([hue.get(), saturation.get(), value.get()]).swapaxes(0, 2).swapaxes(0, 1)
     if fill: hsv = fill_neighbors(hsv, cp.logical_and(NaNangles, NaNmagnitudes), mm=mm)
     return hsv
 
 def get_rgb(*args, **kwargs):
-    return hsv_to_rgb(get_hsv(*args, **kwargs))
+    return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
 def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_quiver=False):
     ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
@@ -233,7 +230,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
          'blue':  [[0.0,  b0, b0],
                    [0.5,  0.0, 0.0],
                    [1.0,  b1, b1]]}
-        newcmap = LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
+        newcmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
         im1 = ax1.imshow(im, cmap=newcmap, origin='lower', vmin=-1, vmax=1,
                          extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba')
         c1 = plt.colorbar(im1)
@@ -267,7 +264,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
         ax3.set_xlabel('x [m]')
         ax3.set_ylabel('y [m]')
         axes.append(ax3)
-    multi = MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
+    multi = widgets.MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
     plt.gcf().tight_layout()
     plt.show()
 
@@ -306,7 +303,7 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
         px, py = positions_x[i], positions_y[i]
         edgedist = min([(px-xmin)/ux, (xmax-px)/ux, (py-ymin)/uy, (ymax-py)/uy, fall_off])/fall_off # Normalized distance to edge of figure (between 0 and 1)
         alpha = max(edgedist, 0.1)
-        ax.add_artist(Ellipse((px, py), size, (size/2 if mm.in_plane else size), angle=angles[i], alpha=alpha, ec=None))
+        ax.add_artist(patches.Ellipse((px, py), size, (size/2 if mm.in_plane else size), angle=angles[i], alpha=alpha, ec=None))
     ax.set_xlim(xmin-mm.dx/2, xmax+mm.dx/2)
     ax.set_ylim(ymin-mm.dy/2, ymax+mm.dy/2)
 
@@ -314,7 +311,7 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
     if save: save_plot(f'results/lattices/{type(mm).__name__}_{nx//mm.unitcell.x:.0f}x{ny//mm.unitcell.y:.0f}.pdf')
     plt.show()
 
-def show_history(mm: Magnets, y_quantity=None, y_label=r'Average magnetization'):
+def show_history(mm: Magnets, *, y_quantity=None, y_label=r'Average magnetization'):
     ''' Plots <y_quantity> (default: average magnetization (mm.history.m)) and total energy (mm.history.E)
         as a function of either the time or the temperature: if the temperature (mm.history.T) is constant, 
         then the x-axis will represent the time (mm.history.t), otherwise it represents the temperature.
@@ -327,7 +324,7 @@ def show_history(mm: Magnets, y_quantity=None, y_label=r'Average magnetization')
         x_quantity, x_label = mm.history.t, 'Time [s]'
     else:
         x_quantity, x_label = mm.history.T, 'Temperature [K]'
-    assert len(y_quantity) == len(x_quantity), "Error in show_history: <y_quantity> has different length than %s history." % x_label.split(' ')[0].lower()
+    if len(y_quantity) != len(x_quantity): raise ValueError(f"y_quantity has different length than history {x_label.split(' ')[0].lower()} array.")
 
     fig = plt.figure(figsize=(4, 6))
     ax1 = fig.add_subplot(211)
@@ -410,7 +407,7 @@ def init_fonts():
     plt.rc('figure', titlesize=chonk)  # fontsize of the figure title
 
 
-def save_plot(save_path, ext=None):
+def save_plot(save_path: str, ext=None):
     ''' <save_path> is a full relative pathname, usually something like
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     '''
@@ -422,7 +419,7 @@ def save_plot(save_path, ext=None):
     except PermissionError:
         warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)
 
-def save_data(df: pd.DataFrame, save_path): # This function doesn't really feel like it belongs in the 'plottools' module...
+def save_data(df: pd.DataFrame, save_path: str): # This function doesn't really feel like it belongs in the 'plottools' module...
     ''' <save_path> is a full relative pathname, usually something like
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     '''
