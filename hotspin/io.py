@@ -124,8 +124,10 @@ class RegionalOutputReader(OutputReader):
         else:
             self.state = cp.zeros((self.nx, self.ny))
 
-    def read_state(self, m=None):
+    def read_state(self, mm: Magnets = None, m=None):
+        if mm is not None: self.configure_for(mm) # If mm not specified, we suppose configure_for() already happened
         if m is None: m = self.mm.m
+
         if self.mm.in_plane:
             m_x = m*self.mm.orientation[:,:,0]*self.mm.Msat*self.mm.V
             m_y = m*self.mm.orientation[:,:,1]*self.mm.Msat*self.mm.V
@@ -135,4 +137,5 @@ class RegionalOutputReader(OutputReader):
         else:
             for i, _ in np.ndenumerate(self.grid):
                 self.state[i[0], i[1]] = cp.sum(m[np.logical_and(self.region_x == i[0], self.region_y == i[1])])
+
         return self.state # [Am²]

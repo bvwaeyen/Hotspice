@@ -21,7 +21,7 @@
     - [ ] Organize plotting functions better
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state because the current method is behaving similarly as when a cheese grater is used as ship
     - [ ] Implement metrics (average magnetization, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, ...) to compare with theory/experiment
-    - [x] Make a plottools function which clearly shows the basic lattice of an ASI (not full, just a couple of unit cells), with grid points and such indicated, to include in $\LaTeX$.
+    - [ ] Can implement autocorrelation length by taking into account cross product between vectors?
     - [ ] Possibly allow specifying angle also for pattern='AFM', if it makes any sense
 
 3. Low priority

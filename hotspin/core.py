@@ -16,7 +16,7 @@ kB = 1.380649e-23
 @dataclass
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are less than <this> switches in a single iteration, the energies are just summed, otherwise a convolution is used.
-    REDUCED_KERNEL_SIZE: int = 20 # If the dipolar kernel is truncated, it becomes a shape (2*<this>-1, 2*<this>-1) array.
+    REDUCED_KERNEL_SIZE: int = 0 # If the dipolar kernel is truncated, it becomes a shape (2*<this>-1, 2*<this>-1) array.
     UPDATE_SCHEME: str = 'Glauber' # Can be any of 'Néel', 'Glauber', 'Wolff'
 
 
@@ -47,7 +47,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J]
         
         # initialize the coordinates based on nx, (ny) and L
-        self.nx, self.ny = nx, ny
+        self.nx, self.ny = int(nx), int(ny)
         self.dx, self.dy = dx, dy
         self.xx, self.yy = cp.meshgrid(cp.linspace(0, dx*(nx-1), nx), cp.linspace(0, dy*(ny-1), ny)) # [m]
         self.index = range(self.xx.size)
@@ -268,8 +268,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             ! <r> is a distance in meters, not a number of cells !
         '''
         Rx, Ry = math.ceil(r/self.dx) - 1, math.ceil(r/self.dy) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
-        Rx, Ry = self.unitcell.x * math.ceil(Rx/self.unitcell.x), self.unitcell.y * math.ceil(Ry/self.unitcell.y) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
-        Rx, Ry = max(min(Rx, self.nx), 1), max(min(Ry, self.ny), 1) # No need to make supercell larger than simulation itself
+        Rx, Ry = self.unitcell.x * max(1, math.ceil(Rx/self.unitcell.x)), self.unitcell.y * max(1, math.ceil(Ry/self.unitcell.y)) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
+        Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
         supergrid_nx = (self.nx + Rx - 1)//(2*Rx) + 1
         supergrid_ny = (self.ny + Ry - 1)//(2*Ry) + 1
         move_grid = -np.random.randint([-Ry, -Rx], [Ry, Rx])
@@ -318,9 +318,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             raise ValueError(f"The Magnets.params object has an invalid value for UPDATE_SCHEME='{self.params.UPDATE_SCHEME}'.")
         return Energy.clean_indices(idx)
 
-    def _update_Glauber(self, Q=0.05, idx=None):
+    def _update_Glauber(self, idx=None, Q=0.05, r=0):
         # 1) Choose a bunch of magnets at random
-        if idx is None: idx = self.select(r=self.calc_r(Q))
+        if idx is None: idx = self.select(r=self.calc_r(Q) if r == 0 else r)
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
         # TODO: can adapt this to work at T=0 by first checking if energy would drop
         exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
@@ -703,9 +703,9 @@ class DipolarEnergy(Energy):
                 switched_field = cp.zeros_like(self.mm.m)
                 switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
                 n = self.mm.params.REDUCED_KERNEL_SIZE
-                usefulkernel = signal.convolve2d(switched_field, kernel[self.mm.ny-1-n:self.mm.ny+n, self.mm.nx-1-n:self.mm.nx+n], mode='same', boundary='wrap' if self.mm.PBC else 'fill')
-                # usefulkernel = signal.convolve2d(kernel, switched_field, mode='valid') # this one is extremely EXTREMELY slow
-                interaction = self.prefactor*cp.multiply(self.mm.m, usefulkernel)
+                usefulkernel = kernel[self.mm.ny-1-n:self.mm.ny+n, self.mm.nx-1-n:self.mm.nx+n] if n else kernel
+                convolutedkernel = signal.convolve2d(switched_field, usefulkernel, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
+                interaction = self.prefactor*cp.multiply(self.mm.m, convolutedkernel)
                 self.E += 2*interaction
             else:
                 ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY NONPARALLEL) 

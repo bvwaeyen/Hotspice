@@ -18,6 +18,7 @@ class Experiment(ABC):
         self.inputter = inputter
         self.outputreader = outputreader
         self.mm = mm
+        self.results = {} # General-purpose dict to store simulation results in
     
     @abstractmethod
     def run(self):
@@ -31,7 +32,6 @@ class KernelQualityExperiment(Experiment):
             By using this class on ASIs with different parameters, one can perform a sweep to determine the optimum.
         '''
         super().__init__(inputter, outputreader, mm)
-        self.results = {}
     
     def run(self, input_bits_length, save=None, verbose=True):
         self.all_states = cp.zeros((self.outputreader.n, self.outputreader.n))

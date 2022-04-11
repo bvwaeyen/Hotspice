@@ -412,7 +412,10 @@ def save_plot(save_path: str, ext=None):
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     '''
     if ext is not None: # Then a specific extension was requested, to override the one in save_path
-        save_path = os.path.splitext(save_path)[0] + '.' + ext.removeprefix('.')
+        original_ext = os.path.splitext(save_path)[1]
+        if len(original_ext) <= 4: # Then probably the 'extension' is actually real, not just the long part after a random decimal point in the string
+            save_path = os.path.splitext(save_path)[0]
+        save_path += '.' + ext.removeprefix('.')
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     try:
         plt.savefig(save_path)
