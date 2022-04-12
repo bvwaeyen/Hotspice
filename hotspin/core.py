@@ -9,6 +9,8 @@ from cupyx.scipy import signal
 from dataclasses import dataclass, field
 from scipy.spatial import distance
 
+from .utils import mirror4
+
 
 kB = 1.380649e-23
 
@@ -582,17 +584,6 @@ class DipolarEnergy(Energy):
         self.mm = mm
         self.unitcell = self.mm.unitcell
         self.E = cp.zeros_like(self.mm.xx)
-
-        def mirror4(arr, /, *, negativex=False, negativey=False):
-            ny, nx = arr.shape
-            arr4 = cp.zeros((2*ny-1, 2*nx-1))
-            xp = -1 if negativex else 1
-            yp = -1 if negativey else 1
-            arr4[ny-1:, nx-1:] = arr
-            arr4[ny-1:, nx-1::-1] = xp*arr
-            arr4[ny-1::-1, nx-1:] = yp*arr
-            arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
-            return arr4
         
         # Let us first make the four-mirrored distance matrix rinv3
         # WARN: this four-mirrored technique only works if (dx, dy) is the same for every cell everywhere!

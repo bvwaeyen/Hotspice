@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from .core import DipolarEnergy, Magnets, ZeemanEnergy
 from .io import Inputter, OutputReader, RandomBinaryDatastream, PerpFieldInputter, RegionalOutputReader
 from .plottools import show_m
+from .utils import strided
 
 
 class Experiment(ABC):
