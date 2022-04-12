@@ -2,7 +2,6 @@ import math
 import warnings
 
 import cupy as cp
-import numpy as np
 
 from abc import ABC, abstractmethod
 
@@ -104,10 +103,8 @@ class IsingASI(ASI):
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):
-        self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        self.orientation[:,:,0] = math.cos(angle)
-        self.orientation[:,:,1] = math.sin(angle)
-        self.orientation = cp.asarray(self.orientation)
+        self.orientation = cp.zeros(cp.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
+        self.orientation[True,True,:] = math.cos(angle), math.sin(angle)
 
     def _get_unitcell(self):
         return (1, 1)
@@ -148,16 +145,10 @@ class SquareASI(ASI):
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):
-        self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        occupation = self.occupation.get()
-        iyy = self.iyy.get()
-        self.orientation[iyy % 2 == 0,0] = math.cos(angle)
-        self.orientation[iyy % 2 == 0,1] = math.sin(angle)
-        self.orientation[iyy % 2 == 1,0] = math.cos(angle + math.pi/2)
-        self.orientation[iyy % 2 == 1,1] = math.sin(angle + math.pi/2)
-        self.orientation[occupation == 0,0] = 0
-        self.orientation[occupation == 0,1] = 0
-        self.orientation = cp.asarray(self.orientation)
+        self.orientation = cp.zeros(cp.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
+        self.orientation[self.iyy % 2 == 0,:] = math.cos(angle), math.sin(angle)
+        self.orientation[self.iyy % 2 == 1,:] = math.cos(angle + math.pi/2), math.sin(angle + math.pi/2)
+        self.orientation[self.occupation == 0,:] = 0
 
     def _get_unitcell(self):
         return (2, 2)
@@ -217,17 +208,11 @@ class KagomeASI(ASI):
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):
-        self.orientation = np.zeros(np.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        occupation = self.occupation.get()
-        self.orientation[:,:,0] = math.cos(angle + math.pi/2)
-        self.orientation[:,:,1] = math.sin(angle + math.pi/2)
-        self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1).get(),0] = math.cos(angle - math.pi/6)
-        self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1).get(),1] = math.sin(angle - math.pi/6)
-        self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1).get(),0] = math.cos(angle + math.pi/6)
-        self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1).get(),1] = math.sin(angle + math.pi/6)
-        self.orientation[occupation == 0,0] = 0
-        self.orientation[occupation == 0,1] = 0
-        self.orientation = cp.asarray(self.orientation)
+        self.orientation = cp.zeros(cp.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
+        self.orientation[True,True,:] = math.cos(angle + math.pi/2), math.sin(angle + math.pi/2)
+        self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),:] = math.cos(angle - math.pi/6), math.sin(angle - math.pi/6)
+        self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),:] = math.cos(angle + math.pi/6), math.sin(angle + math.pi/6)
+        self.orientation[self.occupation == 0,:] = 0
 
     def _get_unitcell(self):
         return (4, 4)

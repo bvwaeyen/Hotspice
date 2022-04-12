@@ -19,6 +19,7 @@
 2. Medium priority
     - [ ] Make unit tests
     - [ ] Organize plotting functions better
+        - [ ] Improve the Average class to make it more versatile and consistent between different ASIs
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state because the current method is behaving similarly as when a cheese grater is used as ship
     - [ ] Implement metrics (average magnetization, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, ...) to compare with theory/experiment
     - [ ] Can implement autocorrelation length by taking into account cross product between vectors?

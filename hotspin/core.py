@@ -2,6 +2,7 @@ import math
 import warnings
 
 import cupy as cp
+import cupyx as cpx
 import numpy as np
 
 from abc import ABC, abstractmethod
@@ -592,7 +593,7 @@ class DipolarEnergy(Energy):
         rry = self.mm.yy - self.mm.yy[0,0]
         rr_sq = rrx**2 + rry**2
         rr_sq[0,0] = cp.inf
-        rr_inv = rr_sq**(-1/2) # Due to the previous line, this is now never infinite
+        rr_inv = cpx.rsqrt(rr_sq) # Due to the previous line, this is now never infinite
         rr_inv3 = rr_inv**3
         rinv3 = mirror4(rr_inv3)
         # Now we determine the normalized rx and ry
