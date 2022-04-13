@@ -12,7 +12,7 @@
     - [ ] Develop .io and .experiments modules
         - [x] Kernel rank experiment
         - [ ] Task Agnostic Metrics for RC
-        - [ ] Allow analog inputs, not just binary
+        - [x] Allow analog inputs, not just binary
 
     - [ ] Reconsider distribution of responsibilities between ASI() and Magnets() classes
 

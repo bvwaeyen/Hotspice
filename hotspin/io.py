@@ -28,19 +28,20 @@ class Inputter(ABC):
         self.datastream = datastream
 
     @abstractmethod
-    def input_bit(self, mm: Magnets, bit=None):
-        """ Inputs a bit (generated using <self.datastream>) into the <mm> simulation. """
-        if bit is None: bit = self.datastream.get_next()
+    def input_single(self, mm: Magnets, value=None):
+        """ Performs an input corresponding to <value> (generated using <self.datastream>) into the <mm> simulation. """
+        if value is None: value = self.datastream.get_next()
+        return value
 
 
 class OutputReader(ABC):
-    def __init__(self):
-        pass
+    def __init__(self, mm=None):
+        if mm is not None: self.configure_for(mm)
 
     @abstractmethod
-    def read_state(self, mm: Magnets):
+    def read_state(self, mm: Magnets) -> cp.ndarray:
         """ Reads the current state of the <mm> simulation in some way (the exact manner should be
-            implemented through subclassing), 
+            implemented through subclassing).
         """
     
     def configure_for(self, mm: Magnets):
@@ -52,14 +53,14 @@ class OutputReader(ABC):
     @property
     @abstractmethod
     def n(self):
-        ''' The number of output bits when reading a given state. '''
+        ''' The number of output values when reading a given state. '''
 
 
 ######## Below are subclasses of the superclasses above
 # TODO: class FileDatastream(Datastream) which reads bits from a file? Can use package 'bitstring' for this.
 # TODO: class SemiRepeatingDatastream(Datastream) which has first <n> random bits and then <m> bits which are the same for all runs
 class RandomBinaryDatastream(BinaryDatastream):
-    def __init__(self, p0=.5): # TODO: save history?
+    def __init__(self, p0=.5):
         ''' Generates random bits, with <p0> probability of getting 0, and 1-<p0> probability of getting 1.
             @param p0 [float] (0.5): the probability of 0 when generating a random bit.
         '''
@@ -68,24 +69,29 @@ class RandomBinaryDatastream(BinaryDatastream):
     def get_next(self, n=1):
         return cp.where(cp.random.uniform(size=(n,)) < self.p0, 0, 1)
 
-
-class PerpFieldInputter(Inputter):
-    def __init__(self, datastream: DataStream, magnitude=1, phi=0, n=2):
-        ''' Applies an external field, whose angle depends on the bit that is being applied:
-            the bit '0' corresponds to an angle of <phi> radians, the bit '1' to <phi>+pi/2 radians.
-        '''
-        super().__init__(datastream)
-        self._phi = phi
-        self._magnitude = magnitude
-        self.n = n # The number of steps (as a multiple of mm.n) done every time self.input_bit(mm) is called
-        # TODO: decide whether to use n, or t, or something else?
+class RandomUniformDatastream(Datastream):
+    def __init__(self, low=0, high=1):
+        ''' Generates uniform random floats between <low=0> and <high=1>. '''
+        self.low, self.high = low, high
     
+    def get_next(self, n=1):
+        return cp.random.uniform(low=self.low, high=self.high, size=(n,))
+
+
+class FieldInputter(Inputter):
+    def __init__(self, datastream: Datastream, magnitude=1, angle=0, n=2):
+        ''' Applies an external field at <angle> rad, whose magnitude is <magnitude>*<datastream.get_next()>. '''
+        super().__init__(datastream)
+        self.angle = angle
+        self.magnitude = magnitude
+        self.n = n # The number of Monte Carlo steps performed every time self.input_single(mm) is called
+
     @property
-    def phi(self): # [rad]
-        return self._phi
-    @phi.setter
-    def phi(self, value):
-        self._phi = value % (2*math.pi)
+    def angle(self): # [rad]
+        return self._angle
+    @angle.setter
+    def angle(self, value):
+        self._angle = value % (2*math.pi)
     
     @property
     def magnitude(self): # [T]
@@ -93,15 +99,35 @@ class PerpFieldInputter(Inputter):
     @magnitude.setter
     def magnitude(self, value):
         self._magnitude = value
+        
+    def input_single(self, mm: Magnets, value=None):
+        if value is None: value = self.datastream.get_next()
+        mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value, angle=self.angle)
+        MCsteps0 = mm.MCsteps
+        while mm.MCsteps - MCsteps0 < self.n: mm.update()
+        return value
+
+
+class PerpFieldInputter(FieldInputter):
+    def __init__(self, datastream: BinaryDatastream, magnitude=1, angle=0, n=2, sine=True):
+        ''' Applies an external field, whose angle depends on the bit that is being applied:
+            the bit '0' corresponds to an angle of <phi> radians, the bit '1' to <phi>+pi/2 radians.
+            Also works for continuous numbers, resulting in intermediate angles, but this is not the intended use.
+            If <sine> is True, the field starts at zero strength and follows half a sine cycle back to zero during
+                the <n> steps that were specified. If False, a constant field is used for the entire duration.
+        '''
+        super().__init__(datastream, magnitude=magnitude, angle=angle, n=n)
+        self.sine = sine # Whether or not to use a sinusoidal field strength
     
-    def input_bit(self, mm: Magnets, bit=None):
-        if bit is None: bit = self.datastream.get_next()
-        angle = self.phi + bit*math.pi/2
+    def input_single(self, mm: Magnets, value=None):
+        if value is None: value = self.datastream.get_next()
+        angle = self.angle + value*math.pi/2
         mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
         MCsteps0 = mm.MCsteps
         while (progress := (mm.MCsteps - MCsteps0)/self.n) < 1:
             if self.sine: mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*math.sin(progress*math.pi), angle=angle)
             mm.update()
+            return value
 
 
 class RegionalOutputReader(OutputReader):
@@ -132,9 +158,9 @@ class RegionalOutputReader(OutputReader):
         else:
             self.state = cp.zeros((self.nx, self.ny))
 
-    def read_state(self, mm: Magnets = None, m=None):
+    def read_state(self, mm: Magnets = None, m=None) -> cp.ndarray:
         if mm is not None: self.configure_for(mm) # If mm not specified, we suppose configure_for() already happened
-        if m is None: m = self.mm.m
+        if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
 
         if self.mm.in_plane:
             m_x = m*self.mm.orientation[:,:,0]*self.mm.Msat*self.mm.V
