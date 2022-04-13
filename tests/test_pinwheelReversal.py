@@ -50,7 +50,7 @@ class test_pinwheelReversal:
         self.size = kwargs.get('size', 400) # Edge length of simulation as a number of cells
         self.a = kwargs.get('a', 1e-6) # [m] Lattice spacing
         self.T = kwargs.get('T', 300) # [K] Room temperature
-        self.H_max = kwargs.get('H_max', 1e-4) # [T] extremal magnitude of external field (default from flatspin paper)
+        self.H_max = kwargs.get('H_max', 4e-4) # [T] extremal magnitude of external field (default from flatspin paper)
         self.V = kwargs.get('V', 470e-9*170e-9*10e-9) # [m³] volume of a single magnet (default from flatspin paper)
 
     def test(self, *args, **kwargs):
@@ -62,7 +62,7 @@ class test_pinwheelReversal:
         '''
         if verbose: print(f'External field angle is {round(angle*180/math.pi):d} degrees.')
         if not (-math.pi/4 < angle < math.pi/4): warnings.warn(f"Field angle {angle} is outside the nominal -pi/4 < angle < pi/4 range. Undesired behavior might occur.", stacklevel=2)
-        self.mm = hotspin.ASI.PinwheelASI(self.size, self.a, T=self.T, PBC=False)
+        self.mm = hotspin.ASI.PinwheelASI(self.size, self.a, T=self.T, PBC=False, V=8e-22)
         self.mm.initialize_m(pattern='uniform', angle=0)
         self.mm.add_energy(hotspin.ZeemanEnergy(magnitude=self.H_max, angle=angle))
         thresholds = Threshold([.7, .35, 0, -.35, -.7], start_value=self.mm.m_avg_x) # If the average magnetization crosses this, a plot is shown.
@@ -72,7 +72,7 @@ class test_pinwheelReversal:
         # H_range = H_range[:H_range.size//4] # Only go from zero to H_max (optional, N/2 steps)
         m_avg_H = np.zeros_like(H_range)
         for i, H in enumerate(H_range):
-            if verbose and (i + 1) % 10**(math.floor(math.log10(N))-1) == 0 or i == 0:
+            if verbose and ((i + 1) % 10**(math.floor(math.log10(N))-1) == 0 or i == 0):
                 print(f"[{i+1}/{H_range.size}] H = {H:.2e} T, m_x={self.mm.m_avg_x:.2f}")
             self.mm.update(r=1e-7)
             self.mm.get_energy('Zeeman').set_field(magnitude=H)
@@ -85,8 +85,8 @@ class test_pinwheelReversal:
         data = pd.DataFrame({"H": H_range, "m_avg": m_avg_H, "H_angle": angle, "T": self.T})
 
         savename = f"results/test_pinwheelReversal/N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}"
-        if plot: test_pinwheelReversal.test_reversal_plot(data, save=savename)
         if save: hotspin.plottools.save_data(data, f"{savename}.csv")
+        if plot: test_pinwheelReversal.test_reversal_plot(data, save=savename)
 
         return data
 
@@ -115,5 +115,5 @@ class test_pinwheelReversal:
 
 
 if __name__ == "__main__":
-    test_pinwheelReversal(T=300, size=50).test(angle=30*math.pi/180, N=2000, verbose=True, save=True, show_intermediate=False)
+    test_pinwheelReversal(T=300, size=50).test(angle=30*math.pi/180, N=20000, verbose=True, save=True, show_intermediate=False)
     # Observation: the external field here is MUCH smaller than in the flatspin paper, even though self.V is the same and self.a is reasonable

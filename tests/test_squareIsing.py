@@ -66,8 +66,8 @@ class test_squareIsing:
 
         Tsweep_direction = 'reverse' if kwargs.get('reverse', False) else ''
         savename = f"results/test_squareIsing/Tsweep{data['T'].nunique()}{Tsweep_direction}_Nsweep{data['N'].nunique()}_{self.mm.nx}x{self.mm.ny}"
-        if plot: test_squareIsing.test_N_influence_plot(data, save=savename)
         if save: hotspin.plottools.save_data(data, f"{savename}.csv")
+        if plot: test_squareIsing.test_N_influence_plot(data, save=savename)
 
         return data
 
