@@ -185,7 +185,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
 def get_rgb(*args, **kwargs):
     return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
-def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_quiver=False):
+def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_quiver=False, figure=None):
     ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
         the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -208,7 +208,9 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
     num_plots += 1 if show_energy else 0
     num_plots += (0 if overlay_quiver else 1) if show_quiver else 0
     axes = []
-    fig = plt.figure(figsize=(3.5*num_plots, 3))
+    if not plt.get_fignums(): figure = None
+    fig = plt.figure(figsize=(3.5*num_plots, 3)) if figure is None else figure
+    if figure is not None: fig.clear()
     ax1 = fig.add_subplot(1, num_plots, 1)
     im = get_rgb(mm, m=m, avg=avg, fill=fill)
     cmap = cm.get_cmap('hsv')
@@ -251,7 +253,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
             axes.append(ax2)
         nonzero = mm.m.get().nonzero()
         mx, my = cp.multiply(m, mm.orientation[:,:,0]).get()[nonzero], cp.multiply(m, mm.orientation[:,:,1]).get()[nonzero]
-        ax2.quiver(mm.xx.get()[nonzero], mm.yy.get()[nonzero], mx, my, color=cmap((np.arctan2(my, mx)/2/np.pi)+.5),
+        ax2.quiver(mm.xx.get()[nonzero], mm.yy.get()[nonzero], mx, my, color=cmap((np.arctan2(my, mx)/2/np.pi) % 1),
                 pivot='mid', scale=1.1/mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
@@ -266,7 +268,11 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
         axes.append(ax3)
     multi = widgets.MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
     plt.gcf().tight_layout()
-    plt.show()
+    if figure is None:
+        plt.show()
+    else:
+        update_interactive(fig)
+    return fig
 
 def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, scale: float = .8, save: bool = False):
     ''' Shows a minimalistic rendition of the lattice on which the spins are placed.
@@ -392,7 +398,21 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
     return result.get()
 
 
-def init_fonts():
+def init_fonts(backend=True):
+    ''' Sets various parameters for consistent plotting across all Hotspin scripts.
+        This should be called before instantiating any subplots.
+        This should not be called directly by any function in hotspin.plottools itself,
+        only by higher-level scripts (e.g. examples, analyses, tests...) which can
+        then decide for themselves whether or not to use these standardized settings.
+        @param backend [bool] (True): if True, the tkinter backend is activated. This
+            backend is preferred since it allows consistent updating of interactive plots.
+    '''
+    if backend:
+        try:
+            matplotlib.use("TkAgg") # tkinter backend is preferred by Hotspin
+        except ImportError:
+            warnings.warn(f"Could not activate 'TkAgg' backend for Hotspin (using {matplotlib.get_backend()} instead).", stacklevel=2)
+    
     # Call this function before instantiating subplots!
     smol = 10
     medium = 11
@@ -405,6 +425,18 @@ def init_fonts():
     plt.rc('ytick', labelsize=smol)    # fontsize of the tick labels
     plt.rc('legend', fontsize=smol)    # legend fontsize
     plt.rc('figure', titlesize=chonk)  # fontsize of the figure title
+
+
+def init_interactive():
+    ''' Call this once before starting to build an interactive (i.e. real-time updatable) plot. '''
+    plt.ion()
+
+def update_interactive(figure=None):
+    ''' Update all the visuals of the most recent figure so it is up-to-date. '''
+    # Interactive functions in hotspin.plottools probably already call this function by themselves.
+    fig = plt.gcf() if figure is None else figure
+    fig.canvas.draw_idle()
+    fig.canvas.flush_events()
 
 
 def save_plot(save_path: str, ext=None):
