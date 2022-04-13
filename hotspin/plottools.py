@@ -197,6 +197,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
         @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
         @param overlay_quiver [bool] (False): if True, the quiver plot is shown overlaid on the color average plot.
+        @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this show_m().
     '''
     avg = Average.resolve(avg, mm)
     if m is None: m = mm.m

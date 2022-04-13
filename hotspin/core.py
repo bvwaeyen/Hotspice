@@ -19,8 +19,14 @@ kB = 1.380649e-23
 @dataclass
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are less than <this> switches in a single iteration, the energies are just summed, otherwise a convolution is used.
-    REDUCED_KERNEL_SIZE: int = 0 # If the dipolar kernel is truncated, it becomes a shape (2*<this>-1, 2*<this>-1) array.
+    REDUCED_KERNEL_SIZE: int = 0 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
     UPDATE_SCHEME: str = 'Glauber' # Can be any of 'Néel', 'Glauber', 'Wolff'
+
+    def __post_init__(self):
+        self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = int(self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF)
+        self.REDUCED_KERNEL_SIZE = int(self.REDUCED_KERNEL_SIZE)
+        if self.UPDATE_SCHEME not in (allowed := ['Glauber', 'Néel', 'Wolff']):
+            raise ValueError(f"UPDATE_SCHEME='{self.UPDATE_SCHEME}' is invalid: allowed values are {allowed}.")
 
 
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
@@ -380,7 +386,30 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         for _ in range(N):
             indexmin2D = divmod(cp.argmin(self.switch_energy(all_indices)), self.nx)
             self.m[indexmin2D] = -self.m[indexmin2D]
+            self.switches += 1
+            self.attempted_switches += 1
             self.update_energy(index=indexmin2D)
+    
+    def minimize_all(self):
+        ''' Switches all magnets that can gain energy by switching. '''
+        all_indices = cp.asarray([self.iyy.reshape(-1), self.ixx.reshape(-1)])
+        indices = all_indices[:, cp.where(self.switch_energy(all_indices) < 0)[0]]
+        if indices.size > 0:
+            self.m[indices[0], indices[1]] = -self.m[indices[0], indices[1]]
+            self.switches += indices.shape[1]
+            self.attempted_switches += indices.shape[1]
+            self.update_energy(index=indices)
+    
+    def relax(self):
+        ''' Relaxes self.m to a (meta)stable state using multiple self.minimize_all() calls.
+            NOTE: this can be an expensive operation for large simulations.
+        '''
+        previous_states = [self.m.copy(), cp.zeros_like(self.m), cp.zeros_like(self.m)] # Current state, previous, and the one before
+        while not cp.allclose(previous_states[2], previous_states[0]): # Loop exits once we detect a 2-cycle, i.e. the only thing happening is some magnets keep switching back and forth
+            self.minimize_all()
+            previous_states[2] = previous_states[1].copy()
+            previous_states[1] = previous_states[0].copy()
+            previous_states[0] = self.m.copy()
 
 
     def history_save(self, *, E_tot=None, t=None, T=None, m_avg=None):
