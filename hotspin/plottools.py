@@ -271,6 +271,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
     plt.gcf().tight_layout()
     if figure is None:
         plt.show()
+        if plt.isinteractive(): update_interactive(fig)
     else:
         update_interactive(fig)
     return fig
@@ -311,8 +312,8 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
         edgedist = min([(px-xmin)/ux, (xmax-px)/ux, (py-ymin)/uy, (ymax-py)/uy, fall_off])/fall_off # Normalized distance to edge of figure (between 0 and 1)
         alpha = max(edgedist, 0.1)
         ax.add_artist(patches.Ellipse((px, py), size, (size/2 if mm.in_plane else size), angle=angles[i], alpha=alpha, ec=None))
-    ax.set_xlim(xmin-mm.dx/2, xmax+mm.dx/2)
-    ax.set_ylim(ymin-mm.dy/2, ymax+mm.dy/2)
+    ax.set_xlim(xmin-size/2, xmax+size/2)
+    ax.set_ylim(ymin-size/2, ymax+size/2)
 
     plt.gcf().tight_layout()
     if save: save_plot(f'results/lattices/{type(mm).__name__}_{nx//mm.unitcell.x:.0f}x{ny//mm.unitcell.y:.0f}.pdf')

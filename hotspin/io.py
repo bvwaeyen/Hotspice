@@ -127,7 +127,7 @@ class PerpFieldInputter(FieldInputter):
         while (progress := (mm.MCsteps - MCsteps0)/self.n) < 1:
             if self.sine: mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*math.sin(progress*math.pi), angle=angle)
             mm.update()
-            return value
+        return value
 
 
 class RegionalOutputReader(OutputReader):

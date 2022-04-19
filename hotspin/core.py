@@ -8,6 +8,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from cupyx.scipy import signal
 from dataclasses import dataclass, field
+from functools import cache
 from scipy.spatial import distance
 
 from .utils import mirror4
@@ -159,10 +160,10 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         '''
         name = name.lower().replace('energy', '')
         for i, e in enumerate(self.energies):
-            if name == e.shortname():
+            if name == e.shortname:
                 self.energies.pop(i)
                 return
-        warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname() for e in self.energies]}", stacklevel=2)
+        warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self.energies]}", stacklevel=2)
 
     def get_energy(self, name: str):
         ''' Returns the specified energy from self.energies.
@@ -172,8 +173,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         '''
         name = name.lower().replace('energy', '')
         for e in self.energies:
-            if name == e.shortname(): return e
-        warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname() for e in self.energies]}", stacklevel=2)
+            if name == e.shortname: return e
+        warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self.energies]}", stacklevel=2)
         return None
 
     def update_energy(self, index: np.ndarray=None):
@@ -299,7 +300,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def _select_cluster(self):
         ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model. '''
         exchange: ExchangeEnergy = self.get_energy('exchange')
-        assert exchange, "Can not select Wolff cluster if there is no exchange energy in the system."
+        assert exchange is not None, "Can not select Wolff cluster if there is no exchange energy in the system."
         neighbors = exchange.local_interaction
         seed = tuple(self._select_single().flat)
         cluster = cp.zeros_like(self.m)
@@ -516,6 +517,8 @@ class Energy(ABC):
             correct for ZeemanEnergy.
         '''
 
+    @property
+    @cache
     def shortname(self):
         return type(self).__name__.lower().replace('energy', '')
 
