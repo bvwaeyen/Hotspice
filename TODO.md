@@ -7,7 +7,7 @@
     - Multi-switching
         - [ ] Fix PBC issue in Grid multi-switching
         - [x] Make r in Grid multi-switching different for x and y
-        - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel since the last calculation I did, did not seem to correspond to reality very well)
+        - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel, because the recent estimated calculation did not seem to correspond to reality very well)
 
     - [ ] Develop .io and .experiments modules
         - [x] Kernel rank experiment
@@ -21,7 +21,8 @@
     - [ ] Organize plotting functions better
         - [ ] Improve the Average class to make it more versatile and consistent between different ASIs
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state because the current method is behaving similarly as when a cheese grater is used as ship
-    - [ ] Implement metrics (average magnetization, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, ...) to compare with theory/experiment
+    - [ ] Implement metrics (average magnetization, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, width of domains (related to correlation probably)...) to compare with theory/experiment
+    - [ ] Improve relaxation algorithm
     - [ ] Can implement autocorrelation length by taking into account cross product between vectors?
     - [ ] Possibly allow specifying angle also for pattern='AFM', if it makes any sense
 
@@ -45,6 +46,7 @@
         - [ ] Domain size of square and pinwheel? As a function of time? (is there a maximum size or do they keep growing)
     - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???)
     - [ ] Simulation speed (samples/sec) for different grid sizes? Are certain nicely factorable lengths preferable?
+    - [ ] Use date & time to save results
 
 3. Low priority
     - Test physical accuracy of Hotspin

@@ -20,7 +20,8 @@ kB = 1.380649e-23
 @dataclass
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are less than <this> switches in a single iteration, the energies are just summed, otherwise a convolution is used.
-    REDUCED_KERNEL_SIZE: int = 0 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
+    # TODO: THOROUGH ANALYSIS OF REDUCED_KERNEL_SIZE AND TAKE APPROPRIATE MEASURES (e.g. full recalculation every <n> steps)
+    REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
     UPDATE_SCHEME: str = 'Glauber' # Can be any of 'Néel', 'Glauber', 'Wolff'
 
     def __post_init__(self):
@@ -33,7 +34,7 @@ class SimParams:
 class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
     def __init__(
         self, nx: int, ny: int, dx: float, dy: float, *,
-        T: float = 1, E_b: float = 5e-20, Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
+        T: float = 300, E_b: float = 5e-20, Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
         pattern: str = 'random', energies: tuple = None, PBC: bool = False, angle: float = None, params: SimParams = None):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
@@ -278,8 +279,9 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             ! <r> is a distance in meters, not a number of cells !
         '''
         Rx, Ry = math.ceil(r/self.dx) - 1, math.ceil(r/self.dy) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
-        Rx, Ry = self.unitcell.x * max(1, math.ceil(Rx/self.unitcell.x)), self.unitcell.y * max(1, math.ceil(Ry/self.unitcell.y)) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
+        Rx, Ry = self.unitcell.x*math.ceil(Rx/self.unitcell.x), self.unitcell.y*math.ceil(Ry/self.unitcell.y) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
         Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
+        Rx, Ry = max(Rx, 2), max(Ry, 2) # If Rx and Ry < 2, too much randomness is removed and we get nonphysical behavior
         supergrid_nx = (self.nx + Rx - 1)//(2*Rx) + 1
         supergrid_ny = (self.ny + Ry - 1)//(2*Ry) + 1
         move_grid = -np.random.randint([-Ry, -Rx], [Ry, Rx])
@@ -381,7 +383,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         return (8e-7*self.Msat**2*self.V**2/(Q*cp.min(self.kBT)))**(1/3)
 
 
-    def minimize(self, N=1):
+    def minimize_single(self, N=1):
         ''' Switches the magnet which has the highest switching probability. Repeat this <N> times. '''
         all_indices = cp.asarray([self.iyy.reshape(-1), self.ixx.reshape(-1)])
         for _ in range(N):
@@ -391,26 +393,55 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             self.attempted_switches += 1
             self.update_energy(index=indexmin2D)
     
-    def minimize_all(self):
-        ''' Switches all magnets that can gain energy by switching. '''
-        all_indices = cp.asarray([self.iyy.reshape(-1), self.ixx.reshape(-1)])
-        indices = all_indices[:, cp.where(self.switch_energy(all_indices) < 0)[0]]
-        if indices.size > 0:
-            self.m[indices[0], indices[1]] = -self.m[indices[0], indices[1]]
-            self.switches += indices.shape[1]
-            self.attempted_switches += indices.shape[1]
-            self.update_energy(index=indices)
+    def minimize_all(self, simultaneous=False):
+        ''' Switches all magnets that can gain energy by switching.
+            By default, several subsets of the domain are updated in a random order, such that in total
+            every cell got exactly one chance at switching. This randomness may increase the runtime, but
+            reduces systematic bias and possible loops which would otherwise cause self.relax() to get stuck.
+            @param simultaneous [bool] (False): if True, all magnets are evaluated simultaneously (nonphysical, error-prone).
+                If False, several subgrids are evaluated after each other in a random order to prevent systematic bias.
+        '''
+        if simultaneous:
+            step_x = step_y = 1
+        else:
+            step_x, step_y = self.unitcell.x*2, self.unitcell.y*2
+        order = cp.random.permutation(step_x*step_y)
+        for i in order:
+            y, x = divmod(i, step_x)
+            if self.occupation[y, x] == 0: continue
+            subset_indices = cp.asarray([self.iyy[y::step_y,x::step_x].reshape(-1), self.ixx[y::step_y,x::step_x].reshape(-1)])
+            indices = subset_indices[:, cp.where(self.switch_energy(subset_indices) < 0)[0]]
+            if indices.size > 0:
+                self.m[indices[0], indices[1]] = -self.m[indices[0], indices[1]]
+                self.switches += indices.shape[1]
+                self.attempted_switches += indices.shape[1]
+                self.update_energy(index=indices)
     
-    def relax(self):
+    def relax(self, verbose=False):
         ''' Relaxes self.m to a (meta)stable state using multiple self.minimize_all() calls.
             NOTE: this can be an expensive operation for large simulations.
         '''
+        if verbose:
+            import matplotlib.pyplot as plt
+            plt.ion()
+            fig = plt.figure(figsize=(5, 5))
+            ax = fig.add_subplot(111)
+            im = ax.imshow(self.m.get())
+
+        # TODO: use a better stopping criterion than just "oh no we exceeded n_max steps"
+        n, n_max = 0, int(math.sqrt(self.nx**2 + self.ny**2)) # Maximum steps is to get signal across the whole grid
         previous_states = [self.m.copy(), cp.zeros_like(self.m), cp.zeros_like(self.m)] # Current state, previous, and the one before
-        while not cp.allclose(previous_states[2], previous_states[0]): # Loop exits once we detect a 2-cycle, i.e. the only thing happening is some magnets keep switching back and forth
+        while not cp.allclose(previous_states[2], previous_states[0]) and n < n_max: # Loop exits once we detect a 2-cycle, i.e. the only thing happening is some magnets keep switching back and forth
             self.minimize_all()
+            if verbose:
+                im.set_array(self.m.get())
+                fig.canvas.draw_idle()
+                fig.canvas.flush_events()
             previous_states[2] = previous_states[1].copy()
             previous_states[1] = previous_states[0].copy()
             previous_states[0] = self.m.copy()
+            n += 1
+        if verbose: print(f"Used {n} (out of {n_max}) steps in relax().")
 
 
     def history_save(self, *, E_tot=None, t=None, T=None, m_avg=None):
