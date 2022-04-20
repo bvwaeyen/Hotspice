@@ -61,7 +61,7 @@ class FullASI(ASI):
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy) % 2)*2 - 1
         else:
-            self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
+            self.m = cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _get_unitcell(self):
@@ -99,11 +99,11 @@ class IsingASI(ASI):
         elif pattern == 'AFM':
             self.m = (self.iyy % 2)*2 - 1
         else:
-            self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
+            self.m = cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):
-        self.orientation = cp.zeros(cp.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
+        self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         self.orientation[True,True,:] = math.cos(angle), math.sin(angle)
 
     def _get_unitcell(self):
@@ -135,17 +135,35 @@ class SquareASI(ASI):
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str, angle: float = 0):
+        angle += 1e-6 # To avoid possible ambiguous rounding in uniform() if angle is perpendicular to self.orientation
+        uniform = lambda angle: 2*((self.orientation[:,:,0]*math.cos(angle) + self.orientation[:,:,1]*math.sin(angle)) >= 0) - 1
         # PYTHONUPDATE_3.10: use structural pattern matching
         if pattern == 'uniform': # Angle 45°
-            self.m = 2*((self.orientation[:,:,0]*math.cos(angle) + self.orientation[:,:,1]*math.sin(angle)) >= 0) - 1
+            self.m = uniform(angle)
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy)//2 % 2)*2 - 1
+        elif pattern == 'vortex':
+            # angle near 0 or math.pi: clockwise/anticlockwise vortex, respectively
+            # angle near math.pi/2 or -math.pi/2: radial out/in, respectively
+            self.m = cp.ones_like(self.xx)
+            distSq = ((self.ixx - (self.nx-1)/2)**2 + (self.iyy - (self.ny-1)/2)**2) # Try to put the vortex close to the center of the simulation
+            distSq[cp.where(self.occupation == 1)] = cp.nan # We don't want to place the vortex center at an occupied cell
+            middle_y, middle_x = divmod(cp.argmax(distSq == cp.min(distSq[~cp.isnan(distSq)])), self.nx) # The non-occupied cell closest to the center
+            # Build bottom, left, top and right areas and set their magnetizations
+            bottom = cp.where(cp.logical_and(self.ixx - middle_x > self.iyy - middle_y, self.ixx + self.iyy <= middle_x + middle_y))
+            left   = cp.where(cp.logical_and(self.ixx - middle_x <= self.iyy - middle_y, self.ixx + self.iyy < middle_x + middle_y))
+            top    = cp.where(cp.logical_and(self.ixx - middle_x < self.iyy - middle_y, self.ixx + self.iyy >= middle_x + middle_y))
+            right  = cp.where(cp.logical_and(self.ixx - middle_x >= self.iyy - middle_y, self.ixx + self.iyy > middle_x + middle_y))
+            self.m[bottom] = uniform(angle + math.pi  )[bottom]
+            self.m[left]   = uniform(angle + math.pi/2)[left]
+            self.m[top]    = uniform(angle            )[top]
+            self.m[right]  = uniform(angle - math.pi/2)[right]
         else:
-            self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
+            self.m = cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):
-        self.orientation = cp.zeros(cp.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
+        self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         self.orientation[self.iyy % 2 == 0,:] = math.cos(angle), math.sin(angle)
         self.orientation[self.iyy % 2 == 1,:] = math.cos(angle + math.pi/2), math.sin(angle + math.pi/2)
         self.orientation[self.occupation == 0,:] = 0
@@ -178,7 +196,7 @@ class PinwheelASI(SquareASI):
         super()._set_orientation(angle - math.pi/4)
 
     def _get_groundstate(self):
-        return 'uniform'
+        return 'uniform' if self.PBC else 'vortex'
 
 
 class KagomeASI(ASI):
@@ -204,11 +222,11 @@ class KagomeASI(ASI):
         elif pattern == 'AFM':
             self.m[(self.ixx + self.iyy) % 4 == 3] *= -1
         else:
-            self.m *= cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
+            self.m *= cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):
-        self.orientation = cp.zeros(cp.shape(self.xx) + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
+        self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         self.orientation[True,True,:] = math.cos(angle + math.pi/2), math.sin(angle + math.pi/2)
         self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),:] = math.cos(angle - math.pi/6), math.sin(angle - math.pi/6)
         self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),:] = math.cos(angle + math.pi/6), math.sin(angle + math.pi/6)

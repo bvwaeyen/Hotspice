@@ -102,7 +102,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy) % 2)*2 - 1
         else:
-            self.m = cp.random.randint(0, 2, size=cp.shape(self.xx))*2 - 1
+            self.m = cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _get_unitcell(self):
