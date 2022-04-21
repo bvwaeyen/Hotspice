@@ -1,5 +1,9 @@
+import inspect
+
 import cupy as cp
 import cupy.lib.stride_tricks as striding
+
+from IPython.terminal.embed import InteractiveShellEmbed
 
 
 def mirror4(arr, /, *, negativex=False, negativey=False):
@@ -31,3 +35,22 @@ def strided(a, W):
     a_ext = cp.concatenate((cp.full(W - 1, cp.nan), a))
     n = a_ext.strides[0]
     return striding.as_strided(a_ext[W - 1:], shape=(a.size, W), strides=(n, -n))
+
+def shell():
+    ''' When called, the program is paused and an interactive shell is opened
+        where the user can enter statements to inspect the scope where
+        shell() was called. Write "exit()" to terminate this shell.
+        Using Ctrl+C will stop the entire program, not just this function
+        (this is due to a bug in the scipy library).
+    '''
+    caller = inspect.getframeinfo(inspect.stack()[1][0])
+
+    print('-'*80)
+    print(f'Opening an interactive shell in the current scope')
+    print(f'(i.e. {caller.filename}:{caller.lineno}-{caller.function}).')
+    print(f'Call "exit" to stop this interactive shell.')
+    print(f'Warning: Ctrl+C will stop the program entirely, not just this shell, so take care which commands you run.')
+    try:
+        InteractiveShellEmbed().mainloop(stack_depth=1)
+    except (KeyboardInterrupt, SystemExit, EOFError):
+        pass

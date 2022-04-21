@@ -162,15 +162,24 @@ class RegionalOutputReader(OutputReader):
         if mm is not None: self.configure_for(mm) # If mm not specified, we suppose configure_for() already happened
         if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
 
-        here = (self.region_x == i[0]) & (self.region_y == i[1])
-        if self.mm.in_plane:
-            m_x = m*self.mm.orientation[:,:,0]*self.mm.Msat*self.mm.V
-            m_y = m*self.mm.orientation[:,:,1]*self.mm.Msat*self.mm.V
-            for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
+        for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
+            here = (self.region_x == i[0]) & (self.region_y == i[1])
+            if self.mm.in_plane:
+                m_x = m*self.mm.orientation[:,:,0]*self.mm.Msat*self.mm.V
+                m_y = m*self.mm.orientation[:,:,1]*self.mm.Msat*self.mm.V
                 self.state[i[0], i[1], 0] = cp.sum(m_x[here]) # Average m_x
                 self.state[i[0], i[1], 1] = cp.sum(m_y[here]) # Average m_y
-        else:
-            for i, _ in np.ndenumerate(self.grid):
+            else:
                 self.state[i[0], i[1]] = cp.sum(m[here])
 
         return self.state # [Am²]
+
+    def inflate_flat_array(self, arr: np.ndarray):
+        ''' Transforms a 1D array <arr> to have the same shape as <self.state>.
+            Basically the inverse transformation as done on <self.state> when calling <self.state.reshape(-1)>.
+            @param arr [np.ndarray]: a NumPy or CuPy array of shape (<self.n>,).
+        '''
+        if self.mm.in_plane:
+            return arr.reshape(self.nx, self.ny, 2)
+        else:
+            return arr.reshape(self.nx, self.ny)
