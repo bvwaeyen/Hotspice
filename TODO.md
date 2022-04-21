@@ -6,13 +6,10 @@
     - [ ] Determine if $E_B$ needs to be taken into account in Glauber model
     - Multi-switching
         - [ ] Fix PBC issue in Grid multi-switching
-        - [x] Make r in Grid multi-switching different for x and y
         - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel, because the recent estimated calculation did not seem to correspond to reality very well)
 
     - [ ] Develop .io and .experiments modules
-        - [x] Kernel rank experiment
         - [ ] Task Agnostic Metrics for RC
-        - [x] Allow analog inputs, not just binary
 
     - [ ] Reconsider distribution of responsibilities between ASI() and Magnets() classes
 
@@ -37,11 +34,12 @@
 
 1. High priority
     - Test physical accuracy of Hotspin
-        - [x] 2D square Ising model
         - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization? "Aging in a Two-Dimensional Ising Model with Dipolar Interactions"?)
-        - [x] Pinwheel reversal in external field (cfr. flatspin paper)
+        - [x] Pinwheel reversal in external field (cfr. flatspin paper) (try with Néel update equation)
+    - Calculate kernel-quality and task agnostic metrics as function of T, for different lattices with different interactions etc. First try easiest models and then go closer to experiment
 
 2. Medium priority
+    - [ ] How many MC steps do we need to reach a statistically stable state?
     - Test physical accuracy of Hotspin
         - [ ] Domain size of square and pinwheel? As a function of time? (is there a maximum size or do they keep growing)
     - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???)
@@ -51,4 +49,3 @@
 3. Low priority
     - Test physical accuracy of Hotspin
         - [ ] Angle between 0° and 45° between SquareASI and PinwheelASI where AFM alignment changes to uniform and vice versa? Can be useful to compare to experiment
-    - [x] Distribution of sampling method

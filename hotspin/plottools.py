@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from cupyx.scipy import signal
-from enum import auto, Enum
+from enum import Enum
 from matplotlib import cm, colors, patches, widgets
 
 from .core import Magnets
@@ -19,37 +19,31 @@ ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes
 matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
 
 
-class Average(Enum): # TODO: maybe create an Average class which can be extended, and a AVERAGE enum that subclasses it or something
-    POINT = auto()
-    CROSS = auto()
-    SQUARE = auto()
-    SQUAREFOUR = auto()
-    HEXAGON = auto()
-    TRIANGLE = auto()
-
-    @property
-    def mask(self):
-        d = {
-            Average.POINT :    [[1]],
-            Average.CROSS :    [[0, 1, 0], # For Pinwheel and Square ASI
-                                [1, 0, 1],
-                                [0, 1, 0]],
-            Average.SQUARE :   [[1, 1, 1], # Often not very useful, just the same as CROSS in most cases
-                                [1, 0, 1],
-                                [1, 1, 1]],
-            Average.SQUAREFOUR:[[1, 1, 1], # Because nearly all ASIs have cells with 4 neighbors, this can come in handy
-                                [1, 4, 1],
-                                [1, 1, 1]],
-            Average.HEXAGON :  [[0, 1, 0, 1, 0], # For Kagome ASI
-                                [1, 0, 0, 0, 1],
-                                [0, 1, 0, 1, 0]],
-            Average.TRIANGLE : [[0, 1, 0], # For Triangle ASI
-                                [1, 0, 1],
-                                [0, 1, 0]]
-        }
-        # Use dtype='float', because if mask would be int then output of convolve2d is also int instead of float
-        return cp.array(d[self], dtype='float')
+class Average(Enum):
+    def __new__(cls, *args, **kwargs): # To allow specifying extra properties like <mask> while retaining enumeration
+          obj = object.__new__(cls)
+          obj._value_ = len(cls.__members__) + 1
+          return obj
+    def __init__(self, mask):
+          self.mask = cp.asarray(mask, dtype='float')
     
+    POINT = [[1]]
+    CROSS = [[0, 1, 0], # For Pinwheel and Square ASI
+             [1, 0, 1],
+             [0, 1, 0]]
+    SQUARE = [[1, 1, 1], # Often not very useful, just the same as CROSS in most cases
+              [1, 0, 1],
+              [1, 1, 1]]
+    SQUAREFOUR = [[1, 1, 1], # Because nearly all ASIs have cells with 4 neighbors, this can come in handy
+                  [1, 4, 1],
+                  [1, 1, 1]]
+    HEXAGON = [[0, 1, 0, 1, 0], # For Kagome ASI
+               [1, 0, 0, 0, 1],
+               [0, 1, 0, 1, 0]]
+    TRIANGLE = [[0, 1, 0], # For Triangle ASI
+                [1, 0, 1],
+                [0, 1, 0]]
+
     @classmethod
     def resolve(cls, avg, mm: Magnets=None):
         ''' <avg> can be any of [str], [bool-like], or [Average]. This function will
@@ -66,9 +60,6 @@ class Average(Enum): # TODO: maybe create an Average class which can be extended
             return Average.resolve(mm._get_appropriate_avg()) if mm is not None else Average.SQUARE
         else:
             return Average.POINT
-
-
-# TODO: class PlotParams which stores plotting parameters for each ASI? Some kind of dataclass or something idk
 
 
 # Below here are some graphical functions (plot magnetization profile etc.)
