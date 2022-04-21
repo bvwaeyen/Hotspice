@@ -4,7 +4,7 @@ Hotspin is a tool for simulating thermally active artificial spin ices, using an
 
 ## Dependencies
 
-Hotspin makes heavy use of the `CuPy` library, which allows GPU-accelerated array computing with CUDA for NVIDIA GPUs. Installing it can be nontrivial, but the easiest method might be using conda and running `conda install -c conda-forge cupy`.
+Hotspin makes heavy use of the `CuPy` library, which allows GPU-accelerated array computing with CUDA for NVIDIA GPUs. There are several ways to install CuPy, but probably the easiest method is to use conda with `conda install -c conda-forge cupy`, as this automatically installs the appropriate version of the CUDA toolkit as well.
 
 ## Getting started
 

@@ -1,6 +1,6 @@
 import math
 import os
-# import warnings
+import warnings
 
 import cupy as cp
 import numpy as np
@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 
 from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
-from .utils import strided
+from .utils import strided, shell
 
 
 class Experiment(ABC):
