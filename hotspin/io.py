@@ -43,13 +43,13 @@ class OutputReader(ABC):
         """ Reads the current state of the <mm> simulation in some way (the exact manner should be
             implemented through subclassing).
         """
-    
+
     def configure_for(self, mm: Magnets):
         """ Subclassing this method is optional. When called, some properties of this OutputReader object
             are initialized, which depend on the Magnets object <mm>.
         """
         self.mm = mm
-    
+
     @property
     @abstractmethod
     def n(self):
@@ -73,7 +73,7 @@ class RandomUniformDatastream(Datastream):
     def __init__(self, low=0, high=1):
         ''' Generates uniform random floats between <low=0> and <high=1>. '''
         self.low, self.high = low, high
-    
+
     def get_next(self, n=1):
         return cp.random.uniform(low=self.low, high=self.high, size=(n,))
 
@@ -92,14 +92,14 @@ class FieldInputter(Inputter):
     @angle.setter
     def angle(self, value):
         self._angle = value % (2*math.pi)
-    
+
     @property
     def magnitude(self): # [T]
         return self._magnitude
     @magnitude.setter
     def magnitude(self, value):
         self._magnitude = value
-        
+
     def input_single(self, mm: Magnets, value=None):
         if value is None: value = self.datastream.get_next()
         mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value, angle=self.angle)
@@ -118,7 +118,7 @@ class PerpFieldInputter(FieldInputter):
         '''
         super().__init__(datastream, magnitude=magnitude, angle=angle, n=n)
         self.sine = sine # Whether or not to use a sinusoidal field strength
-    
+
     def input_single(self, mm: Magnets, value=None):
         if value is None: value = self.datastream.get_next()
         angle = self.angle + value*math.pi/2
@@ -140,11 +140,11 @@ class RegionalOutputReader(OutputReader):
         self.nx, self.ny = nx, ny
         self.grid = np.zeros((self.nx, self.ny)) # We use this to ndenumerate, but CuPy does not have this, so use NumPy
         if mm is not None: self.configure_for(mm)
-        
+
     @property
     def n(self):
         return self.state.size
-    
+
     def configure_for(self, mm: Magnets):
         self.mm = mm
         self.region_x = cp.floor(cp.linspace(0, self.nx, mm.nx)).astype(int)
@@ -162,14 +162,15 @@ class RegionalOutputReader(OutputReader):
         if mm is not None: self.configure_for(mm) # If mm not specified, we suppose configure_for() already happened
         if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
 
+        here = (self.region_x == i[0]) & (self.region_y == i[1])
         if self.mm.in_plane:
             m_x = m*self.mm.orientation[:,:,0]*self.mm.Msat*self.mm.V
             m_y = m*self.mm.orientation[:,:,1]*self.mm.Msat*self.mm.V
             for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
-                self.state[i[0], i[1], 0] = cp.sum(m_x[np.logical_and(self.region_x == i[0], self.region_y == i[1])]) # Average m_x
-                self.state[i[0], i[1], 1] = cp.sum(m_y[np.logical_and(self.region_x == i[0], self.region_y == i[1])]) # Average m_y
+                self.state[i[0], i[1], 0] = cp.sum(m_x[here]) # Average m_x
+                self.state[i[0], i[1], 1] = cp.sum(m_y[here]) # Average m_y
         else:
             for i, _ in np.ndenumerate(self.grid):
-                self.state[i[0], i[1]] = cp.sum(m[np.logical_and(self.region_x == i[0], self.region_y == i[1])])
+                self.state[i[0], i[1]] = cp.sum(m[here])
 
         return self.state # [Am²]

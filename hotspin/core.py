@@ -295,7 +295,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, supergrid_ny*supergrid_nx)
         idx_x = offsets_x + occupation_nonzero[1][random_nonzero_indices]
         idx_y = offsets_y + occupation_nonzero[0][random_nonzero_indices]
-        ok = cp.logical_and(cp.logical_and(idx_x >= 0, idx_y >= 0), cp.logical_and(idx_x < self.nx, idx_y < self.ny))
+        ok = (idx_x >= 0) & (idx_y >= 0) & (idx_x < self.nx) & (idx_y < self.ny)
         if cp.sum(ok) == 0: return self._select_grid(r) # If no samples were taken, try again
         return cp.asarray([idx_y[ok], idx_x[ok]])
     

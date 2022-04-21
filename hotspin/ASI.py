@@ -150,14 +150,14 @@ class SquareASI(ASI):
             distSq[cp.where(self.occupation == 1)] = cp.nan # We don't want to place the vortex center at an occupied cell
             middle_y, middle_x = divmod(cp.argmax(distSq == cp.min(distSq[~cp.isnan(distSq)])), self.nx) # The non-occupied cell closest to the center
             # Build bottom, left, top and right areas and set their magnetizations
-            bottom = cp.where(cp.logical_and(self.ixx - middle_x > self.iyy - middle_y, self.ixx + self.iyy <= middle_x + middle_y))
-            left   = cp.where(cp.logical_and(self.ixx - middle_x <= self.iyy - middle_y, self.ixx + self.iyy < middle_x + middle_y))
-            top    = cp.where(cp.logical_and(self.ixx - middle_x < self.iyy - middle_y, self.ixx + self.iyy >= middle_x + middle_y))
-            right  = cp.where(cp.logical_and(self.ixx - middle_x >= self.iyy - middle_y, self.ixx + self.iyy > middle_x + middle_y))
-            self.m[bottom] = uniform(angle + math.pi  )[bottom]
-            self.m[left]   = uniform(angle + math.pi/2)[left]
-            self.m[top]    = uniform(angle            )[top]
-            self.m[right]  = uniform(angle - math.pi/2)[right]
+            N = cp.where((self.ixx - middle_x < self.iyy - middle_y) & (self.ixx + self.iyy >= middle_x + middle_y))
+            E = cp.where((self.ixx - middle_x >= self.iyy - middle_y) & (self.ixx + self.iyy > middle_x + middle_y))
+            S = cp.where((self.ixx - middle_x > self.iyy - middle_y) & (self.ixx + self.iyy <= middle_x + middle_y))
+            W = cp.where((self.ixx - middle_x <= self.iyy - middle_y) & (self.ixx + self.iyy < middle_x + middle_y))
+            self.m[N] = uniform(angle            )[N]
+            self.m[E] = uniform(angle - math.pi/2)[E]
+            self.m[S] = uniform(angle + math.pi  )[S]
+            self.m[W] = uniform(angle + math.pi/2)[W]
         else:
             self.m = cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
@@ -228,8 +228,8 @@ class KagomeASI(ASI):
     def _set_orientation(self, angle: float = 0.):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         self.orientation[True,True,:] = math.cos(angle + math.pi/2), math.sin(angle + math.pi/2)
-        self.orientation[cp.logical_and((self.ixx - self.iyy) % 4 == 1, self.ixx % 2 == 1),:] = math.cos(angle - math.pi/6), math.sin(angle - math.pi/6)
-        self.orientation[cp.logical_and((self.ixx + self.iyy) % 4 == 3, self.ixx % 2 == 1),:] = math.cos(angle + math.pi/6), math.sin(angle + math.pi/6)
+        self.orientation[((self.ixx - self.iyy) % 4 == 1) & (self.ixx % 2 == 1),:] = math.cos(angle - math.pi/6), math.sin(angle - math.pi/6)
+        self.orientation[((self.ixx + self.iyy) % 4 == 3) & (self.ixx % 2 == 1),:] = math.cos(angle + math.pi/6), math.sin(angle + math.pi/6)
         self.orientation[self.occupation == 0,:] = 0
 
     def _get_unitcell(self):

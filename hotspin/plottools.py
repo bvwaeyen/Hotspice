@@ -120,7 +120,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
         y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
     angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % (2*math.pi)
     magnitudes_avg = cp.sqrt(x_comp_avg**2 + y_comp_avg**2)*mm.Msat
-    useless_angles = cp.where(cp.logical_and(cp.isclose(x_comp_avg, 0), cp.isclose(y_comp_avg, 0)), cp.NaN, 1) # No well-defined angle
+    useless_angles = cp.where(cp.isclose(x_comp_avg, 0) & cp.isclose(y_comp_avg, 0), cp.NaN, 1) # No well-defined angle
     useless_magnitudes = cp.where(magnets_in_avg == 0, cp.NaN, 1) # No magnet (the NaNs here will be a subset of useless_angles)
     angles_avg *= useless_angles
     magnitudes_avg *= useless_magnitudes
@@ -167,19 +167,19 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
     saturation = cp.ones_like(angles)
     value = cp.zeros_like(angles)
     # Situation 1: angle and magnitude both well-defined (an average => color (hue=angle, saturation=1, value=magnitude))
-    affectedpositions = cp.where(cp.logical_and(cp.logical_not(NaNangles), cp.logical_not(NaNmagnitudes)))
+    affectedpositions = cp.where(~NaNangles & ~NaNmagnitudes)
     hue[affectedpositions] = angles[affectedpositions]
     value[affectedpositions] = magnitudes[affectedpositions]
     # Situation 2: magnitude is zero, so angle is NaN (zero average => black (hue=anything, saturation=anything, value=0))
-    affectedpositions = cp.where(cp.logical_and(NaNangles, magnitudes == 0))
+    affectedpositions = cp.where(NaNangles & (magnitudes == 0))
     value[affectedpositions] = 0
     # Situation 3: magnitude is NaN, so angle is NaN (no magnet => white (hue=0, saturation=0, value=1))
-    affectedpositions = cp.where(cp.logical_and(NaNangles, NaNmagnitudes))
+    affectedpositions = cp.where(NaNangles & NaNmagnitudes)
     saturation[affectedpositions] = 0
     value[affectedpositions] = 1
     # Create the hsv matrix with correct axes ordering for matplotlib.colors.hsv_to_rgb:
     hsv = np.array([hue.get(), saturation.get(), value.get()]).swapaxes(0, 2).swapaxes(0, 1)
-    if fill: hsv = fill_neighbors(hsv, cp.logical_and(NaNangles, NaNmagnitudes), mm=mm)
+    if fill: hsv = fill_neighbors(hsv, NaNangles & NaNmagnitudes, mm=mm)
     return hsv
 
 def get_rgb(*args, **kwargs):
@@ -372,7 +372,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
         @return [2D np.array]: The interpolated array.
     '''
     hsv = hsv.get() if isinstance(hsv, cp.ndarray) else np.asarray(hsv)
-    replaceable = replaceable if isinstance(replaceable, cp.ndarray) else cp.asarray(replaceable)
+    replaceable = cp.asarray(replaceable, dtype='bool')
 
     # Extend arrays a bit to fill NaNs near boundaries as well
     a = np.insert(hsv, 0, hsv[1], axis=0) # TODO: make this cupy once cupy supports the .insert function
@@ -384,16 +384,16 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
     E = a[1:-1, 2:, :]
     S = a[2:, 1:-1, :]
     W = a[1:-1, :-2, :]
-    equal_neighbors = cp.logical_and(cp.logical_and(cp.isclose(N, E), cp.isclose(E, S)), cp.isclose(S, W))
-    equal_neighbors = cp.logical_and(cp.logical_and(equal_neighbors[:,:,0], equal_neighbors[:,:,1]), equal_neighbors[:,:,2])
+    equal_neighbors = cp.isclose(N, E) & cp.isclose(E, S) & cp.isclose(S, W)
+    equal_neighbors = equal_neighbors[:,:,0] & equal_neighbors[:,:,1] & equal_neighbors[:,:,2]
 
-    result = cp.where(cp.repeat(cp.logical_and(replaceable, equal_neighbors)[:,:,cp.newaxis], 3, axis=2), N, cp.asarray(hsv))
+    result = cp.where(cp.repeat((replaceable & equal_neighbors)[:,:,cp.newaxis], 3, axis=2), N, cp.asarray(hsv))
 
     if fillblack:
-        blacks = cp.where(cp.logical_and(cp.logical_or(cp.logical_or(N[:,:,2] == 0, E[:,:,2] == 0), cp.logical_or(S[:,:,2] == 0, W[:,:,2] == 0)), replaceable))
+        blacks = cp.where(replaceable & ((N[:,:,2] == 0) | (E[:,:,2] == 0) | (S[:,:,2] == 0) | (W[:,:,2] == 0)))
         result[blacks[0], blacks[1], 2] = 0
     if fillwhite: # If any NaNs remain, they will be white, and we might want to fill them as well
-        whites = cp.where(cp.logical_and(result[:,:,1] == 0, result[:,:,2] == 1))
+        whites = cp.where((result[:,:,1] == 0) & (result[:,:,2] == 1))
         substitution_colors = cp.asarray(get_hsv(mm, fill=False, avg=Average.SQUAREFOUR))
         result[whites[0], whites[1], :] = substitution_colors[whites[0], whites[1], :]
 
