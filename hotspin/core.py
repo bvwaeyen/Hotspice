@@ -16,6 +16,9 @@ from .utils import mirror4
 
 kB = 1.380649e-23
 
+# The random number generator used throughout hotspin.
+rng = cp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
+
 
 @dataclass
 class SimParams:
@@ -102,7 +105,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy) % 2)*2 - 1
         else:
-            self.m = cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
+            self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _get_unitcell(self):
@@ -271,7 +274,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def _select_single(self):
         ''' Selects just a single magnet from the simulation domain. '''
         nonzero_y, nonzero_x = cp.nonzero(self.occupation)
-        nonzero_idx = cp.random.choice(self.n, 1)
+        nonzero_idx = cp.random.choice(self.n, 1) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
         return cp.asarray([nonzero_y[nonzero_idx], nonzero_x[nonzero_idx]]).reshape(2, -1)
 
     def _select_grid(self, r):
@@ -284,7 +287,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         Rx, Ry = max(Rx, 2), max(Ry, 2) # If Rx and Ry < 2, too much randomness is removed and we get nonphysical behavior
         supergrid_nx = (self.nx + Rx - 1)//(2*Rx) + 1
         supergrid_ny = (self.ny + Ry - 1)//(2*Ry) + 1
-        move_grid = -np.random.randint([-Ry, -Rx], [Ry, Rx])
+        move_grid = -np.random.randint([-Ry, -Rx], [Ry, Rx]) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports integers() with arrays
         if Rx >= self.nx: move_grid[1] = 0 # If the grid is perfectly fit along an axis, then
         if Ry >= self.ny: move_grid[0] = 0 # just don't move in that coordinate direction
         offsets_x = move_grid[1] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*Rx
@@ -292,7 +295,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         disp_x, disp_y = move_grid[1] % self.unitcell.x, move_grid[0] % self.unitcell.y
         occupation_supercell = self.occupation[disp_y:disp_y + Ry, disp_x:disp_x + Rx]
         occupation_nonzero = occupation_supercell.nonzero()
-        random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, supergrid_ny*supergrid_nx)
+        random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, supergrid_ny*supergrid_nx) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
         idx_x = offsets_x + occupation_nonzero[1][random_nonzero_indices]
         idx_y = offsets_y + occupation_nonzero[0][random_nonzero_indices]
         ok = (idx_x >= 0) & (idx_y >= 0) & (idx_x < self.nx) & (idx_y < self.ny)
@@ -312,7 +315,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         while cp.any(current_frontier := (1-checked)*signal.convolve2d(cluster, neighbors, mode='same', boundary='wrap' if self.PBC else 'fill')):
             checked[current_frontier != 0] = 1
             bond_prob = 1 - cp.exp(-2*exchange.J/self.kBT*current_frontier) # Swendsen-Wang bond probability
-            current_frontier[cp.random.random(cluster.shape) > bond_prob] = 0 # Rejected probabilistically
+            current_frontier[rng.random(size=cluster.shape) > bond_prob] = 0 # Rejected probabilistically
             cluster[current_frontier != 0] = 1
         return cp.where(cluster == 1)
 
@@ -338,8 +341,8 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         # TODO: can adapt this to work at T=0 by first checking if energy would drop
         exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
-        # idx = idx[:,cp.where(cp.random.random(exponential.shape) < (exponential/(1+exponential)))[0]] # https://en.wikipedia.org/wiki/Glauber_dynamics
-        idx_switch = idx[:,cp.where(cp.random.random(exponential.shape) < exponential)[0]] # http://bit-player.org/2019/glaubers-dynamics
+        # idx = idx[:,cp.where(rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # https://en.wikipedia.org/wiki/Glauber_dynamics
+        idx_switch = idx[:,cp.where(rng.random(size=exponential.shape) < exponential)[0]] # http://bit-player.org/2019/glaubers-dynamics
         if idx_switch.shape[1] > 0:
             self.m[idx_switch[0], idx_switch[1]] *= -1
             self.switches += idx_switch.shape[1]
@@ -352,8 +355,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         minBarrier = cp.min(barrier)
         barrier -= minBarrier # Energy is relative, so set min(E) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
-            # There is no real speed difference between XORWOW or MRG32k3a or Philox4x3210 random generators, so we just don't bother.
-            taus = cp.random.uniform(size=barrier.shape)*cp.exp(barrier/self.kBT)
+            taus = rng.random(size=barrier.shape)*cp.exp(barrier/self.kBT)
             indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
             self.m[indexmin2D] = -self.m[indexmin2D]
             self.switches += 1
@@ -405,7 +407,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             step_x = step_y = 1
         else:
             step_x, step_y = self.unitcell.x*2, self.unitcell.y*2
-        order = cp.random.permutation(step_x*step_y)
+        order = cp.random.permutation(step_x*step_y) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports permutation() method
         for i in order:
             y, x = divmod(i, step_x)
             if self.occupation[y, x] == 0: continue
@@ -564,7 +566,7 @@ class Energy(ABC):
         indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze())
         if len(indices2D.shape) > 2: raise ValueError("An array with more than 2 non-empty dimensions can not be used to represent a list of indices.")
         if not cp.any(cp.asarray(indices2D.shape) == 2): raise ValueError("The list of indices has an incorrect shape. At least one dimension should have length 2.")
-         # PYTHONUPDATE_3.10: use structural pattern matching
+        # PYTHONUPDATE_3.10: use structural pattern matching
         if indices2D.shape[0] == 2: # The only ambiguous case is for a 2x2 input array, but in that case we assume the array is already correct.
             return indices2D
         elif indices2D.shape[1] == 2:

@@ -5,7 +5,7 @@ import cupy as cp
 
 from abc import ABC, abstractmethod
 
-from .core import Magnets
+from .core import Magnets, rng
 
 
 class ASI(ABC, Magnets):
@@ -61,7 +61,7 @@ class FullASI(ASI):
         elif pattern == 'AFM':
             self.m = ((self.ixx - self.iyy) % 2)*2 - 1
         else:
-            self.m = cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
+            self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _get_unitcell(self):
@@ -99,7 +99,7 @@ class IsingASI(ASI):
         elif pattern == 'AFM':
             self.m = (self.iyy % 2)*2 - 1
         else:
-            self.m = cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
+            self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):
@@ -159,7 +159,7 @@ class SquareASI(ASI):
             self.m[S] = uniform(angle + math.pi  )[S]
             self.m[W] = uniform(angle + math.pi/2)[W]
         else:
-            self.m = cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
+            self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):
@@ -222,7 +222,7 @@ class KagomeASI(ASI):
         elif pattern == 'AFM':
             self.m[(self.ixx + self.iyy) % 4 == 3] *= -1
         else:
-            self.m *= cp.random.randint(0, 2, size=self.xx.shape)*2 - 1
+            self.m *= rng.integers(0, 2, size=self.xx.shape)*2 - 1
             if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
 
     def _set_orientation(self, angle: float = 0.):

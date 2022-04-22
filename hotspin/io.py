@@ -7,7 +7,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 # from cupyx.scipy import signal
 
-from .core import Magnets
+from .core import Magnets, rng
 from .plottools import show_m
 
 
@@ -67,7 +67,7 @@ class RandomBinaryDatastream(BinaryDatastream):
         self.p0 = p0
 
     def get_next(self, n=1):
-        return cp.where(cp.random.uniform(size=(n,)) < self.p0, 0, 1)
+        return cp.where(rng.random(size=(n,)) < self.p0, 0, 1)
 
 class RandomUniformDatastream(Datastream):
     def __init__(self, low=0, high=1):
@@ -75,7 +75,7 @@ class RandomUniformDatastream(Datastream):
         self.low, self.high = low, high
 
     def get_next(self, n=1):
-        return cp.random.uniform(low=self.low, high=self.high, size=(n,))
+        return (self.high - self.low)*rng.random(size=(n,)) + self.low
 
 
 class FieldInputter(Inputter):

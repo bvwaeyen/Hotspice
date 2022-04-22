@@ -36,7 +36,7 @@
     - Test physical accuracy of Hotspin
         - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization? "Aging in a Two-Dimensional Ising Model with Dipolar Interactions"?)
         - [x] Pinwheel reversal in external field (cfr. flatspin paper) (try with Néel update equation)
-    - Calculate kernel-quality and task agnostic metrics as function of T, for different lattices with different interactions etc. First try easiest models and then go closer to experiment
+    - [ ] Calculate kernel-quality and task agnostic metrics as function of T, for different lattices with different interactions etc. First try easiest models and then go closer to experiment
 
 2. Medium priority
     - [ ] How many MC steps do we need to reach a statistically stable state?
