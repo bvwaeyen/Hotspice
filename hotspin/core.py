@@ -317,7 +317,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
             bond_prob = 1 - cp.exp(-2*exchange.J/self.kBT*current_frontier) # Swendsen-Wang bond probability
             current_frontier[rng.random(size=cluster.shape) > bond_prob] = 0 # Rejected probabilistically
             cluster[current_frontier != 0] = 1
-        return cp.where(cluster == 1)
+        return cp.asarray(cp.where(cluster == 1))
 
     def update(self, *args, **kwargs):
         if cp.any(self.T == 0):

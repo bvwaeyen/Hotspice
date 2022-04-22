@@ -79,10 +79,10 @@ class TaskAgnosticExperiment(Experiment):
         if verbose:
             init_fonts()
             init_interactive()
+            fig = None
         # First, we run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
         self.u = cp.zeros(N) # Inputs
         self.y = cp.zeros((N, self.outputreader.n)) # Outputs
-        fig = None
         print(f'[0/{N}] Running TaskAgnosticExperiment...')
         for i in range(N):
             self.u[i] = self.inputter.input_single(self.mm)

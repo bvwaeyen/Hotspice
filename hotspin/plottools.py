@@ -200,6 +200,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
     num_plots += 1 if show_energy else 0
     num_plots += (0 if overlay_quiver else 1) if show_quiver else 0
     axes = []
+    if figure is not None and not plt.isinteractive(): init_interactive()
     if not plt.get_fignums(): figure = None
     fig = plt.figure(figsize=(3.5*num_plots, 3)) if figure is None else figure
     if figure is not None: fig.clear()
