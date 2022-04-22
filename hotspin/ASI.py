@@ -55,14 +55,14 @@ class FullASI(ASI):
         self.dx = self.dy = a
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
 
-    def _set_m(self, pattern: str, angle: float = 0):
-        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
-            self.m = cp.ones_like(self.xx)*(2*(math.cos(angle) >= 0) - 1)
-        elif pattern == 'AFM':
-            self.m = ((self.ixx - self.iyy) % 2)*2 - 1
-        else:
-            self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
-            if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
+    def _set_m(self, pattern: str):
+        match str(pattern).strip().lower():
+            case 'uniform':
+                self.m = self._get_m_uniform()
+            case 'afm':
+                self.m = ((self.ixx - self.iyy) % 2)*2 - 1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
 
     def _get_unitcell(self):
         return (1, 1)
@@ -92,15 +92,14 @@ class IsingASI(ASI):
         self.dx = self.dy = a
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
-    def _set_m(self, pattern: str, angle: float = 0):
-        # PYTHONUPDATE_3.10: use structural pattern matching
-        if pattern == 'uniform': # Angle 0°
-            self.m = 2*((self.orientation[:,:,0]*math.cos(angle) + self.orientation[:,:,1]*math.sin(angle)) >= 0) - 1 # Setting empty cells to zero is responsibility of Magnets() class
-        elif pattern == 'AFM':
-            self.m = (self.iyy % 2)*2 - 1
-        else:
-            self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
-            if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
+    def _set_m(self, pattern: str):
+        match str(pattern).strip().lower():
+            case 'uniform':
+                self.m = self._get_m_uniform()
+            case 'afm':
+                self.m = (self.iyy % 2)*2 - 1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
 
     def _set_orientation(self, angle: float = 0.):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
@@ -134,33 +133,31 @@ class SquareASI(ASI):
         self.dx = self.dy = a/2
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
-    def _set_m(self, pattern: str, angle: float = 0):
-        angle += 1e-6 # To avoid possible ambiguous rounding in uniform() if angle is perpendicular to self.orientation
-        uniform = lambda angle: 2*((self.orientation[:,:,0]*math.cos(angle) + self.orientation[:,:,1]*math.sin(angle)) >= 0) - 1
-        # PYTHONUPDATE_3.10: use structural pattern matching
-        if pattern == 'uniform': # Angle 45°
-            self.m = uniform(angle)
-        elif pattern == 'AFM':
-            self.m = ((self.ixx - self.iyy)//2 % 2)*2 - 1
-        elif pattern == 'vortex':
-            # angle near 0 or math.pi: clockwise/anticlockwise vortex, respectively
-            # angle near math.pi/2 or -math.pi/2: radial out/in, respectively
-            self.m = cp.ones_like(self.xx)
-            distSq = ((self.ixx - (self.nx-1)/2)**2 + (self.iyy - (self.ny-1)/2)**2) # Try to put the vortex close to the center of the simulation
-            distSq[cp.where(self.occupation == 1)] = cp.nan # We don't want to place the vortex center at an occupied cell
-            middle_y, middle_x = divmod(cp.argmax(distSq == cp.min(distSq[~cp.isnan(distSq)])), self.nx) # The non-occupied cell closest to the center
-            # Build bottom, left, top and right areas and set their magnetizations
-            N = cp.where((self.ixx - middle_x < self.iyy - middle_y) & (self.ixx + self.iyy >= middle_x + middle_y))
-            E = cp.where((self.ixx - middle_x >= self.iyy - middle_y) & (self.ixx + self.iyy > middle_x + middle_y))
-            S = cp.where((self.ixx - middle_x > self.iyy - middle_y) & (self.ixx + self.iyy <= middle_x + middle_y))
-            W = cp.where((self.ixx - middle_x <= self.iyy - middle_y) & (self.ixx + self.iyy < middle_x + middle_y))
-            self.m[N] = uniform(angle            )[N]
-            self.m[E] = uniform(angle - math.pi/2)[E]
-            self.m[S] = uniform(angle + math.pi  )[S]
-            self.m[W] = uniform(angle + math.pi/2)[W]
-        else:
-            self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
-            if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
+    def _set_m(self, pattern: str):
+        match str(pattern).strip().lower():
+            case 'uniform':
+                self.m = self._get_m_uniform()
+            case 'afm':
+                self.m = ((self.ixx - self.iyy)//2 % 2)*2 - 1
+            case 'vortex':
+                # When using 'angle' property of Magnets.initialize_m:
+                # <angle> near 0 or math.pi: clockwise/anticlockwise vortex, respectively
+                # <angle> near math.pi/2 or -math.pi/2: bowtie configuration (top region: up/down, respectively)
+                self.m = cp.ones_like(self.xx)
+                distSq = ((self.ixx - (self.nx-1)/2)**2 + (self.iyy - (self.ny-1)/2)**2) # Try to put the vortex close to the center of the simulation
+                distSq[cp.where(self.occupation == 1)] = cp.nan # We don't want to place the vortex center at an occupied cell
+                middle_y, middle_x = divmod(cp.argmax(distSq == cp.min(distSq[~cp.isnan(distSq)])), self.nx) # The non-occupied cell closest to the center
+                # Build bottom, left, top and right areas and set their magnetizations
+                N = cp.where((self.ixx - middle_x < self.iyy - middle_y) & (self.ixx + self.iyy >= middle_x + middle_y))
+                E = cp.where((self.ixx - middle_x >= self.iyy - middle_y) & (self.ixx + self.iyy > middle_x + middle_y))
+                S = cp.where((self.ixx - middle_x > self.iyy - middle_y) & (self.ixx + self.iyy <= middle_x + middle_y))
+                W = cp.where((self.ixx - middle_x <= self.iyy - middle_y) & (self.ixx + self.iyy < middle_x + middle_y))
+                self.m[N] = self._get_m_uniform(0         )[N]
+                self.m[E] = self._get_m_uniform(-math.pi/2)[E]
+                self.m[S] = self._get_m_uniform(math.pi   )[S]
+                self.m[W] = self._get_m_uniform(math.pi/2 )[W]
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
 
     def _set_orientation(self, angle: float = 0.):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
@@ -214,16 +211,15 @@ class KagomeASI(ASI):
         self.dy = math.sqrt(3)*self.dx
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
-    def _set_m(self, pattern: str, angle: float = 0):
-        # PYTHONUPDATE_3.10: use structural pattern matching
-        self.m = 2*((self.orientation[:,:,0]*math.cos(angle) + self.orientation[:,:,1]*math.sin(angle)) >= 0) - 1
-        if pattern == 'uniform': # Angle 90°
-            self.m[(self.ixx - self.iyy) % 4 == 1] *= -1
-        elif pattern == 'AFM':
-            self.m[(self.ixx + self.iyy) % 4 == 3] *= -1
-        else:
-            self.m *= rng.integers(0, 2, size=self.xx.shape)*2 - 1
-            if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
+    def _set_m(self, pattern: str, angle=None):
+        match str(pattern).strip().lower():
+            case 'uniform':
+                self.m = self._get_m_uniform()
+            case 'afm':
+                self.m = cp.ones_like(self.ixx)
+                self.m[(self.ixx + self.iyy) % 4 == 3] *= -1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
 
     def _set_orientation(self, angle: float = 0.):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy

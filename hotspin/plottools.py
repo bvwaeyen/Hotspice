@@ -49,17 +49,18 @@ class Average(Enum):
         ''' <avg> can be any of [str], [bool-like], or [Average]. This function will
             then return the [Average] instance that is most appropriate.
         '''
-        if isinstance(avg, Average): # PYTHONUPDATE_3.10: use structural pattern matching
-            return avg
-        elif isinstance(avg, str):
-            for average in Average:
-                if average.name.upper() == avg.upper():
-                    return average
-            raise ValueError(f"Unsupported averaging mask: {avg}")
-        if avg: # Final option is that <avg> can be truthy or falsy
-            return Average.resolve(mm._get_appropriate_avg()) if mm is not None else Average.SQUARE
-        else:
-            return Average.POINT
+        match avg:
+            case Average():
+                return avg
+            case str():
+                for average in Average:
+                    if average.name.upper() == avg.upper():
+                        return average
+                raise ValueError(f"Unsupported averaging mask: {avg}")
+            case _ if avg: # If avg is not str() or Average(), but is still truthy
+                return Average.resolve(mm._get_appropriate_avg()) if mm is not None else Average.SQUARE
+            case _: # If avg is falsy
+                return Average.POINT
 
 
 # Below here are some graphical functions (plot magnetization profile etc.)

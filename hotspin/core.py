@@ -123,13 +123,19 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         pos_x, pos_y = self.xx[slice], self.yy[slice]
         return distance.pdist(cp.asarray([pos_x, pos_y]).get().T).min()
 
+    def _get_m_uniform(self, angle=0):
+        ''' Returns the self.m state with all magnets aligned along <angle> as much as possible. '''
+        angle += 1e-6 # To avoid possible ambiguous rounding for popular angles, if <angle> ⊥ <self.orientation>
+        return self.occupation*(2*((self.orientation[:,:,0]*cp.cos(angle) + self.orientation[:,:,1]*cp.sin(angle)) >= 0) - 1)
+        
     def initialize_m(self, pattern='random', *, angle=0, update_energy=True):
         ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
             @param pattern [str]: can be any of "random", "uniform", "AFM".
         '''
-        self._set_m(pattern, angle=angle)
+        self._set_m(pattern)
         self.m = self.m.astype(float)
         self.m = cp.multiply(self.m, self.occupation)
+        self.m[cp.where(self._get_m_uniform() != self._get_m_uniform(angle))] *= -1 # Allow 'rotation' for any kind of initialized state
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
     
     def _set_orientation(self, angle: float = 0): # TODO: could perhaps make this 3D to avoid possible errors for OOP ASI where self.orientation is now undefined
@@ -188,7 +194,6 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         '''
         if index is not None: index = Energy.clean_indices(index) # TODO: now we are cleaning twice, so remove this in Energy classes maybe?
         for energy in self.energies:
-            # PYTHONUPDATE_3.10: use structural pattern matching
             if index is None: # No index specified, so update fully
                 energy.update()
             elif index.size == 2: # Index contains 2 ints, so it represents the coordinates of a single magnet
@@ -323,14 +328,15 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         if cp.any(self.T == 0):
             warnings.warn('Temperature is zero somewhere, so no switch will be simulated to prevent DIV/0 errors.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
-        if self.params.UPDATE_SCHEME == 'Néel': # PYTHONUPDATE_3.10: use structural pattern matching
-            idx = self._update_Néel(*args, **kwargs)
-        elif self.params.UPDATE_SCHEME == 'Glauber':
-            idx = self._update_Glauber(*args, **kwargs)
-        elif self.params.UPDATE_SCHEME == 'Wolff':
-            idx = self._update_Wolff(*args, **kwargs)
-        else:
-            raise ValueError(f"The Magnets.params object has an invalid value for UPDATE_SCHEME='{self.params.UPDATE_SCHEME}'.")
+        match self.params.UPDATE_SCHEME:
+            case 'Néel':
+                idx = self._update_Néel(*args, **kwargs)
+            case 'Glauber':
+                idx = self._update_Glauber(*args, **kwargs)
+            case 'Wolff':
+                idx = self._update_Wolff(*args, **kwargs)
+            case str(unrecognizedscheme):
+                raise ValueError(f"The Magnets.params object has an invalid value for UPDATE_SCHEME='{unrecognizedscheme}'.")
         return Energy.clean_indices(idx)
 
     def _update_Glauber(self, idx=None, Q=0.05, r=0):
@@ -566,13 +572,13 @@ class Energy(ABC):
         indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze())
         if len(indices2D.shape) > 2: raise ValueError("An array with more than 2 non-empty dimensions can not be used to represent a list of indices.")
         if not cp.any(cp.asarray(indices2D.shape) == 2): raise ValueError("The list of indices has an incorrect shape. At least one dimension should have length 2.")
-        # PYTHONUPDATE_3.10: use structural pattern matching
-        if indices2D.shape[0] == 2: # The only ambiguous case is for a 2x2 input array, but in that case we assume the array is already correct.
-            return indices2D
-        elif indices2D.shape[1] == 2:
-            return indices2D.T
-        else:
-            raise ValueError("Structure of attribute <indices2D> could not be recognized.")
+        match indices2D.shape:
+            case (2, _):
+                return indices2D
+            case (_, 2):
+                return indices2D.T
+            case _:
+                raise ValueError("Structure of attribute <indices2D> could not be recognized.")
     
     @classmethod
     def clean_index(cls, index2D):
