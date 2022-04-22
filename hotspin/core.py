@@ -34,11 +34,11 @@ class SimParams:
             raise ValueError(f"UPDATE_SCHEME='{self.UPDATE_SCHEME}' is invalid: allowed values are {allowed}.")
 
 
-class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abstract base class that is exposed to the world outside this file
+class Magnets(ABC):
     def __init__(
         self, nx: int, ny: int, dx: float, dy: float, *,
         T: float = 300, E_b: float = 5e-20, Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
-        pattern: str = 'random', energies: tuple = None, PBC: bool = False, angle: float = None, params: SimParams = None):
+        pattern: str = 'random', energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are allowed currently. 
@@ -91,7 +91,7 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         # Main initialization steps that require calling other methods of this class
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
         self.n = int(cp.sum(self.occupation)) # Number of magnets in the simulation
-        if self.in_plane: self._initialize_ip(angle=angle)
+        if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
 
         self.initialize_m(pattern, update_energy=False)
 
@@ -99,24 +99,6 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.energies = list[Energy]()
         for energy in energies: self.add_energy(energy)
 
-    def _set_m(self, pattern, angle=0):
-        if pattern == 'uniform': # PYTHONUPDATE_3.10: use structural pattern matching
-            self.m = cp.ones_like(self.xx)
-        elif pattern == 'AFM':
-            self.m = ((self.ixx - self.iyy) % 2)*2 - 1
-        else:
-            self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
-            if pattern != 'random': warnings.warn('Pattern not recognized, defaulting to "random".', stacklevel=2)
-
-    def _get_unitcell(self):
-        return Vec2D(1, 1)
-    
-    def _get_occupation(self):
-        return cp.ones_like(self.ixx)
-    
-    def _get_groundstate(self):
-        return 'random'
-    
     def _get_closest_dist(self):
         ''' Returns the closest distance between two magnets in the simulation. '''
         slice = cp.where(self.occupation[:self.unitcell.y*2,:self.unitcell.x*2]) # We only need at most two unit cells
@@ -126,8 +108,11 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
     def _get_m_uniform(self, angle=0):
         ''' Returns the self.m state with all magnets aligned along <angle> as much as possible. '''
         angle += 1e-6 # To avoid possible ambiguous rounding for popular angles, if <angle> ⊥ <self.orientation>
-        return self.occupation*(2*((self.orientation[:,:,0]*cp.cos(angle) + self.orientation[:,:,1]*cp.sin(angle)) >= 0) - 1)
-        
+        if self.in_plane:
+            return self.occupation*(2*((self.orientation[:,:,0]*cp.cos(angle) + self.orientation[:,:,1]*cp.sin(angle)) >= 0) - 1)
+        else:
+            return cp.ones_like(self.xx)*((cp.floor(angle/math.pi - .5) % 2)*2 - 1)
+
     def initialize_m(self, pattern='random', *, angle=0, update_energy=True):
         ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
             @param pattern [str]: can be any of "random", "uniform", "AFM".
@@ -137,18 +122,19 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         self.m = cp.multiply(self.m, self.occupation)
         self.m[cp.where(self._get_m_uniform() != self._get_m_uniform(angle))] *= -1 # Allow 'rotation' for any kind of initialized state
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
-    
-    def _set_orientation(self, angle: float = 0): # TODO: could perhaps make this 3D to avoid possible errors for OOP ASI where self.orientation is now undefined
-        self.orientation = cp.ones((*self.xx.shape, 2))/math.sqrt(2)
 
-    def _initialize_ip(self, angle: float = None):
+    def _initialize_ip(self, angle: float = 0.):
         ''' Initialize the angles of all the magnets (only applicable in the in-plane case).
             This function should only be called by the Magnets() class itself, not by the user.
             @param angle [float] (0): optional parameter passed to self._set_orientation(), normally
                 used to define an angle (in radians) by which each spin in the system is rotated.
         '''
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
-        self._set_orientation(angle=angle) if angle else self._set_orientation()
+        additional_angle = self._set_orientation()
+        angles = cp.arctan2(self.orientation[:,:,1], self.orientation[:,:,0])
+        angles += angle + (0 if additional_angle is None else additional_angle)
+        self.orientation[:,:,0] = cp.cos(angles)
+        self.orientation[:,:,1] = cp.sin(angles)
 
     def add_energy(self, energy: 'Energy'):
         ''' Adds an Energy object to self.energies. This object is stored under its reduced name,
@@ -495,16 +481,52 @@ class Magnets: # TODO: make this a behind-the-scenes class, and make ASI the abs
         rr = (self.xx**2 + self.yy**2)**(1/2) # This only works if dx, dy is the same for every cell!
         return float(cp.sum(cp.abs(correlation) * rr * rr)/cp.max(cp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
 
-    ######## Now, some useful functions when subclassing this class
+    ######## Now, some useful functions to overwrite when subclassing this class
+    def _set_orientation(self): # Not needed for out-of-plane ASI
+        self.orientation = cp.ones((*self.xx.shape, 2))/math.sqrt(2)
+        return 0
+
+    @abstractmethod
+    def _set_m(self, pattern: str):
+        ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "AFM" or "random". '''
+        match str(pattern).strip().lower():
+            case 'uniform':
+                self.m = self._get_m_uniform()
+            case str(unknown_pattern):
+                self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
+                if unknown_pattern != 'random': warnings.warn(f'Pattern "{unknown_pattern}" not recognized, defaulting to "random".', stacklevel=2)
+
+    @abstractmethod
+    def _get_unitcell(self):
+        ''' Returns a tuple containing the number of cells in a unit cell along both the x- and y-axis. '''
+        return (1, 1) # Example
+    
+    @abstractmethod
+    def _get_occupation(self):
+        ''' Returns a 2D CuPy array which contains 1 at the cells which are occupied by a magnet, and 0 elsewhere. '''
+        return cp.ones_like(self.ixx) # Example
+    
+    @abstractmethod
+    def _get_groundstate(self):
+        ''' Returns <pattern> in self.initialize_m(<pattern>) which corresponds to a global ground state of the system.
+            Use 'random' if no ground state is implemented in self._set_m().
+        '''
+        return 'random'
+
+    @abstractmethod
     def _get_nearest_neighbors(self):
-        return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
+        ''' Returns a small mask with the magnet at the center, and 1 at the positions of its nearest neighbors (elsewhere 0). '''
+        return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]) # Example
 
+    @abstractmethod
     def _get_appropriate_avg(self):
-        ''' Returns the most appropriate averaging mask for a given type of ASI '''
-        return 'cross'
+        ''' Returns the most appropriate averaging mask for a given type of ASI. '''
+        return 'cross' # Example
 
+    @abstractmethod
     def _get_AFMmask(self):
-        return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')
+        ''' Returns the (normalized) mask used to determine how anti-ferromagnetic the magnetization profile is. '''
+        return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float') # Example
 
 
 class Energy(ABC):

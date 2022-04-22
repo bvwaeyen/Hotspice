@@ -5,48 +5,10 @@ import cupy as cp
 
 from abc import ABC, abstractmethod
 
-from .core import Magnets, rng
+from .core import Magnets
 
 
-class ASI(ABC, Magnets):
-    @abstractmethod
-    def _set_m(self, pattern: str):
-        ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "AFM" or "random". '''
-        pass
-
-    @abstractmethod
-    def _get_unitcell(self):
-        ''' Returns a tuple containing the number of cells in a unit cell along both the x- and y-axis. '''
-        pass
-
-    @abstractmethod
-    def _get_occupation(self):
-        ''' Returns a 2D CuPy array which contains 1 at the cells which are occupied by a magnet, and 0 elsewhere. '''
-        pass
-
-    @abstractmethod
-    def _get_appropriate_avg(self):
-        ''' Returns the most appropriate averaging mask for a given type of ASI. '''
-        pass
-
-    @abstractmethod
-    def _get_AFMmask(self):
-        ''' Returns the (normalized) mask used to determine how anti-ferromagnetic the magnetization profile is. '''
-        pass
-
-    @abstractmethod
-    def _get_nearest_neighbors(self):
-        ''' Returns a small mask with the magnet at the center, and 1 at the positions of its nearest neighbors (elsewhere 0). '''
-        pass
-
-    @abstractmethod
-    def _get_groundstate(self):
-        ''' Returns one of either strings: 'uniform', 'AFM', 'random'.
-            Use 'random' if the ground state is more complex than uniform or AFM.
-        '''
-        pass
-
-class FullASI(ASI):
+class FullASI(Magnets):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' Out-of-plane ASI in a square arrangement. '''
         self.a = a # [m] The distance between two nearest neighboring spins
@@ -83,7 +45,7 @@ class FullASI(ASI):
         return 'AFM'
 
 
-class IsingASI(ASI):
+class IsingASI(Magnets):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins on a square grid, all pointing in the same direction. '''
         self.a = a # [m] The distance between two nearest neighboring spins
@@ -101,9 +63,10 @@ class IsingASI(ASI):
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
-    def _set_orientation(self, angle: float = 0.):
+    def _set_orientation(self):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        self.orientation[True,True,:] = math.cos(angle), math.sin(angle)
+        self.orientation[:,:,0] = 1
+        return 0
 
     def _get_unitcell(self):
         return (1, 1)
@@ -124,7 +87,7 @@ class IsingASI(ASI):
         return 'uniform'
 
 
-class SquareASI(ASI):
+class SquareASI(Magnets):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares. '''
         self.a = a # [m] The side length of the squares (i.e. side length of a unit cell)
@@ -159,11 +122,11 @@ class SquareASI(ASI):
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
-    def _set_orientation(self, angle: float = 0.):
+    def _set_orientation(self):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        self.orientation[self.iyy % 2 == 0,:] = math.cos(angle), math.sin(angle)
-        self.orientation[self.iyy % 2 == 1,:] = math.cos(angle + math.pi/2), math.sin(angle + math.pi/2)
-        self.orientation[self.occupation == 0,:] = 0
+        self.orientation[self.iyy % 2 == 0,0] = 1
+        self.orientation[self.iyy % 2 == 1,1] = 1
+        return 0
 
     def _get_unitcell(self):
         return (2, 2)
@@ -189,14 +152,15 @@ class PinwheelASI(SquareASI):
         ''' In-plane ASI similar to SquareASI, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
         super().__init__(n, a, ny=ny, **kwargs)
 
-    def _set_orientation(self, angle: float = 0.):
-        super()._set_orientation(angle - math.pi/4)
+    def _set_orientation(self):
+        super()._set_orientation()
+        return -math.pi/4
 
     def _get_groundstate(self):
         return 'uniform' if self.PBC else 'vortex'
 
 
-class KagomeASI(ASI):
+class KagomeASI(Magnets):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. '''
         self.a = a # [m] The distance between opposing sides of a hexagon
@@ -221,12 +185,12 @@ class KagomeASI(ASI):
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
-    def _set_orientation(self, angle: float = 0.):
+    def _set_orientation(self):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        self.orientation[True,True,:] = math.cos(angle + math.pi/2), math.sin(angle + math.pi/2)
-        self.orientation[((self.ixx - self.iyy) % 4 == 1) & (self.ixx % 2 == 1),:] = math.cos(angle - math.pi/6), math.sin(angle - math.pi/6)
-        self.orientation[((self.ixx + self.iyy) % 4 == 3) & (self.ixx % 2 == 1),:] = math.cos(angle + math.pi/6), math.sin(angle + math.pi/6)
-        self.orientation[self.occupation == 0,:] = 0
+        self.orientation[:,:,1] = 1
+        self.orientation[((self.ixx - self.iyy) % 4 == 1) & (self.ixx % 2 == 1),:] = math.cos(-math.pi/6), math.sin(-math.pi/6)
+        self.orientation[((self.ixx + self.iyy) % 4 == 3) & (self.ixx % 2 == 1),:] = math.cos(math.pi/6), math.sin(math.pi/6)
+        return 0
 
     def _get_unitcell(self):
         return (4, 4)
@@ -255,8 +219,9 @@ class TriangleASI(KagomeASI):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of triangles. '''
         super().__init__(n, a, ny=ny, **kwargs)
 
-    def _set_orientation(self, angle: float = 0.):
-        super()._set_orientation(angle - math.pi/2)
+    def _set_orientation(self):
+        super()._set_orientation()
+        return -math.pi/2
 
     def _get_appropriate_avg(self):
         return 'triangle'
