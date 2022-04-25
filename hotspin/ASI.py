@@ -5,7 +5,18 @@ import cupy as cp
 from .core import Magnets
 
 
-class FullASI(Magnets):
+class OOP_ASI(Magnets):
+    ''' Generic abstract class for out-of-plane ASI. '''
+    def _set_orientation(self, *args, **kwargs):
+        pass # This abstract method is irrelevant for OOP ASI, so we ignore this.
+
+
+class IP_ASI(Magnets):
+    ''' Generic abstract class for in-plane ASI. '''
+    pass
+
+
+class FullASI(OOP_ASI):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' Out-of-plane ASI in a square arrangement. '''
         self.a = a # [m] The distance between two nearest neighboring spins
@@ -36,10 +47,10 @@ class FullASI(Magnets):
         return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
 
     def _get_groundstate(self):
-        return 'AFM'
+        return 'afm'
 
 
-class IsingASI(Magnets):
+class IsingASI(IP_ASI):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins on a square grid, all pointing in the same direction. '''
         self.a = a # [m] The distance between two nearest neighboring spins
@@ -60,7 +71,6 @@ class IsingASI(Magnets):
     def _set_orientation(self):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         self.orientation[:,:,0] = 1
-        return 0
 
     def _get_occupation(self):
         return cp.ones_like(self.xx)
@@ -78,7 +88,7 @@ class IsingASI(Magnets):
         return 'uniform'
 
 
-class SquareASI(Magnets):
+class SquareASI(IP_ASI):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares. '''
         self.a = a # [m] The side length of the squares (i.e. side length of a unit cell)
@@ -117,7 +127,6 @@ class SquareASI(Magnets):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         self.orientation[self.iyy % 2 == 0,0] = 1
         self.orientation[self.iyy % 2 == 1,1] = 1
-        return 0
 
     def _get_occupation(self):
         return (self.ixx + self.iyy) % 2 == 1
@@ -132,23 +141,20 @@ class SquareASI(Magnets):
         return cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
 
     def _get_groundstate(self):
-        return 'AFM'
+        return 'afm'
 
 
 class PinwheelASI(SquareASI):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI similar to SquareASI, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
+        kwargs['angle'] = kwargs.get('angle', 0) - math.pi/4
         super().__init__(n, a, ny=ny, **kwargs)
-
-    def _set_orientation(self):
-        super()._set_orientation()
-        return -math.pi/4
 
     def _get_groundstate(self):
         return 'uniform' if self.PBC else 'vortex'
 
 
-class KagomeASI(Magnets):
+class KagomeASI(IP_ASI):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. '''
         self.a = a # [m] The distance between opposing sides of a hexagon
@@ -178,7 +184,6 @@ class KagomeASI(Magnets):
         self.orientation[:,:,1] = 1
         self.orientation[((self.ixx - self.iyy) % 4 == 1) & (self.ixx % 2 == 1),:] = math.cos(-math.pi/6), math.sin(-math.pi/6)
         self.orientation[((self.ixx + self.iyy) % 4 == 3) & (self.ixx % 2 == 1),:] = math.cos(math.pi/6), math.sin(math.pi/6)
-        return 0
 
     def _get_occupation(self):
         occupation = cp.zeros_like(self.xx)
@@ -202,14 +207,11 @@ class KagomeASI(Magnets):
 class TriangleASI(KagomeASI):
     def __init__(self, n: int, a: float, *, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of triangles. '''
+        kwargs['angle'] = kwargs.get('angle', 0) - math.pi/2
         super().__init__(n, a, ny=ny, **kwargs)
-
-    def _set_orientation(self):
-        super()._set_orientation()
-        return -math.pi/2
 
     def _get_appropriate_avg(self):
         return 'triangle'
 
     def _get_groundstate(self):
-        return 'AFM'
+        return 'afm'

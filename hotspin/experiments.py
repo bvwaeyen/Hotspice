@@ -205,6 +205,7 @@ class TaskAgnosticExperiment(Experiment):
         return float(cp.sum((initial_readout - final_readout)**2))
 
 ###############################################################################
+# TODO: move the executable part of this file elsewhere (e.g. to new file in examples folder)
 def main_kernelquality():
     from .ASI import PinwheelASI
     mm = PinwheelASI(25, 1e-6, T=300, energies=(DipolarEnergy(), ZeemanEnergy()))

@@ -146,13 +146,12 @@ class Magnets(ABC):
     def _initialize_ip(self, angle: float = 0.):
         ''' Initialize the angles of all the magnets (only applicable in the in-plane case).
             This function should only be called by the Magnets() class itself, not by the user.
-            @param angle [float] (0): optional parameter passed to self._set_orientation(), normally
-                used to define an angle (in radians) by which each spin in the system is rotated.
+            @param angle [float] (0): the angle (in radians) by which every spin in the system
+                will be rotated after self._set_orientation() has been called.
         '''
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
-        additional_angle = self._set_orientation()
-        angles = cp.arctan2(self.orientation[:,:,1], self.orientation[:,:,0])
-        angles += angle + (0 if additional_angle is None else additional_angle)
+        self._set_orientation()
+        angles = angle + cp.arctan2(self.orientation[:,:,1], self.orientation[:,:,0])
         self.orientation[:,:,0] = cp.cos(angles)*self.occupation
         self.orientation[:,:,1] = cp.sin(angles)*self.occupation
 
@@ -502,14 +501,19 @@ class Magnets(ABC):
         return float(cp.sum(cp.abs(correlation) * rr * rr)/cp.max(cp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
 
     ######## Now, some useful functions to overwrite when subclassing this class
-    # TODO: determine which methods should actually have _ and which shouldn't
-    def _set_orientation(self): # Not needed for out-of-plane ASI
+    @abstractmethod # Not needed for out-of-plane ASI, but essential for in-plane ASI, therefore abstractmethod anyway
+    def _set_orientation(self):
+        ''' Directly sets <self.orientation>, which is a shape (ny, nx, 2) array.
+            The subset [:,:,0], holds the x-component, [:,:,1] the y-component.
+            The vectors represented in this way are expected to be normalized.
+        ''' # TODO: what if we just stored an array of angles and calculated self.orientation behind the scenes?
         self.orientation = cp.ones((*self.xx.shape, 2))/math.sqrt(2)
-        return 0
 
-    @abstractmethod
+    @abstractmethod # TODO: should this really be an abstractmethod? Uniform and random can be defaults and subclasses can define more of course
     def _set_m(self, pattern: str):
-        ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "AFM" or "random". '''
+        ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "AFM" or "random".
+            <self.m> is a shape (ny, nx) array containing only -1, 0 or 1 indicating the magnetization direction.
+        '''
         match str(pattern).strip().lower():
             case 'uniform':
                 self.m = self._get_m_uniform()
