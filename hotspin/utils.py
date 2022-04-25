@@ -36,6 +36,34 @@ def strided(a, W):
     n = a_ext.strides[0]
     return striding.as_strided(a_ext[W - 1:], shape=(a.size, W), strides=(n, -n))
 
+
+def check_repetition(arr, nx: int, ny: int):
+    ''' Checks if <arr> is periodic with period <nx> along axis=1 and period <ny> along axis=0.
+        If there are any further axes (axis=2, axis=3 etc.), the array is simply seen as a
+        collection of 2D arrays (along axes 0 and 1), and the total result is only True if all
+        of these are periodic with period <nx> and <ny>
+    '''
+    extra_dims = [1] * (len(arr.shape) - 2)
+    max_y, max_x = arr.shape[:2]
+    i, current_checking = 0, arr[:ny, :nx, ...]
+    end_y, end_x = current_checking.shape[:2]
+    while end_y < arr.shape[0] or end_x < arr.shape[1]:
+        if i % 2: # Extend in x-direction (axis=1)
+            current_checking = cp.tile(current_checking, (1, 2, *extra_dims))
+            start_x = current_checking.shape[1]//2
+            end_y, end_x = current_checking.shape[:2]
+            if not cp.allclose(current_checking[:max_y,start_x:max_x, ...], arr[:end_y, start_x:end_x, ...]):
+                return False
+        else: # Extend in y-direction (axis=0)
+            current_checking = cp.tile(current_checking, (2, 1, *extra_dims))
+            start_y = current_checking.shape[0]//2
+            end_y, end_x = current_checking.shape[:2]
+            if not cp.allclose(current_checking[start_y:max_y, :max_x, ...], arr[start_y:end_y, :end_x, ...]):
+                return False
+        i += 1
+    return True
+
+
 def shell():
     ''' When called, the program is paused and an interactive shell is opened
         where the user can enter statements to inspect the scope where

@@ -1,9 +1,6 @@
 import math
-import warnings
 
 import cupy as cp
-
-from abc import ABC, abstractmethod
 
 from .core import Magnets
 
@@ -25,9 +22,6 @@ class FullASI(Magnets):
                 self.m = ((self.ixx - self.iyy) % 2)*2 - 1
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
-
-    def _get_unitcell(self):
-        return (1, 1)
 
     def _get_occupation(self):
         return cp.ones_like(self.xx)
@@ -67,9 +61,6 @@ class IsingASI(Magnets):
         self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
         self.orientation[:,:,0] = 1
         return 0
-
-    def _get_unitcell(self):
-        return (1, 1)
 
     def _get_occupation(self):
         return cp.ones_like(self.xx)
@@ -127,9 +118,6 @@ class SquareASI(Magnets):
         self.orientation[self.iyy % 2 == 0,0] = 1
         self.orientation[self.iyy % 2 == 1,1] = 1
         return 0
-
-    def _get_unitcell(self):
-        return (2, 2)
 
     def _get_occupation(self):
         return (self.ixx + self.iyy) % 2 == 1
@@ -191,9 +179,6 @@ class KagomeASI(Magnets):
         self.orientation[((self.ixx - self.iyy) % 4 == 1) & (self.ixx % 2 == 1),:] = math.cos(-math.pi/6), math.sin(-math.pi/6)
         self.orientation[((self.ixx + self.iyy) % 4 == 3) & (self.ixx % 2 == 1),:] = math.cos(math.pi/6), math.sin(math.pi/6)
         return 0
-
-    def _get_unitcell(self):
-        return (4, 4)
 
     def _get_occupation(self):
         occupation = cp.zeros_like(self.xx)

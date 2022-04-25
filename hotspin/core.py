@@ -10,8 +10,9 @@ from cupyx.scipy import signal
 from dataclasses import dataclass, field
 from functools import cache
 from scipy.spatial import distance
+from textwrap import dedent
 
-from .utils import mirror4
+from .utils import mirror4, check_repetition
 
 
 kB = 1.380649e-23
@@ -78,12 +79,8 @@ class Magnets(ABC):
             self.E_b = cp.ones_like(self.xx)*E_b # [J]
             # TODO: this is not used in Glauber update scheme, but is that correct?
 
-        # Unit cells and PBC
-        self.unitcell = Vec2D(*self._get_unitcell())
+        # PBC and history
         self.PBC = PBC
-        if self.PBC:
-            if nx % self.unitcell.x != 0 or ny % self.unitcell.y != 0:
-                warnings.warn(f"Be careful with PBC, as there are not an integer number of unit cells in the simulation! Hence, the boundaries do not nicely fit together. Adjust nx or ny to alleviate this problem (unit cell has size {self.unitcell.x}x{self.unitcell.y}).", stacklevel=2)
 
         self.history = History()
         self.switches, self.attempted_switches = 0, 0
@@ -92,8 +89,13 @@ class Magnets(ABC):
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
         self.n = int(cp.sum(self.occupation)) # Number of magnets in the simulation
         if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
+        self.unitcell = self._get_unitcell() # This needs to be after occupation and initialize_ip, and before any defects are introduced
 
         self.initialize_m(pattern, update_energy=False)
+
+        if self.PBC:
+            if nx % self.unitcell.x != 0 or ny % self.unitcell.y != 0:
+                warnings.warn(f"Be careful with PBC, as there are not an integer number of unit cells in the simulation! Hence, the boundaries do not nicely fit together. Adjust nx or ny to alleviate this problem (unit cell has size {self.unitcell.x}x{self.unitcell.y}).", stacklevel=2)
 
         # Some energies might require self.orientation etc., so only initialize energy at the end
         self.energies = list[Energy]()
@@ -112,6 +114,24 @@ class Magnets(ABC):
             return self.occupation*(2*((self.orientation[:,:,0]*cp.cos(angle) + self.orientation[:,:,1]*cp.sin(angle)) >= 0) - 1)
         else:
             return cp.ones_like(self.xx)*((cp.floor(angle/math.pi - .5) % 2)*2 - 1)
+    
+    def _get_unitcell(self):
+        ''' Returns a Vec2D containing the number of single grid cells in a unit cell along the x- and y-axis. '''
+        max_cell = 100 # Check only <n> smaller than this: otherwise unitcell is too large to provide any benefit anyway
+        for n in range(1, min(self.nx + self.ny + 1, max_cell)): # Test possible unit cells in a triangle-like manner: (1,1), (2,1), (1,2), (3,1), (2,2), (1,3), ...
+            for i in range(max(0, n - self.nx) + 1, min(n, self.ny) + 1): # Don't test unit cells larger than the domain
+                ux = n - i + 1
+                uy = i
+                if self.in_plane:
+                    if check_repetition(self.orientation, ux, uy):
+                        return Unitcell(ux, uy)
+                else:
+                    if check_repetition(self.occupation, ux, uy):
+                        return Unitcell(ux, uy)
+        warnings.warn(dedent(f"""
+            Could not detect a reasonably sized unit cell. Defaulting to entire domain {self.nx}x{self.ny}.
+            For large simulations, this can cause high memory consumption and very poor performance."""), stacklevel=2)
+        return Unitcell(self.nx, self.ny)
 
     def initialize_m(self, pattern='random', *, angle=0, update_energy=True):
         ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
@@ -133,8 +153,8 @@ class Magnets(ABC):
         additional_angle = self._set_orientation()
         angles = cp.arctan2(self.orientation[:,:,1], self.orientation[:,:,0])
         angles += angle + (0 if additional_angle is None else additional_angle)
-        self.orientation[:,:,0] = cp.cos(angles)
-        self.orientation[:,:,1] = cp.sin(angles)
+        self.orientation[:,:,0] = cp.cos(angles)*self.occupation
+        self.orientation[:,:,1] = cp.sin(angles)*self.occupation
 
     def add_energy(self, energy: 'Energy'):
         ''' Adds an Energy object to self.energies. This object is stored under its reduced name,
@@ -482,6 +502,7 @@ class Magnets(ABC):
         return float(cp.sum(cp.abs(correlation) * rr * rr)/cp.max(cp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
 
     ######## Now, some useful functions to overwrite when subclassing this class
+    # TODO: determine which methods should actually have _ and which shouldn't
     def _set_orientation(self): # Not needed for out-of-plane ASI
         self.orientation = cp.ones((*self.xx.shape, 2))/math.sqrt(2)
         return 0
@@ -495,11 +516,6 @@ class Magnets(ABC):
             case str(unknown_pattern):
                 self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
                 if unknown_pattern != 'random': warnings.warn(f'Pattern "{unknown_pattern}" not recognized, defaulting to "random".', stacklevel=2)
-
-    @abstractmethod
-    def _get_unitcell(self):
-        ''' Returns a tuple containing the number of cells in a unit cell along both the x- and y-axis. '''
-        return (1, 1) # Example
     
     @abstractmethod
     def _get_occupation(self):
@@ -864,7 +880,7 @@ class History:
         self.m.clear()
 
 @dataclass
-class Vec2D:
+class Unitcell:
     ''' Stores x and y components, so we don't need to index [0] or [1] in a tuple, which would be unclear. '''
     x: float
     y: float
