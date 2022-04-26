@@ -65,8 +65,8 @@ def check_repetition(arr, nx: int, ny: int):
 
 
 def shell():
-    ''' When called, the program is paused and an interactive shell is opened
-        where the user can enter statements to inspect the scope where
+    ''' Pauses the program and opens an interactive shell where the user
+        can enter statements or expressions to inspect the scope in which
         shell() was called. Write "exit()" to terminate this shell.
         Using Ctrl+C will stop the entire program, not just this function
         (this is due to a bug in the scipy library).

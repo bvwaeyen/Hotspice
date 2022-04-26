@@ -146,14 +146,14 @@ class Magnets(ABC):
     def _initialize_ip(self, angle: float = 0.):
         ''' Initialize the angles of all the magnets (only applicable in the in-plane case).
             This function should only be called by the Magnets() class itself, not by the user.
-            @param angle [float] (0): the angle (in radians) by which every spin in the system
-                will be rotated after self._set_orientation() has been called.
+            @param angle [float] (0): the additional angle (in radians) by which every spin in
+                the system will be rotated, i.e. in addition to self._get_angles().
         '''
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
-        self._set_orientation()
-        angles = angle + cp.arctan2(self.orientation[:,:,1], self.orientation[:,:,0])
-        self.orientation[:,:,0] = cp.cos(angles)*self.occupation
-        self.orientation[:,:,1] = cp.sin(angles)*self.occupation
+        self.angles = (self._get_angles() + angle)*self.occupation
+        self.orientation = cp.zeros(self.xx.shape + (2,))
+        self.orientation[:,:,0] = cp.cos(self.angles)*self.occupation
+        self.orientation[:,:,1] = cp.sin(self.angles)*self.occupation
 
     def add_energy(self, energy: 'Energy'):
         ''' Adds an Energy object to self.energies. This object is stored under its reduced name,
@@ -349,11 +349,10 @@ class Magnets(ABC):
         if idx is None: idx = self.select(r=self.calc_r(Q) if r == 0 else r)
         self.attempted_switches += idx.shape[1]
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
-        # TODO: can adapt this to work at T=0 by first checking if energy would drop
         exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
-        # idx = idx[:,cp.where(rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # https://en.wikipedia.org/wiki/Glauber_dynamics
-        idx_switch = idx[:,cp.where(rng.random(size=exponential.shape) < exponential)[0]] # http://bit-player.org/2019/glaubers-dynamics
+        idx_switch = idx[:,cp.where(rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
+        # idx = idx[:,cp.where(rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, unsure if this satisfied detailed balance
         if idx_switch.shape[1] > 0:
             self.m[idx_switch[0], idx_switch[1]] *= -1
             self.switches += idx_switch.shape[1]
@@ -502,12 +501,11 @@ class Magnets(ABC):
 
     ######## Now, some useful functions to overwrite when subclassing this class
     @abstractmethod # Not needed for out-of-plane ASI, but essential for in-plane ASI, therefore abstractmethod anyway
-    def _set_orientation(self):
-        ''' Directly sets <self.orientation>, which is a shape (ny, nx, 2) array.
-            The subset [:,:,0], holds the x-component, [:,:,1] the y-component.
-            The vectors represented in this way are expected to be normalized.
-        ''' # TODO: what if we just stored an array of angles and calculated self.orientation behind the scenes?
-        self.orientation = cp.ones((*self.xx.shape, 2))/math.sqrt(2)
+    def _get_angles(self):
+        ''' Returns a 2D array containing the angle (measured counterclockwise from the x-axis)
+            of each spin. The angle of unoccupied cells (self._get_occupation() == 0) is ignored.
+        '''
+        return cp.zeros_like(self.ixx) # Example
 
     @abstractmethod # TODO: should this really be an abstractmethod? Uniform and random can be defaults and subclasses can define more of course
     def _set_m(self, pattern: str):

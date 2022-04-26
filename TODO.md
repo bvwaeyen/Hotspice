@@ -11,7 +11,7 @@
     - [ ] Develop .io and .experiments modules
         - [ ] Task Agnostic Metrics for RC
 
-    - [ ] Reconsider distribution of responsibilities between ASI() and Magnets() classes
+    - [x] Reconsider distribution of responsibilities between ASI() and Magnets() classes
 
 2. Medium priority
     - [ ] Make unit tests
@@ -21,7 +21,7 @@
     - [ ] Implement metrics (average magnetization, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, width of domains (related to correlation probably)...) to compare with theory/experiment
     - [ ] Improve relaxation algorithm
     - [ ] Can implement autocorrelation length by taking into account cross product between vectors?
-    - [ ] Possibly allow specifying angle also for pattern='AFM', if it makes any sense
+    - [x] Possibly allow specifying angle also for pattern='AFM', if it makes any sense
 
 3. Low priority
     - [ ] Compress $M_{sat}$ and $V$ into one parameter (unit Am² = Nm/T) (or is there some reason why they need to be separate?)

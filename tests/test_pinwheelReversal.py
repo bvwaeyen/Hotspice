@@ -47,8 +47,8 @@ class Threshold:
 
 class test_pinwheelReversal:
     def __init__(self, **kwargs):
-        self.size = kwargs.get('size', 400) # Edge length of simulation as a number of cells
-        self.a = kwargs.get('a', 1e-6) # [m] Lattice spacing
+        self.size = kwargs.get('size', 40) # Edge length of simulation as a number of cells
+        self.a = kwargs.get('a', 420e-9*math.sqrt(2)) # [m] Lattice spacing (default from flatspin paper)
         self.T = kwargs.get('T', 300) # [K] Room temperature
         self.H_max = kwargs.get('H_max', 4e-4) # [T] extremal magnitude of external field (default from flatspin paper)
         self.V = kwargs.get('V', 470e-9*170e-9*10e-9) # [m³] volume of a single magnet (default from flatspin paper)
@@ -84,7 +84,7 @@ class test_pinwheelReversal:
 
         data = pd.DataFrame({"H": H_range, "m_avg": m_avg_H, "H_angle": angle, "T": self.T})
 
-        savename = f"results/test_pinwheelReversal/N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}"
+        savename = f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}/N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}"
         if save: hotspin.plottools.save_data(data, f"{savename}.csv")
         if plot: test_pinwheelReversal.test_reversal_plot(data, save=savename)
 

@@ -7,8 +7,9 @@ from .core import Magnets
 
 class OOP_ASI(Magnets):
     ''' Generic abstract class for out-of-plane ASI. '''
-    def _set_orientation(self, *args, **kwargs):
-        pass # This abstract method is irrelevant for OOP ASI, so we ignore this.
+    def _get_angles(self, *args, **kwargs):
+        # This abstract method is irrelevant for OOP ASI, so just return NaNs.
+        return cp.nan*cp.zeros_like(self.ixx)
 
 
 class IP_ASI(Magnets):
@@ -68,9 +69,8 @@ class IsingASI(IP_ASI):
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
-    def _set_orientation(self):
-        self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        self.orientation[:,:,0] = 1
+    def _get_angles(self):
+        return cp.zeros_like(self.xx)
 
     def _get_occupation(self):
         return cp.ones_like(self.xx)
@@ -123,10 +123,10 @@ class SquareASI(IP_ASI):
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
-    def _set_orientation(self):
-        self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        self.orientation[self.iyy % 2 == 0,0] = 1
-        self.orientation[self.iyy % 2 == 1,1] = 1
+    def _get_angles(self):
+        angles = cp.zeros_like(self.xx)
+        angles[self.iyy % 2 == 1] = math.pi/2
+        return angles
 
     def _get_occupation(self):
         return (self.ixx + self.iyy) % 2 == 1
@@ -179,11 +179,11 @@ class KagomeASI(IP_ASI):
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
-    def _set_orientation(self):
-        self.orientation = cp.zeros(self.xx.shape + (2,)) # Keep this a numpy array for now since boolean indexing is broken in cupy
-        self.orientation[:,:,1] = 1
-        self.orientation[((self.ixx - self.iyy) % 4 == 1) & (self.ixx % 2 == 1),:] = math.cos(-math.pi/6), math.sin(-math.pi/6)
-        self.orientation[((self.ixx + self.iyy) % 4 == 3) & (self.ixx % 2 == 1),:] = math.cos(math.pi/6), math.sin(math.pi/6)
+    def _get_angles(self):
+        angles = cp.ones_like(self.xx)*math.pi/2
+        angles[((self.ixx - self.iyy) % 4 == 1) & (self.ixx % 2 == 1)] = -math.pi/6
+        angles[((self.ixx + self.iyy) % 4 == 3) & (self.ixx % 2 == 1)] = math.pi/6
+        return angles
 
     def _get_occupation(self):
         occupation = cp.zeros_like(self.xx)
