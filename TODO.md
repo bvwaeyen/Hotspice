@@ -4,14 +4,13 @@
 
 1. High priority
     - [ ] Determine if $E_B$ needs to be taken into account in Glauber model
+        - [ ] Can we get some sort of time measure for multiswitching Glauber dynamics?
     - Multi-switching
         - [ ] Fix PBC issue in Grid multi-switching
         - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel, because the recent estimated calculation did not seem to correspond to reality very well)
 
     - [ ] Develop .io and .experiments modules
         - [ ] Task Agnostic Metrics for RC
-
-    - [x] Reconsider distribution of responsibilities between ASI() and Magnets() classes
 
 2. Medium priority
     - [ ] Make unit tests
@@ -21,7 +20,7 @@
     - [ ] Implement metrics (average magnetization, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, width of domains (related to correlation probably)...) to compare with theory/experiment
     - [ ] Improve relaxation algorithm
     - [ ] Can implement autocorrelation length by taking into account cross product between vectors?
-    - [x] Possibly allow specifying angle also for pattern='AFM', if it makes any sense
+    - [ ] Make a `get_summary()` method that returns a dict with important parameters of the simulation, and also make a function to reliably store the results of a simulation including these parameters, since now the filenames are drowning in parameters.
 
 3. Low priority
     - [ ] Compress $M_{sat}$ and $V$ into one parameter (unit Am² = Nm/T) (or is there some reason why they need to be separate?)
@@ -36,6 +35,7 @@
     - Test physical accuracy of Hotspin
         - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization? "Aging in a Two-Dimensional Ising Model with Dipolar Interactions"?)
         - [x] Pinwheel reversal in external field (cfr. flatspin paper) (try with Néel update equation)
+            - [ ] Solve problem of too low external field requirement
     - [ ] Calculate kernel-quality and task agnostic metrics as function of T, for different lattices with different interactions etc. First try easiest models and then go closer to experiment
 
 2. Medium priority

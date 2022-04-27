@@ -315,7 +315,7 @@ class Magnets(ABC):
     def _select_cluster(self):
         ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model. '''
         exchange: ExchangeEnergy = self.get_energy('exchange')
-        assert exchange is not None, "Can not select Wolff cluster if there is no exchange energy in the system."
+        if exchange is None: raise NotImplementedError("Can not select Wolff cluster if there is no exchange energy in the system.")
         neighbors = exchange.local_interaction
         seed = tuple(self._select_single().flat)
         cluster = cp.zeros_like(self.m)
@@ -349,7 +349,10 @@ class Magnets(ABC):
         if idx is None: idx = self.select(r=self.calc_r(Q) if r == 0 else r)
         self.attempted_switches += idx.shape[1]
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
-        exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
+        # OPTION 1: TRUE GLAUBER, NO ENERGY BARRIER (or at least not explicitly)
+        # exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
+        # OPTION 2: AD-HOC ADJUSTED GLAUBER, where we assume that the 'other state' is at the top of the energy barrier
+        exponential = cp.clip(cp.exp((-self.E_b[idx[0], idx[1]]-self.switch_energy(idx))/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
         idx_switch = idx[:,cp.where(rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
         # idx = idx[:,cp.where(rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, unsure if this satisfied detailed balance
@@ -359,18 +362,20 @@ class Magnets(ABC):
             self.update_energy(index=idx_switch)
         return idx_switch
     
-    def _update_Néel(self):
+    def _update_Néel(self, max_t=1, attempt_freq=1e10):
         ''' Performs a single magnetization switch. '''
         barrier = (self.E_b - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
         minBarrier = cp.min(barrier)
-        barrier -= minBarrier # Energy is relative, so set min(E) to zero (this prevents issues at low T)
+        barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
-            taus = rng.random(size=barrier.shape)*cp.exp(barrier/self.kBT)
-            indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # cp.unravel_index(indexmin, self.m.shape) # The min(tau) index in 2D form for easy indexing
-            self.m[indexmin2D] = -self.m[indexmin2D]
+            taus = rng.random(size=barrier.shape)*cp.exp(barrier/self.kBT) # Draw random relative times from an exponential distribution
+            indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
+            time = taus[indexmin2D]*cp.exp(minBarrier/self.kBT[indexmin2D])/attempt_freq # This can become cp.inf quite quickly if T is small
+            if time > max_t: return None # Just exit if switching would take ages and ages and ages
+            self.m[indexmin2D] *= -1
             self.switches += 1
             self.attempted_switches += 1
-            self.t += taus[indexmin2D]*(-cp.log(1-taus[indexmin2D]))*cp.exp(minBarrier/self.kBT[indexmin2D]) # This can become cp.inf quite quickly if T is small
+            self.t += time 
         self.update_energy(index=indexmin2D)
         return indexmin2D
 
@@ -609,7 +614,7 @@ class Energy(ABC):
                 this size-2 dimension which will become the primary dimension of the returned array.
             @return [np.array(2xN)]: A 2xN array, where the 1st sub-array indicates x-indices, the 2nd y-indices.
         '''
-        indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze())
+        indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze()) if indices2D is not None else cp.empty((2,0))
         if len(indices2D.shape) > 2: raise ValueError("An array with more than 2 non-empty dimensions can not be used to represent a list of indices.")
         if not cp.any(cp.asarray(indices2D.shape) == 2): raise ValueError("The list of indices has an incorrect shape. At least one dimension should have length 2.")
         match indices2D.shape:
