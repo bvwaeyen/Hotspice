@@ -33,9 +33,10 @@
 
 1. High priority
     - Test physical accuracy of Hotspin
-        - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization? "Aging in a Two-Dimensional Ising Model with Dipolar Interactions"?)
+        - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization?)
+            - [x] 2D Ising with long-range dipolar interactions ("Aging in a Two-Dimensional Ising Model with Dipolar Interactions")
         - [x] Pinwheel reversal in external field (cfr. flatspin paper) (try with Néel update equation)
-            - [ ] Solve problem of too low external field requirement
+            - [x] Solve problem of too low external field requirement
     - [ ] Calculate kernel-quality and task agnostic metrics as function of T, for different lattices with different interactions etc. First try easiest models and then go closer to experiment
 
 2. Medium priority

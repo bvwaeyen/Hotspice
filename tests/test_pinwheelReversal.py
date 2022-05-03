@@ -70,8 +70,8 @@ class test_pinwheelReversal:
         thresholds = Threshold([.7, .35, 0, -.35, -.7], start_value=self.mm.m_avg_x) # If the average magnetization crosses this, a plot is shown.
         H_range = np.linspace(self.H_max, -self.H_max, N) # One sweep from low to high H (N steps)
         H_range = np.append(H_range, np.flip(H_range)) # Sweep down and up (2*N steps)
-        # H_range = np.roll(H_range, N//2) # Start at zero and ramp up first (optional, 2*N steps), use for determining appropriate H_max
-        # H_range = H_range[:H_range.size//4] # Only go from zero to H_max (optional, N/2 steps)
+        # H_range = np.roll(H_range, -N//2) # (optional) Start at zero and decrease first (2*N steps), use for determining appropriate H_max
+        # H_range = H_range[:H_range.size//4] # (optional) Only go from zero to H_max (N/2 steps)
         m_avg_H = np.zeros_like(H_range)
         for i, H in enumerate(H_range):
             if verbose and ((i + 1) % 10**(math.floor(math.log10(N))-1) == 0 or i == 0):
