@@ -38,7 +38,7 @@ class SimParams:
 class Magnets(ABC):
     def __init__(
         self, nx: int, ny: int, dx: float, dy: float, *,
-        T: float = 300, E_b: float = 5e-20, Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
+        T: float = 300, E_b: float = 0., Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
         pattern: str = 'random', energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
@@ -51,9 +51,6 @@ class Magnets(ABC):
                 If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
                 By default, only the dipolar energy is active.
         '''
-        if type(self) is Magnets: # Need to check for Magnets without inheritance, hence we use type() instead of isinstance()
-            raise Exception("Magnets() class can not be instantiated directly, and should instead be subclassed. Consider using a class from the hotspin.ASI module, or writing your own custom ASI class instead.")
-
         self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
         self.t = 0. # [s]
         self.Msat = Msat # [A/m]
@@ -73,11 +70,10 @@ class Magnets(ABC):
         self.T = T # [K]
         
         if isinstance(E_b, np.ndarray): # This detects both CuPy and NumPy arrays
-            if E_b.shape != self.xx.shape: raise ValueError(f"Specified energy barriers (shape {E_b.shape}) does not match shape ({nx}, {ny}) of simulation domain.")
+            if E_b.shape != self.xx.shape: raise ValueError(f"Specified energy barrier (shape {E_b.shape}) does not match shape ({nx}, {ny}) of simulation domain.")
             self.E_b = cp.asarray(E_b) # [J]
         else:
             self.E_b = cp.ones_like(self.xx)*E_b # [J]
-            # TODO: this is not used in Glauber update scheme, but is that correct?
 
         # PBC and history
         self.PBC = PBC
@@ -95,7 +91,10 @@ class Magnets(ABC):
 
         if self.PBC:
             if nx % self.unitcell.x != 0 or ny % self.unitcell.y != 0:
-                warnings.warn(f"Be careful with PBC, as there are not an integer number of unit cells in the simulation! Hence, the boundaries do not nicely fit together. Adjust nx or ny to alleviate this problem (unit cell has size {self.unitcell.x}x{self.unitcell.y}).", stacklevel=2)
+                warnings.warn(dedent(f"""
+                    Be careful with PBC, as there are not an integer number of unit cells in the simulation!
+                    Hence, the boundaries might not nicely fit together. Adjust nx or ny to alleviate this
+                    (unit cell has size {self.unitcell.x}x{self.unitcell.y})."""), stacklevel=2)
 
         # Some energies might require self.orientation etc., so only initialize energy at the end
         self.energies = list[Energy]()
@@ -115,10 +114,11 @@ class Magnets(ABC):
         else:
             return cp.ones_like(self.xx)*((cp.floor(angle/math.pi - .5) % 2)*2 - 1)
     
-    def _get_unitcell(self):
-        ''' Returns a Vec2D containing the number of single grid cells in a unit cell along the x- and y-axis. '''
-        max_cell = 100 # Check only <n> smaller than this: otherwise unitcell is too large to provide any benefit anyway
-        for n in range(1, min(self.nx + self.ny + 1, max_cell)): # Test possible unit cells in a triangle-like manner: (1,1), (2,1), (1,2), (3,1), (2,2), (1,3), ...
+    def _get_unitcell(self, max_cell=100):
+        ''' Returns a Vec2D containing the number of single grid cells in a unit cell along the x- and y-axis.
+            @param max_cell [int] (100): Only unitcells with ux+uy < max_cell are considered for performance reasons.
+        '''
+        for n in range(1, min(self.nx + self.ny + 1, max_cell + 1)): # Test possible unit cells in a triangle-like manner: (1,1), (2,1), (1,2), (3,1), (2,2), (1,3), ...
             for i in range(max(0, n - self.nx) + 1, min(n, self.ny) + 1): # Don't test unit cells larger than the domain
                 ux = n - i + 1
                 uy = i
