@@ -45,7 +45,7 @@
         - [ ] Domain size of square and pinwheel? As a function of time? (is there a maximum size or do they keep growing)
     - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???)
     - [ ] Simulation speed (samples/sec) for different grid sizes? Are certain nicely factorable lengths preferable?
-    - [ ] Use date & time to save results
+    - [ ] Use date & time to save results, use a format that supports metadata to store some constant parameters like T, nx, ny, E_b, ...
 
 3. Low priority
     - Test physical accuracy of Hotspin

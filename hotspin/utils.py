@@ -36,6 +36,14 @@ def strided(a, W):
     n = a_ext.strides[0]
     return striding.as_strided(a_ext[W - 1:], shape=(a.size, W), strides=(n, -n))
 
+def R_squared(a, b):
+    ''' Returns the R² metric between two 1D arrays <a> and <b> as defined in
+        "Task Agnostic Metrics for Reservoir Computing" by Love et al.
+    '''
+    a, b = cp.asarray(a), cp.asarray(b)
+    cov = cp.mean((a - cp.mean(a))*(b - cp.mean(b)))
+    return cov**2/cp.var(a)/cp.var(b) # Same as cp.corrcoef(a, b)[0,1]**2, but faster
+
 
 def check_repetition(arr, nx: int, ny: int):
     ''' Checks if <arr> is periodic with period <nx> along axis=1 and period <ny> along axis=0.

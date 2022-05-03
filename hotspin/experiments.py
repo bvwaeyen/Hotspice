@@ -10,8 +10,8 @@ from abc import ABC, abstractmethod
 
 from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
-from .plottools import init_interactive, show_m, init_fonts
-from .utils import strided, shell
+from .plottools import init_interactive, init_fonts, show_m
+from .utils import R_squared, strided, shell
 
 
 class Experiment(ABC):
@@ -93,19 +93,19 @@ class TaskAgnosticExperiment(Experiment):
                     print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
                 fig = show_m(self.mm, figure=fig)
         # Then, we use the recorded information to perform some funni calculations
-        self.results['NL'] = self.NL(k=k, verbose=verbose)
+        self.results['NL'] = self.NL(k=k)
         self.results['MC'] = self.MC(k=k)
         self.results['CP'] = self.CP()
         self.results['S'] = self.S()
     
-    def NL(self, k=None, local=False, test_fraction=1/4, verbose=False): # Non-linearity
+    def NL(self, k=None, local=False, test_fraction=1/4): # Non-linearity
         ''' Returns a float (local=False) or a CuPy array (local=True) representing the nonlinearity,
             either globally or locally depending on <local>. For this, an estimator for the current readout state is
             trained which for any time instant has access to the <k> most recent inputs (including the present one).
         '''
         if k is None: k = 10 if self.k is None else self.k
-        if self.u.size <= k: raise ValueError("Number of iterations must be larger than k.")
-        if self.u.size < k + 10: warnings.warn(f"k={k} might be tiny touch too big to get a good train/test split.", stacklevel=2) # Just a wet finger estimate
+        if self.u.size <= k: raise ValueError("NL: Number of iterations must be larger than k.")
+        if self.u.size < k + 10: warnings.warn(f"NL: k={k} might be tiny touch too big to get a good train/test split.", stacklevel=2) # Just a wet finger estimate
 
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
         u_train, u_test = cp.split(self.u, [train_test_cutoff])
@@ -126,14 +126,7 @@ class TaskAgnosticExperiment(Experiment):
             elif sigma_y == 0: # Constant readout, so NL should logically be 0, so Rsq = 1-NL = 1
                 Rsq[j] = 1.
             else: # Rsq is 1 for very predictable 
-                Rsq[j] = (np.cov(y_hat_test, y_test[:,j], bias=True)[0, 1]**2)/(sigma_y_hat*sigma_y) # Same as np.corrcoef(y_hat_test, y_test[:,j])[0,1]**2
-                # Rsq[j] = (np.cov(y_hat_test, y_test[:,j], bias=True)[0, 1])/(np.std(y_hat_test)*np.std(y_test[:,j])) # Same as np.corrcoef(y_hat_test, y_test[:,j])[0,1]
-            if verbose:
-                print(f'----- NONLINEARITY OF NODE {j} -----')
-                # print(y_hat_test, y_test[:,j])
-                print('cov std std:', np.cov(y_hat_test, y_test[:,j], bias=True)[0, 1], np.std(y_hat_test), np.std(y_test[:,j]))
-                print('product:', (np.cov(y_hat_test, y_test[:,j], bias=True)[0, 1])/(np.std(y_hat_test)*np.std(y_test[:,j])))
-                print('Rsq (using cov² and var):', Rsq[j])
+                Rsq[j] = R_squared(y_hat_test, y_test[:,j]) # Same as np.corrcoef(y_hat_test, y_test[:,j])[0,1]**2
 
         # Handle <local> True or False and return appropriately
         if local:
@@ -154,7 +147,7 @@ class TaskAgnosticExperiment(Experiment):
         u_train, u_test = cp.split(self.u, [train_test_cutoff])
         y_train, y_test = cp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
 
-        if u_test.size < k: warnings.warn(f"k={k} is too large for the currently stored results (size {self.u.size}), possibly causing issues with train/test split.", stacklevel=2)
+        if u_test.size < k: warnings.warn(f"MC: k={k} is too large for the currently stored results (size {self.u.size}), possibly causing issues with train/test split.", stacklevel=2)
         Rsq = cp.empty(k) # R² correlation coefficient
         weights = cp.zeros((k, self.outputreader.n))
         for j in range(1, k+1): # Train an estimator for the input j iterations ago
@@ -162,7 +155,7 @@ class TaskAgnosticExperiment(Experiment):
             results = sm.OLS(u_train[k-j:-j].get(), y_train[k:,:].get(), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
             weights[j-1,:] = cp.asarray(results.params)
             u_hat_test = results.predict(y_test[j:,:].get()) # Start at y_test[j] to prevent leakage between train/test
-            Rsq[j-1] = (np.cov(u_hat_test, u_test[:-j], bias=True)[0, 1]**2)/(np.var(u_hat_test)*np.var(u_test[:-j])) # Same as np.corrcoef(u_hat_test, u_test[:,-j])[0,1]**2
+            Rsq[j-1] = R_squared(u_hat_test, u_test[:-j])
         Rsq[cp.isnan(Rsq)] = 0 # If some std=0, then it is constant so R² actually gives 0
 
         # Handle <local> True or False and return appropriately
@@ -175,27 +168,29 @@ class TaskAgnosticExperiment(Experiment):
         else:
             return float(cp.sum(Rsq))
 
-    def CP(self, averaged=True): # Complexity
+    def CP(self, transposed=False): # Complexity
         ''' Calculates the complexity: i.e. the effective rank of the kernel matrix as used in KernelQualityExperiment.
-            If averaged is True, the complexity is averaged over all possible square matrices to be found in <self.y>,
-            if averaged is False, the complexity is calculated using the last <self.outputreader.n> entries in <self.y>.
+            The default method used here is to simply average the complexity of recent observations over time.
+            Usually, transposed=True gives (slightly) higher values than for transposed=False.
+            NOTE: never compare results from transposed=True with those for transposed=False.
+                @param transposed [bool] (False): If True, CP is the rank of <self.y> multiplied with <self.y.T>.
+                    If False, it is the average of all consecutive square matrices in <self.y> along the time axis.
         '''
         if self.y.shape[0] < self.y.shape[1]: # Less rows than columns, so rank can at most be the number of rows
             warnings.warn(f"Not enough recorded iterations to reliably calculate complexity (shape {self.y.shape} has less rows than columns)." , stacklevel=2)
         
-        if averaged:
-            ranks = cp.asarray([cp.linalg.matrix_rank(self.y[i:i+self.y.shape[1],:]) for i in range(max(1, self.y.shape[0]-self.y.shape[1]+1))])
-            rank = cp.mean(ranks)
-        else:
+        if transposed:
             # Multiply with transposed to get a square matrix of size <self.outputreader.n> (suggested by J. Leliaert)
             squarematrix = cp.matmul(self.y.T, self.y)
             rank = cp.linalg.matrix_rank(squarematrix)
+        else:
+            ranks = cp.asarray([cp.linalg.matrix_rank(self.y[i:i+self.y.shape[1],:]) for i in range(max(1, self.y.shape[0]-self.y.shape[1]+1))])
+            rank = cp.mean(ranks)
         return int(rank)/self.outputreader.n
-        # TODO: observations show that averaged=False gives a bit higher values than True, but which is better?
     
     def S(self): # Stability
         ''' Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
-            NOTE: This function is not normalized.
+            NOTE: This function is not normalized. #TODO
             NOTE: It can be advantageous to define a different metric for stability if the entire magnetization profile
                   is known, since this function only has access to the readout nodes, not the whole self.m array.
         '''
