@@ -28,8 +28,6 @@ class FullASI(OOP_ASI):
 
     def _set_m(self, pattern: str):
         match str(pattern).strip().lower():
-            case 'uniform':
-                self.m = self._get_m_uniform()
             case 'afm':
                 self.m = ((self.ixx - self.iyy) % 2)*2 - 1
             case str(unknown_pattern):
@@ -62,8 +60,6 @@ class IsingASI(IP_ASI):
 
     def _set_m(self, pattern: str):
         match str(pattern).strip().lower():
-            case 'uniform':
-                self.m = self._get_m_uniform()
             case 'afm':
                 self.m = (self.iyy % 2)*2 - 1
             case str(unknown_pattern):
@@ -99,27 +95,8 @@ class SquareASI(IP_ASI):
 
     def _set_m(self, pattern: str):
         match str(pattern).strip().lower():
-            case 'uniform':
-                self.m = self._get_m_uniform()
             case 'afm':
                 self.m = ((self.ixx - self.iyy)//2 % 2)*2 - 1
-            case 'vortex':
-                # When using 'angle' property of Magnets.initialize_m:
-                # <angle> near 0 or math.pi: clockwise/anticlockwise vortex, respectively
-                # <angle> near math.pi/2 or -math.pi/2: bowtie configuration (top region: up/down, respectively)
-                self.m = cp.ones_like(self.xx)
-                distSq = ((self.ixx - (self.nx-1)/2)**2 + (self.iyy - (self.ny-1)/2)**2) # Try to put the vortex close to the center of the simulation
-                distSq[cp.where(self.occupation == 1)] = cp.nan # We don't want to place the vortex center at an occupied cell
-                middle_y, middle_x = divmod(cp.argmax(distSq == cp.min(distSq[~cp.isnan(distSq)])), self.nx) # The non-occupied cell closest to the center
-                # Build bottom, left, top and right areas and set their magnetizations
-                N = cp.where((self.ixx - middle_x < self.iyy - middle_y) & (self.ixx + self.iyy >= middle_x + middle_y))
-                E = cp.where((self.ixx - middle_x >= self.iyy - middle_y) & (self.ixx + self.iyy > middle_x + middle_y))
-                S = cp.where((self.ixx - middle_x > self.iyy - middle_y) & (self.ixx + self.iyy <= middle_x + middle_y))
-                W = cp.where((self.ixx - middle_x <= self.iyy - middle_y) & (self.ixx + self.iyy < middle_x + middle_y))
-                self.m[N] = self._get_m_uniform(0         )[N]
-                self.m[E] = self._get_m_uniform(-math.pi/2)[E]
-                self.m[S] = self._get_m_uniform(math.pi   )[S]
-                self.m[W] = self._get_m_uniform(math.pi/2 )[W]
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
@@ -171,8 +148,6 @@ class KagomeASI(IP_ASI):
 
     def _set_m(self, pattern: str, angle=None):
         match str(pattern).strip().lower():
-            case 'uniform':
-                self.m = self._get_m_uniform()
             case 'afm':
                 self.m = cp.ones_like(self.ixx)
                 self.m[(self.ixx + self.iyy) % 4 == 3] *= -1

@@ -10,14 +10,15 @@
         - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel, because the recent estimated calculation did not seem to correspond to reality very well)
 
     - [ ] Develop .io and .experiments modules
-        - [ ] Task Agnostic Metrics for RC
+        - [x] Task Agnostic Metrics for RC
+        - [ ] Separate source code from executable code in `hotspin.experiments` module
 
 2. Medium priority
     - [ ] Make unit tests
     - [ ] Organize plotting functions better
         - [ ] Improve the Average class to make it more versatile and consistent between different ASIs
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state because the current method is behaving similarly as when a cheese grater is used as ship
-    - [ ] Implement metrics (average magnetization, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, width of domains (related to correlation probably)...) to compare with theory/experiment
+    - [ ] Implement metrics (average magnetization and dimensionless amplitude ratio  $\langle m^2 \rangle^2/\langle m^4 \rangle$, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, width of domains (related to correlation probably)...) to compare with theory/experiment
     - [ ] Improve relaxation algorithm
     - [ ] Can implement autocorrelation length by taking into account cross product between vectors?
     - [ ] Make a `get_summary()` method that returns a dict with important parameters of the simulation, and also make a function to reliably store the results of a simulation including these parameters, since now the filenames are drowning in parameters.

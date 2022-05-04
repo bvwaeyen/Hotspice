@@ -255,19 +255,19 @@ class Magnets(ABC):
     def T_avg(self) -> float:
         return float(cp.mean(self.T))
     
-    def set_T(self, f, /, *, center=False, noSIunits=False):
+    def set_T(self, f, /, *, center=False, crystalunits=False):
         ''' Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
             @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy arrays as x and y).
             @param center [bool] (False): if True, the origin is put in the middle of the simulation,
                 otherwise it is in the usual lower left corner.
-            @param noSIunits [bool] (False): if True, x and y are assumed to be a number of cells instead of a distance in meters (but still float).
+            @param crystalunits [bool] (False): if True, x and y are assumed to be a number of cells instead of a distance in meters (but still float).
         '''
         if center:
             xx = self.xx + self.dx*self.nx/2
             yy = self.yy + self.dy*self.ny/2
         else:
             xx, yy = self.xx, self.yy
-        if noSIunits: xx, yy = xx/self.dx, xx/self.dy
+        if crystalunits: xx, yy = xx/self.dx, xx/self.dy
         self._T = f(xx, yy)
 
 
@@ -514,12 +514,28 @@ class Magnets(ABC):
 
     @abstractmethod # TODO: should this really be an abstractmethod? Uniform and random can be defaults and subclasses can define more of course
     def _set_m(self, pattern: str):
-        ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "AFM" or "random".
+        ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "vortex", "AFM" or "random".
             <self.m> is a shape (ny, nx) array containing only -1, 0 or 1 indicating the magnetization direction.
         '''
         match str(pattern).strip().lower():
             case 'uniform':
                 self.m = self._get_m_uniform()
+            case 'vortex':
+                # When using 'angle' property of Magnets.initialize_m:
+                #   <angle> near 0 or math.pi: clockwise/anticlockwise vortex, respectively
+                #   <angle> near math.pi/2 or -math.pi/2: bowtie configuration (top region: up/down, respectively)
+                self.m = cp.ones_like(self.xx)
+                distSq = ((self.ixx - (self.nx-1)/2)**2 + (self.iyy - (self.ny-1)/2)**2) # Try to put the vortex close to the center of the simulation
+                distSq[cp.where(self.occupation == 1)] = cp.nan # We don't want to place the vortex center at an occupied cell
+                middle_y, middle_x = divmod(cp.argmax(distSq == cp.min(distSq[~cp.isnan(distSq)])), self.nx) # The non-occupied cell closest to the center
+                N = cp.where((self.ixx - middle_x < self.iyy - middle_y) & (self.ixx + self.iyy >= middle_x + middle_y))
+                E = cp.where((self.ixx - middle_x >= self.iyy - middle_y) & (self.ixx + self.iyy > middle_x + middle_y))
+                S = cp.where((self.ixx - middle_x > self.iyy - middle_y) & (self.ixx + self.iyy <= middle_x + middle_y))
+                W = cp.where((self.ixx - middle_x <= self.iyy - middle_y) & (self.ixx + self.iyy < middle_x + middle_y))
+                self.m[N] = self._get_m_uniform(0         )[N]
+                self.m[E] = self._get_m_uniform(-math.pi/2)[E]
+                self.m[S] = self._get_m_uniform(math.pi   )[S]
+                self.m[W] = self._get_m_uniform(math.pi/2 )[W]
             case str(unknown_pattern):
                 self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
                 if unknown_pattern != 'random': warnings.warn(f'Pattern "{unknown_pattern}" not recognized, defaulting to "random".', stacklevel=2)

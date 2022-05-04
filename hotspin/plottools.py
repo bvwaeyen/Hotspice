@@ -177,7 +177,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
 def get_rgb(*args, **kwargs):
     return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
-def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_quiver=False, figure=None):
+def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, figure=None):
     ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
         the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -189,6 +189,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
         @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
         @param overlay_quiver [bool] (False): if True, the quiver plot is shown overlaid on the color average plot.
+        @param color_quiver [bool] (True): if True, the quiver plot arrows are colored according to their angle.
         @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this show_m().
     '''
     avg = Average.resolve(avg, mm)
@@ -247,7 +248,8 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
             axes.append(ax2)
         nonzero = mm.m.get().nonzero()
         mx, my = cp.multiply(m, mm.orientation[:,:,0]).get()[nonzero], cp.multiply(m, mm.orientation[:,:,1]).get()[nonzero]
-        ax2.quiver(mm.xx.get()[nonzero], mm.yy.get()[nonzero], mx, my, color=cmap((np.arctan2(my, mx)/2/np.pi) % 1),
+        ax2.quiver(mm.xx.get()[nonzero], mm.yy.get()[nonzero], mx, my,
+                color=(cmap((np.arctan2(my, mx)/2/np.pi) % 1) if color_quiver else 'black'),
                 pivot='mid', scale=1.1/mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
