@@ -1,7 +1,10 @@
 import inspect
+import os
+import warnings
 
 import cupy as cp
 import cupy.lib.stride_tricks as striding
+import pandas as pd
 
 from IPython.terminal.embed import InteractiveShellEmbed
 
@@ -90,3 +93,23 @@ def shell():
         InteractiveShellEmbed().mainloop(stack_depth=1)
     except (KeyboardInterrupt, SystemExit, EOFError):
         pass
+
+
+def save_data(df: pd.DataFrame, save_path: str):
+    ''' <save_path> is a full relative pathname, usually something like
+        "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
+    '''
+    # TODO: make this json-only so we can consistently save metadata, add standard procedure to add this metadata etc.
+
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    name, ext = os.path.splitext(save_path)
+    try:
+        match ext:
+            case '.csv':
+                df.to_csv(name + '.csv')
+            case '.json':
+                df.to_json(name + '.json')
+            case _:
+                warnings.warn(f'Saved pandas.DataFrame as .csv, while .{ext} was requested. Only csv is supported.')
+    except PermissionError:
+        warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)

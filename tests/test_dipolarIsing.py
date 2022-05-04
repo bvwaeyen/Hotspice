@@ -6,6 +6,7 @@ r''' This file tests the correspondence between theory and simulation for a
         J. H. Toloza, F. A. Tamarit, and S. A. Cannas. Aging in a two-dimensional Ising model
         with dipolar interactions. Physical Review B, 58(14):R8885, 1998.
 '''
+# TODO: add error bars and change line to be just data-points
 import math
 
 import cupy as cp
@@ -58,8 +59,8 @@ class test_dipolarIsing:
         
         data = pd.DataFrame({"delta": delta_range, "AFMness": AFMness})
         savename = f"results/test_dipolarIsing/deltasweep{data['delta'].min()}..{data['delta'].max()}({data['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}"
-        if plot: test_dipolarIsing.test_delta_influence_plot(data, save=savename)
-        if save: hotspin.plottools.save_data(data, f"{savename}.csv")
+        if plot: test_dipolarIsing.test_delta_influence_plot(data, save=save*savename)
+        if save: hotspin.utils.save_data(data, f"{savename}.csv")
 
         return data
     
@@ -81,4 +82,4 @@ class test_dipolarIsing:
 
 
 if __name__ == "__main__":
-    test_dipolarIsing().test(verbose=True, save=True)
+    test_dipolarIsing(size=40).test(verbose=True, save=True)

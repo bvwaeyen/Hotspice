@@ -90,8 +90,8 @@ class test_pinwheelReversal:
         data = pd.DataFrame({"H": H_range, "m_avg": m_avg_H, "H_angle": angle, "T": self.T, "E_b": self.E_b})
 
         savename = f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}/N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}"
-        if save: hotspin.plottools.save_data(data, f"{savename}.csv")
-        if plot: test_pinwheelReversal.test_reversal_plot(data, save=savename)
+        if save: hotspin.utils.save_data(data, f"{savename}.csv")
+        if plot: test_pinwheelReversal.test_reversal_plot(data, save=save*savename)
 
         return data
 
@@ -120,9 +120,10 @@ class test_pinwheelReversal:
 
 
 if __name__ == "__main__":
+    save = True
     # Observation: the external field here is MUCH smaller than in the flatspin paper, even though self.V is the same and self.a is reasonable
     # For Néel this is kind of ok:
-    # test_pinwheelReversal(T=300, size=50, H_max=0.1, E_b=hotspin.Energy.eV_to_J(25.8), scheme='Néel').test(angle=30*math.pi/180, N=20000, verbose=True, save=True, show_intermediate=False)
-    # For Glauber this is the best I could get:
-    # test_pinwheelReversal(T=300, size=50, H_max=1e-4, E_b=0, scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=True, save=True, show_intermediate=False)
-    test_pinwheelReversal(T=300, size=50, H_max=1e-1, E_b=hotspin.Energy.eV_to_J(71), scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=True, save=True, show_intermediate=False)
+    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_b=hotspin.Energy.eV_to_J(71), scheme='Néel').test(angle=30*math.pi/180, N=20000, verbose=True, save=save, show_intermediate=False)
+    # For Glauber this is the best I could get without and with E_b:
+    # test_pinwheelReversal(T=300, size=50, H_max=1e-4, E_b=0, scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=True, save=save, show_intermediate=False)
+    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_b=hotspin.Energy.eV_to_J(71), scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=True, save=save, show_intermediate=False)
