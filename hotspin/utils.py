@@ -1,5 +1,10 @@
+import datetime
+import getpass
 import inspect
+import io
+import json
 import os
+import subprocess
 import warnings
 
 import cupy as cp
@@ -82,17 +87,120 @@ def shell():
         Using Ctrl+C will stop the entire program, not just this function
         (this is due to a bug in the scipy library).
     '''
-    caller = inspect.getframeinfo(inspect.stack()[1][0])
+    try:
+        caller = inspect.getframeinfo(inspect.stack()[1][0])
 
-    print('-'*80)
-    print(f'Opening an interactive shell in the current scope')
-    print(f'(i.e. {caller.filename}:{caller.lineno}-{caller.function}).')
-    print(f'Call "exit" to stop this interactive shell.')
-    print(f'Warning: Ctrl+C will stop the program entirely, not just this shell, so take care which commands you run.')
+        print('-'*80)
+        print(f'Opening an interactive shell in the current scope')
+        print(f'(i.e. {caller.filename}:{caller.lineno}-{caller.function}).')
+        print(f'Call "exit" to stop this interactive shell.')
+        print(f'Warning: Ctrl+C will stop the program entirely, not just this shell, so take care which commands you run.')
+    except:
+        pass # Just to make sure we don't break when logging
     try:
         InteractiveShellEmbed().mainloop(stack_depth=1)
     except (KeyboardInterrupt, SystemExit, EOFError):
         pass
+
+
+def gpu_memory():
+    ''' Returns a tuple (free memory, total memory) of the currently active CUDA device. '''
+    return cp.cuda.Device().mem_info
+
+
+def save_json(df: pd.DataFrame, name: str, path: str = None, constants: dict = None, metadata: dict = None):
+    ''' Saves the Pandas dataframe <df> as a json file with appropriate metadata,
+        in the directory specified by <path> with optional name <name>.
+        @param df [pandas.DataFrame]: the dataframe to be saved.
+        @param name [str]: this text is used as the start of the filename.
+            Additionally, a timestamp is added to this.
+        @param path [str] ('hotspin_results'): the directory to create the .json file in.
+        @param constants [dict] ({}): used to store constants such that they needn't be
+            repeated in every row of the dataframe, e.g. cell size, temperature...
+            These are stored under the "constants" object in the json file. 
+        @param metadata [dict] ({}): any elements present in this dictionary will overwrite
+            their default values as generated automatically to be put under the name "metadata".
+        @return (str): the absolute path where the .json file was saved.
+    '''
+    if path is None: path = 'hotspin_results'
+    if constants is None: constants = {}
+
+    df_dict = json.loads(df.to_json(orient='split', index=True))
+    if metadata is None: metadata = {}
+    metadata.setdefault('datetime', datetime.datetime.now().strftime(r"%Y%m%d%H%M%S"))
+    metadata.setdefault('author', getpass.getuser())
+    metadata.setdefault('simulator', "Hotspin")
+    metadata.setdefault('description', "No further description was provided.")
+    try:
+        gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
+            encoding='utf-8').strip())).to_json(orient='table', index=False))['data']
+    except:
+        gpu_info = {}
+    metadata.setdefault('GPU', gpu_info)
+
+    total_dict = {'metadata': metadata, 'constants': constants, 'data': df_dict}
+    filename = name + '_' + metadata['datetime'] + '.json'
+    fullpath = os.path.abspath(os.path.join(path, filename))
+    os.makedirs(path, exist_ok=True)
+    with open(fullpath, 'w') as outfile:
+        json.dump(total_dict, outfile, indent="\t", cls=CompactJSONEncoder)
+    return fullpath
+
+    
+class CompactJSONEncoder(json.JSONEncoder):
+    """ A JSON Encoder to pretty-rpint while keeping lowest-level lists on single lines. """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.indentation_level = 0
+
+    def encode(self, o):
+        """ Encode JSON object *o* with respect to single line lists. """
+        if isinstance(o, (list, tuple)):
+            if self._is_single_line_list(o):
+                return "[" + ", ".join(json.dumps(el) for el in o) + "]"
+            else:
+                self.indentation_level += 1
+                output = [self.indent_str + self.encode(el) for el in o]
+                self.indentation_level -= 1
+                return "[\n" + ",\n".join(output) + "\n" + self.indent_str + "]"
+        elif isinstance(o, dict):
+            if len(o) > 0:
+                self.indentation_level += 1
+                output = [self.indent_str + f"{json.dumps(k)}: {self.encode(v)}" for k, v in o.items()]
+                self.indentation_level -= 1
+                return "{\n" + ",\n".join(output) + "\n" + self.indent_str + "}"
+            else:
+                return "{ }"
+        else:
+            return json.dumps(o)
+
+    def _is_single_line_list(self, o):
+        if isinstance(o, (list, tuple)):
+            return not any(isinstance(el, (list, tuple, dict)) for el in o) # and len(o) <= 2 and len(str(o)) - 2 <= 60
+
+    @property
+    def indent_str(self) -> str:
+        if isinstance(self.indent, str):
+            return self.indent * self.indentation_level
+        elif isinstance(self.indent, int):
+            return " " * self.indentation_level * self.indent
+    
+    def iterencode(self, o, **kwargs):
+        """ equired to also work with `json.dump`. """
+        return self.encode(o)
+
+
+def read_json(filename: str):
+    """ Reads a .json file located at <filename> and returns its contents as a dictionary. """
+    try: # See if what was passed as a filename was actually a json-format string
+        total_dict = json.loads(filename)
+    except json.JSONDecodeError: # Nope, it was just a filename
+        with open(filename, 'r') as infile: total_dict = json.load(infile)
+
+    df = pd.read_json(json.dumps(total_dict['data']), orient='split')
+    total_dict['data'] = df
+    return total_dict
 
 
 def save_data(df: pd.DataFrame, save_path: str):
@@ -113,3 +221,8 @@ def save_data(df: pd.DataFrame, save_path: str):
                 warnings.warn(f'Saved pandas.DataFrame as .csv, while .{ext} was requested. Only csv is supported.')
     except PermissionError:
         warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)
+
+
+if __name__ == "__main__":
+    fullpath = save_json(pd.DataFrame({"H_range": cp.arange(15).get(), "m": (cp.arange(15)**2).get()}), 'This is just a test. Do not panic.')
+    print(read_json(fullpath))
