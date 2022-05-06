@@ -352,7 +352,9 @@ class Magnets(ABC):
         # OPTION 1: TRUE GLAUBER, NO ENERGY BARRIER (or at least not explicitly)
         # exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # OPTION 2: AD-HOC ADJUSTED GLAUBER, where we assume that the 'other state' is at the top of the energy barrier
-        exponential = cp.clip(cp.exp((-self.E_b[idx[0], idx[1]]-self.switch_energy(idx))/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
+        # TODO: more accurate energy barrier? (might not be worth the computational cost)
+        barrier = cp.maximum((delta_E := self.switch_energy(idx)), self.E_b[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
+        exponential = cp.clip(cp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
         idx_switch = idx[:,cp.where(rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
         # idx = idx[:,cp.where(rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, unsure if this satisfied detailed balance
@@ -360,7 +362,7 @@ class Magnets(ABC):
             self.m[idx_switch[0], idx_switch[1]] *= -1
             self.switches += idx_switch.shape[1]
             self.update_energy(index=idx_switch)
-        return idx_switch
+        return idx_switch # TODO: can we get some sort of elapsed time? Yes for one switch, but what about many at once?
     
     def _update_Néel(self, max_t=1, attempt_freq=1e10):
         ''' Performs a single magnetization switch. '''

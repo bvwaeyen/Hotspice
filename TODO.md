@@ -4,6 +4,7 @@
 
 1. High priority
     - [ ] Determine if $E_B$ needs to be taken into account in Glauber model
+        - [ ] Improve accuracy of actual energy barrier as function of $\Delta E$ and $E_B$
         - [ ] Can we get some sort of time measure for multiswitching Glauber dynamics?
     - Multi-switching
         - [ ] Fix PBC issue in Grid multi-switching
@@ -35,7 +36,6 @@
 1. High priority
     - Test physical accuracy of Hotspin
         - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization?)
-            - [x] 2D Ising with long-range dipolar interactions ("Aging in a Two-Dimensional Ising Model with Dipolar Interactions")
         - [x] Pinwheel reversal in external field (cfr. flatspin paper) (try with Néel update equation)
             - [x] Solve problem of too low external field requirement
     - [ ] Calculate kernel-quality and task agnostic metrics as function of T, for different lattices with different interactions etc. First try easiest models and then go closer to experiment
@@ -44,9 +44,11 @@
     - [ ] How many MC steps do we need to reach a statistically stable state?
     - Test physical accuracy of Hotspin
         - [ ] Domain size of square and pinwheel? As a function of time? (is there a maximum size or do they keep growing)
+        - [x] 2D Ising with long-range dipolar interactions ("Aging in a Two-Dimensional Ising Model with Dipolar Interactions")
+            - [ ] Can we also check the 'aging' part of that paper?
     - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???)
     - [ ] Simulation speed (samples/sec) for different grid sizes? Are certain nicely factorable lengths preferable?
-    - [ ] Use date & time to save results, use a format that supports metadata to store some constant parameters like T, nx, ny, E_b, ...
+    - [x] Use date & time to save results, use a format that supports metadata to store some constant parameters like T, nx, ny, E_b, ...
 
 3. Low priority
     - Test physical accuracy of Hotspin
