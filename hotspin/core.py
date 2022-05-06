@@ -313,7 +313,10 @@ class Magnets(ABC):
         return cp.asarray([idx_y[ok], idx_x[ok]])
     
     def _select_cluster(self):
-        ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model. '''
+        ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model.
+            This function is provided "as is", with no warranty of any kind, express or implied,
+            including but not limited to fitness for simulating a two-dimensional Ising model.
+        '''
         exchange: ExchangeEnergy = self.get_energy('exchange')
         if exchange is None: raise NotImplementedError("Can not select Wolff cluster if there is no exchange energy in the system.")
         neighbors = exchange.local_interaction

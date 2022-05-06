@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import init_interactive, init_fonts, show_m
-from .utils import R_squared, strided, shell
+from .utils import R_squared, strided
 
 
 class Experiment(ABC):
@@ -198,43 +198,3 @@ class TaskAgnosticExperiment(Experiment):
         final_readout = self.outputreader.read_state().reshape(-1)
         initial_readout = self.y[0,:] # Assuming this was relaxed first
         return float(cp.sum((initial_readout - final_readout)**2))
-
-###############################################################################
-# TODO: move the executable part of this file elsewhere (e.g. to new file in examples folder)
-def main_kernelquality():
-    from .ASI import PinwheelASI
-    mm = PinwheelASI(25, 1e-6, T=300, energies=(DipolarEnergy(), ZeemanEnergy()))
-    datastream = RandomBinaryDatastream()
-    inputter = PerpFieldInputter(datastream, magnitude=1, angle=math.pi/180*7, n=2)
-    outputreader = RegionalOutputReader(5, 5, mm)
-    experiment = KernelQualityExperiment(inputter, outputreader, mm)
-    values = 11
-
-    filename = f'results/{type(experiment).__name__}/{type(inputter).__name__}/{type(outputreader).__name__}_{mm.nx}x{mm.ny}_out{outputreader.nx}x{outputreader.nx}_in{values}values.npy'
-    
-    experiment.run(values, save=filename, verbose=True)
-    print(experiment.results['rank'])
-    np.set_printoptions(threshold=np.inf)
-
-    import matplotlib.pyplot as plt
-    result = np.load(filename)
-    plt.imshow(result, interpolation='nearest')
-    plt.title(f'{mm.nx}x{mm.ny} {type(mm).__name__}\nField {inputter.magnitude*1e3} mT $\\rightarrow$ rank {np.linalg.matrix_rank(result)}')
-    plt.xlabel('Output feature')
-    plt.ylabel(f'Input # ({values} values each)')
-    plt.savefig(f'{os.path.splitext(filename)[0]}.pdf')
-    plt.show()
-
-def main_taskagnostic():
-    from .ASI import PinwheelASI
-    mm = PinwheelASI(25, 1e-6, T=100, energies=(DipolarEnergy(), ZeemanEnergy()), PBC=False, pattern='vortex')
-    datastream = RandomUniformDatastream(low=-1, high=1)
-    inputter = FieldInputter(datastream, magnitude=3e-5, angle=math.pi/180*7, n=2)
-    outputreader = RegionalOutputReader(2, 2, mm)
-    experiment = TaskAgnosticExperiment(inputter, outputreader, mm)
-    experiment.run(N=100, verbose=True)
-    print(experiment.results)
-    shell()
-if __name__ == "__main__": # Run this file from the parent directory using cmd 'python -m hotspin.experiments'
-    # main_kernelquality()
-    main_taskagnostic()

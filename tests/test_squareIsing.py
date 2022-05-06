@@ -32,7 +32,8 @@ class test_squareIsing:
             The final half of these <N> update calls are recorded, from which and their average/stdev of m_avg calculated.
             @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.
         '''
-        self.mm = hotspin.ASI.FullASI(self.size, self.a, energies=[hotspin.ExchangeEnergy(J=self.J)], PBC=True, pattern=('random' if reverse else 'uniform'))
+        simparams = hotspin.SimParams(UPDATE_SCHEME="Glauber")
+        self.mm = hotspin.ASI.FullASI(self.size, self.a, energies=[hotspin.ExchangeEnergy(J=self.J)], PBC=True, pattern=('random' if reverse else 'uniform'), params=simparams)
 
         T_range = np.linspace(self.T_lim[0], self.T_lim[1], T_steps)
         if reverse: T_range = np.flip(T_range)
