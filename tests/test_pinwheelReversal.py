@@ -87,12 +87,14 @@ class test_pinwheelReversal:
                 if verbose: print(f"[{i+1}/{H_range.size}] H = {H:.2e} T, m_x={self.mm.m_avg_x:.2f} (threshold passed{', plotting magnetization...' if show_intermediate else ''})")
                 if show_intermediate: hotspin.plottools.show_m(self.mm)
 
-        data = pd.DataFrame({"H": H_range, "m_avg": m_avg_H, "H_angle": angle, "T": self.T, "E_b": self.E_b})
-
-        savename = f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}/N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}"
-        if save: hotspin.utils.save_data(data, f"{savename}.csv")
-        if plot: test_pinwheelReversal.test_reversal_plot(data, save=save*savename)
-
+        data = pd.DataFrame({"H": H_range, "m_avg": m_avg_H})
+        metadata = {"description": r"Pinwheel reversal test as described in pp. 8-10 of `flatspin: A Large-Scale Artificial Spin Ice Simulator` by Jensen et al."}
+        constants = {"H_angle": angle, "T": self.T, "E_b": self.E_b, "nx": self.mm.nx, "ny": self.mm.ny}
+        if save:
+            savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path=f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}", name=f"N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}")
+            if plot: test_pinwheelReversal.test_reversal_plot(data, save=savepath)
+        else:
+            if plot: test_pinwheelReversal.test_reversal_plot(data)
         return data
 
     @staticmethod

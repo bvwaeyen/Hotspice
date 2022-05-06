@@ -27,7 +27,7 @@ class test_squareIsing:
     def T_c(self):
         return 2*self.J/hotspin.kB/math.log(1+math.sqrt(2))
 
-    def test_magnetization(self, T_steps=21, N=1000, verbose=False, plot=True, reverse=False):
+    def test_magnetization(self, T_steps=21, N=1000, verbose=False, plot=True, save=False, reverse=False):
         ''' Performs a sweep of the temperature in <T_steps> steps. At each step, <N> Magnets.update() calls are performed.
             The final half of these <N> update calls are recorded, from which and their average/stdev of m_avg calculated.
             @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.
@@ -49,7 +49,14 @@ class test_squareIsing:
             m_std[i] = np.std(averages)
 
         data = pd.DataFrame({"T": T_range, "m_avg": m_avg, "m_std": m_std})
-        if plot: test_squareIsing.test_magnetization_plot(data)
+        metadata = {"description": r"Magnetization of 2D exchange-coupled Ising model near critical temperature."}
+        constants = {"nx": self.mm.nx, "ny": self.mm.ny, "N": N}
+        if save:
+            Tsweep_direction = 'reverse' if reverse else ''
+            savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path="results/test_squareIsing", name=f"Tsweep{data['T'].nunique()}{Tsweep_direction}_N{N}_{self.mm.nx}x{self.mm.ny}")
+            if plot: test_squareIsing.test_magnetization_plot(data, save=savepath)
+        else:
+            if plot: test_squareIsing.test_magnetization_plot(data)
         return data
     
     def test_N_influence(self, *args, plot=True, save=True, **kwargs):
@@ -64,15 +71,19 @@ class test_squareIsing:
             local_data["N"] = N
             data = pd.concat([data, local_data])
 
-        Tsweep_direction = 'reverse' if kwargs.get('reverse', False) else ''
-        savename = f"results/test_squareIsing/Tsweep{data['T'].nunique()}{Tsweep_direction}_Nsweep{data['N'].nunique()}_{self.mm.nx}x{self.mm.ny}"
-        if save: hotspin.utils.save_data(data, f"{savename}.csv")
-        if plot: test_squareIsing.test_N_influence_plot(data, save=save*savename)
-
+        metadata = {"description": r"Magnetization of 2D exchange-coupled Ising model near critical temperature, for different N (the number of update steps for each data point)."}
+        constants = {"nx": self.mm.nx, "ny": self.mm.ny}
+        if save:
+            Tsweep_direction = 'reverse' if kwargs.get('reverse', False) else ''
+            savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path="results/test_squareIsing", name=f"Tsweep{data['T'].nunique()}{Tsweep_direction}_Nsweep{data['N'].nunique()}_{self.mm.nx}x{self.mm.ny}")
+            if plot: test_squareIsing.test_N_influence_plot(data, save=savepath)
+        else:
+            if plot: test_squareIsing.test_N_influence_plot(data)
         return data
 
     @staticmethod
-    def test_magnetization_plot(data: pd.DataFrame):
+    def test_magnetization_plot(data: pd.DataFrame, save=False):
+        ''' If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. '''
         T_lim = [data["T"].min(), data["T"].max()]
 
         hotspin.plottools.init_fonts()
@@ -81,7 +92,16 @@ class test_squareIsing:
         ax.errorbar(data["T"], data["m_avg"], yerr=data["m_std"], fmt='o', label='Hotspin')
         ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label='Theory')
         ax.legend()
+        ax.set_xlabel('Temperature $T/T_c$')
+        ax.set_ylabel('Magnetization $\\langle M\\rangle /M_0$')
+        ax.set_xlim([T_lim[0]-.005, T_lim[1]+.005])
+        ax.set_ylim([-0.01, 1])
         plt.gcf().tight_layout()
+        if save:
+            if not isinstance(save, str):
+                reverse = '' if data["T"].iloc[0] < data["T"].iloc[-1] else 'reverse'
+                save = f"results/test_squareIsing/Tsweep{data['T'].nunique()}{reverse}.pdf"
+            hotspin.plottools.save_plot(save, ext='.pdf')
         plt.show()
 
     @staticmethod

@@ -58,10 +58,13 @@ class test_dipolarIsing:
             AFMness[i] = hotspin.plottools.get_AFMness(self.mm)
         
         data = pd.DataFrame({"delta": delta_range, "AFMness": AFMness})
-        savename = f"results/test_dipolarIsing/deltasweep{data['delta'].min()}..{data['delta'].max()}({data['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}"
-        if plot: test_dipolarIsing.test_delta_influence_plot(data, save=save*savename)
-        if save: hotspin.utils.save_data(data, f"{savename}.csv")
-
+        metadata = {"description": r"2D Ising model with exchange and dipolar interactions, sweeping $\delta$ as described in `Striped phases in two-dimensional dipolar ferromagnets` by MacIsaac et al."}
+        constants = {"nx": self.mm.nx, "ny": self.mm.ny, "MCstepsize": N, "T": self.T}
+        if save:
+            savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path="results/test_dipolarIsing", name=f"deltasweep{data['delta'].min()}..{data['delta'].max()}({data['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}")
+            if plot: test_dipolarIsing.test_delta_influence_plot(data, save=savepath)
+        else:
+            if plot: test_dipolarIsing.test_delta_influence_plot(data)
         return data
     
     @staticmethod

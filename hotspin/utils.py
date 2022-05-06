@@ -5,6 +5,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 import warnings
 
 import cupy as cp
@@ -108,9 +109,10 @@ def gpu_memory():
     return cp.cuda.Device().mem_info
 
 
-def save_json(df: pd.DataFrame, name: str, path: str = None, constants: dict = None, metadata: dict = None):
-    ''' Saves the Pandas dataframe <df> as a json file with appropriate metadata,
-        in the directory specified by <path> with optional name <name>.
+def save_json(df: pd.DataFrame, path: str = None, name: str = None, constants: dict = None, metadata: dict = None):
+    ''' Saves the Pandas dataframe <df> to a json file with appropriate metadata,
+        in the directory specified by <path> with optional name <name>, so the full
+        filename is "<path>/<name>_<yyyymmddHHMMSS>.json".
         @param df [pandas.DataFrame]: the dataframe to be saved.
         @param name [str]: this text is used as the start of the filename.
             Additionally, a timestamp is added to this.
@@ -121,16 +123,34 @@ def save_json(df: pd.DataFrame, name: str, path: str = None, constants: dict = N
         @param metadata [dict] ({}): any elements present in this dictionary will overwrite
             their default values as generated automatically to be put under the name "metadata".
         @return (str): the absolute path where the .json file was saved.
-    '''
+
+        The JSON file contains the following three objects:
+        - "metadata", with the following values: 
+            - "datetime": a string representing the time in yyyymmddHHMMSS format
+            - "author": name of the author (default: login name of user on the computer)
+            - "creator": path of the __main__ module in the session
+            - "simulator": "Hotspin", just for clarity
+            - "description": a (small) description of what the data represents
+            - "GPU": an object containing some information about the used NVIDIA GPU, more specifically with
+                values "name", " compute_cap", " driver_version", " uuid", " memory.total [MiB]", " timestamp".
+        - "constants", with names and values of parameters which remained constant throughout the simulation.
+        - "data", which stores a JSON 'table' representation of the Pandas dataframe containing the actual data.
+    ''' # TODO: add information about which file (__main__) (and function/class?) generated the data
     if path is None: path = 'hotspin_results'
+    if name is None: name = 'hotspin_simulation'
     if constants is None: constants = {}
 
     df_dict = json.loads(df.to_json(orient='split', index=True))
     if metadata is None: metadata = {}
     metadata.setdefault('datetime', datetime.datetime.now().strftime(r"%Y%m%d%H%M%S"))
     metadata.setdefault('author', getpass.getuser())
+    try: 
+        creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
+    except:
+        creator_info = ''
+    metadata.setdefault('creator', creator_info)
     metadata.setdefault('simulator', "Hotspin")
-    metadata.setdefault('description', "No further description was provided.")
+    metadata.setdefault('description', "No custom description available.")
     try:
         gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
             ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
@@ -149,7 +169,7 @@ def save_json(df: pd.DataFrame, name: str, path: str = None, constants: dict = N
 
     
 class CompactJSONEncoder(json.JSONEncoder):
-    """ A JSON Encoder to pretty-rpint while keeping lowest-level lists on single lines. """
+    """ A JSON encoder for pretty-printing, but with lowest-level lists kept on single lines. """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.indentation_level = 0
@@ -191,38 +211,26 @@ class CompactJSONEncoder(json.JSONEncoder):
         return self.encode(o)
 
 
-def read_json(filename: str):
-    """ Reads a .json file located at <filename> and returns its contents as a dictionary. """
-    try: # See if what was passed as a filename was actually a json-format string
-        total_dict = json.loads(filename)
-    except json.JSONDecodeError: # Nope, it was just a filename
-        with open(filename, 'r') as infile: total_dict = json.load(infile)
+def read_json(JSON):
+    """ Reads a JSON-parseable object containing previously generated Hotspin data, and returns its
+        contents as a dictionary, with the "data" attribute readily converted to a Pandas dataframe.
+        @param JSON: a JSON-parseable object, can be any of: file-like object, JSON string,
+            or a string representing a file path.
+    """
+    # EAFP ;)
+    try: # See if <JSON> is actually a JSON-format string
+        total_dict = json.loads(JSON)
+    except json.JSONDecodeError: # Nope, but EAFP ;)
+        try: # See if <JSON> is actually a file-like object
+            total_dict = json.load(JSON)
+        except: # See if <JSON> is actually a string representing a file path
+            with open(JSON, 'r') as infile: total_dict = json.load(infile)
 
     df = pd.read_json(json.dumps(total_dict['data']), orient='split')
     total_dict['data'] = df
     return total_dict
 
 
-def save_data(df: pd.DataFrame, save_path: str):
-    ''' <save_path> is a full relative pathname, usually something like
-        "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
-    '''
-    # TODO: make this json-only so we can consistently save metadata, add standard procedure to add this metadata etc.
-
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    name, ext = os.path.splitext(save_path)
-    try:
-        match ext:
-            case '.csv':
-                df.to_csv(name + '.csv')
-            case '.json':
-                df.to_json(name + '.json')
-            case _:
-                warnings.warn(f'Saved pandas.DataFrame as .csv, while .{ext} was requested. Only csv is supported.')
-    except PermissionError:
-        warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)
-
-
 if __name__ == "__main__":
-    fullpath = save_json(pd.DataFrame({"H_range": cp.arange(15).get(), "m": (cp.arange(15)**2).get()}), 'This is just a test. Do not panic.')
+    fullpath = save_json(pd.DataFrame({"H_range": cp.arange(15).get(), "m": (cp.arange(15)**2).get()}), name='This is just a test. Do not panic.')
     print(read_json(fullpath))
