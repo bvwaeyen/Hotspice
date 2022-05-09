@@ -366,6 +366,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
         @param fillwhite [bool] (False): If True, white pixels are colored in using the Average.SQUAREFULL rule.
         @return [2D np.array]: The interpolated array.
     '''
+    if hsv.shape[0] < 2 or hsv.shape[1] < 2: return hsv
     hsv = hsv.get() if isinstance(hsv, cp.ndarray) else np.asarray(hsv)
     replaceable = cp.asarray(replaceable, dtype='bool')
 

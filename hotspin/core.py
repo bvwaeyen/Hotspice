@@ -21,7 +21,7 @@ kB = 1.380649e-23
 rng = cp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
 
 
-@dataclass
+@dataclass(slots=True)
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are less than <this> switches in a single iteration, the energies are just summed, otherwise a convolution is used.
     # TODO: THOROUGH ANALYSIS OF REDUCED_KERNEL_SIZE AND TAKE APPROPRIATE MEASURES (e.g. full recalculation every <n> steps)
@@ -255,6 +255,10 @@ class Magnets(ABC):
     def T_avg(self) -> float:
         return float(cp.mean(self.T))
     
+    @property
+    def E_b_avg(self) -> float:
+        return float(cp.mean(self.E_b))
+    
     def set_T(self, f, /, *, center=False, crystalunits=False):
         ''' Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
             @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy arrays as x and y).
@@ -376,11 +380,13 @@ class Magnets(ABC):
             taus = rng.random(size=barrier.shape)*cp.exp(barrier/self.kBT) # Draw random relative times from an exponential distribution
             indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
             time = taus[indexmin2D]*cp.exp(minBarrier/self.kBT[indexmin2D])/attempt_freq # This can become cp.inf quite quickly if T is small
-            if time > max_t: return None # Just exit if switching would take ages and ages and ages
+            self.attempted_switches += 1
+            if time > max_t:
+                self.t += max_t
+                return None # Just exit if switching would take ages and ages and ages
             self.m[indexmin2D] *= -1
             self.switches += 1
-            self.attempted_switches += 1
-            self.t += time 
+            self.t += time
         self.update_energy(index=indexmin2D)
         return indexmin2D
 
@@ -907,7 +913,7 @@ class History:
         self.t.clear()
         self.m.clear()
 
-@dataclass
+@dataclass(slots=True)
 class Unitcell:
     ''' Stores x and y components, so we don't need to index [0] or [1] in a tuple, which would be unclear. '''
     x: float
