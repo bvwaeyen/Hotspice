@@ -83,7 +83,7 @@ class TaskAgnosticExperiment(Experiment):
         # First, we run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
         self.u = cp.zeros(N) # Inputs
         self.y = cp.zeros((N, self.outputreader.n)) # Outputs
-        print(f'[0/{N}] Running TaskAgnosticExperiment...')
+        if verbose: print(f'[0/{N}] Running TaskAgnosticExperiment...')
         for i in range(N):
             self.u[i] = self.inputter.input_single(self.mm)
             self.y[i,:] = self.outputreader.read_state().reshape(-1)
@@ -98,11 +98,13 @@ class TaskAgnosticExperiment(Experiment):
         self.results['CP'] = self.CP()
         self.results['S'] = self.S()
     
-    def NL(self, k=None, local=False, test_fraction=1/4): # Non-linearity
+
+    def NL(self, k=None, local=False, test_fraction=1/4, verbose=False): # Non-linearity
         ''' Returns a float (local=False) or a CuPy array (local=True) representing the nonlinearity,
             either globally or locally depending on <local>. For this, an estimator for the current readout state is
             trained which for any time instant has access to the <k> most recent inputs (including the present one).
         '''
+        if verbose: print(f"Calculating NL (local={local})...")
         if k is None: k = 10 if self.k is None else self.k
         if self.u.size <= k: raise ValueError("NL: Number of iterations must be larger than k.")
         if self.u.size < k + 10: warnings.warn(f"NL: k={k} might be tiny touch too big to get a good train/test split.", stacklevel=2) # Just a wet finger estimate
@@ -134,11 +136,12 @@ class TaskAgnosticExperiment(Experiment):
         else:
             return float(1 - cp.mean(Rsq))
     
-    def MC(self, k=None, local=False, test_fraction=1/4): # Memory capacity
+    def MC(self, k=None, local=False, test_fraction=1/4, verbose=False): # Memory capacity
         ''' Returns a float (local=False) or a CuPy array (local=True) representing the memory capacity,
             either globally or locally depending on <local>. For this, an estimator is trained which
             for any time instant attempts to predict the previous <k> inputs based on the current readout state.
         '''
+        if verbose: print(f"Calculating MC (local={local})...")
         if k is None: k = 10 if self.k is None else self.k
         if self.u.size <= k: raise ValueError("Number of iterations must be larger than k.")
         # if self.u.size < k + 10: warnings.warn(f"k={k} might be tiny touch too big to get a good train/test split.", stacklevel=2) # Just a wet finger estimate

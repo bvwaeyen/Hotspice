@@ -50,9 +50,9 @@ class test_pinwheelReversal:
         self.size = kwargs.get('size', 40) # Edge length of simulation as a number of cells
         self.a = kwargs.get('a', 420e-9*math.sqrt(2)) # [m] Lattice spacing (default from flatspin paper)
         self.T = kwargs.get('T', 300) # [K] Room temperature
-        self.H_max = kwargs.get('H_max', 4e-4) # [T] extremal magnitude of external field (default from flatspin paper)
+        self.H_max = kwargs.get('H_max', .1) # [T] extremal magnitude of external field
         self.V = kwargs.get('V', 470e-9*170e-9*10e-9) # [m³] volume of a single magnet (default from flatspin paper)
-        self.E_b = kwargs.get('E_b', hotspin.kB*self.T*1000) # [J] energy barrier between stable states (realistic for islands in flatspin paper)
+        self.E_b = kwargs.get('E_b', hotspin.Energy.eV_to_J(71)) # [J] energy barrier between stable states (realistic for islands in flatspin paper)
         self.scheme = kwargs.get('scheme', 'Néel')
 
     def test(self, *args, **kwargs):
