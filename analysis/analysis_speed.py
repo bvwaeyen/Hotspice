@@ -15,11 +15,12 @@ def analysis_speed(mm: hotspin.Magnets, t_min: float = 1, n_min: int = 1, verbos
         @param t_min [float] (1): the minimal number of seconds during which the performance is monitored.
         @param n_min [int] (1): the minimal number of mm.update() calls whose performance is monitored.
     '''
+    hotspin.utils.free_gpu_memory()
     i, t0 = -1, time.perf_counter()
     while (i := i + 1) < n_min or time.perf_counter() - t0 < t_min: # Do this for at least <n_min> iterations and <t_min> seconds
         mm.update()
     dt = time.perf_counter() - t0
-    if verbose: print(f'Time required for {i} runs ({mm.switches} switches) of Magnets.select() on {mm.nx}x{mm.ny} grid: {dt:.3f}s.')
+    if verbose: print(f'[{hotspin.utils.readable_bytes(hotspin.utils.get_gpu_memory()["free"])} free on GPU] Time required for {i} runs ({mm.switches} switches) of Magnets.select() on {mm.nx}x{mm.ny} grid: {dt:.3f}s.')
     return {"attempts/s": mm.attempted_switches/dt, "switches/s": mm.switches/dt, "MCsteps/s": mm.MCsteps/dt}
 
 
@@ -29,9 +30,15 @@ def analysis_speed_size(L_range, ASI_type=hotspin.ASI.FullASI, save: bool = Fals
     switches_per_s = np.zeros_like(L_range, dtype='float')
     MCsteps_per_s = np.zeros_like(L_range, dtype='float')
     for i, L in enumerate(L_range):
-        mm: hotspin.Magnets = ASI_type(L, 1e-6, **kwargs)
+        try:
+            mm: hotspin.Magnets = ASI_type(L, 1e-6, ny=L, **kwargs)
+        except:
+            if verbose: print(f"Could not initialize {ASI_type} for L={L}.")
+            continue
         x = analysis_speed(mm, verbose=verbose)
         n[i], attempts_per_s[i], switches_per_s[i], MCsteps_per_s[i] = mm.n, x["attempts/s"], x["switches/s"], x["MCsteps/s"]
+    nz = n.nonzero()
+    L_range, n, attempts_per_s, switches_per_s, MCsteps_per_s = L_range[nz], n[nz], attempts_per_s[nz], switches_per_s[nz], MCsteps_per_s[nz]
 
     data = pd.DataFrame({"L": L_range, "n": n, "attempts/s": attempts_per_s, "switches/s": switches_per_s, "MCsteps/s": MCsteps_per_s})
     metadata = {"description": r"Performance test for Hotspin, determining throughput as switches/s or a similar metric, for various simulation sizes."}
@@ -61,9 +68,9 @@ def analysis_speed_size_plot(data, save=False, show=True):
 
     ax2.set_xscale('log')
     ax2.set_xlim([data["L"].min(), data["L"].max()])
-    ticks = np.array([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000])
+    ticks = np.array([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000])
     ax2.set_xticks(ticks[np.where((ticks >= ax2.get_xlim()[0]) & (ticks <= ax2.get_xlim()[1]))])
-    ax2.xaxis.grid(linestyle='--')
+    ax2.xaxis.grid(linestyle=':')
     ax2.set_xlabel('Cells in x- and y-direction')
 
     plt.gcf().tight_layout()
@@ -77,3 +84,15 @@ def analysis_speed_size_plot(data, save=False, show=True):
 if __name__ == "__main__":
     L_range = np.concatenate([np.arange(1, 100, 1), np.arange(100, 400, 5), np.arange(400, 600, 10), np.arange(600, 1001, 25)])
     analysis_speed_size(L_range=L_range, save=True, plot=True, T=100, PBC=True, verbose=True)
+
+    # plot = False
+    # T = 100
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.FullASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.IsingASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.PinwheelASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.SquareASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.KagomeASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.TriangleASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
+
+    # openname = 'results/analysis_speed_size/something.json'
+    # analysis_speed_size_plot(hotspin.utils.read_json(openname)["data"], save=openname)

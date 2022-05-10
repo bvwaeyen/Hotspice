@@ -87,6 +87,8 @@ class Magnets(ABC):
         if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
         self.unitcell = self._get_unitcell() # This needs to be after occupation and initialize_ip, and before any defects are introduced
 
+        if self.n == 0:
+            raise ValueError(f"can not initialize {type(self)} of size {self.nx}x{self.ny}, as this does not contain any spins.")
         self.initialize_m(pattern, update_energy=False)
 
         if self.PBC:

@@ -123,9 +123,20 @@ def shell():
         pass
 
 
-def gpu_memory():
-    ''' Returns a tuple (free memory, total memory) of the currently active CUDA device. '''
-    return cp.cuda.Device().mem_info
+def free_gpu_memory(free=True):
+    ''' Garbage-collects unused memory on the currently active CUDA device. '''
+    cp.get_default_memory_pool().free_all_blocks()
+
+def get_gpu_memory():
+    ''' @return [dict]: keys "free" and "total" memory (in bytes) of the currently active CUDA device. '''
+    free, total = cp.cuda.Device().mem_info # mem_info is a tuple: (free, total) memory in bytes
+    return {"free": free, "total": total}
+
+def readable_bytes(N):
+    if N < 1024: return f"{N:.0f} B"
+    i = int(math.floor(math.log(N, 1024)))
+    number = N / 1024**i
+    return f"{number:.2f} {('B', 'KiB', 'MiB', 'GiB', 'TiB')[i]}"
 
 
 def save_json(df: pd.DataFrame, path: str = None, name: str = None, constants: dict = None, metadata: dict = None):
