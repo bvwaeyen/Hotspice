@@ -3,6 +3,7 @@ import getpass
 import inspect
 import io
 import json
+import math
 import os
 import subprocess
 import sys
@@ -30,6 +31,23 @@ def mirror4(arr, /, *, negativex=False, negativey=False):
     arr4[ny-1::-1, nx-1:] = yp*arr
     arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
     return arr4
+
+
+def is_significant(i: int, N: int, order=1):
+    ''' Returns True if <i> iterations is an 'important' milestone if there are <N> in total.
+        Useful for verbose print statements in long simulations.
+        @param i [int]: the index of the current iteration (starting at 0)
+        @param N [int]: the total number of iterations
+        @param order [int]: an example will help to explain this argument.
+            If N=1000 and order=0, True will be returned if i = 0 or 999,
+            while for order=1 any of i = 0, 99, 199, 299, ..., 999 yield True.
+            Basically, at least <10**order> values of i (equally spaced) will yield True.
+    '''
+    if (i + 1) % 10**(math.floor(math.log10(N))-order) == 0:
+        return True
+    if i == 0 or i == N - 1:
+        return True
+    return False
 
 
 def strided(a, W: int):
@@ -141,7 +159,7 @@ def save_json(df: pd.DataFrame, path: str = None, name: str = None, constants: d
     if name is None: name = 'hotspin_simulation'
     if constants is None: constants = {}
 
-    df_dict = json.loads(df.to_json(orient='split', index=True))
+    df_dict = json.loads(df.to_json(orient='split', index=False))
     if metadata is None: metadata = {}
     metadata.setdefault('datetime', datetime.datetime.now().strftime(r"%Y%m%d%H%M%S"))
     metadata.setdefault('author', getpass.getuser())
@@ -234,6 +252,14 @@ def read_json(JSON):
     df = pd.read_json(json.dumps(total_dict['data']), orient='split')
     total_dict['data'] = df
     return total_dict
+
+
+def full_obj_name(obj):
+    klass = type(obj)
+    if hasattr(klass, "__module__"):
+        return f'{klass.__module__}.{klass.__qualname__}'
+    else:
+        return klass.__qualname__
 
 
 if __name__ == "__main__":

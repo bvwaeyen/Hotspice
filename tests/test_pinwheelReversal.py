@@ -74,7 +74,7 @@ class test_pinwheelReversal:
         # H_range = H_range[:H_range.size//4] # (optional) Only go from zero to H_max (N/2 steps)
         m_avg_H = np.zeros_like(H_range)
         for i, H in enumerate(H_range):
-            if verbose and ((i + 1) % 10**(math.floor(math.log10(N))-1) == 0 or i == 0):
+            if verbose and hotspin.utils.is_significant(i, N):
                 print(f"[{i+1}/{H_range.size}] H = {H:.2e} T, m_x={self.mm.m_avg_x:.2f}")
             if self.scheme == 'Glauber':
                 self.mm.update(r=1e-7)
@@ -123,9 +123,11 @@ class test_pinwheelReversal:
 
 if __name__ == "__main__":
     save = True
+    show_intermediate = False
+    verbose = True
     # Observation: the external field here is MUCH smaller than in the flatspin paper, even though self.V is the same and self.a is reasonable
     # For Néel this is kind of ok:
-    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_b=hotspin.Energy.eV_to_J(71), scheme='Néel').test(angle=30*math.pi/180, N=20000, verbose=True, save=save, show_intermediate=False)
+    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_b=hotspin.Energy.eV_to_J(71), scheme='Néel').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
     # For Glauber this is the best I could get without and with E_b:
-    # test_pinwheelReversal(T=300, size=50, H_max=1e-4, E_b=0, scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=True, save=save, show_intermediate=False)
-    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_b=hotspin.Energy.eV_to_J(71), scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=True, save=save, show_intermediate=False)
+    # test_pinwheelReversal(T=300, size=50, H_max=1e-4, E_b=0, scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
+    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_b=hotspin.Energy.eV_to_J(71), scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)

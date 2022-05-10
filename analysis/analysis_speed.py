@@ -35,10 +35,10 @@ def analysis_speed_size(L_range, ASI_type=hotspin.ASI.FullASI, save: bool = Fals
 
     data = pd.DataFrame({"L": L_range, "n": n, "attempts/s": attempts_per_s, "switches/s": switches_per_s, "MCsteps/s": MCsteps_per_s})
     metadata = {"description": r"Performance test for Hotspin, determining throughput as switches/s or a similar metric, for various simulation sizes."}
-    constants = {"T": mm.T_avg, "E_b": mm.E_b_avg, "dx": mm.dx, "dy": mm.dy}
+    constants = {"T": mm.T_avg, "E_b": mm.E_b_avg, "dx": mm.dx, "dy": mm.dy, "ASI_type": hotspin.utils.full_obj_name(mm), "PBC": mm.PBC}
     savepath = ''
     if save:
-        savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path=f"results/analysis_speed_size", name=f"{ASI_type.__name__}_size{L_range.min()}-{L_range.max()}{'_PBC' if kwargs.get('PBC', False) else ''}")
+        savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path=f"results/analysis_speed_size", name=f"{ASI_type.__name__}_size{L_range.min()}-{L_range.max()}_T{constants['T']:.0f}{'_PBC' if kwargs.get('PBC', False) else ''}")
     if plot or save:
         analysis_speed_size_plot(data, save=savepath, show=plot)
     return data
@@ -76,4 +76,4 @@ def analysis_speed_size_plot(data, save=False, show=True):
 
 if __name__ == "__main__":
     L_range = np.concatenate([np.arange(1, 100, 1), np.arange(100, 400, 5), np.arange(400, 600, 10), np.arange(600, 1001, 25)])
-    analysis_speed_size(L_range=L_range, save=True, plot=True, T=100, PBC=True)
+    analysis_speed_size(L_range=L_range, save=True, plot=True, T=100, PBC=True, verbose=True)
