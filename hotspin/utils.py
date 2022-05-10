@@ -10,6 +10,7 @@ import warnings
 
 import cupy as cp
 import cupy.lib.stride_tricks as striding
+import numpy as np
 import pandas as pd
 
 from IPython.terminal.embed import InteractiveShellEmbed
@@ -31,7 +32,7 @@ def mirror4(arr, /, *, negativex=False, negativey=False):
     return arr4
 
 
-def strided(a, W):
+def strided(a, W: int):
     ''' <a> is a 1D CuPy array, which gets expanded into 2D shape (a.size, W) where every row
         is a successively shifted version of the original <a>:
         the first row is [a[0], NaN, NaN, ...] with total length <W>.
@@ -135,7 +136,7 @@ def save_json(df: pd.DataFrame, path: str = None, name: str = None, constants: d
                 values "name", " compute_cap", " driver_version", " uuid", " memory.total [MiB]", " timestamp".
         - "constants", with names and values of parameters which remained constant throughout the simulation.
         - "data", which stores a JSON 'table' representation of the Pandas dataframe containing the actual data.
-    ''' # TODO: add information about which file (__main__) (and function/class?) generated the data
+    ''' # TODO: add information about which function/class generated the data, and SimParams
     if path is None: path = 'hotspin_results'
     if name is None: name = 'hotspin_simulation'
     if constants is None: constants = {}
@@ -146,6 +147,8 @@ def save_json(df: pd.DataFrame, path: str = None, name: str = None, constants: d
     metadata.setdefault('author', getpass.getuser())
     try: 
         creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
+        if 'hotspin' in creator_info:
+            creator_info = '...\\' + creator_info[len(creator_info.split('hotspin')[0]):]
     except:
         creator_info = ''
     metadata.setdefault('creator', creator_info)
@@ -175,7 +178,9 @@ class CompactJSONEncoder(json.JSONEncoder):
         self.indentation_level = 0
 
     def encode(self, o):
-        """ Encode JSON object *o* with respect to single line lists. """
+        """ Encode JSON object <o> with respect to single line lists. """
+        if isinstance(o, (np.ndarray, cp.ndarray)):
+            o = o.tolist()
         if isinstance(o, (list, tuple)):
             if self._is_single_line_list(o):
                 return "[" + ", ".join(json.dumps(el) for el in o) + "]"
@@ -207,7 +212,7 @@ class CompactJSONEncoder(json.JSONEncoder):
             return " " * self.indentation_level * self.indent
     
     def iterencode(self, o, **kwargs):
-        """ equired to also work with `json.dump`. """
+        """ Required to also work with `json.dump`. """
         return self.encode(o)
 
 

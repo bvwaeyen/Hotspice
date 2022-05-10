@@ -174,10 +174,10 @@ class RegionalOutputReader(OutputReader):
 
         return self.state # [Am²]
 
-    def inflate_flat_array(self, arr: np.ndarray):
+    def inflate_flat_array(self, arr: np.ndarray|cp.ndarray):
         ''' Transforms a 1D array <arr> to have the same shape as <self.state>.
             Basically the inverse transformation as done on <self.state> when calling <self.state.reshape(-1)>.
-            @param arr [np.ndarray]: a NumPy or CuPy array of shape (<self.n>,).
+            @param arr [array]: a NumPy or CuPy array of shape (<self.n>,).
         '''
         if self.mm.in_plane:
             return arr.reshape(self.nx, self.ny, 2)

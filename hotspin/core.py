@@ -69,7 +69,7 @@ class Magnets(ABC):
         # initialize temperature and energy barrier arrays (!!! needs self.xx etc. to exist, since this is an array itself)
         self.T = T # [K]
         
-        if isinstance(E_b, np.ndarray): # This detects both CuPy and NumPy arrays
+        if isinstance(E_b, (np.ndarray, cp.ndarray)):
             if E_b.shape != self.xx.shape: raise ValueError(f"Specified energy barrier (shape {E_b.shape}) does not match shape ({nx}, {ny}) of simulation domain.")
             self.E_b = cp.asarray(E_b) # [J]
         else:
@@ -192,9 +192,9 @@ class Magnets(ABC):
         warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self.energies]}", stacklevel=2)
         return None
 
-    def update_energy(self, index: np.ndarray=None):
+    def update_energy(self, index: np.ndarray|cp.ndarray = None):
         ''' Updates all the energies which are currently present in the simulation.
-            @param index [np.array] (None): if specified, only the magnets at these indices are considered in the calculation.
+            @param index [array] (None): if specified, only the magnets at these indices are considered in the calculation.
                 We need a NumPy or CuPy array (to easily determine its size: if =2, then only a single switch is considered.)
         '''
         if index is not None: index = Energy.clean_indices(index) # TODO: now we are cleaning twice, so remove this in Energy classes maybe?
@@ -224,7 +224,7 @@ class Magnets(ABC):
     
     @T.setter
     def T(self, value):
-        if isinstance(value, np.ndarray): # This detects both CuPy and NumPy arrays
+        if isinstance(value, (np.ndarray, cp.ndarray)):
             if value.shape != self.xx.shape: raise ValueError(f"Specified temperature profile (shape {value.shape}) does not match shape ({self.nx}, {self.ny}) of simulation domain.")
             self._T = cp.asarray(value)
         else:
