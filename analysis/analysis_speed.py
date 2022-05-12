@@ -24,14 +24,14 @@ def analysis_speed(mm: hotspin.Magnets, t_min: float = 1, n_min: int = 1, verbos
     return {"attempts/s": mm.attempted_switches/dt, "switches/s": mm.switches/dt, "MCsteps/s": mm.MCsteps/dt}
 
 
-def analysis_speed_size(L_range, ASI_type=hotspin.ASI.FullASI, save: bool = False, plot: bool = True, verbose: bool = False, **kwargs):
+def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.FullASI, save: bool = False, plot: bool = True, verbose: bool = False, **kwargs):
     n = np.zeros_like(L_range)
     attempts_per_s = np.zeros_like(L_range, dtype='float')
     switches_per_s = np.zeros_like(L_range, dtype='float')
     MCsteps_per_s = np.zeros_like(L_range, dtype='float')
     for i, L in enumerate(L_range):
         try:
-            mm: hotspin.Magnets = ASI_type(L, 1e-6, ny=L, **kwargs)
+            mm = ASI_type(L, 1e-6, ny=L, **kwargs)
         except:
             if verbose: print(f"Could not initialize {ASI_type} for L={L}.")
             continue

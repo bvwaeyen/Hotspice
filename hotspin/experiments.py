@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import init_interactive, init_fonts, show_m
-from .utils import R_squared, strided
+from .utils import is_significant, R_squared, strided
 
 
 class Experiment(ABC):
@@ -87,10 +87,8 @@ class TaskAgnosticExperiment(Experiment):
         for i in range(N):
             self.u[i] = self.inputter.input_single(self.mm)
             self.y[i,:] = self.outputreader.read_state().reshape(-1)
-            if verbose:
-                # print(self.u[i])
-                if (i + 1) % 10**(math.floor(math.log10(N))-1) == 0 or i == 0: 
-                    print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
+            if verbose and is_significant(i, N):
+                print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
                 fig = show_m(self.mm, figure=fig)
         # Then, we use the recorded information to perform some funni calculations
         self.results['NL'] = self.NL(k=k)
@@ -98,6 +96,16 @@ class TaskAgnosticExperiment(Experiment):
         self.results['CP'] = self.CP()
         self.results['S'] = self.S()
     
+    def load(self, u, y, k=None, **kwargs):
+        self.u = cp.asarray(u).reshape(-1)
+        self.y = cp.asarray(y).reshape(self.u.shape[0], -1)
+        if self.u.size <= k: raise ValueError(f"Number of entries N={self.u.size} must be larger than k={k}.")
+        # Then, we use the recorded information to perform some funni calculations
+        self.results['NL'] = self.NL(k=k, **kwargs)
+        self.results['MC'] = self.MC(k=k, **kwargs)
+        self.results['CP'] = self.CP()
+        self.results['S'] = self.S()
+
 
     def NL(self, k=None, local=False, test_fraction=1/4, verbose=False): # Non-linearity
         ''' Returns a float (local=False) or a CuPy array (local=True) representing the nonlinearity,
