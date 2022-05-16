@@ -1,4 +1,5 @@
 import datetime
+import functools
 import getpass
 import inspect
 import io
@@ -15,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from IPython.terminal.embed import InteractiveShellEmbed
+from operator import mul
 
 
 def mirror4(arr, /, *, negativex=False, negativey=False):
@@ -31,6 +33,23 @@ def mirror4(arr, /, *, negativex=False, negativey=False):
     arr4[ny-1::-1, nx-1:] = yp*arr
     arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
     return arr4
+
+
+def as_cupy_array(value, shape: tuple) -> cp.ndarray:
+    ''' Converts <value> to a CuPy array of shape <shape>. If <value> is scalar, the returned
+        array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
+        as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.
+    '''
+    is_scalar = True # Determine if <value> is scalar-like...
+    if isinstance(value, (np.ndarray, cp.ndarray)):
+        if value.size != 1: is_scalar = False
+
+    if is_scalar: # ... and act accordingly
+        return cp.ones(shape)*float(value)
+    else:
+        if value.size != functools.reduce(mul, shape):
+            raise ValueError(f"Specified value (shape {value.shape}) is incompatible with desired shape {shape}.")
+        return cp.asarray(value).reshape(shape)
 
 
 def is_significant(i: int, N: int, order=1):

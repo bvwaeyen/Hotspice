@@ -12,7 +12,7 @@ from functools import cache
 from scipy.spatial import distance
 from textwrap import dedent
 
-from .utils import mirror4, check_repetition
+from .utils import as_cupy_array, check_repetition, mirror4
 
 
 kB = 1.380649e-23
@@ -39,7 +39,7 @@ class Magnets(ABC):
     def __init__(
         self, nx: int, ny: int, dx: float, dy: float, *,
         T: float = 300, E_b: float = 0., Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
-        pattern: str = 'random', energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None):
+        pattern: str = None, energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are allowed currently. 
@@ -56,28 +56,23 @@ class Magnets(ABC):
         self.Msat = Msat # [A/m]
         self.V = V # [m³]
         self.in_plane = in_plane
+        self.PBC = PBC
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J]
+        pattern = self._get_groundstate() if pattern is None else pattern
         
-        # initialize the coordinates based on nx, (ny) and L
+        # Initialize the coordinates based on nx, (ny) and L
         self.nx, self.ny = int(nx), int(ny)
-        self.dx, self.dy = dx, dy
-        self.xx, self.yy = cp.meshgrid(cp.linspace(0, dx*(nx-1), nx), cp.linspace(0, dy*(ny-1), ny)) # [m]
+        self.dx, self.dy = float(dx), float(dy)
+        self.xx, self.yy = cp.meshgrid(cp.linspace(0, self.dx*(self.nx-1), self.nx), cp.linspace(0, self.dy*(self.ny-1), self.ny)) # [m]
         self.index = range(self.xx.size)
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.nx), cp.arange(0, self.ny))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
-        # initialize temperature and energy barrier arrays (!!! needs self.xx etc. to exist, since this is an array itself)
+        # Initialize temperature and energy barrier arrays (!!! needs self.xx etc. to exist, since this is an array of same shape)
         self.T = T # [K]
-        
-        if isinstance(E_b, (np.ndarray, cp.ndarray)):
-            if E_b.shape != self.xx.shape: raise ValueError(f"Specified energy barrier (shape {E_b.shape}) does not match shape ({nx}, {ny}) of simulation domain.")
-            self.E_b = cp.asarray(E_b) # [J]
-        else:
-            self.E_b = cp.ones_like(self.xx)*E_b # [J]
+        self.E_b = E_b # [J]
 
-        # PBC and history
-        self.PBC = PBC
-
+        # History
         self.history = History()
         self.switches, self.attempted_switches = 0, 0
 
@@ -226,11 +221,16 @@ class Magnets(ABC):
     
     @T.setter
     def T(self, value):
-        if isinstance(value, (np.ndarray, cp.ndarray)):
-            if value.shape != self.xx.shape: raise ValueError(f"Specified temperature profile (shape {value.shape}) does not match shape ({self.nx}, {self.ny}) of simulation domain.")
-            self._T = cp.asarray(value)
-        else:
-            self._T = cp.ones_like(self.xx)*value
+        self._T = as_cupy_array(value, self.xx.shape)
+
+    @property
+    def E_b(self) -> cp.ndarray:
+        return self._E_b
+    
+    @E_b.setter
+    def E_b(self, value):
+        self._E_b = as_cupy_array(value, self.xx.shape)
+
 
     @property
     def kBT(self) -> cp.ndarray:
