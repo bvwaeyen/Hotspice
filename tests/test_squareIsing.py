@@ -54,7 +54,8 @@ class test_squareIsing:
         constants = {"nx": self.mm.nx, "ny": self.mm.ny, "N": N}
         if save:
             Tsweep_direction = 'reverse' if reverse else ''
-            savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path="results/test_squareIsing", name=f"Tsweep{data['T'].nunique()}{Tsweep_direction}_N{N}_{self.mm.nx}x{self.mm.ny}")
+            full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
+            savepath = hotspin.utils.save_json(full_json, path="results/test_squareIsing", name=f"Tsweep{data['T'].nunique()}{Tsweep_direction}_N{N}_{self.mm.nx}x{self.mm.ny}")
             if plot: test_squareIsing.test_magnetization_plot(data, save=savepath)
         else:
             if plot: test_squareIsing.test_magnetization_plot(data)
@@ -76,7 +77,8 @@ class test_squareIsing:
         constants = {"nx": self.mm.nx, "ny": self.mm.ny}
         if save:
             Tsweep_direction = 'reverse' if kwargs.get('reverse', False) else ''
-            savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path="results/test_squareIsing", name=f"Tsweep{data['T'].nunique()}{Tsweep_direction}_Nsweep{data['N'].nunique()}_{self.mm.nx}x{self.mm.ny}")
+            full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
+            savepath = hotspin.utils.save_json(full_json, path="results/test_squareIsing", name=f"Tsweep{data['T'].nunique()}{Tsweep_direction}_Nsweep{data['N'].nunique()}_{self.mm.nx}x{self.mm.ny}")
             if plot: test_squareIsing.test_N_influence_plot(data, save=savepath)
         else:
             if plot: test_squareIsing.test_N_influence_plot(data)

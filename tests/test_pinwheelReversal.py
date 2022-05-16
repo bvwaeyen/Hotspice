@@ -91,7 +91,8 @@ class test_pinwheelReversal:
         metadata = {"description": r"Pinwheel reversal test as described in pp. 8-10 of `flatspin: A Large-Scale Artificial Spin Ice Simulator` by Jensen et al."}
         constants = {"H_angle": angle, "T": self.T, "E_b": self.E_b, "nx": self.mm.nx, "ny": self.mm.ny}
         if save:
-            savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path=f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}", name=f"N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}")
+            full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
+            savepath = hotspin.utils.save_json(full_json, path=f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}", name=f"N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}")
             if plot: test_pinwheelReversal.test_reversal_plot(data, save=savepath)
         else:
             if plot: test_pinwheelReversal.test_reversal_plot(data)

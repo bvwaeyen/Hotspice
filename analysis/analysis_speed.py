@@ -45,7 +45,8 @@ def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.F
     constants = {"T": mm.T_avg, "E_b": mm.E_b_avg, "dx": mm.dx, "dy": mm.dy, "ASI_type": hotspin.utils.full_obj_name(mm), "PBC": mm.PBC}
     savepath = ''
     if save:
-        savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path=f"results/analysis_speed_size", name=f"{ASI_type.__name__}_size{L_range.min()}-{L_range.max()}_T{constants['T']:.0f}{'_PBC' if kwargs.get('PBC', False) else ''}")
+        full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
+        savepath = hotspin.utils.save_json(full_json, path=f"results/analysis_speed_size", name=f"{ASI_type.__name__}_size{L_range.min()}-{L_range.max()}_T{constants['T']:.0f}{'_PBC' if kwargs.get('PBC', False) else ''}")
     if plot or save:
         analysis_speed_size_plot(data, save=savepath, show=plot)
     return data

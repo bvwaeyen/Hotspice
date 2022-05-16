@@ -61,7 +61,8 @@ class test_dipolarIsing:
         metadata = {"description": r"2D Ising model with exchange and dipolar interactions, sweeping $\delta$ as described in `Striped phases in two-dimensional dipolar ferromagnets` by MacIsaac et al."}
         constants = {"nx": self.mm.nx, "ny": self.mm.ny, "MCstepsize": N, "T": self.T_avg}
         if save:
-            savepath = hotspin.utils.save_json(data, metadata=metadata, constants=constants, path="results/test_dipolarIsing", name=f"deltasweep{data['delta'].min()}..{data['delta'].max()}({data['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}")
+            full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
+            savepath = hotspin.utils.save_json(full_json, path="results/test_dipolarIsing", name=f"deltasweep{data['delta'].min()}..{data['delta'].max()}({data['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}")
             if plot: test_dipolarIsing.test_delta_influence_plot(data, save=savepath)
         else:
             if plot: test_dipolarIsing.test_delta_influence_plot(data)
