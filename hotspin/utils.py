@@ -1,5 +1,4 @@
 import datetime
-import functools
 import getpass
 import inspect
 import io
@@ -16,7 +15,6 @@ import numpy as np
 import pandas as pd
 
 from IPython.terminal.embed import InteractiveShellEmbed
-from operator import mul
 
 
 def mirror4(arr, /, *, negativex=False, negativey=False):
@@ -47,12 +45,12 @@ def as_cupy_array(value, shape: tuple) -> cp.ndarray:
     if is_scalar: # ... and act accordingly
         return cp.ones(shape)*float(value)
     else:
-        if value.size != functools.reduce(mul, shape):
+        if value.size != math.prod(shape):
             raise ValueError(f"Specified value (shape {value.shape}) is incompatible with desired shape {shape}.")
         return cp.asarray(value).reshape(shape)
 
 
-def is_significant(i: int, N: int, order=1):
+def is_significant(i: int, N: int, order=1) -> bool:
     ''' Returns True if <i> iterations is an 'important' milestone if there are <N> in total.
         Useful for verbose print statements in long simulations.
         @param i [int]: the index of the current iteration (starting at 0)
@@ -69,7 +67,7 @@ def is_significant(i: int, N: int, order=1):
     return False
 
 
-def strided(a, W: int):
+def strided(a: cp.ndarray, W: int):
     ''' <a> is a 1D CuPy array, which gets expanded into 2D shape (a.size, W) where every row
         is a successively shifted version of the original <a>:
         the first row is [a[0], NaN, NaN, ...] with total length <W>.
@@ -142,7 +140,7 @@ def shell():
         pass
 
 
-def free_gpu_memory(free=True):
+def free_gpu_memory():
     ''' Garbage-collects unused memory on the currently active CUDA device. '''
     cp.get_default_memory_pool().free_all_blocks()
 
