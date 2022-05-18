@@ -436,6 +436,12 @@ def update_interactive(figure=None):
     fig.canvas.draw_idle()
     fig.canvas.flush_events()
 
+def close_interactive(figure=None):
+    if figure is not None:
+        plt.close(figure)
+    else:
+        plt.close()
+
 
 def save_plot(save_path: str, ext=None):
     ''' <save_path> is a full relative pathname, usually something like

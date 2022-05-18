@@ -9,11 +9,12 @@ import pandas as pd
 import statsmodels.api as sm
 
 from abc import ABC, abstractmethod
+from scipy.spatial import distance
 
 from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
-from .plottools import init_interactive, init_fonts, show_m
-from .utils import is_significant, R_squared, strided
+from .plottools import close_interactive, init_interactive, init_fonts, show_m
+from .utils import filter_kwargs, is_significant, R_squared, strided
 
 
 class Experiment(ABC):
@@ -71,27 +72,34 @@ class TaskAgnosticExperiment(Experiment):
         super().__init__(inputter, outputreader, mm)
         self.k = None
 
-    def run(self, N=1000, k=10, verbose=False):
+    def run(self, N=1000, k=10, verbose=False, calc=True):
         ''' @param N [int]: The total number of iterations performed (each iteration consists of <self.inputter.n> MC steps).
             @param k [int]: The number of iterations back in time that are used to train the current time step.
         '''
         if N <= k: raise ValueError(f"Number of iterations N={N} must be larger than k={k}.")
         self.k = k
-        self.mm.relax()
         if verbose:
             init_fonts()
             init_interactive()
             fig = None
-        # First, we run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
+            print(f'[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...')
+        self.mm.relax()
+        self.initial_state = self.outputreader.read_state().reshape(-1)
+        # Run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
         self.u = cp.zeros(N) # Inputs
         self.y = cp.zeros((N, self.outputreader.n)) # Outputs
-        if verbose: print(f'[0/{N}] Running TaskAgnosticExperiment...')
         for i in range(N):
             self.u[i] = self.inputter.input_single(self.mm)
             self.y[i,:] = self.outputreader.read_state().reshape(-1)
             if verbose and is_significant(i, N):
                 print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
                 fig = show_m(self.mm, figure=fig)
+        self.mm.relax()
+        self.final_state = self.outputreader.read_state().reshape(-1)
+        
+        if calc: self.calculate_all(k=k) # Use the recorded information to calculate task agnostic metrics
+        if verbose: close_interactive(fig) # Close the realtime figure as it is no longer needed
+
 
     def to_dataframe(self, u: cp.ndarray = None, y: cp.ndarray = None):
         """ If <u> or <y> are not provided, the saved <self.u> and <self.y>
@@ -234,13 +242,22 @@ class TaskAgnosticExperiment(Experiment):
             rank = cp.mean(ranks)
         return int(rank)/self.outputreader.n
     
-    def S(self): # Stability
+    def S(self, relax=False): # Stability
         ''' Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
-            NOTE: This function is not normalized. #TODO
             NOTE: It can be advantageous to define a different metric for stability if the entire magnetization profile
                   is known, since this function only has access to the readout nodes, not the whole self.m array.
         '''
-        self.mm.relax()
-        final_readout = self.outputreader.read_state().reshape(-1)
-        initial_readout = self.y[0,:] # Assuming this was relaxed first
-        return float(cp.sum((initial_readout - final_readout)**2))
+        if relax: 
+            self.mm.relax()
+            final_readout = self.outputreader.read_state().reshape(-1)
+        elif not hasattr(self, 'final_state'):
+            if self.y.size > 0:
+                final_readout = self.y[-1,:]
+            else:
+                final_readout = self.outputreader.read_state().reshape(-1)
+        
+        initial_readout = self.initial_state # Assuming this was relaxed first
+        final_readout = self.final_state # Assuming this was also relaxed first
+        return 1 - distance.cosine(initial_readout.get(), final_readout.get())/2 # distance.cosine is in range [0., 2.]
+        # Another possibly interesting metric: Hamming distance 
+        # (is proportion of disagreeing elements, but would require full access to state mm.m to work properly (-1 or 1 binary state))
