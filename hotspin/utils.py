@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 
 from IPython.terminal.embed import InteractiveShellEmbed
+from types import FunctionType
+from typing import Iterable
 
 
 def mirror4(arr, /, *, negativex=False, negativey=False):
@@ -31,6 +33,10 @@ def mirror4(arr, /, *, negativex=False, negativey=False):
     arr4[ny-1::-1, nx-1:] = yp*arr
     arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
     return arr4
+
+
+def filter_kwargs(kwargs: dict, func: FunctionType):
+    return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames}
 
 
 def as_cupy_array(value, shape: tuple) -> cp.ndarray:
@@ -300,6 +306,29 @@ def read_json(JSON):
     df = pd.read_json(json.dumps(total_dict['data']), orient='split')
     total_dict['data'] = df
     return total_dict
+
+
+def combine_all(container: str | Iterable):
+    ''' Combines all the JSON data in <container>, which can either be a:
+        - string representing a path to a directory containing many similar .json files
+        - iterable containing many dictionaries, each representing a bunch of similar data
+    '''
+    if isinstance(container, str): # Then it is a path to a directory containing several .json files
+        all_jsons = [read_json(os.path.join(container, path)) for path in os.listdir(container) if path.endswith('.json')]
+    else: # Then it is an iterable containing many dictionaries representing the data already
+        all_jsons = container
+    dataframes, constants, metadata = [], {}, {}
+    for json_i in all_jsons:
+        dataframes.append(json_i["data"])
+        constants |= json_i["constants"]
+        metadata |= json_i["metadata"]
+
+    df: pd.DataFrame = pd.concat(dataframes, ignore_index=True)
+    for column in df.columns: # Remove 'constants' which are actually not constant
+        if column in constants.keys():
+            del constants[column]
+
+    return combine_json(df, constants=constants, metadata=metadata)
 
 
 def full_obj_name(obj):

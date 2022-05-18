@@ -1,9 +1,11 @@
 import math
 import os
+import re
 import warnings
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import statsmodels.api as sm
 
 from abc import ABC, abstractmethod
@@ -90,21 +92,49 @@ class TaskAgnosticExperiment(Experiment):
             if verbose and is_significant(i, N):
                 print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
                 fig = show_m(self.mm, figure=fig)
-        # Then, we use the recorded information to perform some funni calculations
-        self.results['NL'] = self.NL(k=k)
-        self.results['MC'] = self.MC(k=k)
-        self.results['CP'] = self.CP()
-        self.results['S'] = self.S()
-    
-    def load(self, u, y, k=None, **kwargs):
+
+    def to_dataframe(self, u: cp.ndarray = None, y: cp.ndarray = None):
+        """ If <u> or <y> are not provided, the saved <self.u> and <self.y>
+            arrays are used. When providing <u> and <y> directly,
+                <u> should be a 1D array of length N, and
+                <y> a <NxL> array, where L is the number of output nodes.
+            The resulting dataframe has columns "u", "y0", "y1", ... "y<L-1>".
+        """
+        if (u is None) != (y is None): raise ValueError('Either none or both of <u> and <y> arguments must be provided.')
+        if u is None:
+            u = cp.concatenate((cp.asarray([cp.nan]), self.u, cp.asarray([cp.nan]))) # self.u with NaN input as 0th index
+        if y is None:
+            y = cp.concatenate((self.initial_state.reshape(1, -1), self.y, self.final_state.reshape(1, -1)), axis=0) # self.y with pristine state as 0th index
+        
+        u = cp.asarray(u).get() # Need as NumPy array for pd
+        y = cp.asarray(y).get() # Need as NumPy array for pd
+        if u.shape[0] != y.shape[0]: raise ValueError(f'Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.')
+
+        df = pd.DataFrame()
+        df["u"] = u
+        for i in range(y.shape[1]): df[f"y{i}"] = y[:,i]
+        return df
+
+    def load_dataframe(self, df: pd.DataFrame, u: cp.ndarray = None, y: cp.ndarray = None):
+        """ Returns the CuPy arrays <u> and <y> present in the dataframe. """
+        if u is None: u = cp.asarray(df["u"])
+        if y is None:
+            pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
+            y_cols = [colname for colname in df if pattern.match(colname)]
+            y = cp.asarray(df[y_cols])
+
         self.u = cp.asarray(u).reshape(-1)
-        self.y = cp.asarray(y).reshape(self.u.shape[0], -1)
-        if self.u.size <= k: raise ValueError(f"Number of entries N={self.u.size} must be larger than k={k}.")
-        # Then, we use the recorded information to perform some funni calculations
-        self.results['NL'] = self.NL(k=k, **kwargs)
-        self.results['MC'] = self.MC(k=k, **kwargs)
-        self.results['CP'] = self.CP()
-        self.results['S'] = self.S()
+        self.y = cp.asarray(y, dtype=float).reshape(self.u.shape[0], -1)
+        if math.isnan(self.u[0]):
+            self.initial_state = self.y[0,:]
+            self.u = self.u[1:]
+            self.y = self.y[1:]
+        if math.isnan(self.u[-1]):
+            self.final_state = self.y[-1,:]
+            self.u = self.u[:-1]
+            self.y = self.y[:-1]
+        return self.u, self.y
+
 
 
     def NL(self, k=None, local=False, test_fraction=1/4, verbose=False): # Non-linearity
