@@ -136,6 +136,11 @@ class TaskAgnosticExperiment(Experiment):
         return self.u, self.y
 
 
+    def calculate_all(self, **kwargs):
+        self.results['NL'] = self.NL(**filter_kwargs(kwargs, self.NL))
+        self.results['MC'] = self.MC(**filter_kwargs(kwargs, self.MC))
+        self.results['CP'] = self.CP(**filter_kwargs(kwargs, self.CP))
+        self.results['S'] = self.S(**filter_kwargs(kwargs, self.S))
 
     def NL(self, k=None, local=False, test_fraction=1/4, verbose=False): # Non-linearity
         ''' Returns a float (local=False) or a CuPy array (local=True) representing the nonlinearity,
