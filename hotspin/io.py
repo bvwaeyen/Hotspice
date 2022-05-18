@@ -154,6 +154,14 @@ class RegionalOutputReader(OutputReader):
         self.region_y[-1] = self.ny - 1
         self.region_x = np.tile(self.region_x, (mm.ny, 1))
         self.region_y = np.tile(self.region_y, (mm.nx, 1)).T
+
+        n = cp.zeros_like(self.grid)
+        # Determine the number of magnets in each region
+        for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
+            here = (self.region_x == i[0]) & (self.region_y == i[1])
+            n[i] = cp.sum(mm.occupation[here])
+        self.normalization_factor = np.max(cp.asarray(self.mm.Msat*self.mm.V*n).get())
+
         if mm.in_plane:
             self.state = cp.zeros((self.nx, self.ny, 2))
         else:
