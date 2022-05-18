@@ -692,7 +692,9 @@ class ZeemanEnergy(Energy):
             self.B_ext = self.magnitude*cp.array([math.cos(self.angle), math.sin(self.angle)]) # [T]
         else:
             self.B_ext = self.magnitude # [T]
-            if self.angle != 0: warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.', stacklevel=2)
+            if self.angle != 0:
+                self.angle = 0
+                warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.', stacklevel=2)
         self.update()
 
     def update(self):

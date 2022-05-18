@@ -102,7 +102,7 @@ class FieldInputter(Inputter):
 
     def input_single(self, mm: Magnets, value=None):
         if value is None: value = self.datastream.get_next()
-        mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value, angle=self.angle)
+        mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value, angle=(self.angle if mm.in_plane else None))
         MCsteps0 = mm.MCsteps
         while mm.MCsteps - MCsteps0 < self.n: mm.update()
         return value
@@ -120,6 +120,7 @@ class PerpFieldInputter(FieldInputter):
         self.sine = sine # Whether or not to use a sinusoidal field strength
 
     def input_single(self, mm: Magnets, value=None):
+        if not mm.in_plane: raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
         if value is None: value = self.datastream.get_next()
         angle = self.angle + value*math.pi/2
         mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
@@ -161,12 +162,13 @@ class RegionalOutputReader(OutputReader):
     def read_state(self, mm: Magnets = None, m=None) -> cp.ndarray:
         if mm is not None: self.configure_for(mm) # If mm not specified, we suppose configure_for() already happened
         if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
+        if self.mm.in_plane:
+            m_x = m*self.mm.orientation[:,:,0]*self.mm.Msat*self.mm.V/self.normalization_factor
+            m_y = m*self.mm.orientation[:,:,1]*self.mm.Msat*self.mm.V/self.normalization_factor
 
         for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
             here = (self.region_x == i[0]) & (self.region_y == i[1])
             if self.mm.in_plane:
-                m_x = m*self.mm.orientation[:,:,0]*self.mm.Msat*self.mm.V
-                m_y = m*self.mm.orientation[:,:,1]*self.mm.Msat*self.mm.V
                 self.state[i[0], i[1], 0] = cp.sum(m_x[here]) # Average m_x
                 self.state[i[0], i[1], 1] = cp.sum(m_y[here]) # Average m_y
             else:
