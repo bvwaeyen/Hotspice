@@ -38,7 +38,7 @@ class SimParams:
 class Magnets(ABC):
     def __init__(
         self, nx: int, ny: int, dx: float, dy: float, *,
-        T: float = 300, E_b: float = 0., Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
+        T: float = 300, E_B: float = 0., Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
         pattern: str = None, energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
@@ -70,7 +70,7 @@ class Magnets(ABC):
 
         # Initialize temperature and energy barrier arrays (!!! needs self.xx etc. to exist, since this is an array of same shape)
         self.T = T # [K]
-        self.E_b = E_b # [J]
+        self.E_B = E_B # [J]
 
         # History
         self.history = History()
@@ -112,7 +112,7 @@ class Magnets(ABC):
             return cp.ones_like(self.xx)*((cp.floor(angle/math.pi - .5) % 2)*2 - 1)
     
     def _get_unitcell(self, max_cell=100):
-        ''' Returns a Vec2D containing the number of single grid cells in a unit cell along the x- and y-axis.
+        ''' Returns a Unitcell containing the number of single grid cells in a unit cell along the x- and y-axis.
             @param max_cell [int] (100): Only unitcells with ux+uy < max_cell are considered for performance reasons.
         '''
         for n in range(1, min(self.nx + self.ny + 1, max_cell + 1)): # Test possible unit cells in a triangle-like manner: (1,1), (2,1), (1,2), (3,1), (2,2), (1,3), ...
@@ -224,12 +224,12 @@ class Magnets(ABC):
         self._T = as_cupy_array(value, self.xx.shape)
 
     @property
-    def E_b(self) -> cp.ndarray:
-        return self._E_b
+    def E_B(self) -> cp.ndarray:
+        return self._E_B
     
-    @E_b.setter
-    def E_b(self, value):
-        self._E_b = as_cupy_array(value, self.xx.shape)
+    @E_B.setter
+    def E_B(self, value):
+        self._E_B = as_cupy_array(value, self.xx.shape)
 
 
     @property
@@ -258,8 +258,8 @@ class Magnets(ABC):
         return float(cp.mean(self.T))
     
     @property
-    def E_b_avg(self) -> float:
-        return float(cp.mean(self.E_b))
+    def E_B_avg(self) -> float:
+        return float(cp.mean(self.E_B))
     
     def set_T(self, f, /, *, center=False, crystalunits=False):
         ''' Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
@@ -362,7 +362,7 @@ class Magnets(ABC):
         # exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # OPTION 2: AD-HOC ADJUSTED GLAUBER, where we assume that the 'other state' is at the top of the energy barrier
         # TODO: more accurate energy barrier? (might not be worth the computational cost)
-        barrier = cp.maximum((delta_E := self.switch_energy(idx)), self.E_b[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
+        barrier = cp.maximum((delta_E := self.switch_energy(idx)), self.E_B[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
         exponential = cp.clip(cp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
         idx_switch = idx[:,cp.where(rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
@@ -375,7 +375,8 @@ class Magnets(ABC):
     
     def _update_Néel(self, max_t=1, attempt_freq=1e10):
         ''' Performs a single magnetization switch. '''
-        barrier = (self.E_b - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
+        # TODO: we might be able to multi-switch here as well, by taking into account the double-switch time
+        barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
         minBarrier = cp.min(barrier)
         barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway

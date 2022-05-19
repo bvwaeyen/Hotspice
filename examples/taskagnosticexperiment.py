@@ -27,7 +27,7 @@ def single_taskagnostic(experiment: TaskAgnosticExperiment, iterations=1000, dir
     df = experiment.to_dataframe()
     metadata = {"description": r"Contains the input values <u> and state vectors <y> used for calculating task agnostic metrics of the system as proposed in `Task Agnostic Metrics for Reservoir Computing` by Love et al."}
     constants = {"ext_magnitude": experiment.inputter.magnitude, "ext_angle": experiment.inputter.angle, "out_nx": experiment.outputreader.nx, "out_ny": experiment.outputreader.ny,
-                 "V": experiment.mm.V, "T": experiment.mm.T_avg, "E_b": experiment.mm.E_b_avg, "nx": experiment.mm.nx, "ny": experiment.mm.ny, "dx": experiment.mm.dx, "dy": experiment.mm.dy, "ASI_type": hotspin.utils.full_obj_name(experiment.mm)}
+                 "V": experiment.mm.V, "T": experiment.mm.T_avg, "E_B": experiment.mm.E_B_avg, "nx": experiment.mm.nx, "ny": experiment.mm.ny, "dx": experiment.mm.dx, "dy": experiment.mm.dy, "ASI_type": hotspin.utils.full_obj_name(experiment.mm)}
     full_json = hotspin.utils.combine_json(df, metadata=metadata, constants=constants)
     if save:
         path = "results/TaskAgnosticExperiment"
@@ -74,7 +74,7 @@ def sweep_taskagnostic(ASI_type: type[hotspin.Magnets], variables: dict = None, 
     ''' The dictionary <variables> contains keys representing the parameters to be
         swept, whose value is an array containing their values. A full sweep through
         the hypercube formed by these arrays is performed. The keys should be valid
-        arguments to the <ASI_type> class (nx/ny, dx/dy, T, E_b, Msat...) or the
+        arguments to the <ASI_type> class (nx/ny, dx/dy, T, E_B, Msat...) or the
         TaskAgnosticExperiment class (ext_field, ext_angle...),
         and should only be scalar values.
             Example: {"T": [250, 300, 350], "V": [2e-22, 4e-22]}

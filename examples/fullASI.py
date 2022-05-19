@@ -13,12 +13,12 @@ from context import hotspin
 
 ## Parameters, meshgrid
 T = 300 # [K]
-E_b = 5e-22 # [J]
+E_B = 5e-22 # [J]
 n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.FullASI(n, 1e-6, T=T, E_b=E_b, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspin.ASI.FullASI(n, 1e-6, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 

@@ -4,31 +4,28 @@
 
 1. High priority
     - [ ] Determine if $E_B$ needs to be taken into account in Glauber model
-        - [ ] Improve accuracy of actual energy barrier as function of $\Delta E$ and $E_B$
+        - [x] Improve accuracy of actual energy barrier as function of $\Delta E$ and $E_B$
+        - [ ] Improve accuracy of actual energy barrier using a four-state approach?
         - [ ] Can we get some sort of time measure for multiswitching Glauber dynamics?
-    - Multi-switching
-        - [ ] Fix PBC issue in Grid multi-switching
-        - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel, because the recent estimated calculation did not seem to correspond to reality very well)
-
-    - [ ] Develop .io and .experiments modules
-        - [x] Task Agnostic Metrics for RC
-        - [ ] Separate source code from executable code in `hotspin.experiments` module
+    - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel, because the recent estimated calculation did not seem to correspond to reality very well)
 
 2. Medium priority
     - [ ] Make unit tests
     - [ ] Organize plotting functions better
         - [ ] Improve the Average class to make it more versatile and consistent between different ASIs
-    - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state because the current method is behaving similarly as when a cheese grater is used as ship
+    - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state (e.g. Néel vector?) because the current method is behaving similarly as when a cheese grater is used as ship
     - [ ] Implement metrics (average magnetization and dimensionless amplitude ratio  $\langle m^2 \rangle^2/\langle m^4 \rangle$, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction, susceptibility, width of domains (related to correlation probably)...) to compare with theory/experiment
     - [ ] Improve relaxation algorithm
+    - Multi-switching
+        - [ ] Fix PBC issue in Grid multi-switching
+        - [ ] Implement parallel Poisson-disc sampling
     - [ ] Can implement autocorrelation length by taking into account cross product between vectors?
-    - [ ] Make a `get_summary()` method that returns a dict with important parameters of the simulation, and also make a function to reliably store the results of a simulation including these parameters, since now the filenames are drowning in parameters.
+    - [ ] Make a `get_summary()` method that returns a dict with important parameters of the simulation for easier creation of the "constants" in JSON data files.
 
 3. Low priority
     - [ ] Compress $M_{sat}$ and $V$ into one parameter (unit Am² = Nm/T) (or is there some reason why they need to be separate?)
     - [ ] Linear transformations (e.g. skewing or squeezing) should be relatively easy to implement by acting on xx, yy, but unit cells and more advanced calculations might become an issue ([plt imshow](https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html "Affine transform of an image for skewed geometries"))
     - [ ] Random defects (i.e. missing magnets, because other randomness will interfere with the unit cells)
-    - [x] Turn Vec2D into a Unitcell class, and detect the unitcell dimensions etc. automatically
     - [ ] Plot that shows field direction at every cell taking into account Zeeman and dipolar field from all other magnets
 
 ## Analysis and tests
@@ -37,7 +34,7 @@
     - Test physical accuracy of Hotspin
         - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization?)
         - [x] Pinwheel reversal in external field (cfr. flatspin paper) (try with Néel update equation)
-            - [x] Solve problem of too low external field requirement
+            - [ ] Solve problem of too high external field requirement for the second step of two-step switching (I think this is due to the )
     - [ ] Calculate kernel-quality and task agnostic metrics as function of T, for different lattices with different interactions etc. First try easiest models and then go closer to experiment
 
 2. Medium priority
@@ -47,8 +44,8 @@
         - [x] 2D Ising with long-range dipolar interactions ("Aging in a Two-Dimensional Ising Model with Dipolar Interactions")
             - [ ] Can we also check the 'aging' part of that paper?
     - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???)
-    - [ ] Simulation speed (samples/sec) for different grid sizes? Are certain nicely factorable lengths preferable?
-    - [x] Use date & time to save results, use a format that supports metadata to store some constant parameters like T, nx, ny, E_b, ...
+    - [x] Simulation speed (samples/sec) for different grid sizes?
+        - [ ] Are certain nicely factorable lengths preferable? (all I notice now is that for non-1x1-unitcell systems, there is a dependence on if the unitcells fit perfectly in the simulation or not)
 
 3. Low priority
     - Test physical accuracy of Hotspin

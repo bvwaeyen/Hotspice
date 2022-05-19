@@ -42,7 +42,7 @@ def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.F
 
     data = pd.DataFrame({"L": L_range, "n": n, "attempts/s": attempts_per_s, "switches/s": switches_per_s, "MCsteps/s": MCsteps_per_s})
     metadata = {"description": r"Performance test for Hotspin, determining throughput as switches/s or a similar metric, for various simulation sizes."}
-    constants = {"T": mm.T_avg, "E_b": mm.E_b_avg, "dx": mm.dx, "dy": mm.dy, "ASI_type": hotspin.utils.full_obj_name(mm), "PBC": mm.PBC}
+    constants = {"T": mm.T_avg, "E_B": mm.E_B_avg, "dx": mm.dx, "dy": mm.dy, "ASI_type": hotspin.utils.full_obj_name(mm), "PBC": mm.PBC}
     savepath = ''
     if save:
         full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
