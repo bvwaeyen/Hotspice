@@ -27,6 +27,7 @@ class SimParams:
     # TODO: THOROUGH ANALYSIS OF REDUCED_KERNEL_SIZE AND TAKE APPROPRIATE MEASURES (e.g. full recalculation every <n> steps)
     REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
     UPDATE_SCHEME: str = 'Glauber' # Can be any of 'Néel', 'Glauber', 'Wolff'
+    MULTISAMPLING_SCHEME: str = 'grid' # Can be any of 'single', 'grid', 'Poisson', 'cluster'
 
     def __post_init__(self):
         self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = int(self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF)
@@ -284,8 +285,15 @@ class Magnets(ABC):
         '''
         if r is None: r = self.calc_r(0.01)
 
-        return self._select_grid(r=r)
-        # return self._select_single()
+        match self.params.MULTISAMPLING_SCHEME:
+            case 'single':
+                return self._select_single(self)
+            case 'grid':
+                return self._select_grid(r=r)
+            case 'Poisson':
+                return self._select_Poisson(r=r)
+            case 'cluster':
+                return self._select_cluster()
     
     def _select_single(self):
         ''' Selects just a single magnet from the simulation domain. '''
@@ -316,7 +324,21 @@ class Magnets(ABC):
         idx_y = offsets_y + occupation_nonzero[0][random_nonzero_indices]
         ok = (idx_x >= 0) & (idx_y >= 0) & (idx_x < self.nx) & (idx_y < self.ny)
         if cp.sum(ok) == 0: return self._select_grid(r) # If no samples were taken, try again
-        return cp.asarray([idx_y[ok], idx_x[ok]])
+        return cp.asarray([idx_y[ok].reshape(-1), idx_x[ok].reshape(-1)])
+    
+    def _select_Poisson(self, r):
+        from .wip_poisson import SequentialPoissonDiskSampling
+        # from scipy.spatial import KDTree
+        # TODO: implement parallel Poisson disc sampling
+        # def ThrowSample():
+        #     pass
+        # def Subdivide():
+        #     pass
+
+        # T = scipy.spatial.KDtree
+        p = SequentialPoissonDiskSampling(self.ny*self.dy, self.nx*self.dx, r, tries=1)
+        points = (np.array(p.fill())/self.dx).astype(int)
+        return cp.asarray(points.T)
     
     def _select_cluster(self):
         ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model.
@@ -361,7 +383,7 @@ class Magnets(ABC):
         # OPTION 1: TRUE GLAUBER, NO ENERGY BARRIER (or at least not explicitly)
         # exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # OPTION 2: AD-HOC ADJUSTED GLAUBER, where we assume that the 'other state' is at the top of the energy barrier
-        # TODO: more accurate energy barrier? (might not be worth the computational cost)
+        # TODO: more accurate energy barrier using 4-state approach? (might not be worth the computational cost)
         barrier = cp.maximum((delta_E := self.switch_energy(idx)), self.E_B[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
         exponential = cp.clip(cp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:

@@ -12,7 +12,7 @@ from scipy.spatial import distance
 from context import hotspin
 
 
-def calculate_any_neighbors(pos, shape, center:int=0):
+def calculate_any_neighbors(pos, shape, center: int = 0):
     ''' @param pos [cp.array(2xN)]: the array of indices (row 0: y, row 1: x)
         @param shape [tuple(2)]: the maximum indices (+1) in y- and x- direction
         @param center [int]: if 0, then the full neighbor array is returned. If nonzero, only the 
@@ -41,7 +41,7 @@ def calculate_any_neighbors(pos, shape, center:int=0):
         return final_array
 
 
-def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True):
+def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True, params:hotspin.SimParams=None, ASI_type:type[hotspin.Magnets]=None):
     ''' In this analysis, the multiple-magnet-selection algorithm of hotspin.Magnets.select() is analyzed.
         The spatial distribution is calculated by performing <n> runs of the select() method.
         Also the probability distribution of the distance between two samples is calculated,
@@ -53,12 +53,13 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     '''
     if Ly is None: Ly = L
     if Lx is None: Lx = L
-    mm = hotspin.ASI.FullASI(Lx, 1, ny=Ly, PBC=PBC)
+    if ASI_type is None: ASI_type = hotspin.ASI.FullASI
+    mm = ASI_type(Lx, 1, ny=Ly, PBC=PBC, params=params)
     INTEGER_BINS = False # If true, the bins are pure integers, otherwise they can be finer than this.
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
     scale: int = 3 if ONLY_SMALLEST_DISTANCE else 4 # The distances are stored up to scale*r, beyond that we dont keep in memory
 
-    distances_binned = cp.zeros(n_bins := int(r*scale+1)) if INTEGER_BINS else cp.zeros(n_bins := 100)
+    distances_binned = cp.zeros(n_bins := int(r*scale+1)) if INTEGER_BINS else cp.zeros(n_bins := 99)
     bin_width = r*scale/(n_bins-1)
     distance_bins = cp.linspace(0, r*scale-bin_width, n_bins)
     max_dist_bin = r*scale
@@ -72,7 +73,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     for _ in range(n):
         # from poisson_disc import Bridson_sampling
         # pos = cp.asarray(Bridson_sampling(dims=np.array([Ly, Lx]), radius=r, k=5).T, dtype=int) # POISSON DISC SAMPLING BRIDSON2007
-        pos = mm.select(r) # MODIFY THIS LINE TO SELECT A SPECIFIC SELECTION ALGORITHM
+        pos = mm.select(r=r)
         total += pos.shape[1]
         choices = cp.zeros_like(field)
         choices[pos[0], pos[1]] += 1
@@ -116,11 +117,11 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     fig = plt.figure(figsize=(8, 7))
     ax1 = fig.add_subplot(2, 2, 1)
     if ONLY_SMALLEST_DISTANCE:
-        ax1.bar(distance_bins.get(), cp.cumsum(distances_binned/cp.sum(distances_binned)).get(), align='edge', width=bin_width)
-        ax1.bar(distance_bins.get(), (distances_binned/cp.sum(distances_binned)).get()/bin_width, align='edge', width=bin_width)
+        ax1.bar(distance_bins.get(), cp.cumsum(distances_binned/cp.sum(distances_binned)).get(), align='edge', width=bin_width, color='C0', label='Cum. prob.')
+        ax1.fill_between(distance_bins.get(), (distances_binned/cp.sum(distances_binned)).get()/bin_width, step='post', edgecolor='C1', facecolor='C1', alpha=0.7, label='Prob. dens.')
         ax1.set_xlabel('Distance to nearest neighbor (binned)')
         ax1.set_title('Nearest-neighbor distances')
-        ax1.legend(['Cum. prob.', 'Prob. dens.'])
+        ax1.legend(loc='lower right')
     else:
         ax1.bar(distance_bins.get(), distances_binned.get(), align='edge', width=bin_width)
         ax1.set_xlabel('Distance to any other sample (binned)')
@@ -148,7 +149,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     plt.suptitle(f'{Lx}x{Ly} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
     plt.gcf().tight_layout()
     if save:
-        save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{Lx}x{Ly}_r={r}{'_PBC' if PBC else ''}.pdf"
+        save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{mm.params.MULTISAMPLING_SCHEME}_{Lx}x{Ly}_r={r}{'_PBC' if PBC else ''}.pdf"
         dirname = os.path.dirname(save_path)
         if not os.path.exists(dirname): os.makedirs(dirname)
         try:
@@ -174,5 +175,6 @@ def analysis_select_speed(n: int=10000, L:int=400, r=16):
 
 
 if __name__ == "__main__":
-    # analysis_select_speed(L=400)
-    analysis_select_distribution(Lx=300, Ly=200, n=5000, save=True, PBC=True)
+    simparams = hotspin.SimParams(MULTISAMPLING_SCHEME='Poisson')
+    # analysis_select_speed(L=400, n=100)
+    analysis_select_distribution(Lx=100, Ly=100, n=4000, save=True, PBC=True, params=simparams)
