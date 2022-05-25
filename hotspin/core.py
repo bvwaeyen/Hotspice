@@ -307,23 +307,29 @@ class Magnets(ABC):
         '''
         Rx, Ry = math.ceil(r/self.dx) - 1, math.ceil(r/self.dy) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
         Rx, Ry = self.unitcell.x*math.ceil(Rx/self.unitcell.x), self.unitcell.y*math.ceil(Ry/self.unitcell.y) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
-        Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
         Rx, Ry = max(Rx, 2), max(Ry, 2) # If Rx and Ry < 2, too much randomness is removed and we get nonphysical behavior
+        Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
+
+        if self.PBC: # how thick the PBC edges are at bottom and right
+            PBC_edge_x = min(Rx, max(0, self.nx - Rx)) # minmax to avoid cutting into the (0,0) supercell
+            PBC_edge_y = min(Ry, max(0, self.ny - Ry)) # which could lead to 0 possible allowed spots
+        else: PBC_edge_x = PBC_edge_y = 0
+
         supergrid_nx = (self.nx + Rx - 1)//(2*Rx) + 1
         supergrid_ny = (self.ny + Ry - 1)//(2*Ry) + 1
-        move_grid = -np.random.randint([-Ry, -Rx], [Ry, Rx]) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports integers() with arrays
-        if Rx >= self.nx: move_grid[1] = 0 # If the grid is perfectly fit along an axis, then
-        if Ry >= self.ny: move_grid[0] = 0 # just don't move in that coordinate direction
-        offsets_x = move_grid[1] + self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*Rx
-        offsets_y = move_grid[0] + self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*Ry
-        disp_x, disp_y = move_grid[1] % self.unitcell.x, move_grid[0] % self.unitcell.y
-        occupation_supercell = self.occupation[disp_y:disp_y + Ry, disp_x:disp_x + Rx]
+        offsets_x = self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*Rx
+        offsets_y = self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*Ry
+        occupation_supercell = self.occupation[:Ry,:Rx]
         occupation_nonzero = occupation_supercell.nonzero()
         random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, supergrid_ny*supergrid_nx) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
         idx_x = offsets_x + occupation_nonzero[1][random_nonzero_indices]
         idx_y = offsets_y + occupation_nonzero[0][random_nonzero_indices]
-        ok = (idx_x >= 0) & (idx_y >= 0) & (idx_x < self.nx) & (idx_y < self.ny)
+        ok = (idx_x >= 0) & (idx_y >= 0) & (idx_x < self.nx - PBC_edge_x) & (idx_y < self.ny - PBC_edge_y)
         if cp.sum(ok) == 0: return self._select_grid(r) # If no samples were taken, try again
+
+        # Roll the supergrid somewhere randomly (necessary for uniform sampling)
+        if Rx < self.nx: idx_x = (idx_x + cp.random.randint(self.nx)) % self.nx
+        if Ry < self.ny: idx_y = (idx_y + cp.random.randint(self.ny)) % self.ny
         return cp.asarray([idx_y[ok].reshape(-1), idx_x[ok].reshape(-1)])
     
     def _select_Poisson(self, r):
