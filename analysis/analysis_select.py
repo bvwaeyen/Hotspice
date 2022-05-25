@@ -78,17 +78,17 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
         choices = cp.zeros_like(field)
         choices[pos[0], pos[1]] += 1
         field += choices
-        if pos.shape[1] > 1: # if there is more than 1 sample
-            if PBC:
-                _, n_pos = pos.shape # The following approach is quite suboptimal, but it works :)
-                all_pos = cp.zeros((2, n_pos*4), dtype=int)
-                all_pos[:,:n_pos] = pos
-                all_pos[0,n_pos:n_pos*2] = all_pos[0,:n_pos] + mm.ny
-                all_pos[1,n_pos:n_pos*2] = all_pos[1,:n_pos]
-                all_pos[0,n_pos*2:] = all_pos[0,:n_pos*2]
-                all_pos[1,n_pos*2:] = all_pos[1,:n_pos*2] + mm.nx
-            else:
-                all_pos = pos
+        if PBC:
+            _, n_pos = pos.shape # The following approach is quite suboptimal, but it works :)
+            all_pos = cp.zeros((2, n_pos*4), dtype=int)
+            all_pos[:,:n_pos] = pos
+            all_pos[0,n_pos:n_pos*2] = all_pos[0,:n_pos] + mm.ny
+            all_pos[1,n_pos:n_pos*2] = all_pos[1,:n_pos]
+            all_pos[0,n_pos*2:] = all_pos[0,:n_pos*2]
+            all_pos[1,n_pos*2:] = all_pos[1,:n_pos*2] + mm.nx
+        else:
+            all_pos = pos
+        if all_pos.shape[1] > 1: # if there is more than 1 sample
             if ONLY_SMALLEST_DISTANCE:
                 dist_matrix = cp.asarray(distance.cdist(all_pos.T.get(), all_pos.T.get()))
                 dist_matrix[dist_matrix==0] = np.inf
@@ -115,13 +115,28 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     cmap.set_under(color='black')
     hotspin.plottools.init_fonts()
     fig = plt.figure(figsize=(8, 7))
+
+    # PLOT 1: HISTOGRAM OF (NEAREST) NEIGHBORS
     ax1 = fig.add_subplot(2, 2, 1)
     if ONLY_SMALLEST_DISTANCE:
-        ax1.bar(distance_bins.get(), cp.cumsum(distances_binned/cp.sum(distances_binned)).get(), align='edge', width=bin_width, color='C0', label='Cum. prob.')
-        ax1.fill_between(distance_bins.get(), (distances_binned/cp.sum(distances_binned)).get()/bin_width, step='post', edgecolor='C1', facecolor='C1', alpha=0.7, label='Prob. dens.')
+        color_left = 'C1'
         ax1.set_xlabel('Distance to nearest neighbor (binned)')
-        ax1.set_title('Nearest-neighbor distances')
-        ax1.legend(loc='lower right')
+        data1_left = (distances_binned/cp.sum(distances_binned)).get()/(bin_width/r)
+        ax1.fill_between(distance_bins.get(), data1_left, step='post', edgecolor=color_left, facecolor=color_left, alpha=0.7)
+        ax1.set_ylabel('Probability density [$r^{-1}$]', color=color_left)
+        ax1.tick_params(axis='y', labelcolor=color_left)
+
+        ax1_right = ax1.twinx() # instantiate a second axes that shares the same x-axis
+        color_right = 'C0'
+        ax1_right.set_ylabel('Cumulative probability', color=color_right)
+        data1_right = cp.cumsum(distances_binned/cp.sum(distances_binned)).get()
+        ax1_right.bar(distance_bins.get(), data1_right, align='edge', width=bin_width, color=color_right)
+        ax1_right.tick_params(axis='y', labelcolor=color_right)
+        ax1.set_zorder(ax1_right.get_zorder() + 1)
+        ax1.patch.set_visible(False)
+
+        ax1.set_ylim([0, ax1.get_ylim()[1]])
+        ax1_right.set_ylim([0, ax1_right.get_ylim()[1]]) # might want to set this to [0, 1]
     else:
         ax1.bar(distance_bins.get(), distances_binned.get(), align='edge', width=bin_width)
         ax1.set_xlabel('Distance to any other sample (binned)')
@@ -131,21 +146,33 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     ax1.set_xticks([r*n for n in range(scale+1)])
     ax1.set_xticklabels(['0', 'r'] + [f'{n}r' for n in range(2, scale+1)])
     ax1.axvline(r, color='black', linestyle=':', linewidth=1, label=None)
-    ax2 = fig.add_subplot(2, 2, 3)
-    im2 = ax2.imshow(field.get(), vmin=1e-10, origin='lower', interpolation_stage='rgba', interpolation='none', cmap=cmap)
-    ax2.set_title(f"# choices for each cell")
+
+    # PLOT 2: PROBABILITY DENSITY OF NEIGHBORS AROUND ANY SAMPLE
+    ax2 = fig.add_subplot(2, 2, 2)
+    data2 = field_local.get()/total
+    im2 = ax2.imshow(data2, vmin=1e-10, vmax=max(2e-10, np.max(data2)), extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='nearest', cmap=cmap)
+    ax2.set_title(f'Prob. dens. of neighbors\naround any sample')
+    ax2.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
+    ax2.add_patch(plt.Circle((0, 0), r, linewidth=1, fill=False, color='white', linestyle=':'))
     plt.colorbar(im2, extend='min')
-    ax3 = fig.add_subplot(2, 2, 2)
-    im3 = ax3.imshow(field_local.get()/total, vmin=1e-10, extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='nearest', cmap=cmap)
-    ax3.set_title(f'Prob. dens. of neighbors\naround any sample')
-    ax3.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
-    ax3.add_patch(plt.Circle((0, 0), r, linewidth=1, fill=False, color='white', linestyle=':'))
+
+    # PLOT 3: PROBABILITY OF CHOOSING EACH CELL
+    ax3 = fig.add_subplot(2, 2, 3) # TODO: add x and y histograms to the sides of this
+    data3 = field.get()
+    im3 = ax3.imshow(data3, vmin=1e-10, origin='lower', interpolation_stage='rgba', interpolation='none', cmap=cmap)
+    ax3.set_title(f"# choices for each cell")
     plt.colorbar(im3, extend='min')
+
+    # PLOT 4: PERIODOGRAM
     ax4 = fig.add_subplot(2, 2, 4)
     freq = cp.fft.fftshift(cp.fft.fftfreq(mm.nx, d=1)).get() # use fftshift to get ascending frequency order
-    im4 = ax4.imshow(spectrum.get()/total, extent=[-.5+freq[0], .5+freq[-1], -.5+freq[0], .5+freq[-1]], interpolation_stage='rgba', interpolation='none', cmap='gray')
+    data4 = spectrum.get()/total
+    im4 = ax4.imshow(data4, extent=[-.5+freq[0], .5+freq[-1], -.5+freq[0], .5+freq[-1]], interpolation_stage='rgba', interpolation='none', cmap='gray')
     ax4.set_title(f'Periodogram')
     plt.colorbar(im4)
+    
+    # TODO: show histogram of how many samples are generated for each call of select()
+    # TODO: show one representative (or the worst i.e. least samples maybe? or lowest distance?) call of select() spatially for visual inspection (might not be necessary since we have the other plots already)
     plt.suptitle(f'{Lx}x{Ly} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
     plt.gcf().tight_layout()
     if save:
@@ -173,8 +200,10 @@ def analysis_select_speed(n: int=10000, L:int=400, r=16):
     t = time.perf_counter() - t
     print(f'Time required for {n} runs of hotspin.Magnets.select() on {L}x{L} grid: {t:.3f}s.')
 
+# TODO: write function to analyze sampling performance (analysis_select_speed/num_samples) as a function of parameters between different samplers
+# e.g. occupation sparsity, nx & ny for constant r or vice versa (or maybe 2D imshow changing nx=ny and r?)
 
 if __name__ == "__main__":
     simparams = hotspin.SimParams(MULTISAMPLING_SCHEME='Poisson')
     # analysis_select_speed(L=400, n=100)
-    analysis_select_distribution(Lx=100, Ly=100, n=4000, save=True, PBC=True, params=simparams)
+    analysis_select_distribution(Lx=300, Ly=200, n=400, save=True, PBC=True, params=simparams)

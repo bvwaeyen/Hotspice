@@ -15,8 +15,7 @@ import numpy as np
 import pandas as pd
 
 from IPython.terminal.embed import InteractiveShellEmbed
-from types import FunctionType
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 def mirror4(arr, /, *, negativex=False, negativey=False):
@@ -35,7 +34,7 @@ def mirror4(arr, /, *, negativex=False, negativey=False):
     return arr4
 
 
-def filter_kwargs(kwargs: dict, func: FunctionType):
+def filter_kwargs(kwargs: dict, func: Callable):
     return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames}
 
 

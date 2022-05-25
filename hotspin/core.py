@@ -327,7 +327,7 @@ class Magnets(ABC):
         return cp.asarray([idx_y[ok].reshape(-1), idx_x[ok].reshape(-1)])
     
     def _select_Poisson(self, r):
-        from .wip_poisson import SequentialPoissonDiskSampling
+        from .poisson import SequentialPoissonDiskSampling
         # from scipy.spatial import KDTree
         # TODO: implement parallel Poisson disc sampling
         # def ThrowSample():

@@ -5,7 +5,8 @@ import numpy as np
 from scipy.spatial.distance import pdist
 from typing import Callable
 
-
+# TODO: parallel Poisson?
+# TODO: make sure all PBC are accounted for (loose PBC cause imperfect radial symmetry in plot 2 of analysis_select, and increased prob. to place samples near x=0, y=0)
 
 
 class SequentialPoissonDiskSampling:
@@ -20,10 +21,12 @@ class SequentialPoissonDiskSampling:
     ]
     neighbourhoodLength = len(neighbourhood)
 
-    def __init__(self, width: int, height: int, radius: float, tries: int = 30, rng: Callable = None):
+    def __init__(self, width: int, height: int, radius: float, tries: int = 3, rng: Callable = np.random.random):
         ''' Class to implement poisson disk sampling. Code inspired by the Javascript version from
             https://github.com/kchapelier/fast-2d-poisson-disk-sampling/blob/master/src/fast-poisson-disk-sampling.js,
             adapted to our own requirements (e.g. integer positions, PBC)
+            NOTE: this class is quite basic, it can only support integer positions with equal dx and dy,
+                  and only provides a high probability of satisfying PBC, not 100%.
             @param width, height [int]: shape of the space
             @param radius [float]: minimum distance between separate points
             @param tries [int] (30): number of times the algorithm will try to place a point in the neighbourhood of other points
@@ -33,9 +36,11 @@ class SequentialPoissonDiskSampling:
 
         self.width = width
         self.height = height
-        self.radius = radius
+        self.radius = max(radius, 1)
         self.maxTries = max(3, math.ceil(tries))
-        self.rng = np.random.random if rng is None else rng
+        self.rng = rng
+
+        self.offset_x, self.offset_y = int(rng()*self.width), int(rng()*self.height)
 
         self.squaredRadius = self.radius*self.radius
         self.radiusPlusEpsilon = self.radius + epsilon
@@ -63,20 +68,6 @@ class SequentialPoissonDiskSampling:
             0
         ])
 
-    def addPoint(self, point):
-        ''' Add a given point to the grid
-            @param point [list(2)]: point as [x, y]
-            @return [list(4)|None]: (if valid) the point added to the grid represented as [x, y, angle, tries]
-        '''
-        valid = (len(point) == 2)
-        
-        return self.directAddPoint([
-            point[0] % self.width,
-            point[1] % self.height,
-            self.rng()*math.pi*2,
-            0
-        ]) if valid else None
-
     def directAddPoint(self, point):
         ''' Add a given point to the grid, without any check
             @param point [list(4)]: point represented as [x, y, angle, tries]
@@ -94,13 +85,9 @@ class SequentialPoissonDiskSampling:
             @param point [list(4)]: point represented as [x, y, angle, tries]
             @return [bool]: whether the point is in the neighbourhood of another point
         '''
-        pointpos = [int(point[0]/self.cellSize) | 0, int(point[1]/self.cellSize) | 0]
         for neighbourIndex in range(self.neighbourhoodLength):
-            gridIndex = [0, 0]
-            for dimension in range(2):
-                currentDimensionValue = pointpos[dimension] + self.neighbourhood[neighbourIndex][dimension]
-                gridIndex[dimension] = currentDimensionValue % self.gridShape[dimension]
-            gridIndex = tuple(gridIndex)
+            gridIndex = ((int(point[0]/self.cellSize) + self.neighbourhood[neighbourIndex][0]) % self.gridShape[0],
+                         (int(point[1]/self.cellSize) + self.neighbourhood[neighbourIndex][1]) % self.gridShape[1])
 
             if self.grid[gridIndex] != 0: # i.e. it is occupied
                 positions = np.asarray([[point[0], point[1]], self.samplePoints[self.grid[gridIndex] - 1]]) # point, and already existing point
@@ -112,8 +99,7 @@ class SequentialPoissonDiskSampling:
                     dist_1d[dist_1d > box[dim]*0.5] -= box[dim]
                     dist_nd_sq += dist_1d**2 # d^2 = dx^2 + dy^2
 
-                if dist_nd_sq < self.squaredRadius:
-                    return True
+                if dist_nd_sq < self.squaredRadius: return True
         return False
 
     def next(self):
@@ -149,6 +135,12 @@ class SequentialPoissonDiskSampling:
                 if index < len(self.processList): self.processList[index] = r
         
         return None
+    
+    def offset(self):
+        samplePoints = np.asarray(self.samplePoints)
+        samplePoints[:,0] = (samplePoints[:,0] + self.offset_x) % self.width
+        samplePoints[:,1] = (samplePoints[:,1] + self.offset_y) % self.height
+        self.samplePoints = samplePoints.tolist()
 
     def fill(self):
         ''' Automatically fill the grid, adding a random point to start the process if needed.
@@ -156,6 +148,7 @@ class SequentialPoissonDiskSampling:
         '''
         if len(self.samplePoints) == 0: self.addRandomPoint()
         while self.next(): pass
+        self.offset()
         return self.samplePoints
 
     def getAllPoints(self):
@@ -171,16 +164,18 @@ class SequentialPoissonDiskSampling:
         self.processList = []
 
 if __name__ == "__main__":
-    p = SequentialPoissonDiskSampling(1000, 1000, 16, tries=3) # 3 (or 2) tries is optimal in terms of points/second
-    points = np.asarray(p.fill())
-    print(len(points))
-
     import matplotlib.pyplot as plt
     from matplotlib.patches import Circle
+
+
+    p = SequentialPoissonDiskSampling(500, 500, 16, tries=3) # 3 (or 2) tries is optimal in terms of points/second
+    points = p.fill()
+    print(f'Sampled {len(points)} points.')
+
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal')
     for x, y in points:
         ax.add_artist(Circle(xy=(x, y), radius=p.radius/2))
-    ax.set_xlim([0, p.width])
-    ax.set_ylim([0, p.height])
+    ax.set_xlim([-.5, p.width-.5])
+    ax.set_ylim([-.5, p.height-.5])
     plt.show()
