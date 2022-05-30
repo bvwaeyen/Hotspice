@@ -95,6 +95,9 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
                 distances = cp.min(dist_matrix, axis=1)
             else:
                 distances = cp.asarray(distance.pdist(all_pos.T.get()))
+            # if min_dist > (m := cp.min(distances)) and m < r:
+            #     indices = cp.where(distances == m)[0]
+            #     print(m, pos[:,indices])
             min_dist = min(min_dist, cp.min(distances))
             near_distances = distances[distances < max_dist_bin]
             if near_distances.size != 0:
@@ -187,23 +190,24 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
         plt.show()
 
 
-def analysis_select_speed(n: int=10000, L:int=400, r=16):
+def analysis_select_speed(n: int=10000, L:int=400, r=16, PBC:bool=True, params:hotspin.SimParams=None):
     ''' Tests the speed of selecting magnets without any other analysis-related calculations in between.
         @param n [int] (10000): the number of times the select() method is executed.
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     '''
-    mm = hotspin.ASI.FullASI(L, 1)
+    mm = hotspin.ASI.FullASI(L, 1, PBC=PBC, params=params)
+    samples = 0
     t = time.perf_counter()
     for _ in range(n):
-        mm.select(r)
+        samples += mm.select(r=r).shape[1]
     t = time.perf_counter() - t
-    print(f'Time required for {n} runs of hotspin.Magnets.select() on {L}x{L} grid: {t:.3f}s.')
+    print(f'Time required for {n} runs of hotspin.Magnets.select() on {L}x{L} grid: {t:.3f}s ({samples} samples).')
 
 # TODO: write function to analyze sampling performance (analysis_select_speed/num_samples) as a function of parameters between different samplers
 # e.g. occupation sparsity, nx & ny for constant r or vice versa (or maybe 2D imshow changing nx=ny and r?)
 
 if __name__ == "__main__":
-    simparams = hotspin.SimParams(MULTISAMPLING_SCHEME='Poisson')
-    # analysis_select_speed(L=400, n=100)
-    analysis_select_distribution(Lx=300, Ly=200, n=400, save=True, PBC=True, params=simparams)
+    PBC, simparams = True, hotspin.SimParams(MULTISAMPLING_SCHEME='grid')
+    # analysis_select_speed(L=400, n=400, PBC=PBC, params=simparams)
+    analysis_select_distribution(Lx=300, Ly=200, n=1000, save=True, PBC=PBC, params=simparams)

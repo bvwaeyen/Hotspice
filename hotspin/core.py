@@ -278,72 +278,102 @@ class Magnets(ABC):
         self._T = f(xx, yy)
 
 
-    def select(self, r=None):
-        ''' @param r [float] (self.calc_r(0.01)): minimal distance between magnets, in meters
+    def select(self, **kwargs):
+        ''' Performs the appropriate sampling method as specified by self.params.MULTISAMPLING_SCHEME.
+            - 'single': strictly speaking, this is the only physically correct sampling scheme. However,
+                to improve efficiency while making as small an approximation as possible, the grid and
+                Poisson schemes exist for use in the Glauber update scheme.
+            - 'grid': built for efficient parallel generation of samples, but this introduces strong bias
+                from the orthogonal grid in the sample distribution. To remedy this to some extent, using
+                poisson=True randomizes the positioning of the supercells, though these are still placed
+                on a supergrid and therefore the bias is not completely eliminated.
+            - 'Poisson': uses a true Poisson disk sampling algorithm to sample some magnets with a minimal
+                distance requirement, but is much slower than 'grid' for simulations larger than ~(6r, 6r).
+                Also, this does not take into account self.occupation, resulting in a possible loss of
+                samples for some spin ices.
+            - 'cluster': only to be used in the Wolff update scheme. This is supposed to reduce "critical
+                slowing down" in the 2D square-lattice exchange-coupled Ising model.
+            @param r [float] (self.calc_r(0.01)): minimal distance between magnets, in meters
             @return [cp.array]: a 2xN array, where the 2 rows represent y- and x-coordinates (!), respectively.
                 (this is because the indexing of 2D arrays is e.g. self.m[y,x])
         '''
-        if r is None: r = self.calc_r(0.01)
-
         match self.params.MULTISAMPLING_SCHEME:
-            case 'single':
-                return self._select_single(self)
+            case 'single': # Strictly speaking, this is the only physically correct sampling scheme
+                pos = self._select_single(**kwargs)
             case 'grid':
-                return self._select_grid(r=r)
+                pos = self._select_grid(**kwargs)
             case 'Poisson':
-                return self._select_Poisson(r=r)
+                pos = self._select_Poisson(**kwargs)
             case 'cluster':
-                return self._select_cluster()
+                pos = self._select_cluster(**kwargs)
+        if pos.size > 0:
+            valid = np.where(self.occupation[pos[0], pos[1]])[0]
+        else: valid = np.zeros(0)
+        return pos[:,valid] if valid.size > 0 else self.select(**kwargs) # If at first you don't succeed try, try and try again
     
     def _select_single(self):
-        ''' Selects just a single magnet from the simulation domain. '''
+        ''' Selects just a single magnet from the simulation domain.
+            Strictly speaking, this is the only physically correct sampling scheme.
+        '''
         nonzero_y, nonzero_x = cp.nonzero(self.occupation)
         nonzero_idx = cp.random.choice(self.n, 1) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
         return cp.asarray([nonzero_y[nonzero_idx], nonzero_x[nonzero_idx]]).reshape(2, -1)
 
-    def _select_grid(self, r):
+    def _select_grid(self, r=None, poisson=None):
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
             ! <r> is a distance in meters, not a number of cells !
+            @param r [float] (self.calc_r(0.01)): the minimal distance between two samples.
+            @param poisson [bool] (True|False): whether or not to choose the supercells using a poisson-like scheme.
+                Using poisson=True is slower (already 2x slower for more than ~15x15 supercells) and places less
+                samples at once, but provides a much better sample distribution where the orthogonal grid bias is
+                not entirely eliminated but nonetheless significantly reduced as compared to poisson=False.
         '''
+        if r is None: r = self.calc_r(0.01)
+        if poisson is None: poisson = (15*r)**2 < self.nx*self.ny # use poisson supercells only if there are not too many supercells
         Rx, Ry = math.ceil(r/self.dx) - 1, math.ceil(r/self.dy) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
         Rx, Ry = self.unitcell.x*math.ceil(Rx/self.unitcell.x), self.unitcell.y*math.ceil(Ry/self.unitcell.y) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
-        Rx, Ry = max(Rx, 2), max(Ry, 2) # If Rx and Ry < 2, too much randomness is removed and we get nonphysical behavior
         Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
+        Rx, Ry = max(Rx, 1 if poisson else 2), max(Ry, 1 if poisson else 2) # Also don't take too small, too much randomness could be removed, resulting in nonphysical behavior
 
-        if self.PBC: # how thick the PBC edges are at bottom and right
-            PBC_edge_x = min(Rx, max(0, self.nx - Rx)) # minmax to avoid cutting into the (0,0) supercell
-            PBC_edge_y = min(Ry, max(0, self.ny - Ry)) # which could lead to 0 possible allowed spots
-        else: PBC_edge_x = PBC_edge_y = 0
+        supercells_nx = self.nx//Rx + 1
+        supercells_ny = self.ny//Ry + 1
+        if poisson:
+            from .poisson import PoissonGrid
+            # TODO: with parallel Poisson sampling, generate a lot more samples than necessary at once so we have enough for the next several iterations as well
+            supercells_x, supercells_y = cp.asarray(PoissonGrid(supercells_nx, supercells_ny))
+        else:
+            supercells_x = self.ixx[:supercells_ny:2, :supercells_nx:2].ravel()
+            supercells_y = self.iyy[:supercells_ny:2, :supercells_nx:2].ravel()
+        n = supercells_x.size # Number of selected supercells
 
-        supergrid_nx = (self.nx + Rx - 1)//(2*Rx) + 1
-        supergrid_ny = (self.ny + Ry - 1)//(2*Ry) + 1
-        offsets_x = self.ixx[:supergrid_ny, :supergrid_nx].ravel()*2*Rx
-        offsets_y = self.iyy[:supergrid_ny, :supergrid_nx].ravel()*2*Ry
-        occupation_supercell = self.occupation[:Ry,:Rx]
-        occupation_nonzero = occupation_supercell.nonzero()
-        random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, supergrid_ny*supergrid_nx) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
-        idx_x = offsets_x + occupation_nonzero[1][random_nonzero_indices]
-        idx_y = offsets_y + occupation_nonzero[0][random_nonzero_indices]
-        ok = (idx_x >= 0) & (idx_y >= 0) & (idx_x < self.nx - PBC_edge_x) & (idx_y < self.ny - PBC_edge_y)
-        if cp.sum(ok) == 0: return self._select_grid(r) # If no samples were taken, try again
+        offset_x, offset_y = np.random.randint(self.nx), np.random.randint(self.ny) # To hide any weird edge effects
+        dx, dy = offset_x % Rx, offset_y % Ry # offset in a single supercell
+        occupation_supercell = self.occupation[dy:dy+Ry, dx:dx+Rx]
+        occupation_nonzero = occupation_supercell.nonzero() # tuple: (array(x_indices), array(y_indices))
+        random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, n) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
+        idx_x = supercells_x*Rx + occupation_nonzero[1][random_nonzero_indices]
+        idx_y = supercells_y*Ry + occupation_nonzero[0][random_nonzero_indices]
+
+        # Remove the max_x and max_y borders to ensure PBC
+        if self.PBC: # Cutoff index to ensure PBC if applicable (max() to ensure that (0,0) supercell is intact)
+            ok = (idx_x < max(Rx, self.nx - Rx)) & (idx_y < max(Ry, self.ny - Ry))
+            idx_x, idx_y = idx_x[ok], idx_y[ok]
 
         # Roll the supergrid somewhere randomly (necessary for uniform sampling)
-        if Rx < self.nx: idx_x = (idx_x + cp.random.randint(self.nx)) % self.nx
-        if Ry < self.ny: idx_y = (idx_y + cp.random.randint(self.ny)) % self.ny
-        return cp.asarray([idx_y[ok].reshape(-1), idx_x[ok].reshape(-1)])
-    
-    def _select_Poisson(self, r):
-        from .poisson import SequentialPoissonDiskSampling
-        # from scipy.spatial import KDTree
-        # TODO: implement parallel Poisson disc sampling
-        # def ThrowSample():
-        #     pass
-        # def Subdivide():
-        #     pass
+        if Rx < self.nx: idx_x = (idx_x + offset_x) % self.nx
+        if Ry < self.ny: idx_y = (idx_y + offset_y) % self.ny
+        if idx_x.size != 0:
+            return cp.asarray([idx_y.reshape(-1), idx_x.reshape(-1)])
+        else:
+            return self._select_grid(r) # If no samples survived, try again
 
-        # T = scipy.spatial.KDtree
-        p = SequentialPoissonDiskSampling(self.ny*self.dy, self.nx*self.dx, r, tries=1)
-        points = (np.array(p.fill())/self.dx).astype(int)
+    def _select_Poisson(self, r=None): # WARN: does not take occupation into account, so preferably only use on FullASI/IsingASI!
+        if r is None: r = self.calc_r(0.01)
+        from .poisson import SequentialPoissonDiskSampling, poisson_disc_samples
+
+        # p = SequentialPoissonDiskSampling(self.ny*self.dy, self.nx*self.dx, r, tries=1).fill()
+        p = poisson_disc_samples(self.ny*self.dy, self.nx*self.dx, r, k=4)
+        points = (np.array(p)/self.dx).astype(int)
         return cp.asarray(points.T)
     
     def _select_cluster(self):
