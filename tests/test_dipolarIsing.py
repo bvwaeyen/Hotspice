@@ -26,11 +26,11 @@ class test_dipolarIsing:
     @property
     def dipolar_nearest(self):
         ''' Yields the dipolar interaction energy between nearest neighbors. '''
-        return 1e-7*self.mm.get_energy('dipolar').prefactor*(self.mm.Msat*self.mm.V)**2/(self.mm.a**3)
+        return 1e-7*self.mm.get_energy('dipolar').prefactor*(self.mm._momentSq)/(self.mm.a**3)
     
     @property
     def delta(self):
-        ''' Dipolar energy magnitude:  m*m* prefactor/(a**3)*1e-7*(Msat*V)**2
+        ''' Dipolar energy magnitude:  m*m* prefactor/(a**3)*1e-7*(moment**2)
             Exchange energy magnitude: m*m* J
             So delta = exchange/dipolar is given by...
         '''

@@ -160,7 +160,7 @@ class RegionalOutputReader(OutputReader):
         for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
             here = (self.region_x == i[0]) & (self.region_y == i[1])
             n[i] = cp.sum(mm.occupation[here])
-        self.normalization_factor = np.max(cp.asarray(self.mm.Msat*self.mm.V*n).get())
+        self.normalization_factor = np.max(cp.asarray(cp.max(self.mm.moment)*n).get())
 
         if mm.in_plane:
             self.state = cp.zeros((self.nx, self.ny, 2))
@@ -171,8 +171,8 @@ class RegionalOutputReader(OutputReader):
         if mm is not None: self.configure_for(mm) # If mm not specified, we suppose configure_for() already happened
         if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
         if self.mm.in_plane:
-            m_x = m*self.mm.orientation[:,:,0]*self.mm.Msat*self.mm.V/self.normalization_factor
-            m_y = m*self.mm.orientation[:,:,1]*self.mm.Msat*self.mm.V/self.normalization_factor
+            m_x = m*self.mm.orientation[:,:,0]*self.mm.moment/self.normalization_factor
+            m_y = m*self.mm.orientation[:,:,1]*self.mm.moment/self.normalization_factor
 
         for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
             here = (self.region_x == i[0]) & (self.region_y == i[1])

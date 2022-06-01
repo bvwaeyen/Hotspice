@@ -12,7 +12,7 @@ from functools import cache
 from scipy.spatial import distance
 from textwrap import dedent
 
-from .utils import as_cupy_array, check_repetition, mirror4
+from .utils import as_cupy_array, check_repetition, mirror4, Field
 
 
 kB = 1.380649e-23
@@ -39,23 +39,28 @@ class SimParams:
 class Magnets(ABC):
     def __init__(
         self, nx: int, ny: int, dx: float, dy: float, *,
-        T: float = 300, E_B: float = 0., Msat: float = 800e3, V: float = 2e-22, in_plane: bool = True,
-        pattern: str = None, energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None):
+        T: Field = 300, E_B: Field = 0., moment: Field = None, Msat: Field = 800e3, V: Field = 2e-22,
+        pattern: str = None, energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None, in_plane: bool = False):
         '''
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
-            The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are allowed currently. 
+            The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are currently allowed.
             The initial configuration of a Magnets geometry consists of 3 parts:
-             1) in_plane:  Magnets can be in-plane or out-of-plane: True or False, respectively.
-             2) ASI type:  Defined through subclasses (pinwheel, kagome, Ising...).
-             3) pattern: The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM' or 'random'.
-            One can also specify which energy components should be considered: any of 'dipolar', 'Zeeman' and 'exchange'.
-                If you want to adjust the parameters of these energies, than call energy_<type>_init(<parameters>) manually.
-                By default, only the dipolar energy is active.
+                1) in_plane: Magnets can be in-plane or out-of-plane: True or False, respectively. Determined by subclassing.
+                2) ASI type: Defined through subclasses (pinwheel, kagome, Ising...). This concerns the layout of spins.
+                3) pattern:  The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM', 'vortex' or 'random'.
+            One can also specify which energies should be considered by passing a tuple of Energy objects to <energies>.
+                If <energies> is not passed, only the dipolar energy is considered. If a tuple is passed, however, the
+                dipolar energy is not automatically added: if still desired, the user should include this themselves.
+            The arguments <T>, <E_B>, <moment>, <Msat> and <V> can all be constant (by passing them as a float) or spatially
+                varying (by passing them as a shape (nx, ny) array).
+            The magnetic moment can either be specified using the 2 arguments <Msat> (default 800e3 A/m) and <V> (default 2e-22 m³),
+                or directly by passing a value to <moment>. The argument <moment> takes precedence over <Msat> and <V>.
+            To enable periodic boundary conditions (default: disabled), pass PBC=True.
+            To add an extra rotation to all spins in addition to self._get_angles(), pass <angle> as a float (in radians).
+            The parameter <in_plane> should only be used in a super().__init__() call when subclassing this class.
         '''
         self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
         self.t = 0. # [s]
-        self.Msat = Msat # [A/m]
-        self.V = V # [m³]
         self.in_plane = in_plane
         self.PBC = PBC
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J]
@@ -69,9 +74,10 @@ class Magnets(ABC):
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.nx), cp.arange(0, self.ny))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
-        # Initialize temperature and energy barrier arrays (!!! needs self.xx etc. to exist, since this is an array of same shape)
+        # Initialize field-like properties (!!! these need self.xx etc. to exist, since these are arrays of the same shape)
         self.T = T # [K]
         self.E_B = E_B # [J]
+        self.moment = Msat*V if moment is None else moment # [Am²] moment is saturation magnetization multiplied by volume
 
         # History
         self.history = History()
@@ -221,7 +227,7 @@ class Magnets(ABC):
         return self._T
     
     @T.setter
-    def T(self, value):
+    def T(self, value: Field):
         self._T = as_cupy_array(value, self.xx.shape)
 
     @property
@@ -229,8 +235,17 @@ class Magnets(ABC):
         return self._E_B
     
     @E_B.setter
-    def E_B(self, value):
+    def E_B(self, value: Field):
         self._E_B = as_cupy_array(value, self.xx.shape)
+
+    @property
+    def moment(self) -> cp.ndarray:
+        return self._moment
+    
+    @moment.setter
+    def moment(self, value: Field):
+        self._moment = as_cupy_array(value, self.xx.shape)
+        self._momentSq = self._moment*self._moment
 
 
     @property
@@ -461,15 +476,18 @@ class Magnets(ABC):
         return cluster
 
 
-    def calc_r(self, Q): # r: a distance in meters
+    def calc_r(self, Q, as_scalar=True) -> float|cp.ndarray:
         ''' Calculates the minimal value of r (IN METERS). Considering two nearby sampled magnets, the switching probability
             of the first magnet will depend on the state of the second. For magnets further than <calc_r(Q)> apart, the switching
             probability of the first will not change by more than <Q> if the second magnet switches.
             @param Q [float]: (0<Q<1) the maximum allowed change in switching probability of a sample if any other sample switches.
-            @return [float]: the minimal distance (in meters) between two samples, if their mutual influence on their switching
-                probabilities is to be less than <Q>.
+            @param as_scalar [bool] (True): if True, a safe value for the whole grid is returned.
+                If False, a CuPy array is returned which can for example be used in adaptive Poisson disc sampling.
+            @return [float|cp.ndarray]: the minimal distance (in meters) between samples, if their mutual influence on their
+                switching probabilities is to be less than <Q>.
         '''
-        return (8e-7*self.Msat**2*self.V**2/(Q*cp.min(self.kBT)))**(1/3)
+        r = (8e-7*self._momentSq/(Q*self.kBT))**(1/3)
+        return float(cp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
     def minimize_single(self, N=1):
@@ -758,9 +776,9 @@ class ZeemanEnergy(Energy):
 
     def update(self):
         if self.mm.in_plane:
-            self.E = -self.mm.Msat*self.mm.V*cp.multiply(self.mm.m, self.B_ext[0]*self.mm.orientation[:,:,0] + self.B_ext[1]*self.mm.orientation[:,:,1])
+            self.E = -self.mm.moment*cp.multiply(self.mm.m, self.B_ext[0]*self.mm.orientation[:,:,0] + self.B_ext[1]*self.mm.orientation[:,:,1])
         else:
-            self.E = -self.mm.Msat*self.mm.V*self.mm.m*self.B_ext
+            self.E = -self.mm.moment*self.mm.m*self.B_ext
 
     def energy_switch(self, indices2D):
         indices2D = Energy.clean_indices(indices2D)
@@ -846,7 +864,7 @@ class DipolarEnergy(Energy):
                     kernel[:self.mm.ny-1,:] += kernelcopy[self.mm.ny:,:]
                     kernel[:self.mm.ny-1,self.mm.nx:] += kernelcopy[self.mm.ny:,:self.mm.nx-1]
 
-                kernel *= 1e-7*(self.mm.Msat*self.mm.V)**2 # [J], 1e-7 is mu_0/4Pi
+                kernel *= 1e-7 # [J/Am²], 1e-7 is mu_0/4Pi
                 self.kernel_unitcell[y][x] = kernel
         self.update()
     
@@ -861,7 +879,7 @@ class DipolarEnergy(Energy):
                     partial_m = cp.zeros_like(self.mm.m)
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
 
-                    total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')
+                    total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')*self.mm._momentSq
         self.E = self.prefactor*total_energy
     
     def energy_switch(self, indices2D):
@@ -879,7 +897,7 @@ class DipolarEnergy(Energy):
         if kernel is not None:
             # Multiply with the magnetization
             usefulkernel = kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-            interaction = self.prefactor*self.mm.m[index2D]*cp.multiply(self.mm.m, usefulkernel)
+            interaction = self.prefactor*self.mm.m[index2D]*cp.multiply(self.mm.m, usefulkernel)*self.mm._momentSq
         else:
             interaction = cp.zeros_like(self.mm.m)
 
@@ -906,7 +924,7 @@ class DipolarEnergy(Energy):
                 n = self.mm.params.REDUCED_KERNEL_SIZE
                 usefulkernel = kernel[self.mm.ny-1-n:self.mm.ny+n, self.mm.nx-1-n:self.mm.nx+n] if n else kernel
                 convolutedkernel = signal.convolve2d(switched_field, usefulkernel, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
-                interaction = self.prefactor*cp.multiply(self.mm.m, convolutedkernel)
+                interaction = self.prefactor*cp.multiply(self.mm.m*self.mm._momentSq, convolutedkernel)
                 self.E += 2*interaction
             else:
                 ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY NONPARALLEL) 
@@ -914,7 +932,7 @@ class DipolarEnergy(Energy):
                 for j in range(indices_here.shape[1]):
                     y, x = indices_here[0,j], indices_here[1,j]
                     interaction += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-                interaction = self.prefactor*cp.multiply(self.mm.m, interaction)
+                interaction = self.prefactor*cp.multiply(self.mm.m*self.mm._momentSq, interaction)
                 self.E += 2*interaction
     
     @property

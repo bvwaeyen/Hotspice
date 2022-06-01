@@ -74,7 +74,7 @@ def sweep_taskagnostic(ASI_type: type[hotspin.Magnets], variables: dict = None, 
     ''' The dictionary <variables> contains keys representing the parameters to be
         swept, whose value is an array containing their values. A full sweep through
         the hypercube formed by these arrays is performed. The keys should be valid
-        arguments to the <ASI_type> class (nx/ny, dx/dy, T, E_B, Msat...) or the
+        arguments to the <ASI_type> class (nx/ny, dx/dy, T, E_B, moment...) or the
         TaskAgnosticExperiment class (ext_field, ext_angle...),
         and should only be scalar values.
             Example: {"T": [250, 300, 350], "V": [2e-22, 4e-22]}

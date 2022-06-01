@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 from IPython.terminal.embed import InteractiveShellEmbed
-from typing import Callable, Iterable
+from typing import Callable, Iterable, TypeVar
 
 
 def mirror4(arr, /, *, negativex=False, negativey=False):
@@ -38,7 +38,8 @@ def filter_kwargs(kwargs: dict, func: Callable):
     return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames}
 
 
-def as_cupy_array(value, shape: tuple) -> cp.ndarray:
+Field = TypeVar("Field", int, float, np.ndarray, cp.ndarray) # Every type that can be parsed by as_cupy_array()
+def as_cupy_array(value: Field, shape: tuple) -> cp.ndarray:
     ''' Converts <value> to a CuPy array of shape <shape>. If <value> is scalar, the returned
         array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
         as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.

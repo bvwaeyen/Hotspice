@@ -89,7 +89,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
             'hexagon:' averages each hexagon in kagome ASI, or each star in triangle ASI.
         @return [(2D np.array, 2D np.array)]: a tuple containing two arrays, namely the (averaged) magnetization
             angle and magnitude, respecively, for each relevant position in the simulation.
-            Angles lay between 0 and 2*pi, magnitudes between 0 and mm.Msat.
+            Angles lay between 0 and 2*pi, magnitudes between 0 and mm.moment.
             !! This does not necessarily have the same shape as <m> !!
     '''
     if m is None: m = mm.m
@@ -111,7 +111,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
         x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
         y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
     angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % (2*math.pi)
-    magnitudes_avg = cp.sqrt(x_comp_avg**2 + y_comp_avg**2)*mm.Msat
+    magnitudes_avg = cp.sqrt(x_comp_avg**2 + y_comp_avg**2)*mm.moment
     useless_angles = cp.where(cp.isclose(x_comp_avg, 0) & cp.isclose(y_comp_avg, 0), cp.NaN, 1) # No well-defined angle
     useless_magnitudes = cp.where(magnets_in_avg == 0, cp.NaN, 1) # No magnet (the NaNs here will be a subset of useless_angles)
     angles_avg *= useless_angles
@@ -151,7 +151,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
     
     # Normalize to ranges between 0 and 1 and determine NaN-positions
     angles = angles/2/math.pi
-    magnitudes = magnitudes/mm.Msat
+    magnitudes = magnitudes/mm.moment
     NaNangles = cp.isnan(angles)
     NaNmagnitudes = cp.isnan(magnitudes)
     # Create hue, saturation and value arrays
