@@ -56,17 +56,19 @@ def as_cupy_array(value: Field, shape: tuple) -> cp.ndarray:
         return cp.asarray(value).reshape(shape)
 
 
-def is_significant(i: int, N: int, order=1) -> bool:
+def is_significant(i: int, N: int, order: float=1) -> bool:
     ''' Returns True if <i> iterations is an 'important' milestone if there are <N> in total.
         Useful for verbose print statements in long simulations.
         @param i [int]: the index of the current iteration (starting at 0)
         @param N [int]: the total number of iterations
-        @param order [int]: an example will help to explain this argument.
-            If N=1000 and order=0, True will be returned if i = 0 or 999,
-            while for order=1 any of i = 0, 99, 199, 299, ..., 999 yield True.
-            Basically, at least <10**order> values of i (equally spaced) will yield True.
+        @param order [float]: strictly speaking this can be any float, but integers work best.
+            Basically, approximately <10**order> values of i (equally spaced) will yield True.
+            An example can be useful to illustrate the behavior of this parameter:
+                If N=1000 and order=0, True will be returned if i = 0 or 999,
+                while for order=1 any of i = 0, 99, 199, 299, ..., 999 yield True.
+                A float example: for order=0.6 only i = 0, 251, 502, 753, 999 yield True.
     '''
-    if (i + 1) % 10**(math.floor(math.log10(N))-order) == 0:
+    if (i + 1) % 10**(math.floor(math.log10(N))-order) < 1:
         return True
     if i == 0 or i == N - 1:
         return True
@@ -308,7 +310,7 @@ def read_json(JSON):
     return total_dict
 
 
-def combine_all(container: str | Iterable):
+def combine_all(container: str|Iterable):
     ''' Combines all the JSON data in <container>, which can either be a:
         - string representing a path to a directory containing many similar .json files
         - iterable containing many dictionaries, each representing a bunch of similar data

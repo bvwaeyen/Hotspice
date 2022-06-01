@@ -250,7 +250,7 @@ class Magnets(ABC):
 
     @property
     def kBT(self) -> cp.ndarray:
-        return 1.380649e-23*self._T
+        return kB*self._T
 
     @property
     def m_avg_x(self) -> float:
@@ -298,14 +298,14 @@ class Magnets(ABC):
             - 'single': strictly speaking, this is the only physically correct sampling scheme. However,
                 to improve efficiency while making as small an approximation as possible, the grid and
                 Poisson schemes exist for use in the Glauber update scheme.
-            - 'grid': built for efficient parallel generation of samples, but this introduces strong bias
-                from the orthogonal grid in the sample distribution. To remedy this to some extent, using
-                poisson=True randomizes the positioning of the supercells, though these are still placed
-                on a supergrid and therefore the bias is not completely eliminated.
+            - 'grid': built for efficient parallel generation of samples, but this introduces strong grid
+                bias in the sample distribution. To remedy this to some extent, using poisson=True randomizes
+                the positioning of the supercells, though these are still placed on a supergrid and therefore
+                the bias is not completely eliminated. No spatially varying r is possible with this method.
             - 'Poisson': uses a true Poisson disk sampling algorithm to sample some magnets with a minimal
                 distance requirement, but is much slower than 'grid' for simulations larger than ~(6r, 6r).
                 Also, this does not take into account self.occupation, resulting in a possible loss of
-                samples for some spin ices.
+                samples for some spin ices. Not implemented, but possible: spatially dependent r.
             - 'cluster': only to be used in the Wolff update scheme. This is supposed to reduce "critical
                 slowing down" in the 2D square-lattice exchange-coupled Ising model.
             @param r [float] (self.calc_r(0.01)): minimal distance between magnets, in meters
@@ -535,7 +535,7 @@ class Magnets(ABC):
             ax = fig.add_subplot(111)
             im = ax.imshow(self.m.get())
 
-        # TODO: use a better stopping criterion than just "oh no we exceeded n_max steps"
+        # TODO: use a better stopping criterion than just "oh no we exceeded n_max steps", and remove verbose code when all is fixed
         n, n_max = 0, int(math.sqrt(self.nx**2 + self.ny**2)) # Maximum steps is to get signal across the whole grid
         previous_states = [self.m.copy(), cp.zeros_like(self.m), cp.zeros_like(self.m)] # Current state, previous, and the one before
         while not cp.allclose(previous_states[2], previous_states[0]) and n < n_max: # Loop exits once we detect a 2-cycle, i.e. the only thing happening is some magnets keep switching back and forth

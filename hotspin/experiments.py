@@ -102,7 +102,7 @@ class TaskAgnosticExperiment(Experiment):
 
 
     def to_dataframe(self, u: cp.ndarray = None, y: cp.ndarray = None):
-        """ If <u> or <y> are not provided, the saved <self.u> and <self.y>
+        """ If <u> or <y> are not explicitly provided, the saved <self.u> and <self.y>
             arrays are used. When providing <u> and <y> directly,
                 <u> should be a 1D array of length N, and
                 <y> a <NxL> array, where L is the number of output nodes.
@@ -247,7 +247,7 @@ class TaskAgnosticExperiment(Experiment):
             NOTE: It can be advantageous to define a different metric for stability if the entire magnetization profile
                   is known, since this function only has access to the readout nodes, not the whole self.m array.
         '''
-        if relax: 
+        if relax:
             self.mm.relax()
             final_readout = self.outputreader.read_state().reshape(-1)
         elif not hasattr(self, 'final_state'):
