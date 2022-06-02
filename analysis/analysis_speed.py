@@ -52,7 +52,7 @@ def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.F
     return data
 
 
-def analysis_speed_size_plot(data, save=False, show=True):
+def analysis_speed_size_plot(data: pd.DataFrame, save=False, show=True):
     hotspin.plottools.init_fonts()
     fig = plt.figure(figsize=(5, 5))
     ax1 = fig.add_subplot(111)

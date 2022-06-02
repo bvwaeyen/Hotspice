@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from scipy.spatial import distance
 
 from .core import Magnets, DipolarEnergy, ZeemanEnergy
+from .ASI import FullASI
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, show_m
 from .utils import filter_kwargs, is_significant, R_squared, strided
@@ -91,9 +92,10 @@ class TaskAgnosticExperiment(Experiment):
         for i in range(N):
             self.u[i] = self.inputter.input_single(self.mm)
             self.y[i,:] = self.outputreader.read_state().reshape(-1)
-            if verbose and is_significant(i, N):
-                print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
+            if verbose:
                 fig = show_m(self.mm, figure=fig)
+                if is_significant(i, N):
+                    print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
         self.mm.relax()
         self.final_state = self.outputreader.read_state().reshape(-1)
         
@@ -143,6 +145,13 @@ class TaskAgnosticExperiment(Experiment):
             self.y = self.y[:-1]
         return self.u, self.y
 
+    @classmethod
+    def dummy(cls, mm=None):
+        if mm is None: mm = FullASI(1, 1)
+        datastream = RandomUniformDatastream(low=-1, high=1)
+        inputter = FieldInputter(datastream)
+        outputreader = RegionalOutputReader(1, 1, mm)
+        return cls(inputter, outputreader, mm)
 
     def calculate_all(self, **kwargs):
         self.results['NL'] = self.NL(**filter_kwargs(kwargs, self.NL))
