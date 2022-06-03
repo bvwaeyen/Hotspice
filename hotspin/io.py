@@ -79,12 +79,15 @@ class RandomUniformDatastream(Datastream):
 
 
 class FieldInputter(Inputter):
-    def __init__(self, datastream: Datastream, magnitude=1, angle=0, n=2):
-        ''' Applies an external field at <angle> rad, whose magnitude is <magnitude>*<datastream.get_next()>. '''
+    def __init__(self, datastream: Datastream, magnitude=1, angle=0, n=2, sine=0):
+        ''' Applies an external field at <angle> rad, whose magnitude is <magnitude>*<datastream.get_next()>.
+            <sine> specifies the frequency [Hz] of the sinusoidal field, if it is nonzero.
+        '''
         super().__init__(datastream)
         self.angle = angle
         self.magnitude = magnitude
-        self.n = n # The number of Monte Carlo steps performed every time self.input_single(mm) is called
+        self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
+        self.sine = sine # Whether or not to use a sinusoidal field strength
 
     @property
     def angle(self): # [rad]
@@ -101,10 +104,21 @@ class FieldInputter(Inputter):
         self._magnitude = value
 
     def input_single(self, mm: Magnets, value=None):
+        if self.sine != 0 and mm.params.UPDATE_SCHEME != 'Néel':
+            raise AttributeError("Can not use temporal sine=True if UPDATE_SCHEME != 'Néel'.")
+        
         if value is None: value = self.datastream.get_next()
-        mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value, angle=(self.angle if mm.in_plane else None))
+        mm.get_energy('Zeeman').set_field(angle=(self.angle if mm.in_plane else None))
         MCsteps0 = mm.MCsteps
-        while mm.MCsteps - MCsteps0 < self.n: mm.update()
+        if not self.sine: # If frequency is zero: use constant magnitude
+            mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value)
+            while (progress := (mm.MCsteps - MCsteps0)/self.n) < 1:
+                mm.update()
+        else:
+            t0 = mm.t
+            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.sine)) < 1:
+                mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value*math.sin(progress*math.pi))
+                mm.update(t_max=0.1/self.sine) # At least 10 steps per sine-period
         return value
 
 
@@ -116,9 +130,8 @@ class PerpFieldInputter(FieldInputter):
             If <sine> is True, the field starts at zero strength and follows half a sine cycle back to zero during
                 the <n> steps that were specified. If False, a constant field is used for the entire duration.
         '''
-        super().__init__(datastream, magnitude=magnitude, angle=angle, n=n)
-        self.sine = sine # Whether or not to use a sinusoidal field strength
-
+        super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, sine=sine)
+    # TODO: include sine as in FieldInputter, or better yet call super().__init__()
     def input_single(self, mm: Magnets, value=None):
         if not mm.in_plane: raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
         if value is None: value = self.datastream.get_next()

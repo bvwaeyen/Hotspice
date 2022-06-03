@@ -11,13 +11,13 @@ from context import hotspin
 from hotspin.experiments import TaskAgnosticExperiment
 
 
-def create_TaskAgnosticExperiment(mm: hotspin.Magnets, ext_magnitude=0.04, ext_angle=0, MCsteps=2, resolution=None, res_x=5, res_y=5, **kwargs):
+def create_TaskAgnosticExperiment(mm: hotspin.Magnets, ext_magnitude=0.04, ext_angle=0, MCsteps=2, sine=False, resolution=None, res_x=5, res_y=5, **kwargs):
     if resolution is not None:
         res_x = resolution
         res_y = resolution
 
     datastream = hotspin.io.RandomUniformDatastream(low=-1, high=1)
-    inputter = hotspin.io.FieldInputter(datastream, magnitude=ext_magnitude, angle=ext_angle, n=MCsteps)
+    inputter = hotspin.io.FieldInputter(datastream, magnitude=ext_magnitude, angle=ext_angle, n=MCsteps, sine=sine)
     outputreader = hotspin.io.RegionalOutputReader(res_x, res_y, mm)
     return TaskAgnosticExperiment(inputter, outputreader, mm)
 
@@ -187,5 +187,5 @@ if __name__ == "__main__":
     simparams = hotspin.SimParams(UPDATE_SCHEME='Néel')
     sweep_taskagnostic(hotspin.ASI.SquareASI, variables={}, params=simparams,
                        E_B=hotspin.Energy.eV_to_J(5), T=300, V=220e-9*80e-9*25e-9, Msat=860e3, a=320e-9, n=9, PBC=False, pattern='random',
-                       iterations=1000, ext_angle=math.pi/4, ext_magnitude=0.08, verbose=True
+                       iterations=1000, ext_angle=math.pi/4, ext_magnitude=0.08, sine=200e6, verbose=True
     ) # TODO: continue developing this Tufte et al. situation, with the frequency correctly being taken into account in the Néel scheme.
