@@ -120,9 +120,9 @@ class TaskAgnosticExperiment(Experiment):
         y = cp.asarray(y).get() # Need as NumPy array for pd
         if u.shape[0] != y.shape[0]: raise ValueError(f'Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.')
 
-        df = pd.DataFrame()
-        df["u"] = u
-        for i in range(y.shape[1]): df[f"y{i}"] = y[:,i]
+        df_u = pd.DataFrame({"u": u})
+        df_y = pd.DataFrame({f"y{i}": y[:,i] for i in range(y.shape[1])})
+        df = pd.concat([df_u, df_y], axis=1)
         return df
 
     def load_dataframe(self, df: pd.DataFrame, u: cp.ndarray = None, y: cp.ndarray = None):
@@ -212,11 +212,11 @@ class TaskAgnosticExperiment(Experiment):
 
         if u_test.size < k: warnings.warn(f"MC: k={k} is too large for the currently stored results (size {self.u.size}), possibly causing issues with train/test split.", stacklevel=2)
         Rsq = cp.empty(k) # R² correlation coefficient
-        weights = cp.zeros((k, self.outputreader.n))
+        if local: weights = cp.zeros((k, self.outputreader.n))
         for j in range(1, k+1): # Train an estimator for the input j iterations ago
             # This one is a mess of indices, but at least we don't need striding like for non-linearity
             results = sm.OLS(u_train[k-j:-j].get(), y_train[k:,:].get(), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
-            weights[j-1,:] = cp.asarray(results.params)
+            if local: weights[j-1,:] = cp.asarray(results.params) # TODO: this gives an error I think
             u_hat_test = results.predict(y_test[j:,:].get()) # Start at y_test[j] to prevent leakage between train/test
             Rsq[j-1] = R_squared(u_hat_test, u_test[:-j])
         Rsq[cp.isnan(Rsq)] = 0 # If some std=0, then it is constant so R² actually gives 0
@@ -249,7 +249,7 @@ class TaskAgnosticExperiment(Experiment):
         else:
             ranks = cp.asarray([cp.linalg.matrix_rank(self.y[i:i+self.y.shape[1],:]) for i in range(max(1, self.y.shape[0]-self.y.shape[1]+1))])
             rank = cp.mean(ranks)
-        return int(rank)/self.outputreader.n
+        return float(rank)/self.y.shape[1]
     
     def S(self, relax=False): # Stability
         ''' Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
@@ -264,7 +264,7 @@ class TaskAgnosticExperiment(Experiment):
                 final_readout = self.y[-1,:]
             else:
                 final_readout = self.outputreader.read_state().reshape(-1)
-        
+
         initial_readout = self.initial_state # Assuming this was relaxed first
         final_readout = self.final_state # Assuming this was also relaxed first
         return 1 - distance.cosine(initial_readout.get(), final_readout.get())/2 # distance.cosine is in range [0., 2.]

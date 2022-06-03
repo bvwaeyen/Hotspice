@@ -1,4 +1,4 @@
-name: hotspin310_tried
+name: hotspin310
 channels:
   - defaults
 dependencies:

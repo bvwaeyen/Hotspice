@@ -27,7 +27,8 @@ def single_taskagnostic(experiment: TaskAgnosticExperiment, iterations=1000, dir
     df = experiment.to_dataframe()
     metadata = {"description": r"Contains the input values <u> and state vectors <y> used for calculating task agnostic metrics of the system as proposed in `Task Agnostic Metrics for Reservoir Computing` by Love et al."}
     constants = {"ext_magnitude": experiment.inputter.magnitude, "ext_angle": experiment.inputter.angle, "out_nx": experiment.outputreader.nx, "out_ny": experiment.outputreader.ny,
-                 "V": experiment.mm.V, "T": experiment.mm.T_avg, "E_B": experiment.mm.E_B_avg, "nx": experiment.mm.nx, "ny": experiment.mm.ny, "dx": experiment.mm.dx, "dy": experiment.mm.dy, "ASI_type": hotspin.utils.full_obj_name(experiment.mm)}
+                 "inputter": hotspin.utils.full_obj_name(experiment.inputter), "outputreader": hotspin.utils.full_obj_name(experiment.outputreader), "datastream": hotspin.utils.full_obj_name(experiment.inputter.datastream),
+                 "moment": experiment.mm.moment_avg, "T": experiment.mm.T_avg, "E_B": experiment.mm.E_B_avg, "nx": experiment.mm.nx, "ny": experiment.mm.ny, "dx": experiment.mm.dx, "dy": experiment.mm.dy, "ASI_type": hotspin.utils.full_obj_name(experiment.mm)}
     full_json = hotspin.utils.combine_json(df, metadata=metadata, constants=constants)
     if save:
         path = "results/TaskAgnosticExperiment"
@@ -102,7 +103,7 @@ def sweep_taskagnostic(ASI_type: type[hotspin.Magnets], variables: dict = None, 
         variables_exp = hotspin.utils.filter_kwargs(kwargs_i, create_TaskAgnosticExperiment)
 
         # Create ASI and perform the task agnostic experiment on it
-        mm = ASI_type(**constants_mm, **variables_mm, energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Glauber'))
+        mm = ASI_type(**constants_mm, **variables_mm, energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()))
         experiment = create_TaskAgnosticExperiment(mm, **constants_exp, **variables_exp)
         json_i = hotspin.utils.read_json(single_taskagnostic(experiment, **kwargs))
         df_i = json_i["data"]
@@ -168,6 +169,23 @@ def load_sweep_to_experiments(full_json):
 
 
 if __name__ == "__main__":
-    sweep_taskagnostic(hotspin.ASI.PinwheelASI, variables={"n": [25, 30], "T": [400]}, 
-                       E_b=hotspin.Energy.eV_to_J(71), V=470e-9*170e-9*10e-9, PBC=False, pattern='vortex',
-                       iterations=20, ext_angle=math.pi/180*7, verbose=True)
+    # sweep_taskagnostic(hotspin.ASI.PinwheelASI, variables={"n": [25, 30], "T": [400]}, 
+    #                    E_B=hotspin.Energy.eV_to_J(71), V=470e-9*170e-9*10e-9, PBC=False, pattern='vortex',
+    #                    iterations=20, ext_angle=math.pi/180*7, verbose=True)
+
+    # load_sweep_to_experiments(hotspin.utils.read_json("results/TaskAgnosticExperiment/Sweep/n,T_20220517162856.json"))
+
+
+    # A RANDOM TEST I TRIED WHICH I THOUGHT HAD REASONABLE VALUES:
+    # sweep_taskagnostic(hotspin.ASI.PinwheelASI, variables={}, 
+    #                    E_B=hotspin.Energy.eV_to_J(0.250), T=300, V=100e-9*100e-9*10e-9, n=100, PBC=True, pattern='vortex',
+    #                    iterations=1000, ext_angle=math.pi/180*7, ext_magnitude=0.001, resolution=10, verbose=True
+    # )
+
+    # THE SITUATION THEY HAVE IN 'Computation in artificial spin ice' BY TUFTE ET AL.:
+    # let's first try it with Glauber dynamics, although in reality they heavily rely on the freq. of the external field
+    simparams = hotspin.SimParams(UPDATE_SCHEME='Néel')
+    sweep_taskagnostic(hotspin.ASI.SquareASI, variables={}, params=simparams,
+                       E_B=hotspin.Energy.eV_to_J(5), T=300, V=220e-9*80e-9*25e-9, Msat=860e3, a=320e-9, n=9, PBC=False, pattern='random',
+                       iterations=1000, ext_angle=math.pi/4, ext_magnitude=0.08, verbose=True
+    ) # TODO: continue developing this Tufte et al. situation, with the frequency correctly being taken into account in the Néel scheme.

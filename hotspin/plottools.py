@@ -111,7 +111,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
         x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
         y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
     angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % (2*math.pi)
-    magnitudes_avg = cp.sqrt(x_comp_avg**2 + y_comp_avg**2)*mm.moment
+    magnitudes_avg = cp.sqrt(x_comp_avg**2 + y_comp_avg**2)
     useless_angles = cp.where(cp.isclose(x_comp_avg, 0) & cp.isclose(y_comp_avg, 0), cp.NaN, 1) # No well-defined angle
     useless_magnitudes = cp.where(magnets_in_avg == 0, cp.NaN, 1) # No magnet (the NaNs here will be a subset of useless_angles)
     angles_avg *= useless_angles
@@ -151,7 +151,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
     
     # Normalize to ranges between 0 and 1 and determine NaN-positions
     angles = angles/2/math.pi
-    magnitudes = magnitudes/mm.moment
+    magnitudes = magnitudes
     NaNangles = cp.isnan(angles)
     NaNmagnitudes = cp.isnan(magnitudes)
     # Create hue, saturation and value arrays

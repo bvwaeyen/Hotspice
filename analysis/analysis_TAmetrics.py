@@ -10,7 +10,7 @@ from matplotlib.lines import Line2D
 from context import hotspin
 
 
-def analysis_TAmetrics_Nk(filename: str, k_range=10, save=False, plot=True):
+def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbose=True):
     ''' Loads a full TaskAgnosticExperiment dataframe (of a single run) and determines the
         task-agnostic metrics NL, MC and CP as a function of the number of recorded iterations N.
         This will allow to determine an optimum value of N before performing any sort of
@@ -37,8 +37,9 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=False, plot=True):
             NL[index] = experiment.NL(k=k)
             MC[index] = experiment.MC(k=k)
             CP[index] = experiment.CP()
+            if verbose: print("Performed iteration", index)
         except:
-            pass
+            if verbose: print("Failed in iteration", index)
     
     # BELOW HERE IS STILL UNDER CONSTRUCTION, ABOVE HERE SHOULD BE OK
     data = pd.DataFrame({"N": N_grid.reshape(-1), "k": k_grid.reshape(-1), "NL": NL.reshape(-1), "MC": MC.reshape(-1), "CP": CP.reshape(-1)})
@@ -50,7 +51,7 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=False, plot=True):
     savepath = ''
     if save:
         full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
-        savepath = hotspin.utils.save_json(full_json, path=os.path.dirname(filename), name=f"{os.path.splitext(os.path.basename(filename))}_metrics", timestamp=False)
+        savepath = hotspin.utils.save_json(full_json, path=os.path.dirname(filename), name=f"{os.path.splitext(os.path.basename(filename))[0]}_metrics", timestamp=False)
     if plot or save:
         analysis_TAmetrics_Nk_plot(data, save=savepath, show=plot)
     return data
@@ -62,18 +63,17 @@ def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
     NL_grid = df["NL"].values.reshape(-1, k_vals)
     MC_grid = df["MC"].values.reshape(-1, k_vals)
     CP_grid = df["CP"].values.reshape(-1, k_vals)
-    print(NL_grid, MC_grid, CP_grid)
 
     hotspin.plottools.init_fonts()
     fig = plt.figure(figsize=(5, 5))
     if k_vals > 1: # use surface plot in 3D
         ax = fig.add_subplot(111, projection='3d')
-        NL_surf = ax.plot_surface(N_grid, k_grid, NL_grid, color="C0", linewidth=0, antialiased=False, label='NL')
-        MC_surf = ax.plot_surface(N_grid, k_grid, MC_grid, color="C1", linewidth=0, antialiased=False, label='MC')
-        CP_surf = ax.plot_surface(N_grid, k_grid, CP_grid, color="C2", linewidth=0, antialiased=False, label='CP')
-        fakeNLline = Line2D([0],[0], linestyle="none", color="C0", marker = 'o')
-        fakeMCline = Line2D([0],[0], linestyle="none", color="C1", marker = 'o')
-        fakeCPline = Line2D([0],[0], linestyle="none", color="C2", marker = 'o')
+        NL_surf = ax.plot_surface(N_grid, k_grid, NL_grid, color="C0", linewidth=0, antialiased=True, label='NL')
+        MC_surf = ax.plot_surface(N_grid, k_grid, MC_grid, color="C1", linewidth=0, antialiased=True, label='MC')
+        CP_surf = ax.plot_surface(N_grid, k_grid, CP_grid, color="C2", linewidth=0, antialiased=True, label='CP')
+        fakeNLline = Line2D([0],[0], linestyle="none", color="C0", marker='o')
+        fakeMCline = Line2D([0],[0], linestyle="none", color="C1", marker='o')
+        fakeCPline = Line2D([0],[0], linestyle="none", color="C2", marker='o')
         ax.set_xlabel("N")
         ax.set_ylabel("k")
         ax.set_zlabel("metrics")
@@ -86,7 +86,6 @@ def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
         ax.set_xlabel("N")
         ax.set_ylabel("metrics")
         ax.legend()
-    ax.set_ylim([0,1])
     plt.gcf().tight_layout()
     if save:
         if not isinstance(save, str):
@@ -95,5 +94,6 @@ def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
     if show: plt.show()
 
 if __name__ == "__main__":
-    analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/TaskAgnostic_PinwheelASI_30x30_20220517162856.json")
-    # TODO: create an experiment with 1000 lines in the dataframe 
+    save = True
+    # analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/PinwheelASI_N=1000_test.json", k_range=[10, 20])
+    analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/SquareASI_N=1000_testsmol.json", k_range=[10], save=save)

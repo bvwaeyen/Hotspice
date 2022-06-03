@@ -277,6 +277,10 @@ class Magnets(ABC):
     def E_B_avg(self) -> float:
         return float(cp.mean(self.E_B))
     
+    @property
+    def moment_avg(self) -> float:
+        return float(cp.mean(self.moment))
+    
     def set_T(self, f, /, *, center=False, crystalunits=False):
         ''' Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
             @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy arrays as x and y).
