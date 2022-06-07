@@ -72,6 +72,7 @@ class TaskAgnosticExperiment(Experiment):
         '''
         super().__init__(inputter, outputreader, mm)
         self.k = None
+        self.initial_state = self.outputreader.read_state().reshape(-1)
 
     def run(self, N=1000, k=10, verbose=False, calc=True):
         ''' @param N [int]: The total number of iterations performed (each iteration consists of <self.inputter.n> MC steps).
@@ -159,23 +160,19 @@ class TaskAgnosticExperiment(Experiment):
         self.results['CP'] = self.CP(**filter_kwargs(kwargs, self.CP))
         self.results['S'] = self.S(**filter_kwargs(kwargs, self.S))
 
-    def NL(self, k=None, local=False, test_fraction=1/4, verbose=False): # Non-linearity
+    def NL(self, k: int = None, local: bool = False, test_fraction: float = 1/4, verbose: bool = False): # Non-linearity
         ''' Returns a float (local=False) or a CuPy array (local=True) representing the nonlinearity,
             either globally or locally depending on <local>. For this, an estimator for the current readout state is
             trained which for any time instant has access to the <k> most recent inputs (including the present one).
         '''
         if verbose: print(f"Calculating NL (local={local})...")
         if k is None: k = 10 if self.k is None else self.k
-        if self.u.size <= k: raise ValueError("NL: Number of iterations must be larger than k.")
-        if self.u.size < k + 10: warnings.warn(f"NL: k={k} might be tiny touch too big to get a good train/test split.", stacklevel=2) # Just a wet finger estimate
-
+        
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
-        u_train, u_test = cp.split(self.u, [train_test_cutoff])
+        if train_test_cutoff < k: raise ValueError(f"NL: k={k} must be <={train_test_cutoff} for the available data.")
+        u_train_strided, u_test_strided = np.split(strided(self.u, k), [train_test_cutoff])
         y_train, y_test = cp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
-
-
-        u_strided = strided(self.u, k) # List of last <k> entries in <u> for each time step (result: N x k array)
-        u_train_strided, u_test_strided = np.split(u_strided, [train_test_cutoff])
+        
         # u_train_strided, y_train = u_train_strided[k-1:], y_train[k-1:] # First <k-1> rows don't have <k> previous entries yet to use as 'samples'
         Rsq = cp.empty(self.outputreader.n) # R² correlation coefficient
         for j in range(self.outputreader.n): # Train an estimator for the j-th output feature
@@ -203,14 +200,12 @@ class TaskAgnosticExperiment(Experiment):
         '''
         if verbose: print(f"Calculating MC (local={local})...")
         if k is None: k = 10 if self.k is None else self.k
-        if self.u.size <= k: raise ValueError("Number of iterations must be larger than k.")
-        # if self.u.size < k + 10: warnings.warn(f"k={k} might be tiny touch too big to get a good train/test split.", stacklevel=2) # Just a wet finger estimate
 
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
+        if train_test_cutoff < k: raise ValueError(f"MC: k={k} must be <={train_test_cutoff} for the available data.")
         u_train, u_test = cp.split(self.u, [train_test_cutoff])
         y_train, y_test = cp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
 
-        if u_test.size < k: warnings.warn(f"MC: k={k} is too large for the currently stored results (size {self.u.size}), possibly causing issues with train/test split.", stacklevel=2)
         Rsq = cp.empty(k) # R² correlation coefficient
         if local: weights = cp.zeros((k, self.outputreader.n))
         for j in range(1, k+1): # Train an estimator for the input j iterations ago
@@ -240,7 +235,7 @@ class TaskAgnosticExperiment(Experiment):
                     If False, it is the average of all consecutive square matrices in <self.y> along the time axis.
         '''
         if self.y.shape[0] < self.y.shape[1]: # Less rows than columns, so rank can at most be the number of rows
-            warnings.warn(f"Not enough recorded iterations to reliably calculate complexity (shape {self.y.shape} has less rows than columns)." , stacklevel=2)
+            warnings.warn(f"Not enough recorded iterations to reliably calculate complexity ({self.y.shape[0]} samples < {self.y.shape[1]} features)" , stacklevel=2)
         
         if transposed:
             # Multiply with transposed to get a square matrix of size <self.outputreader.n> (suggested by J. Leliaert)
@@ -253,6 +248,7 @@ class TaskAgnosticExperiment(Experiment):
     
     def S(self, relax=False): # Stability
         ''' Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
+            If <relax> is True, the final state is determined by relaxing the current state of <self.mm>.
             NOTE: It can be advantageous to define a different metric for stability if the entire magnetization profile
                   is known, since this function only has access to the readout nodes, not the whole self.m array.
         '''

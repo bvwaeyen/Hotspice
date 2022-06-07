@@ -108,7 +108,7 @@ class FieldInputter(Inputter):
             raise AttributeError("Can not use temporal sine=True if UPDATE_SCHEME != 'Néel'.")
         
         if value is None: value = self.datastream.get_next()
-        mm.get_energy('Zeeman').set_field(angle=(self.angle if mm.in_plane else None))
+        mm.get_energy('Zeeman').set_field(angle=(self.angle if mm.in_plane else None)) # set angle only once
         MCsteps0 = mm.MCsteps
         if not self.sine: # If frequency is zero: use constant magnitude
             mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value)
@@ -123,7 +123,7 @@ class FieldInputter(Inputter):
 
 
 class PerpFieldInputter(FieldInputter):
-    def __init__(self, datastream: BinaryDatastream, magnitude=1, angle=0, n=2, sine=True):
+    def __init__(self, datastream: BinaryDatastream, magnitude=1, angle=0, n=2, sine=0):
         ''' Applies an external field, whose angle depends on the bit that is being applied:
             the bit '0' corresponds to an angle of <phi> radians, the bit '1' to <phi>+pi/2 radians.
             Also works for continuous numbers, resulting in intermediate angles, but this is not the intended use.
@@ -131,16 +131,25 @@ class PerpFieldInputter(FieldInputter):
                 the <n> steps that were specified. If False, a constant field is used for the entire duration.
         '''
         super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, sine=sine)
-    # TODO: include sine as in FieldInputter, or better yet call super().__init__()
+
     def input_single(self, mm: Magnets, value=None):
-        if not mm.in_plane: raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
+        if self.sine != 0 and mm.params.UPDATE_SCHEME != 'Néel':
+            raise AttributeError("Can not use temporal sine=True if UPDATE_SCHEME != 'Néel'.")
+        if not mm.in_plane:
+            raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
+
         if value is None: value = self.datastream.get_next()
         angle = self.angle + value*math.pi/2
-        mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
         MCsteps0 = mm.MCsteps
-        while (progress := (mm.MCsteps - MCsteps0)/self.n) < 1:
-            if self.sine: mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*math.sin(progress*math.pi), angle=angle)
-            mm.update()
+        if not self.sine: # If frequency is zero: use constant magnitude
+            mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
+            while (progress := (mm.MCsteps - MCsteps0)/self.n) < 1:
+                mm.update()
+        else:
+            t0 = mm.t
+            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.sine)) < 1:
+                mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*math.sin(progress*math.pi), angle=angle)
+                mm.update(t_max=0.1/self.sine) # At least 10 steps per sine-period
         return value
 
 
