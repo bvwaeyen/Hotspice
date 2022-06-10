@@ -52,7 +52,7 @@ class test_pinwheelReversal:
         self.T = kwargs.get('T', 300) # [K] Room temperature
         self.H_max = kwargs.get('H_max', .1) # [T] extremal magnitude of external field
         self.V = kwargs.get('V', 470e-9*170e-9*10e-9) # [m³] volume of a single magnet (default from flatspin paper)
-        self.E_B = kwargs.get('E_B', hotspin.Energy.eV_to_J(71)) # [J] energy barrier between stable states (realistic for islands in flatspin paper)
+        self.E_B = kwargs.get('E_B', hotspin.utils.eV_to_J(71)) # [J] energy barrier between stable states (realistic for islands in flatspin paper)
         self.scheme = kwargs.get('scheme', 'Néel')
 
     def test(self, *args, **kwargs):
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     verbose = True
     # Observation: the external field here is MUCH smaller than in the flatspin paper, even though self.V is the same and self.a is reasonable
     # For Néel this is kind of ok:
-    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_B=hotspin.Energy.eV_to_J(71), scheme='Néel').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
+    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_B=hotspin.utils.eV_to_J(71), scheme='Néel').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
     # For Glauber this is the best I could get without and with E_B:
     # test_pinwheelReversal(T=300, size=50, H_max=1e-4, E_B=0, scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
-    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_B=hotspin.Energy.eV_to_J(71), scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
+    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_B=hotspin.utils.eV_to_J(71), scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)

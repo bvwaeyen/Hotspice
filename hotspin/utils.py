@@ -37,6 +37,34 @@ def mirror4(arr, /, *, negativex=False, negativey=False):
 def filter_kwargs(kwargs: dict, func: Callable):
     return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames}
 
+def clean_indices(indices2D):
+    ''' Converts a generic iterable <indices2D> into a standardized form for representing 2D indices.
+        @param <indices2D> [iterable]: may contain at most 2 dimensions of size > 1, at least one of which
+            has size == 2. It is this size-2 dimension which will become the primary dim of the returned array.
+        @return [tuple(2)cp.array(2xN)]: A tuple containing exactly 2 CuPy arrays of length N. The first array
+            represents y-indices, the second represents x-indices.
+    '''
+    indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze()) if indices2D is not None else cp.empty((2,0))
+    if len(indices2D.shape) > 2: raise ValueError("An array with more than 2 non-empty dimensions can not be used to represent a list of indices.")
+    if not cp.any(cp.asarray(indices2D.shape) == 2): raise ValueError("The list of indices has an incorrect shape. At least one dimension should have length 2.")
+    match indices2D.shape:
+        case (2, _):
+            return tuple(indices2D)
+        case (_, 2):
+            return tuple(indices2D.T)
+        case (_, ): # 1D
+            return tuple(indices2D.reshape(2, -1))
+        case _: # wildcard
+            raise ValueError("Structure of attribute <indices2D> could not be recognized: not 2D with at least one size-2 dimension.")
+
+def clean_index(index2D):
+    ''' Does the same thing as clean_indices, but optimized for a single 2D index. '''
+    return tuple(cp.asarray(index2D).reshape(2))
+
+def J_to_eV(E: float, /):
+    return E/1.602176634e-19
+def eV_to_J(E: float, /):
+    return E*1.602176634e-19
 
 Field = TypeVar("Field", int, float, np.ndarray, cp.ndarray) # Every type that can be parsed by as_cupy_array()
 def as_cupy_array(value: Field, shape: tuple) -> cp.ndarray:

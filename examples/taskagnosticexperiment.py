@@ -170,7 +170,7 @@ def load_sweep_to_experiments(full_json):
 
 if __name__ == "__main__":
     # sweep_taskagnostic(hotspin.ASI.PinwheelASI, variables={"n": [25, 30], "T": [400]}, 
-    #                    E_B=hotspin.Energy.eV_to_J(71), V=470e-9*170e-9*10e-9, PBC=False, pattern='vortex',
+    #                    E_B=hotspin.utils.eV_to_J(71), V=470e-9*170e-9*10e-9, PBC=False, pattern='vortex',
     #                    iterations=20, ext_angle=math.pi/180*7, verbose=True)
 
     # load_sweep_to_experiments(hotspin.utils.read_json("results/TaskAgnosticExperiment/Sweep/n,T_20220517162856.json"))
@@ -178,7 +178,7 @@ if __name__ == "__main__":
 
     # A RANDOM TEST I TRIED WHICH I THOUGHT HAD REASONABLE VALUES:
     # sweep_taskagnostic(hotspin.ASI.PinwheelASI, variables={}, 
-    #                    E_B=hotspin.Energy.eV_to_J(0.250), T=300, V=100e-9*100e-9*10e-9, n=100, PBC=True, pattern='vortex',
+    #                    E_B=hotspin.utils.eV_to_J(0.250), T=300, V=100e-9*100e-9*10e-9, n=100, PBC=True, pattern='vortex',
     #                    iterations=1000, ext_angle=math.pi/180*7, ext_magnitude=0.001, resolution=10, verbose=True
     # )
 
@@ -186,6 +186,6 @@ if __name__ == "__main__":
     # let's first try it with Glauber dynamics, although in reality they heavily rely on the freq. of the external field
     simparams = hotspin.SimParams(UPDATE_SCHEME='Néel')
     sweep_taskagnostic(hotspin.ASI.SquareASI, variables={}, params=simparams,
-                       E_B=hotspin.Energy.eV_to_J(5), T=300, V=220e-9*80e-9*25e-9, Msat=860e3, a=320e-9, n=9, PBC=False, pattern='random',
+                       E_B=hotspin.utils.eV_to_J(5), T=300, V=220e-9*80e-9*25e-9, Msat=860e3, a=320e-9, n=9, PBC=False, pattern='random',
                        iterations=1000, ext_angle=math.pi/4, ext_magnitude=0.08, sine=200e6, verbose=True
     ) # TODO: continue developing this Tufte et al. situation, with the frequency correctly being taken into account in the Néel scheme.

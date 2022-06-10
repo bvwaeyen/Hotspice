@@ -12,7 +12,7 @@ from functools import cache
 from scipy.spatial import distance
 from textwrap import dedent
 
-from .utils import as_cupy_array, check_repetition, mirror4, Field
+from .utils import as_cupy_array, check_repetition, clean_indices, Field, mirror4
 
 
 kB = 1.380649e-23
@@ -201,17 +201,18 @@ class Magnets(ABC):
             @param index [array] (None): if specified, only the magnets at these indices are considered in the calculation.
                 We need a NumPy or CuPy array (to easily determine its size: if =2, then only a single switch is considered.)
         '''
-        if index is not None: index = Energy.clean_indices(index) # TODO: now we are cleaning twice, so remove this in Energy classes maybe?
+        if index is not None: index = clean_indices(index)
         for energy in self.energies:
             if index is None: # No index specified, so update fully
                 energy.update()
-            elif index.size == 2: # Index contains 2 ints, so it represents the coordinates of a single magnet
-                energy.update_single(Energy.clean_index(index))
-            else: # Index is specified and does not contain 2 ints, so interpret it as coordinates of multiple magnets
+            elif index[0].size == 1: # Only a single index is present, so just use update_single
+                energy.update_single(index)
+            elif index[0].size > 1: # Index is specified and contains multiple ints, so we must use update_multiple
                 energy.update_multiple(index)
     
     def switch_energy(self, indices2D):
         ''' @return [cp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch. '''
+        indices2D = clean_indices(indices2D)
         return cp.sum(cp.asarray([energy.energy_switch(indices2D) for energy in self.energies]), axis=0)
 
     @property
@@ -330,7 +331,7 @@ class Magnets(ABC):
         else: valid = np.zeros(0)
         return pos[:,valid] if valid.size > 0 else self.select(**kwargs) # If at first you don't succeed try, try and try again
     
-    def _select_single(self):
+    def _select_single(self, **kwargs):
         ''' Selects just a single magnet from the simulation domain.
             Strictly speaking, this is the only physically correct sampling scheme.
         '''
@@ -338,7 +339,7 @@ class Magnets(ABC):
         nonzero_idx = cp.random.choice(self.n, 1) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
         return cp.asarray([nonzero_y[nonzero_idx], nonzero_x[nonzero_idx]]).reshape(2, -1)
 
-    def _select_grid(self, r=None, poisson=None):
+    def _select_grid(self, r=None, poisson=None, **kwargs):
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
             ! <r> is a distance in meters, not a number of cells !
             @param r [float] (self.calc_r(0.01)): the minimal distance between two samples.
@@ -386,7 +387,7 @@ class Magnets(ABC):
         else:
             return self._select_grid(r) # If no samples survived, try again
 
-    def _select_Poisson(self, r=None): # WARN: does not take occupation into account, so preferably only use on FullASI/IsingASI!
+    def _select_Poisson(self, r=None, **kwargs): # WARN: does not take occupation into account, so preferably only use on FullASI/IsingASI!
         if r is None: r = self.calc_r(0.01)
         from .poisson import SequentialPoissonDiskSampling, poisson_disc_samples
 
@@ -395,7 +396,7 @@ class Magnets(ABC):
         points = (np.array(p)/self.dx).astype(int)
         return cp.asarray(points.T)
     
-    def _select_cluster(self):
+    def _select_cluster(self, **kwargs):
         ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model.
             This function is provided "as is", with no warranty of any kind, express or implied,
             including but not limited to fitness for simulating a two-dimensional Ising model.
@@ -428,7 +429,7 @@ class Magnets(ABC):
                 idx = self._update_Wolff(*args, **kwargs)
             case str(unrecognizedscheme):
                 raise ValueError(f"The Magnets.params object has an invalid value for UPDATE_SCHEME='{unrecognizedscheme}'.")
-        return Energy.clean_indices(idx)
+        return clean_indices(idx)
 
     def _update_Glauber(self, idx=None, Q=0.05, r=0):
         # 1) Choose a bunch of magnets at random
@@ -683,15 +684,15 @@ class Energy(ABC):
     @abstractmethod
     def energy_switch(self, indices2D):
         ''' Returns the change in energy experienced by the magnets at <indices2D>, if they were to switch.
-            @param indices2D [list(2xN)]: A list containing two elements: an array containing the x-indices of each switched
-                magnet, and a similar array for y (so indices2D is basically a 2xN array, with N the number of switches).
+            @param indices2D [tuple(2)]: A tuple containing two equal-size 1D arrays representing the y- and x-
+                indices of the sampled magnets, such that this tuple can be used directly to index self.E.
             @return [list(N)]: A list containing the local changes in energy for each magnet of <indices2D>, in the same order.
         '''
 
     @abstractmethod
     def update_single(self, index2D):
         ''' Updates self.E by only taking into account that a single magnet (at index2D) switched.
-            @param index2D [tuple(2)]: A tuple containing two elements: the x- and y-index of the switched magnet.
+            @param index2D [tuple(2)]: A tuple containing two size-1 arrays representing y- and x-index of the switched magnet.
         '''
     
     @abstractmethod
@@ -699,8 +700,8 @@ class Energy(ABC):
         ''' Updates self.E by only taking into account that some magnets (at indices2D) switched.
             This seems like it is just multiple times self.update_single(), but sometimes an optimization is possible,
             hence this required alternative function for updating multiple magnets at once.
-            @param indices2D [list(2xN)]: A list containing two elements: an array containing the x-indices of each switched
-                magnet, and a similar array for y (so indices2D is basically a 2xN array, with N the number of switches).
+            @param indices2D [tuple(2)]: A tuple containing two equal-size 1D arrays representing the y- and x-
+                indices of the sampled magnets, such that this tuple can be used directly to index self.E.
         '''
 
     @property
@@ -715,42 +716,6 @@ class Energy(ABC):
     @cache
     def shortname(self):
         return type(self).__name__.lower().replace('energy', '')
-
-    @classmethod
-    def clean_indices(cls, indices2D):
-        ''' Reshapes <indices2D> into a 2xN two-dimensional array.
-            @param <indices2D> [iterable]: an iterable which can have any shape, as long as it contains
-                at most 2 dimensions of a size greater than 1, of which exactly one has size 2. It is 
-                this size-2 dimension which will become the primary dimension of the returned array.
-            @return [np.array(2xN)]: A 2xN array, where the 1st sub-array indicates x-indices, the 2nd y-indices.
-        '''
-        indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze()) if indices2D is not None else cp.empty((2,0))
-        if len(indices2D.shape) > 2: raise ValueError("An array with more than 2 non-empty dimensions can not be used to represent a list of indices.")
-        if not cp.any(cp.asarray(indices2D.shape) == 2): raise ValueError("The list of indices has an incorrect shape. At least one dimension should have length 2.")
-        match indices2D.shape:
-            case (2, _):
-                return indices2D
-            case (_, 2):
-                return indices2D.T
-            case _:
-                raise ValueError("Structure of attribute <indices2D> could not be recognized.")
-    
-    @classmethod
-    def clean_index(cls, index2D):
-        ''' Reshapes <index2D> into a length 2 one-dimensional array.
-            @param <index2D> [iterable]: an iterable which can have any shape, as long as it contains exactly 2 elements.
-            @return [tuple(2)]: A length 2 tuple, whose elements correspond to the x- and y-index, respectively.
-        '''
-        index2D = cp.asarray(index2D)
-        if index2D.size != 2: raise ValueError("The <index2D> argument should contain exactly two values: the x- and y-index.")
-        return tuple(index2D.reshape(2))
-    
-    @classmethod
-    def J_to_eV(cls, E, /):
-        return E/1.602176634e-19
-    @classmethod
-    def eV_to_J(cls, E, /):
-        return E*1.602176634e-19
 
 
 class ZeemanEnergy(Energy):
@@ -785,16 +750,13 @@ class ZeemanEnergy(Energy):
             self.E = -self.mm.moment*self.mm.m*self.B_ext
 
     def energy_switch(self, indices2D):
-        indices2D = Energy.clean_indices(indices2D)
-        return -2*self.E[indices2D[0], indices2D[1]]
+        return -2*self.E[indices2D]
 
     def update_single(self, index2D):
-        index2D = Energy.clean_index(index2D)
         self.E[index2D] *= -1
     
     def update_multiple(self, indices2D):
-        indices2D = Energy.clean_indices(indices2D)
-        self.E[indices2D[0], indices2D[1]] *= -1
+        self.E[indices2D] *= -1
     
     @property
     def E_tot(self):
@@ -887,11 +849,9 @@ class DipolarEnergy(Energy):
         self.E = self.prefactor*total_energy
     
     def energy_switch(self, indices2D):
-        indices2D = Energy.clean_indices(indices2D)
-        return -2*self.E[indices2D[0], indices2D[1]]
+        return -2*self.E[indices2D]
     
     def update_single(self, index2D):
-        index2D = Energy.clean_index(index2D)
         # First we get the x and y coordinates of magnet <i> in its unit cell
         y, x = index2D
         x_unitcell = int(x) % self.unitcell.x
@@ -909,35 +869,30 @@ class DipolarEnergy(Energy):
         self.E[index2D] *= -1 # This magnet switched, so all its interactions are inverted
     
     def update_multiple(self, indices2D):
-        indices2D = Energy.clean_indices(indices2D)
-        self.E[indices2D[0], indices2D[1]] *= -1
-        indices2D_unitcell = cp.empty_like(indices2D)
-        indices2D_unitcell[0,:] = indices2D[0,:] % self.unitcell.y
-        indices2D_unitcell[1,:] = indices2D[1,:] % self.unitcell.x
-        indices2D_unitcell_raveled = indices2D_unitcell[1] + indices2D_unitcell[0]*self.unitcell.x
+        self.E[indices2D] *= -1
+        indices2D_unitcell_raveled = (indices2D[1] % self.unitcell.x) + (indices2D[0] % self.unitcell.y)*self.unitcell.x
         binned_unitcell_raveled = cp.bincount(indices2D_unitcell_raveled)
         for i in binned_unitcell_raveled.nonzero()[0]: # Iterate over the unitcell indices present in indices2D
             y_unitcell, x_unitcell = divmod(int(i), self.unitcell.x)
             kernel = self.kernel_unitcell[y_unitcell][x_unitcell]
             if kernel is None: continue # This should never happen, but check anyway in case indices2D includes empty cells
-            indices_here = indices2D[:,indices2D_unitcell_raveled == i]
-            if indices_here.shape[1] > self.mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: # THIS NUMBER IS EMPIRICALLY DETERMINED
+            indices_here = cp.where(indices2D_unitcell_raveled == i)[0]
+            indices2D_here = (indices2D[0][indices_here], indices2D[1][indices_here])
+            if indices_here.size > self.mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF:
                 ### EITHER WE DO THIS (CONVOLUTION) (starts to be better at approx. 40 simultaneous switches for 41x41 kernel, taking into account the need for complete recalculation every <something> steps, so especially for large T this is good)
                 switched_field = cp.zeros_like(self.mm.m)
-                switched_field[indices_here[0], indices_here[1]] = self.mm.m[indices_here[0], indices_here[1]]
+                switched_field[indices2D_here] = self.mm.m[indices2D_here]
                 n = self.mm.params.REDUCED_KERNEL_SIZE
                 usefulkernel = kernel[self.mm.ny-1-n:self.mm.ny+n, self.mm.nx-1-n:self.mm.nx+n] if n else kernel
-                convolutedkernel = signal.convolve2d(switched_field, usefulkernel, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
-                interaction = self.prefactor*cp.multiply(self.mm.m*self.mm._momentSq, convolutedkernel)
-                self.E += 2*interaction
+                convolvedkernel = signal.convolve2d(switched_field, usefulkernel, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
             else:
                 ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY NONPARALLEL) 
-                interaction = cp.zeros_like(self.mm.m)
-                for j in range(indices_here.shape[1]):
-                    y, x = indices_here[0,j], indices_here[1,j]
-                    interaction += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-                interaction = self.prefactor*cp.multiply(self.mm.m*self.mm._momentSq, interaction)
-                self.E += 2*interaction
+                convolvedkernel = cp.zeros_like(self.mm.m) # Still is convolved, just not in parallel
+                for j in range(indices_here.size): # Here goes the manual convolution
+                    y, x = indices2D_here[0][j], indices2D_here[1][j]
+                    convolvedkernel += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
+            interaction = self.prefactor*cp.multiply(self.mm.m*self.mm._momentSq, convolvedkernel)
+            self.E += 2*interaction
     
     @property
     def E_tot(self):
@@ -964,8 +919,7 @@ class ExchangeEnergy(Energy):
             self.E = -self.J*cp.multiply(signal.convolve2d(self.mm.m, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill'), self.mm.m)
 
     def energy_switch(self, indices2D):
-        indices2D = Energy.clean_indices(indices2D)
-        return -2*self.E[indices2D[0], indices2D[1]]
+        return -2*self.E[indices2D]
     
     def update_single(self, index2D):
         self.update() # There are much faster ways of doing this, but this becomes difficult with PBC and in/out-of-plane
