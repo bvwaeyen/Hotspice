@@ -27,13 +27,16 @@ class SimParams:
     # TODO: THOROUGH ANALYSIS OF REDUCED_KERNEL_SIZE AND TAKE APPROPRIATE MEASURES (e.g. full recalculation every <n> steps)
     REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
     UPDATE_SCHEME: str = 'Glauber' # Can be any of 'Néel', 'Glauber', 'Wolff'
-    MULTISAMPLING_SCHEME: str = 'grid' # Can be any of 'single', 'grid', 'Poisson', 'cluster'
+    MULTISAMPLING_SCHEME: str = 'grid' # Can be any of 'single', 'grid', 'Poisson', 'cluster'. Only used if UPDATE_SCHEME is 'Glauber'.
 
     def __post_init__(self):
         self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = int(self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF)
         self.REDUCED_KERNEL_SIZE = int(self.REDUCED_KERNEL_SIZE)
         if self.UPDATE_SCHEME not in (allowed := ['Glauber', 'Néel', 'Wolff']):
             raise ValueError(f"UPDATE_SCHEME='{self.UPDATE_SCHEME}' is invalid: allowed values are {allowed}.")
+        if self.MULTISAMPLING_SCHEME not in (allowed := ['single', 'grid', 'Poisson', 'cluster']):
+            raise ValueError(f"MULTISAMPLING_SCHEME='{self.MULTISAMPLING_SCHEME}' is invalid: allowed values are {allowed}.")
+        # If a multisampling scheme is incompatible with an update scheme, an error should be raised at runtime, not here.
 
 
 class Magnets(ABC):
@@ -159,7 +162,7 @@ class Magnets(ABC):
         self.orientation[:,:,0] = cp.cos(self.angles)*self.occupation
         self.orientation[:,:,1] = cp.sin(self.angles)*self.occupation
 
-    def add_energy(self, energy: 'Energy'):
+    def add_energy(self, energy: 'Energy', verbose=True):
         ''' Adds an Energy object to self.energies. This object is stored under its reduced name,
             e.g. ZeemanEnergy is stored under 'zeeman'.
             @param energy [Energy]: the energy to be added.
@@ -167,12 +170,12 @@ class Magnets(ABC):
         energy.initialize(self)
         for i, e in enumerate(self.energies):
             if type(e) is type(energy):
-                warnings.warn(f'An instance of {type(energy).__name__} was already included in the simulation, and has now been overwritten.', stacklevel=2)
+                if verbose: warnings.warn(f'An instance of {type(energy).__name__} was already included in the simulation, and has now been overwritten.', stacklevel=2)
                 self.energies[i] = energy
                 return
         self.energies.append(energy)
 
-    def remove_energy(self, name: str):
+    def remove_energy(self, name: str, verbose=True):
         ''' Removes the specified energy from self.energies.
             @param name [str]: the name of the energy to be removed. Case-insensitive and may or may not include
                 the 'energy' part of the class name. Valid options include e.g. 'dipolar', 'DipolarEnergy'...
@@ -182,9 +185,9 @@ class Magnets(ABC):
             if name == e.shortname:
                 self.energies.pop(i)
                 return
-        warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self.energies]}", stacklevel=2)
+        if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self.energies]}", stacklevel=2)
 
-    def get_energy(self, name: str):
+    def get_energy(self, name: str, verbose=True):
         ''' Returns the specified energy from self.energies.
             @param name [str]: the name of the energy to be returned. Case-insensitive and may or may not include
                 the 'energy' part of the class name. Valid options include e.g. 'dipolar', 'DipolarEnergy'...
@@ -193,7 +196,7 @@ class Magnets(ABC):
         name = name.lower().replace('energy', '')
         for e in self.energies:
             if name == e.shortname: return e
-        warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self.energies]}", stacklevel=2)
+        if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self.energies]}", stacklevel=2)
         return None
 
     def update_energy(self, index: np.ndarray|cp.ndarray = None):
@@ -398,12 +401,24 @@ class Magnets(ABC):
     
     def _select_cluster(self, **kwargs):
         ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model.
-            This function is provided "as is", with no warranty of any kind, express or implied,
-            including but not limited to fitness for simulating a two-dimensional Ising model.
+            This is supposed to alleviate the 'critical slowing down' near the critical temperature.
+            Therefore, this should not be used for low or high T, only near the T_C is this useful.
         '''
+        if self.get_energy('dipolar', verbose=False) is not None:
+            return self._select_cluster_longrange()
+        else:
+            return self._select_cluster_exchange()
+
+    def _select_cluster_longrange(self):
+        # TODO: see if the algorithm can be done efficiently for OOP ASI with long-range interactions
+        # because it seems that it is certainly possible (if we define an interaction energy between magnets)
+        # but that the limiting factor is the sheer number of 'neighbors' that a long-range interaction creates.
+        raise NotImplementedError("Can not (yet?) select Wolff cluster with long-range interactions.")
+
+    def _select_cluster_exchange(self):
         exchange: ExchangeEnergy = self.get_energy('exchange')
         if exchange is None: raise NotImplementedError("Can not select Wolff cluster if there is no exchange energy in the system.")
-        neighbors = exchange.local_interaction
+        neighbors = exchange.local_interaction # self._get_nearest_neighbors()
         seed = tuple(self._select_single().flat)
         cluster = cp.zeros_like(self.m)
         cluster[seed] = 1
@@ -652,12 +667,12 @@ class Magnets(ABC):
         ''' Returns a small mask with the magnet at the center, and 1 at the positions of its nearest neighbors (elsewhere 0). '''
         return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]) # Example
 
-    @abstractmethod
+    @abstractmethod # TODO: this is a pretty archaic method at this point
     def _get_appropriate_avg(self):
         ''' Returns the most appropriate averaging mask for a given type of ASI. '''
         return 'cross' # Example
 
-    @abstractmethod
+    @abstractmethod # TODO: this is a pretty archaic method at this point as well. Sould this really be abstract?
     def _get_AFMmask(self):
         ''' Returns the (normalized) mask used to determine how anti-ferromagnetic the magnetization profile is. '''
         return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float') # Example
@@ -867,7 +882,7 @@ class DipolarEnergy(Energy):
 
         self.E += 2*interaction
         self.E[index2D] *= -1 # This magnet switched, so all its interactions are inverted
-    
+
     def update_multiple(self, indices2D):
         self.E[indices2D] *= -1
         indices2D_unitcell_raveled = (indices2D[1] % self.unitcell.x) + (indices2D[0] % self.unitcell.y)*self.unitcell.x
