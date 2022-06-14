@@ -87,29 +87,29 @@ class test_pinwheelReversal:
                 if verbose: print(f"[{i+1}/{H_range.size}] H = {H:.2e} T, m_x={self.mm.m_avg_x:.2f} (threshold passed{', plotting magnetization...' if show_intermediate else ''})")
                 if show_intermediate: hotspin.plottools.show_m(self.mm)
 
-        data = pd.DataFrame({"H": H_range, "m_avg": m_avg_H})
+        df = pd.DataFrame({"H": H_range, "m_avg": m_avg_H})
         metadata = {"description": r"Pinwheel reversal test as described in pp. 8-10 of `flatspin: A Large-Scale Artificial Spin Ice Simulator` by Jensen et al."}
         constants = {"H_angle": angle, "T": self.T, "E_B": self.E_B, "nx": self.mm.nx, "ny": self.mm.ny}
+        data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
         if save:
-            full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
-            savepath = hotspin.utils.save_json(full_json, path=f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}", name=f"N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}")
-            if plot: test_pinwheelReversal.test_reversal_plot(data, save=savepath)
+            savepath = data.save(dir=f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}", name=f"N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}")
+            if plot: test_pinwheelReversal.test_reversal_plot(df, save=savepath)
         else:
-            if plot: test_pinwheelReversal.test_reversal_plot(data)
+            if plot: test_pinwheelReversal.test_reversal_plot(df)
         return data
 
     @staticmethod
-    def test_reversal_plot(data: pd.DataFrame, save=False, reduce: int = 10000):
+    def test_reversal_plot(df: pd.DataFrame, save=False, reduce: int = 10000):
         ''' If <reduce> is nonzero, the number of plotted points is kept reasonable so the pdf does not take eons to load. '''
-        N = len(data.index)
-        if reduce: data = data.iloc[::math.ceil(N/reduce)]
-        M_sat_parallel = data["m_avg"].abs().max() # Assuming that the saturation is achieved somewhere (normally at initialization, so this should be ok)
+        N = len(df.index)
+        if reduce: df = df.iloc[::math.ceil(N/reduce)]
+        M_sat_parallel = df["m_avg"].abs().max() # Assuming that the saturation is achieved somewhere (normally at initialization, so this should be ok)
 
         hotspin.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.plot(data["H"]*1e3, data["m_avg"]/M_sat_parallel, linewidth=1, color='black', zorder=-1)
-        ax.scatter(data["H"]*1e3, data["m_avg"]/M_sat_parallel, s=10, zorder=1)
+        ax.plot(df["H"]*1e3, df["m_avg"]/M_sat_parallel, linewidth=1, color='black', zorder=-1)
+        ax.scatter(df["H"]*1e3, df["m_avg"]/M_sat_parallel, s=10, zorder=1)
         ax.grid(color='grey', linestyle=':')
         ax.set_xlabel('External field magnitude [mT]')
         ax.set_ylabel('Magnetization $\\langle M_{\\parallel}\\rangle /M_0$')
@@ -117,7 +117,7 @@ class test_pinwheelReversal:
         plt.gcf().tight_layout()
         if save:
             if not isinstance(save, str):
-                save = f"results/test_squareIsing/N={N:.0f}_H={data['H'].max():.2e}_Eb={data['E_B']:.2e}_{round(data['H_angle'].iloc[0]*180/math.pi):.0f}deg_T={data['T'].mean():.0f}.pdf"
+                save = f"results/test_squareIsing/N={N:.0f}_H={df['H'].max():.2e}_Eb={df['E_B']:.2e}_{round(df['H_angle'].iloc[0]*180/math.pi):.0f}deg_T={df['T'].mean():.0f}.pdf"
             hotspin.plottools.save_plot(save, ext='.pdf')
         plt.show()
 

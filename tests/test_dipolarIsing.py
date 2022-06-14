@@ -57,30 +57,30 @@ class test_dipolarIsing:
             # if verbose: hotspin.plottools.show_m(self.mm)
             AFMness[i] = hotspin.plottools.get_AFMness(self.mm)
         
-        data = pd.DataFrame({"delta": delta_range, "AFMness": AFMness})
+        df = pd.DataFrame({"delta": delta_range, "AFMness": AFMness})
         metadata = {"description": r"2D Ising model with exchange and dipolar interactions, sweeping $\delta$ as described in `Striped phases in two-dimensional dipolar ferromagnets` by MacIsaac et al."}
-        constants = {"nx": self.mm.nx, "ny": self.mm.ny, "MCstepsize": N, "T": self.T_avg}
+        constants = {"nx": self.mm.nx, "ny": self.mm.ny, "MCstepsize": N, "T": self.mm.T_avg}
+        data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
         if save:
-            full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
-            savepath = hotspin.utils.save_json(full_json, path="results/test_dipolarIsing", name=f"deltasweep{data['delta'].min()}..{data['delta'].max()}({data['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}")
-            if plot: test_dipolarIsing.test_delta_influence_plot(data, save=savepath)
+            savepath = data.save(dir="results/test_dipolarIsing", name=f"deltasweep{df['delta'].min()}..{df['delta'].max()}({df['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}")
+            if plot: test_dipolarIsing.test_delta_influence_plot(df, save=savepath)
         else:
-            if plot: test_dipolarIsing.test_delta_influence_plot(data)
+            if plot: test_dipolarIsing.test_delta_influence_plot(df)
         return data
     
     @staticmethod
-    def test_delta_influence_plot(data: pd.DataFrame, save=False):
+    def test_delta_influence_plot(df: pd.DataFrame, save=False):
         hotspin.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.plot(data["delta"], data["AFMness"])
+        ax.plot(df["delta"], df["AFMness"])
         ax.set_xlabel(r"$\delta$ (relative exchange/dipolar strength)")
         ax.axvline(0.85, linestyle=':', color='black')
         ax.set_ylabel('AFM-ness')
         plt.gcf().tight_layout()
         if save:
             if not isinstance(save, str):
-                save = f"results/test_dipolarIsing/deltasweep{data['delta'].min()}..{data['delta'].max()}({data['delta'].nunique()}).pdf"
+                save = f"results/test_dipolarIsing/deltasweep{df['delta'].min()}..{df['delta'].max()}({df['delta'].nunique()}).pdf"
             hotspin.plottools.save_plot(save, ext='.pdf')
         plt.show()
 

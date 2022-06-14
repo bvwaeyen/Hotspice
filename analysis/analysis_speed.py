@@ -40,35 +40,35 @@ def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.F
     nz = n.nonzero()
     L_range, n, attempts_per_s, switches_per_s, MCsteps_per_s = L_range[nz], n[nz], attempts_per_s[nz], switches_per_s[nz], MCsteps_per_s[nz]
 
-    data = pd.DataFrame({"L": L_range, "n": n, "attempts/s": attempts_per_s, "switches/s": switches_per_s, "MCsteps/s": MCsteps_per_s})
+    df = pd.DataFrame({"L": L_range, "n": n, "attempts/s": attempts_per_s, "switches/s": switches_per_s, "MCsteps/s": MCsteps_per_s})
     metadata = {"description": r"Performance test for Hotspin, determining throughput as switches/s or a similar metric, for various simulation sizes."}
     constants = {"T": mm.T_avg, "E_B": mm.E_B_avg, "dx": mm.dx, "dy": mm.dy, "ASI_type": hotspin.utils.full_obj_name(mm), "PBC": mm.PBC}
-    savepath = ''
+    savepath = '' # TODO: is this necessary? maybe we can simplify this
+    data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
     if save:
-        full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
-        savepath = hotspin.utils.save_json(full_json, path=f"results/analysis_speed_size", name=f"{ASI_type.__name__}_size{L_range.min()}-{L_range.max()}_T{constants['T']:.0f}{'_PBC' if kwargs.get('PBC', False) else ''}")
+        savepath = data.save(dir=f"results/analysis_speed_size", name=f"{ASI_type.__name__}_size{L_range.min()}-{L_range.max()}_T{constants['T']:.0f}{'_PBC' if kwargs.get('PBC', False) else ''}")
     if plot or save:
-        analysis_speed_size_plot(data, save=savepath, show=plot)
+        analysis_speed_size_plot(df, save=savepath, show=plot)
     return data
 
 
-def analysis_speed_size_plot(data: pd.DataFrame, save=False, show=True):
+def analysis_speed_size_plot(df: pd.DataFrame, save=False, show=True):
     hotspin.plottools.init_fonts()
     fig = plt.figure(figsize=(5, 5))
     ax1 = fig.add_subplot(111)
     ax2 = ax1.twiny()
-    ax1.plot(data["n"], data["attempts/s"], label='Samples / sec')
-    ax1.plot(data["n"], data["switches/s"], label='Switches / sec')
-    ax1.plot(data["n"], data["MCsteps/s"], label='MC steps / sec')
+    ax1.plot(df["n"], df["attempts/s"], label='Samples / sec')
+    ax1.plot(df["n"], df["switches/s"], label='Switches / sec')
+    ax1.plot(df["n"], df["MCsteps/s"], label='MC steps / sec')
     ax1.set_xscale('log')
-    ax1.set_xlim([data["n"].min(), data["n"].max()])
+    ax1.set_xlim([df["n"].min(), df["n"].max()])
     ax1.set_yscale('log')
     ax1.set_xlabel('Number of spins')
     ax1.set_ylabel('Throughput [$s^{-1}$]')
     ax1.legend()
 
     ax2.set_xscale('log')
-    ax2.set_xlim([data["L"].min(), data["L"].max()])
+    ax2.set_xlim([df["L"].min(), df["L"].max()])
     ticks = np.array([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000])
     ax2.set_xticks(ticks[np.where((ticks >= ax2.get_xlim()[0]) & (ticks <= ax2.get_xlim()[1]))])
     ax2.xaxis.grid(linestyle=':')
@@ -96,4 +96,4 @@ if __name__ == "__main__":
     # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.TriangleASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
 
     # openname = 'results/analysis_speed_size/something.json'
-    # analysis_speed_size_plot(hotspin.utils.read_json(openname)["data"], save=openname)
+    # analysis_speed_size_plot(hotspin.utils.Data.load(openname).df, save=openname)

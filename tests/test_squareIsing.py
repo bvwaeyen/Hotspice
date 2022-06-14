@@ -27,7 +27,7 @@ class test_squareIsing:
     def T_c(self):
         return 2*self.J/hotspin.kB/math.log(1+math.sqrt(2))
 
-    def test_magnetization(self, T_steps=21, N=1000, verbose=False, plot=True, save=False, reverse=False):
+    def test_magnetization(self, T_steps=21, N=1000, verbose=False, plot=True, save=False, reverse=False) -> hotspin.utils.Data:
         ''' Performs a sweep of the temperature in <T_steps> steps. At each step, <N> Magnets.update() calls are performed.
             The final half of these <N> update calls are recorded, from which and their average/stdev of m_avg calculated.
             @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.
@@ -49,50 +49,51 @@ class test_squareIsing:
             m_avg[i] = np.mean(averages)
             m_std[i] = np.std(averages)
 
-        data = pd.DataFrame({"T": T_range, "m_avg": m_avg, "m_std": m_std})
+        df = pd.DataFrame({"T": T_range, "m_avg": m_avg, "m_std": m_std})
         metadata = {"description": r"Magnetization of 2D exchange-coupled Ising model near critical temperature."}
-        constants = {"nx": self.mm.nx, "ny": self.mm.ny, "N": N}
+        constants = {"nx": self.mm.nx, "ny": self.mm.ny, "N": N, "UPDATE_SCHEME": self.mm.params.UPDATE_SCHEME, "Tsweep_reverse": reverse}
+        data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
         if save:
             Tsweep_direction = 'reverse' if reverse else ''
-            full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
-            savepath = hotspin.utils.save_json(full_json, path="results/test_squareIsing", name=f"Tsweep{data['T'].nunique()}{Tsweep_direction}_N{N}_{self.mm.nx}x{self.mm.ny}")
-            if plot: test_squareIsing.test_magnetization_plot(data, save=savepath)
+            savepath = data.save(dir="results/test_squareIsing", name=f"Tsweep{df['T'].nunique()}{Tsweep_direction}_N{N}_{self.mm.params.UPDATE_SCHEME}_{self.mm.nx}x{self.mm.ny}")
+            if plot: test_squareIsing.test_magnetization_plot(df, save=savepath)
         else:
-            if plot: test_squareIsing.test_magnetization_plot(data)
+            if plot: test_squareIsing.test_magnetization_plot(df)
         return data
     
     def test_N_influence(self, *args, plot=True, save=True, **kwargs):
         ''' Tests the influence of <N> (the number of iterations per value of T) on m_avg.
             Any arguments (not 'N') passed to this function are passed through to test_magnetization().
         '''
-        data = pd.DataFrame()
+        df = pd.DataFrame()
 
         N_range = [1000, 2000, 4000]
         for N in N_range:
             local_data = self.test_magnetization(*args, N=N, plot=False, **kwargs)
-            local_data["N"] = N
-            data = pd.concat([data, local_data])
+            local_df = local_data.df
+            local_df["N"] = N
+            df = pd.concat([df, local_df])
 
         metadata = {"description": r"Magnetization of 2D exchange-coupled Ising model near critical temperature, for different N (the number of update steps for each data point)."}
-        constants = {"nx": self.mm.nx, "ny": self.mm.ny}
+        constants = local_data.constants
+        data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
         if save:
-            Tsweep_direction = 'reverse' if kwargs.get('reverse', False) else ''
-            full_json = hotspin.utils.combine_json(data, metadata=metadata, constants=constants)
-            savepath = hotspin.utils.save_json(full_json, path="results/test_squareIsing", name=f"Tsweep{data['T'].nunique()}{Tsweep_direction}_Nsweep{data['N'].nunique()}_{self.mm.nx}x{self.mm.ny}")
-            if plot: test_squareIsing.test_N_influence_plot(data, save=savepath)
+            Tsweep_direction = 'reverse' if constants['Tsweep_reverse'] else ''
+            savepath = data.save(dir="results/test_squareIsing", name=f"Tsweep{df['T'].nunique()}{Tsweep_direction}_Nsweep{df['N'].nunique()}_{constants['UPDATE_SCHEME']}_{constants['nx']}x{constants['ny']}")
+            if plot: test_squareIsing.test_N_influence_plot(df, save=savepath)
         else:
-            if plot: test_squareIsing.test_N_influence_plot(data)
+            if plot: test_squareIsing.test_N_influence_plot(df)
         return data
 
     @staticmethod
-    def test_magnetization_plot(data: pd.DataFrame, save=False):
+    def test_magnetization_plot(df: pd.DataFrame, save=False):
         ''' If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. '''
-        T_lim = [data["T"].min(), data["T"].max()]
+        T_lim = [df["T"].min(), df["T"].max()]
 
         hotspin.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.errorbar(data["T"], data["m_avg"], yerr=data["m_std"], fmt='o', label='Hotspin')
+        ax.errorbar(df["T"], df["m_avg"], yerr=df["m_std"], fmt='o', label='Hotspin')
         ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label='Theory')
         ax.legend()
         ax.set_xlabel('Temperature $T/T_c$')
@@ -102,21 +103,21 @@ class test_squareIsing:
         plt.gcf().tight_layout()
         if save:
             if not isinstance(save, str):
-                reverse = '' if data["T"].iloc[0] < data["T"].iloc[-1] else 'reverse'
-                save = f"results/test_squareIsing/Tsweep{data['T'].nunique()}{reverse}.pdf"
+                reverse = '' if df["T"].iloc[0] < df["T"].iloc[-1] else 'reverse'
+                save = f"results/test_squareIsing/Tsweep{df['T'].nunique()}{reverse}.pdf"
             hotspin.plottools.save_plot(save, ext='.pdf')
         plt.show()
 
     @staticmethod
-    def test_N_influence_plot(data: pd.DataFrame, save=False):
+    def test_N_influence_plot(df: pd.DataFrame, save=False):
         ''' If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. '''
-        T_lim = [data["T"].min(), data["T"].max()]
+        T_lim = [df["T"].min(), df["T"].max()]
 
         hotspin.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        for N, local_data in data.groupby("N"):
-            ax.errorbar(local_data["T"], local_data["m_avg"], yerr=local_data["m_std"], fmt='o', label=f'N={N}')
+        for N, local_df in df.groupby("N"):
+            ax.errorbar(local_df["T"], local_df["m_avg"], yerr=local_df["m_std"], fmt='o', label=f'N={N}')
         ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label='Theory')
         ax.legend()
         ax.set_xlabel('Temperature $T/T_c$')
@@ -126,8 +127,8 @@ class test_squareIsing:
         plt.gcf().tight_layout()
         if save:
             if not isinstance(save, str):
-                reverse = '' if data["T"].iloc[0] < data["T"].iloc[-1] else 'reverse'
-                save = f"results/test_squareIsing/Tsweep{data['T'].nunique()}{reverse}_Nsweep{data['N'].nunique()}.pdf"
+                reverse = '' if df["T"].iloc[0] < df["T"].iloc[-1] else 'reverse'
+                save = f"results/test_squareIsing/Tsweep{df['T'].nunique()}{reverse}_Nsweep{df['N'].nunique()}.pdf"
             hotspin.plottools.save_plot(save, ext='.pdf')
         plt.show()
 
