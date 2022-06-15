@@ -1,4 +1,3 @@
-import datetime
 import getpass
 import inspect
 import io
@@ -14,6 +13,7 @@ import cupy.lib.stride_tricks as striding
 import numpy as np
 import pandas as pd
 
+from datetime import datetime
 from IPython.terminal.embed import InteractiveShellEmbed
 from typing import Callable, Iterable, TypeVar
 
@@ -195,52 +195,53 @@ def readable_bytes(N):
 class Data:
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
         ''' Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
+            Constant columns in <df> are automatically moved to <constants>, and keys present
+            in <constants> that are also columns in <df> are removed from <constants>.
             @param df [pandas.DataFrame]: the dataframe to be stored.
             @param constants [dict] ({}): used to store constants such that they needn't be
                 repeated in every row of the dataframe, e.g. cell size, temperature...
-                These constants can also be arrays of JSON-convertable objects, e.g. scalars or strings.
-                Both CuPy and NumPy arrays are supported for this purpose.
-            @param metadata [dict] ({}): any elements present in this dictionary will overwrite
-                their default values as generated automatically to be put under the name "metadata".
-                Additional fields can also be provided without issue, as long as they are a scalar or string.
-
-            # When saved as a JSON file, the following three top-level objects are available:
-            # - "constants", with names and values of parameters which remained constant throughout the simulation.
-            # - "data", which stores a JSON 'table' representation of the Pandas dataframe containing the actual data.
-            # - "metadata", with the following values: 
-            #     - "author": name of the author (default: login name of user on the computer)
-            #     - "creator": path of the __main__ module in the session
-            #     - "datetime": a string representing the time in yyyymmddHHMMSS format
-            #     - "description": a (small) description of what the data represents
-            #     - "GPU": an object containing some information about the used NVIDIA GPU, more specifically with
-            #         values "name", " compute_cap", " driver_version", " memory.total [MiB]", " timestamp", " uuid".
-            #     - "savepath": the full pathname where this function saved the JSON object to a file.
-            #     - "simulator": "Hotspin", just for clarity
+                These constants can be scalars, strings or CuPy/NumPy arrays.
+            @param metadata [dict] ({}): used to store additional information about the
+                simulation, e.g. description, author, time... Some fields are automatically
+                generated if they are not present in the dictionary passed to <metadata>.
+                For more details, see the <self.metadata> docstring.
         '''
         self.df = df
         self.metadata = metadata
         self.constants = constants
-    
+
     @property
     def df(self): return self._df
     @df.setter
     def df(self, value: pd.DataFrame):
+        ''' The Pandas DataFrame containing the bulk of the data. '''
         if not isinstance(value, pd.DataFrame):
             try: # Then assume <value> is a JSON-parseable object
                 value = pd.read_json(json.dumps(value), orient='split') 
             except: # So no DataFrame, and not JSON-parseable? Just stop this madness.
                 raise ValueError('Could not parse DataFrame-like object correctly.')
         self._df = value
+        self._check_consistency()
         assert isinstance(self._df, pd.DataFrame)
-    
+
     @property
     def metadata(self): return self._metadata
     @metadata.setter
-    def metadata(self, value: dict): # TODO: add information about which function/class generated the data, and SimParams
+    def metadata(self, value: dict):
+        ''' All keys in <value> are stored without modification, and the following keys are
+            automatically added if they are not provided in <value>:
+            - 'author': name of the author (default: login name of user on the computer)
+            - 'creator': main file responsible for creating the data (default: path of the __main__ module in the session)
+            - 'datetime': a string representing the UTC time in "yyyymmddHHMMSS" format
+            - 'description': a (small) description of what the data represents
+            - 'GPU': a list of dicts representing the NVIDIA GPUs used for the simulation. Each dict contains
+                keys 'name', 'compute_cap', 'driver_version', 'memory.total [MiB]', 'timestamp', 'uuid'.
+            - 'simulator': "Hotspin", just for clarity. Can include version number when applicable.
+        '''
         if value is None: value = {}
         if not isinstance(value, dict): raise ValueError('Metadata must be provided as a dictionary.')
-        
-        value.setdefault('datetime', datetime.datetime.now().strftime(r"%Y%m%d%H%M%S"))
+
+        value.setdefault('datetime', datetime.utcnow().strftime(r"%Y%m%d%H%M%S"))
         value.setdefault('author', getpass.getuser())
         try:
             creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
@@ -255,32 +256,61 @@ class Data:
             gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
                 ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
                 encoding='utf-8').strip())).to_json(orient='table', index=False))['data']
+            gpu_info = [{key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in d.items()} for d in gpu_info] # Remove spaces around key and value text
         except:
-            gpu_info = {}
+            gpu_info = []
         value.setdefault('GPU', gpu_info)
 
         self._metadata = value
         assert isinstance(self._metadata, dict)
-    
+
     @property
     def constants(self): return self._constants
     @constants.setter
     def constants(self, value: dict):
+        ''' Names and values of parameters which are constant throughout all entries in <self.df>. '''
         if value is None: value = {}
-        if not isinstance(value, dict): raise ValueError('Constants must be provided as a dictionary.')
+        if not isinstance(value, dict): raise ValueError("Constants must be provided as a dictionary.")
         self._constants = value
+        self._check_consistency()
         assert isinstance(self._constants, dict)
-    
+
+    def _check_consistency(self):
+        ''' Moves constant columns in <self.df> to <self.constants>, and removes keys
+            from <self.constants> that are also columns in <self.df>, to prevent ambiguous duplicates.
+            Checks if all keys in <self.constants> and <self.metadata> are strings;
+        '''
+        if hasattr(self, 'constants') and hasattr(self, 'df'):
+            # Move all constant columns in self.df to self.constants
+            is_column_constant = ~(self.df != self.df.iloc[0]).any()
+            for column, is_constant in is_column_constant.items():
+                if is_constant:
+                    self.constants[column] = self.df[column].iloc[0]
+                    self.df.drop(columns=column)
+            # Remove constants from self.constants that are also column labels in self.df
+            for column in self.df.columns:
+                if column in self.constants.keys():
+                    del self.constants[column]
+
+        if hasattr(self, 'constants'):
+            for key in self.constants.keys():
+                if not isinstance(key, str): raise KeyError("Data.constants keys must be of type string.")
+        if hasattr(self, 'metadata'):
+            for key in self.metadata.keys():
+                if not isinstance(key, str): raise KeyError("Data.metadata keys must be of type string.")
+
     def save(self, dir: str = None, name: str = None, timestamp=True):
         ''' Saves the currently stored data (<self.df>, <self.constants> and <self.metadata>)
             to a JSON file, with path "<dir>/<name>_<yyyymmddHHMMSS>.json". The automatically
             added timestamp in the filename can be disabled by passing <timestamp=False>.
+            The JSON file contains three top-level objects: "metadata", "constants" and "data",
+            where "data" stores a JSON 'table' representation of the Pandas DataFrame <self.df>.
 
             @param dir [str] ('hotspin_results'): the directory to create the .json file in.
             @param name [str] ('hotspin_simulation'): this text is used as the start of the filename.
             @param timestamp [bool|str] (True): if true, a timestamp is added to the filename. A string
                 can be passed to override the auto-generated timestamp. If False, no timestamp is added.
-            @return (str): the absolute path where the JSON file was saved.
+            @return (str): the absolute path of the saved JSON file.
         '''
         if dir is None: dir = 'hotspin_results'
         if name is None: name = 'hotspin_simulation'
@@ -292,17 +322,16 @@ class Data:
         }
 
         if timestamp:
-            timestr = '_' + (timestamp if isinstance(timestamp, str) else self.metadata['datetime'])
+            timestr = "_" + (timestamp if isinstance(timestamp, str) else self.metadata['datetime'])
         else:
-            timestr = ''
-        
-        filename = name + timestr + '.json'
+            timestr = ""
+        filename = name + timestr + ".json"
         fullpath = os.path.abspath(os.path.join(dir, filename))
         os.makedirs(dir, exist_ok=True)
         with open(fullpath, 'w') as outfile:
             json.dump(total_dict, outfile, indent="\t", cls=_CompactJSONEncoder)
         return fullpath
-    
+
     @staticmethod
     def load(JSON):
         """ Reads a JSON-parseable object containing previously generated Hotspin data, and returns its
@@ -328,7 +357,7 @@ class Data:
                 except: # See if <JSON> is actually a string representing a file path
                     with open(JSON, 'r') as infile: JSONdict = json.load(infile)
         else:
-            raise ValueError('Could not parse JSON-like object correctly.')
+            raise ValueError("Could not parse JSON-like object correctly.")
 
         df = pd.read_json(json.dumps(JSONdict['data']), orient='split') # JSON -> DataFrame to load
         return Data(df, constants=JSONdict['constants'], metadata=JSONdict['metadata'])
