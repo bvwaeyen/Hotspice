@@ -61,15 +61,12 @@ class test_dipolarIsing:
         metadata = {"description": r"2D Ising model with exchange and dipolar interactions, sweeping $\delta$ as described in `Striped phases in two-dimensional dipolar ferromagnets` by MacIsaac et al."}
         constants = {"nx": self.mm.nx, "ny": self.mm.ny, "MCstepsize": N, "T": self.mm.T_avg}
         data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
-        if save:
-            savepath = data.save(dir="results/test_dipolarIsing", name=f"deltasweep{df['delta'].min()}..{df['delta'].max()}({df['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}")
-            if plot: test_dipolarIsing.test_delta_influence_plot(df, save=savepath)
-        else:
-            if plot: test_dipolarIsing.test_delta_influence_plot(df)
+        if save: save = data.save(dir="results/test_dipolarIsing", name=f"deltasweep{df['delta'].min()}..{df['delta'].max()}({df['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}")
+        if plot or save: test_dipolarIsing.test_delta_influence_plot(df, save=save, show=plot)
         return data
     
     @staticmethod
-    def test_delta_influence_plot(df: pd.DataFrame, save=False):
+    def test_delta_influence_plot(df: pd.DataFrame, save=False, show=True):
         hotspin.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
@@ -82,7 +79,7 @@ class test_dipolarIsing:
             if not isinstance(save, str):
                 save = f"results/test_dipolarIsing/deltasweep{df['delta'].min()}..{df['delta'].max()}({df['delta'].nunique()}).pdf"
             hotspin.plottools.save_plot(save, ext='.pdf')
-        plt.show()
+        if show: plt.show()
 
 
 if __name__ == "__main__":

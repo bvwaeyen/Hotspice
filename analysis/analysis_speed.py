@@ -25,6 +25,7 @@ def analysis_speed(mm: hotspin.Magnets, t_min: float = 1, n_min: int = 1, verbos
 
 
 def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.FullASI, save: bool = False, plot: bool = True, verbose: bool = False, **kwargs):
+    L_range: np.ndarray = np.asarray(L_range)
     n = np.zeros_like(L_range)
     attempts_per_s = np.zeros_like(L_range, dtype='float')
     switches_per_s = np.zeros_like(L_range, dtype='float')
@@ -43,12 +44,9 @@ def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.F
     df = pd.DataFrame({"L": L_range, "n": n, "attempts/s": attempts_per_s, "switches/s": switches_per_s, "MCsteps/s": MCsteps_per_s})
     metadata = {"description": r"Performance test for Hotspin, determining throughput as switches/s or a similar metric, for various simulation sizes."}
     constants = {"T": mm.T_avg, "E_B": mm.E_B_avg, "dx": mm.dx, "dy": mm.dy, "ASI_type": hotspin.utils.full_obj_name(mm), "PBC": mm.PBC}
-    savepath = '' # TODO: is this necessary? maybe we can simplify this
     data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
-    if save:
-        savepath = data.save(dir=f"results/analysis_speed_size", name=f"{ASI_type.__name__}_size{L_range.min()}-{L_range.max()}_T{constants['T']:.0f}{'_PBC' if kwargs.get('PBC', False) else ''}")
-    if plot or save:
-        analysis_speed_size_plot(df, save=savepath, show=plot)
+    if save: save = data.save(dir=f"results/analysis_speed_size", name=f"{ASI_type.__name__}_size{L_range.min()}-{L_range.max()}_T{constants['T']:.0f}{'_PBC' if kwargs.get('PBC', False) else ''}")
+    if plot or save: analysis_speed_size_plot(df, save=save, show=plot) # If statement not strictly necessary, just better for performance
     return data
 
 

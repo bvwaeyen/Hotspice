@@ -91,16 +91,15 @@ class test_pinwheelReversal:
         metadata = {"description": r"Pinwheel reversal test as described in pp. 8-10 of `flatspin: A Large-Scale Artificial Spin Ice Simulator` by Jensen et al."}
         constants = {"H_angle": angle, "T": self.T, "E_B": self.E_B, "nx": self.mm.nx, "ny": self.mm.ny}
         data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
-        if save:
-            savepath = data.save(dir=f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}", name=f"N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}")
-            if plot: test_pinwheelReversal.test_reversal_plot(df, save=savepath)
-        else:
-            if plot: test_pinwheelReversal.test_reversal_plot(df)
+        if save: save = data.save(dir=f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}", name=f"N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}")
+        if plot or save: test_pinwheelReversal.test_reversal_plot(df, save=save, show=plot)
         return data
 
     @staticmethod
-    def test_reversal_plot(df: pd.DataFrame, save=False, reduce: int = 10000):
-        ''' If <reduce> is nonzero, the number of plotted points is kept reasonable so the pdf does not take eons to load. '''
+    def test_reversal_plot(df: pd.DataFrame, save=False, show=True, reduce: int = 10000):
+        ''' If <reduce> is nonzero, the number of plotted points is kept reasonable so the pdf
+            does not take eons to load (the number of plotted points is <= <reduce>).
+        '''
         N = len(df.index)
         if reduce: df = df.iloc[::math.ceil(N/reduce)]
         M_sat_parallel = df["m_avg"].abs().max() # Assuming that the saturation is achieved somewhere (normally at initialization, so this should be ok)
@@ -119,7 +118,7 @@ class test_pinwheelReversal:
             if not isinstance(save, str):
                 save = f"results/test_squareIsing/N={N:.0f}_H={df['H'].max():.2e}_Eb={df['E_B']:.2e}_{round(df['H_angle'].iloc[0]*180/math.pi):.0f}deg_T={df['T'].mean():.0f}.pdf"
             hotspin.plottools.save_plot(save, ext='.pdf')
-        plt.show()
+        if show: plt.show()
 
 
 if __name__ == "__main__":

@@ -79,14 +79,12 @@ class test_squareIsing:
         data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
         if save:
             Tsweep_direction = 'reverse' if constants['Tsweep_reverse'] else ''
-            savepath = data.save(dir="results/test_squareIsing", name=f"Tsweep{df['T'].nunique()}{Tsweep_direction}_Nsweep{df['N'].nunique()}_{constants['UPDATE_SCHEME']}_{constants['nx']}x{constants['ny']}")
-            if plot: test_squareIsing.test_N_influence_plot(df, save=savepath)
-        else:
-            if plot: test_squareIsing.test_N_influence_plot(df)
+            save = data.save(dir="results/test_squareIsing", name=f"Tsweep{df['T'].nunique()}{Tsweep_direction}_Nsweep{df['N'].nunique()}_{constants['UPDATE_SCHEME']}_{constants['nx']}x{constants['ny']}")
+        if plot or save: test_squareIsing.test_N_influence_plot(df, save=save, show=plot)
         return data
 
     @staticmethod
-    def test_magnetization_plot(df: pd.DataFrame, save=False):
+    def test_magnetization_plot(df: pd.DataFrame, save=False, show=True):
         ''' If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. '''
         T_lim = [df["T"].min(), df["T"].max()]
 
@@ -106,7 +104,7 @@ class test_squareIsing:
                 reverse = '' if df["T"].iloc[0] < df["T"].iloc[-1] else 'reverse'
                 save = f"results/test_squareIsing/Tsweep{df['T'].nunique()}{reverse}.pdf"
             hotspin.plottools.save_plot(save, ext='.pdf')
-        plt.show()
+        if show: plt.show()
 
     @staticmethod
     def test_N_influence_plot(df: pd.DataFrame, save=False):

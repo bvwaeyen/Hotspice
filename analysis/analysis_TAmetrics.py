@@ -15,24 +15,23 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
         task-agnostic metrics NL, MC and CP as a function of the number of recorded iterations N.
         This will allow to determine an optimum value of N before performing any sort of
         parameter sweep on an HPC cluster such that we do not use too much time.
-        TODO: Can also vary the parameter <k> for NL and MC in a sensible range, maybe in a different function in this file.
     '''
-    data = hotspin.utils.Data.load(filename)
-    df = data.df
+    data_in = hotspin.utils.Data.load(filename)
+    df_in = data_in.df
     k_range = np.asarray(k_range).reshape(-1) # Turn into 1D range
 
     # TODO: remove weird and inconsistent checks in TaskAgnosticExperiment for k and N etc., or at least improve them
     # Use coarser N_range for higher N, because it takes O(N) time to determine NL, MC and CP:
     N_range = np.concatenate([np.arange(1, 100, 1), np.arange(100, 400, 5), np.arange(400, 600, 10), np.arange(600, 1001, 25)])
-    N_range = N_range[np.where((N_range <= (df.shape[0] - 2)))] # Doesn't make much sense to take N or k larger
-    k_range = k_range[np.where((k_range <= (df.shape[0] - 2)))] # than the number of samples in the dataframe
+    N_range = N_range[np.where((N_range <= (df_in.shape[0] - 2)))] # Doesn't make much sense to take N or k larger
+    k_range = k_range[np.where((k_range <= (df_in.shape[0] - 2)))] # than the number of samples in the dataframe
     N_grid, k_grid = np.meshgrid(N_range, k_range)
     NL, MC, CP = np.zeros_like(N_grid)*np.nan, np.zeros_like(N_grid)*np.nan, np.zeros_like(N_grid)*np.nan
     experiment = hotspin.experiments.TaskAgnosticExperiment.dummy()
     for index, _ in np.ndenumerate(N_grid):
         k = k_grid[index]
         N = N_grid[index]
-        experiment.load_dataframe(df.iloc[:N+1])
+        experiment.load_dataframe(df_in.iloc[:N+1])
         try:
             NL[index] = experiment.NL(k=k)
             MC[index] = experiment.MC(k=k)
@@ -42,19 +41,16 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
             if verbose: print("Failed in iteration", index)
     
     # BELOW HERE IS STILL UNDER CONSTRUCTION, ABOVE HERE SHOULD BE OK
-    out_df = pd.DataFrame({"N": N_grid.reshape(-1), "k": k_grid.reshape(-1), "NL": NL.reshape(-1), "MC": MC.reshape(-1), "CP": CP.reshape(-1)})
-    metadata = data.metadata | {
+    df = pd.DataFrame({"N": N_grid.reshape(-1), "k": k_grid.reshape(-1), "NL": NL.reshape(-1), "MC": MC.reshape(-1), "CP": CP.reshape(-1)})
+    metadata = data_in.metadata | {
         "description": r"Metrics calculated for different N and k, based on a long TaskAgnosticExperiment, in order to determine an optimal value of N and k before starting a parameter sweep.",
         "original_filename": filename
     }
-    constants = data.constants
-    savepath = ''
-    if save:
-        full_json = hotspin.utils.Data(out_df, metadata=metadata, constants=constants)
-        savepath = full_json.save(dir=os.path.dirname(filename), name=f"{os.path.splitext(os.path.basename(filename))[0]}_metrics", timestamp=False)
-    if plot or save:
-        analysis_TAmetrics_Nk_plot(out_df, save=savepath, show=plot)
-    return out_df
+    constants = data_in.constants
+    data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
+    if save: save = data.save(dir=os.path.dirname(filename), name=f"{os.path.splitext(os.path.basename(filename))[0]}_metrics", timestamp=False)
+    if plot or save: analysis_TAmetrics_Nk_plot(df, save=save, show=plot)
+    return df
 
 def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
     k_vals = df["k"].nunique()
