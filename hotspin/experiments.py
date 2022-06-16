@@ -11,7 +11,7 @@ import statsmodels.api as sm
 from abc import ABC, abstractmethod
 from scipy.spatial import distance
 
-from .core import Magnets, DipolarEnergy, ZeemanEnergy
+from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import FullASI
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, show_m
@@ -71,102 +71,73 @@ class TaskAgnosticExperiment(Experiment):
             to implement task-agnostic metrics for reservoir computing using a single random input signal.
         '''
         super().__init__(inputter, outputreader, mm)
-        self.k = None
+        self.results = {'NL': None, 'MC': None, 'CP': None, 'S': None}
         self.initial_state = self.outputreader.read_state().reshape(-1)
 
-    def run(self, N=1000, k=10, verbose=False, calc=True):
-        ''' @param N [int]: The total number of iterations performed (each iteration consists of <self.inputter.n> MC steps).
-            @param k [int]: The number of iterations back in time that are used to train the current time step.
+    @classmethod
+    def dummy(cls, mm: Magnets = None):
+        ''' Creates a minimalistic working TaskAgnosticExperiment instance.
+            @param mm [hotspin.Magnets] (None): if specified, this is used as Magnets()
+                object. Otherwise, a minimalistic hotspin.ASI.FullASI() instance is used.
         '''
-        if N <= k: raise ValueError(f"Number of iterations N={N} must be larger than k={k}.")
-        self.k = k
+        if mm is None: mm = FullASI(10, 10, energies=(DipolarEnergy(), ZeemanEnergy()))
+        datastream = RandomUniformDatastream(low=-1, high=1)
+        inputter = FieldInputter(datastream)
+        outputreader = RegionalOutputReader(2, 2, mm)
+        return cls(inputter, outputreader, mm)
+
+    def run(self, N=1000, add=False, verbose=False):
+        ''' @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
+            @param add [bool]: If True, the newly calculated iterations are appended to the
+                current <self.u> and <self.y> arrays, and <self.final_state> is updated.
+        '''
         if verbose:
             init_fonts()
             init_interactive()
             fig = None
             print(f'[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...')
-        self.mm.relax()
-        self.initial_state = self.outputreader.read_state().reshape(-1)
+
+        if not add: 
+            self.mm.relax()
+            self.initial_state = self.outputreader.read_state().reshape(-1)
         # Run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
-        self.u = cp.zeros(N) # Inputs
-        self.y = cp.zeros((N, self.outputreader.n)) # Outputs
+        u = cp.zeros(N) # Inputs
+        y = cp.zeros((N, self.outputreader.n)) # Outputs
         for i in range(N):
-            self.u[i] = self.inputter.input_single(self.mm)
-            self.y[i,:] = self.outputreader.read_state().reshape(-1)
+            u[i] = self.inputter.input_single(self.mm)
+            y[i,:] = self.outputreader.read_state().reshape(-1)
             if verbose:
                 fig = show_m(self.mm, figure=fig)
                 if is_significant(i, N):
                     print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
         self.mm.relax()
         self.final_state = self.outputreader.read_state().reshape(-1)
-        
-        if calc: self.calculate_all(k=k) # Use the recorded information to calculate task agnostic metrics
+
+        self.u = cp.concatenate([self.u, u], axis=0) if add else u
+        self.y = cp.concatenate([self.y, y], axis=0) if add else y
+
         if verbose: close_interactive(fig) # Close the realtime figure as it is no longer needed
 
+    def calculate_all(self, ignore_errors=False, **kwargs):
+        ''' Recalculates NL, MC, CP and S. Arguments passed to calculate_all()
+            are directly passed through to the respective self.<metric> functions.
+            @param ignore_errors [bool] (False): if True, exceptions raised by the
+                respective self.<metric> functions are ignored (use with caution).
+        '''
+        try:
+            self.results['NL'] = self.NL(**filter_kwargs(kwargs, self.NL))
+            self.results['MC'] = self.MC(**filter_kwargs(kwargs, self.MC))
+            self.results['CP'] = self.CP(**filter_kwargs(kwargs, self.CP))
+            self.results['S'] = self.S(**filter_kwargs(kwargs, self.S))
+        except Exception as e:
+            if not ignore_errors: raise
 
-    def to_dataframe(self, u: cp.ndarray = None, y: cp.ndarray = None):
-        """ If <u> or <y> are not explicitly provided, the saved <self.u> and <self.y>
-            arrays are used. When providing <u> and <y> directly,
-                <u> should be a 1D array of length N, and
-                <y> a <NxL> array, where L is the number of output nodes.
-            The resulting dataframe has columns "u", "y0", "y1", ... "y<L-1>".
-        """
-        if (u is None) != (y is None): raise ValueError('Either none or both of <u> and <y> arguments must be provided.')
-        if u is None:
-            u = cp.concatenate((cp.asarray([cp.nan]), self.u, cp.asarray([cp.nan]))) # self.u with NaN input as 0th index
-        if y is None:
-            y = cp.concatenate((self.initial_state.reshape(1, -1), self.y, self.final_state.reshape(1, -1)), axis=0) # self.y with pristine state as 0th index
-        
-        u = cp.asarray(u).get() # Need as NumPy array for pd
-        y = cp.asarray(y).get() # Need as NumPy array for pd
-        if u.shape[0] != y.shape[0]: raise ValueError(f'Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.')
-
-        df_u = pd.DataFrame({"u": u})
-        df_y = pd.DataFrame({f"y{i}": y[:,i] for i in range(y.shape[1])})
-        df = pd.concat([df_u, df_y], axis=1)
-        return df
-
-    def load_dataframe(self, df: pd.DataFrame, u: cp.ndarray = None, y: cp.ndarray = None):
-        """ Returns the CuPy arrays <u> and <y> present in the dataframe. """
-        if u is None: u = cp.asarray(df["u"])
-        if y is None:
-            pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
-            y_cols = [colname for colname in df if pattern.match(colname)]
-            y = cp.asarray(df[y_cols])
-
-        self.u = cp.asarray(u).reshape(-1)
-        self.y = cp.asarray(y, dtype=float).reshape(self.u.shape[0], -1)
-        if math.isnan(self.u[0]):
-            self.initial_state = self.y[0,:]
-            self.u = self.u[1:]
-            self.y = self.y[1:]
-        if math.isnan(self.u[-1]):
-            self.final_state = self.y[-1,:]
-            self.u = self.u[:-1]
-            self.y = self.y[:-1]
-        return self.u, self.y
-
-    @classmethod
-    def dummy(cls, mm=None):
-        if mm is None: mm = FullASI(1, 1)
-        datastream = RandomUniformDatastream(low=-1, high=1)
-        inputter = FieldInputter(datastream)
-        outputreader = RegionalOutputReader(1, 1, mm)
-        return cls(inputter, outputreader, mm)
-
-    def calculate_all(self, **kwargs):
-        self.results['NL'] = self.NL(**filter_kwargs(kwargs, self.NL))
-        self.results['MC'] = self.MC(**filter_kwargs(kwargs, self.MC))
-        self.results['CP'] = self.CP(**filter_kwargs(kwargs, self.CP))
-        self.results['S'] = self.S(**filter_kwargs(kwargs, self.S))
-
-    def NL(self, k: int = None, local: bool = False, test_fraction: float = 1/4, verbose: bool = False): # Non-linearity
+    def NL(self, k: int = 10, local: bool = False, test_fraction: float = 1/4, verbose: bool = False): # Non-linearity
         ''' Returns a float (local=False) or a CuPy array (local=True) representing the nonlinearity,
             either globally or locally depending on <local>. For this, an estimator for the current readout state is
             trained which for any time instant has access to the <k> most recent inputs (including the present one).
         '''
         if verbose: print(f"Calculating NL (local={local})...")
-        if k is None: k = 10 if self.k is None else self.k
         
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
         if train_test_cutoff < k: raise ValueError(f"NL: k={k} must be <={train_test_cutoff} for the available data.")
@@ -193,13 +164,12 @@ class TaskAgnosticExperiment(Experiment):
         else:
             return float(1 - cp.mean(Rsq))
     
-    def MC(self, k=None, local=False, test_fraction=1/4, verbose=False): # Memory capacity
+    def MC(self, k=10, local=False, test_fraction=1/4, verbose=False): # Memory capacity
         ''' Returns a float (local=False) or a CuPy array (local=True) representing the memory capacity,
             either globally or locally depending on <local>. For this, an estimator is trained which
             for any time instant attempts to predict the previous <k> inputs based on the current readout state.
         '''
         if verbose: print(f"Calculating MC (local={local})...")
-        if k is None: k = 10 if self.k is None else self.k
 
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
         if train_test_cutoff < k: raise ValueError(f"MC: k={k} must be <={train_test_cutoff} for the available data.")
@@ -229,10 +199,10 @@ class TaskAgnosticExperiment(Experiment):
     def CP(self, transposed=False): # Complexity
         ''' Calculates the complexity: i.e. the effective rank of the kernel matrix as used in KernelQualityExperiment.
             The default method used here is to simply average the complexity of recent observations over time.
-            Usually, transposed=True gives (slightly) higher values than for transposed=False.
-            NOTE: never compare results from transposed=True with those for transposed=False.
-                @param transposed [bool] (False): If True, CP is the rank of <self.y> multiplied with <self.y.T>.
-                    If False, it is the average of all consecutive square matrices in <self.y> along the time axis.
+            @param transposed [bool] (False): If True, CP is the rank of <self.y> multiplied with <self.y.T>.
+                If False, it is the average of all consecutive square matrices in <self.y> along the time axis.
+                Usually, transposed=True gives (slightly) higher values than for transposed=False.
+                NOTE: never compare results from transposed=True with those for transposed=False.
         '''
         if self.y.shape[0] < self.y.shape[1]: # Less rows than columns, so rank can at most be the number of rows
             warnings.warn(f"Not enough recorded iterations to reliably calculate complexity ({self.y.shape[0]} samples < {self.y.shape[1]} features)" , stacklevel=2)
@@ -248,9 +218,9 @@ class TaskAgnosticExperiment(Experiment):
     
     def S(self, relax=False): # Stability
         ''' Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
-            If <relax> is True, the final state is determined by relaxing the current state of <self.mm>.
             NOTE: It can be advantageous to define a different metric for stability if the entire magnetization profile
                   is known, since this function only has access to the readout nodes, not the whole self.m array.
+            @param relax [bool] (False): if True, the final state is determined by relaxing the current state of <self.mm>.
         '''
         if relax:
             self.mm.relax()
@@ -266,3 +236,48 @@ class TaskAgnosticExperiment(Experiment):
         return 1 - distance.cosine(initial_readout.get(), final_readout.get())/2 # distance.cosine is in range [0., 2.]
         # Another possibly interesting metric: Hamming distance 
         # (is proportion of disagreeing elements, but would require full access to state mm.m to work properly (-1 or 1 binary state))
+
+
+    def to_dataframe(self, u: cp.ndarray = None, y: cp.ndarray = None):
+        ''' If <u> and <y> are not explicitly provided, the saved <self.u> and <self.y>
+            arrays are used. When providing <u> and <y> directly,
+                <u> should be a 1D array of length N, and
+                <y> a <NxL> array, where L is the number of output nodes.
+            The resulting dataframe has columns "u", "y0", "y1", ... "y<L-1>".
+        '''
+        if (u is None) != (y is None): raise ValueError('Either none or both of <u> and <y> arguments must be provided.')
+        if u is None:
+            u = cp.concatenate((cp.asarray([cp.nan]), self.u, cp.asarray([cp.nan]))) # self.u with NaN input as 0th index
+        if y is None:
+            y = cp.concatenate((self.initial_state.reshape(1, -1), self.y, self.final_state.reshape(1, -1)), axis=0) # self.y with pristine state as 0th index
+        
+        u = cp.asarray(u).get() # Need as NumPy array for pd
+        y = cp.asarray(y).get() # Need as NumPy array for pd
+        if u.shape[0] != y.shape[0]: raise ValueError(f'Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.')
+
+        df_u = pd.DataFrame({"u": u})
+        df_y = pd.DataFrame({f"y{i}": y[:,i] for i in range(y.shape[1])})
+        df = pd.concat([df_u, df_y], axis=1)
+        return df
+
+    def load_dataframe(self, df: pd.DataFrame, u: cp.ndarray = None, y: cp.ndarray = None):
+        ''' Loads the CuPy arrays <u> and <y> stored in the dataframe <df>
+            into the <self.u> and <self.y> properties, and returns both.
+        '''
+        if u is None: u = cp.asarray(df["u"])
+        if y is None:
+            pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
+            y_cols = [colname for colname in df if pattern.match(colname)]
+            y = cp.asarray(df[y_cols])
+
+        self.u = cp.asarray(u).reshape(-1)
+        self.y = cp.asarray(y, dtype=float).reshape(self.u.shape[0], -1)
+        if math.isnan(self.u[0]):
+            self.initial_state = self.y[0,:]
+            self.u = self.u[1:]
+            self.y = self.y[1:]
+        if math.isnan(self.u[-1]):
+            self.final_state = self.y[-1,:]
+            self.u = self.u[:-1]
+            self.y = self.y[:-1]
+        return self.u, self.y

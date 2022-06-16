@@ -22,7 +22,7 @@ def create_TaskAgnosticExperiment(mm: hotspin.Magnets, ext_magnitude=0.04, ext_a
     return TaskAgnosticExperiment(inputter, outputreader, mm)
 
 def single_taskagnostic(experiment: TaskAgnosticExperiment, iterations=1000, dirname=None, verbose=False, save=True, plot=False, **kwargs):
-    experiment.run(N=iterations, verbose=verbose, calc=False)
+    experiment.run(N=iterations, verbose=verbose)
 
     df = experiment.to_dataframe()
     metadata = {"description": r"Contains the input values <u> and state vectors <y> used for calculating task agnostic metrics of the system as proposed in `Task Agnostic Metrics for Reservoir Computing` by Love et al."}
