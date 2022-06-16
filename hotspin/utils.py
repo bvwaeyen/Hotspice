@@ -362,6 +362,47 @@ class Data:
         df = pd.read_json(json.dumps(JSONdict['data']), orient='split') # JSON -> DataFrame to load
         return Data(df, constants=JSONdict['constants'], metadata=JSONdict['metadata'])
 
+    @staticmethod
+    def load_collection(collection: str|Iterable):
+        ''' Combines all the JSON data in <collection>, which can either be a:
+            - string representing a directory path, containing many similar .json files
+            - iterable containing many Data objects, each representing a bunch of similar data
+            The idea is that these different chunks of data have a certain overlap, e.g. that
+            most of their constants/columns are the same, with only a few varying between them.
+            NOTE: arrays as constants are ignored in the comparison.
+        '''
+        if isinstance(collection, str): # Then it is a path to a directory containing several .json files
+            collection = [Data.load(os.path.join(collection, path)) for path in os.listdir(collection) if path.endswith('.json')]
+        elif all(isinstance(i, Data) for i in collection): # Then it is an iterable containing many Data objects already
+            collection = collection
+        else:
+            raise ValueError('Could not recognize <collection> as a bunch of data.')
+
+        nonconstants, constants, metadata = set(), dict(), dict()
+        # 1st sweep: to possibly find constants which are not constant throughout <collection>
+        for data in collection:
+            nonconstants = nonconstants.union(data.df.columns) # df columns are never constant
+            for key in data.constants:
+                if key in constants: # Then this 'constant' was already encountered earlier
+                    if constants[key] != data.constants[key]: # And it is not the same as earlier
+                        nonconstants.add(key)
+            constants |= data.constants # We have checked all <data.constants> now, so merge it with <constants> for the next iteration
+            metadata |= data.metadata
+        constants = {key: value for key, value in constants.items() if key not in nonconstants}
+
+        # 2nd sweep: now we know which constants are not really constant, so we can properly deal with them
+        dataframes = []
+        for data in collection:
+            df = data.df.copy() # To prevent changing the original data.df
+            for const in data.constants:
+                if (impostor := const) in nonconstants: # If const is not deemed constant ඞ, move it to the df
+                    df[impostor] = data.constants[impostor]
+            dataframes.append(df)
+
+        # And now combine everything into one big Data() object
+        big_df = pd.concat(dataframes, ignore_index=True) # Concatenate all rows of dataframes
+        return Data(big_df, constants=constants, metadata=metadata)
+
 
 class _CompactJSONEncoder(json.JSONEncoder):
     """ A JSON encoder for pretty-printing, but with lowest-level lists kept on single lines. """
@@ -408,30 +449,6 @@ class _CompactJSONEncoder(json.JSONEncoder):
         return self.encode(o)
 
 
-def combine_all(container: str|Iterable[Data]):
-    ''' Combines all the JSON data in <container>, which can either be a:
-        - string representing a path to a directory containing many similar .json files
-        - iterable containing many Data objects, each representing a bunch of similar data
-    '''
-    if isinstance(container, str): # Then it is a path to a directory containing several .json files
-        all_data = [Data.load(os.path.join(container, path)) for path in os.listdir(container) if path.endswith('.json')]
-    elif all(isinstance(i, Data) for i in all_data): # Then it is an iterable containing many Data objects already
-        all_data = container
-    dataframes, constants, metadata = [], {}, {}
-    data: Data
-    for data in all_data:
-        dataframes.append(data.df)
-        constants |= data.constants
-        metadata |= data.metadata
-
-    df: pd.DataFrame = pd.concat(dataframes, ignore_index=True)
-    for column in df.columns: # Remove 'constants' which are actually not constant
-        if column in constants.keys():
-            del constants[column]
-
-    return Data(df, constants=constants, metadata=metadata)
-
-
 def full_obj_name(obj):
     klass = type(obj)
     if hasattr(klass, "__module__"):
@@ -441,6 +458,20 @@ def full_obj_name(obj):
 
 
 if __name__ == "__main__":
-    full_json = Data(pd.DataFrame({"H_range": cp.arange(15).get(), "m": (cp.arange(15)**2).get()}))
-    fullpath = full_json.save(name='This is just a test. Do not panic.')
-    print(Data.load(fullpath))
+    def test_save():
+        full_json = Data(pd.DataFrame({"H_range": cp.arange(15).get(), "m": (cp.arange(15)**2).get()}))
+        fullpath = full_json.save(name='This is just a test. Do not panic.')
+        print(Data.load(fullpath))
+    test_save()
+
+    def test_load_collection():
+        constants1 = {'T': 400, 'nx': 200, 'ny':200}
+        constants2 = {'T': 300, 'ny': 200, 'nx': 200}
+        df1 = pd.DataFrame({'nx': [200, 250, 300], 'E_b': [6, 7, 8]})
+        df2 = pd.DataFrame({'E_b': [3, 4, 5]})
+        data1 = Data(df1, constants=constants1)
+        data2 = Data(df2, constants=constants2)
+        data = Data.load_collection([data1, data2])
+        print(data.df)
+        print(data.constants)
+    test_load_collection()
