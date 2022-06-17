@@ -6,7 +6,6 @@ r''' This file tests the correspondence between theory and simulation for a
         J. H. Toloza, F. A. Tamarit, and S. A. Cannas. Aging in a two-dimensional Ising model
         with dipolar interactions. Physical Review B, 58(14):R8885, 1998.
 '''
-# TODO: add error bars and change line to be just data-points
 import math
 
 import cupy as cp
@@ -43,21 +42,25 @@ class test_dipolarIsing:
     def test(self, *args, **kwargs):
         self.data = self.test_delta_influence(*args, **kwargs)
 
-    def test_delta_influence(self, N=2, delta_range=np.arange(0, 3.01, .1), verbose=False, plot=True, save=True):
+    def test_delta_influence(self, N=2, delta_range=np.arange(0, 3.01, .05), verbose=False, plot=True, save=True):
         self.mm = hotspin.ASI.FullASI(self.size, self.a, E_B=0, T=self.T, energies=[hotspin.DipolarEnergy(), hotspin.ExchangeEnergy()], pattern='AFM', PBC=False)
         AFMness = np.zeros_like(delta_range)
+        AFMness_std = np.zeros_like(delta_range)
         for i, delta in enumerate(delta_range):
             if verbose: print(f"[{i+1}/{delta_range.size}] delta = {delta:.2f} ...")
             self.delta = delta # Basically sets the exchange energy in self.mm
             MCsteps0 = self.mm.MCsteps
-            while self.mm.MCsteps - MCsteps0 < N:
+            AFMnesses = []
+            while (progress := (self.mm.MCsteps - MCsteps0)/N) < 1:
                 self.mm.update(Q=0.1)
+                if progress > .5: AFMnesses.append(hotspin.plottools.get_AFMness(self.mm))
             # if verbose: hotspin.plottools.show_m(self.mm)
             self.mm.relax()
             # if verbose: hotspin.plottools.show_m(self.mm)
-            AFMness[i] = hotspin.plottools.get_AFMness(self.mm)
+            AFMness[i] = np.mean(AFMnesses)
+            AFMness_std[i] = np.std(AFMnesses)
         
-        df = pd.DataFrame({"delta": delta_range, "AFMness": AFMness})
+        df = pd.DataFrame({"delta": delta_range, "AFMness": AFMness, "AFMness_std": AFMness_std})
         metadata = {"description": r"2D Ising model with exchange and dipolar interactions, sweeping $\delta$ as described in `Striped phases in two-dimensional dipolar ferromagnets` by MacIsaac et al."}
         constants = {"nx": self.mm.nx, "ny": self.mm.ny, "MCstepsize": N, "T": self.mm.T_avg}
         data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
@@ -70,10 +73,12 @@ class test_dipolarIsing:
         hotspin.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.plot(df["delta"], df["AFMness"])
+        ax.errorbar(df["delta"], df["AFMness"], yerr=df["AFMness_std"], fmt='o', label='Hotspin')
         ax.set_xlabel(r"$\delta$ (relative exchange/dipolar strength)")
-        ax.axvline(0.85, linestyle=':', color='black')
         ax.set_ylabel('AFM-ness')
+        ax.set_xlim([df["delta"].min()-.005, df["delta"].max()+.005])
+        ax.set_ylim([-0.01, 1])
+        ax.axvline(0.85, linestyle=':', color='black')
         plt.gcf().tight_layout()
         if save:
             if not isinstance(save, str):
