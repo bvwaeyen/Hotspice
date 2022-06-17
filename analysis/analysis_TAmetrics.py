@@ -20,7 +20,6 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
     df_in = data_in.df
     k_range = np.asarray(k_range).reshape(-1) # Turn into 1D range
 
-    # TODO: remove weird and inconsistent checks in TaskAgnosticExperiment for k and N etc., or at least improve them
     # Use coarser N_range for higher N, because it takes O(N) time to determine NL, MC and CP:
     N_range = np.concatenate([np.arange(1, 100, 1), np.arange(100, 400, 5), np.arange(400, 600, 10), np.arange(600, 1001, 25)])
     N_range = N_range[np.where((N_range <= (df_in.shape[0] - 2)))] # Doesn't make much sense to take N or k larger
