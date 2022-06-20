@@ -13,7 +13,7 @@ from scipy.spatial import distance
 from textwrap import dedent
 
 from .poisson import PoissonGrid
-from .utils import as_cupy_array, check_repetition, clean_indices, Field, mirror4
+from .utils import as_cupy_array, check_repetition, clean_indices, Field, full_obj_name, mirror4
 
 
 kB = 1.380649e-23
@@ -64,13 +64,12 @@ class Magnets(ABC):
             The parameter <in_plane> should only be used in a super().__init__() call when subclassing this class.
         '''
         self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
-        self.t = 0. # [s]
-        self.in_plane = in_plane
-        self.PBC = PBC
-        energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J]
+        energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J] use dipolar energy by default
         pattern = self._get_groundstate() if pattern is None else pattern
-        
-        # Initialize the coordinates based on nx, (ny) and L
+
+        # Initialize properties that are necessary to access by subsequent method calls
+        self.energies = list[Energy]() # Don't manually add anything to this, instead call self.add_energy()
+        self.in_plane = in_plane
         self.nx, self.ny = int(nx), int(ny)
         self.dx, self.dy = float(dx), float(dy)
         self.xx, self.yy = cp.meshgrid(cp.linspace(0, self.dx*(self.nx-1), self.nx), cp.linspace(0, self.dy*(self.ny-1), self.ny)) # [m]
@@ -78,34 +77,26 @@ class Magnets(ABC):
         self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.nx), cp.arange(0, self.ny))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
+        # Main initialization steps to create the geometry
+        self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
+        self.n = int(cp.sum(self.occupation)) # Number of magnets in the simulation
+        if self.n == 0: raise ValueError(f"Can not initialize {full_obj_name(self)} of size {self.nx}x{self.ny}, as this does not contain any spins.")
+        if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
+        self.unitcell = self._get_unitcell() # This needs to be after occupation and initialize_ip, and before any defects are introduced
+        self.PBC = PBC
+        self.initialize_m(pattern, update_energy=False)
+
         # Initialize field-like properties (!!! these need self.xx etc. to exist, since these are arrays of the same shape)
         self.T = T # [K]
         self.E_B = E_B # [J]
         self.moment = Msat*V if moment is None else moment # [Am²] moment is saturation magnetization multiplied by volume
 
         # History
+        self.t = 0. # [s]
         self.history = History()
         self.switches, self.attempted_switches = 0, 0
 
-        # Main initialization steps that require calling other methods of this class
-        self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
-        self.n = int(cp.sum(self.occupation)) # Number of magnets in the simulation
-        if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
-        self.unitcell = self._get_unitcell() # This needs to be after occupation and initialize_ip, and before any defects are introduced
-
-        if self.n == 0:
-            raise ValueError(f"can not initialize {type(self)} of size {self.nx}x{self.ny}, as this does not contain any spins.")
-        self.initialize_m(pattern, update_energy=False)
-
-        if self.PBC:
-            if nx % self.unitcell.x != 0 or ny % self.unitcell.y != 0:
-                warnings.warn(dedent(f"""
-                    Be careful with PBC, as there are not an integer number of unit cells in the simulation!
-                    Hence, the boundaries might not nicely fit together. Adjust nx or ny to alleviate this
-                    (unit cell has size {self.unitcell.x}x{self.unitcell.y})."""), stacklevel=2)
-
-        # Some energies might require self.orientation etc., so only initialize energy at the end
-        self.energies = list[Energy]()
+        # Finally initialize the energies, (at the end, since they might require self.orientation etc.)
         for energy in energies: self.add_energy(energy)
 
     def _get_closest_dist(self):
@@ -252,6 +243,21 @@ class Magnets(ABC):
         self._moment = as_cupy_array(value, self.xx.shape)
         self._momentSq = self._moment*self._moment
 
+    @property
+    def PBC(self):
+        return self._PBC
+    
+    @PBC.setter
+    def PBC(self, value: bool):
+        self._PBC = bool(value)
+        if hasattr(self, 'energies'):
+            for energy in self.energies: energy.initialize(self)
+        if hasattr(self, 'unitcell'):
+            if self._PBC and (self.nx % self.unitcell.x != 0 or self.ny % self.unitcell.y != 0): # Unit cells don't match along the edges
+                warnings.warn(dedent(f"""
+                    Be careful with PBC, as there are not an integer number of unit cells in the simulation!
+                    Hence, the boundaries might not nicely fit together. Adjust nx or ny to alleviate this
+                    (unit cell has size {self.unitcell.x}x{self.unitcell.y})."""), stacklevel=2)
 
     @property
     def kBT(self) -> cp.ndarray:
