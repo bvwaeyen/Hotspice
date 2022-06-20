@@ -12,6 +12,7 @@ from functools import cache
 from scipy.spatial import distance
 from textwrap import dedent
 
+from .poisson import PoissonGrid
 from .utils import as_cupy_array, check_repetition, clean_indices, Field, mirror4
 
 
@@ -361,7 +362,6 @@ class Magnets(ABC):
         supercells_nx = self.nx//Rx + 1
         supercells_ny = self.ny//Ry + 1
         if poisson:
-            from .poisson import PoissonGrid
             # TODO: with parallel Poisson sampling, generate a lot more samples than necessary at once so we have enough for the next several iterations as well
             supercells_x, supercells_y = cp.asarray(PoissonGrid(supercells_nx, supercells_ny))
         else:
@@ -466,8 +466,8 @@ class Magnets(ABC):
             self.update_energy(index=idx_switch)
         return idx_switch # TODO: can we get some sort of elapsed time? Yes for one switch, but what about many at once?
     
-    def _update_Néel(self, max_t=1, attempt_freq=1e10):
-        ''' Performs a single magnetization switch. '''
+    def _update_Néel(self, t_max=1, attempt_freq=1e10):
+        ''' Performs a single magnetization switch, if the switch would occur sooner than <t_max> seconds. '''
         # TODO: we might be able to multi-switch here as well, by taking into account the double-switch time
         barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
         minBarrier = cp.min(barrier)
@@ -477,8 +477,8 @@ class Magnets(ABC):
             indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
             time = taus[indexmin2D]*cp.exp(minBarrier/self.kBT[indexmin2D])/attempt_freq # This can become cp.inf quite quickly if T is small
             self.attempted_switches += 1
-            if time > max_t:
-                self.t += max_t
+            if time > t_max:
+                self.t += t_max
                 return None # Just exit if switching would take ages and ages and ages
             self.m[indexmin2D] *= -1
             self.switches += 1

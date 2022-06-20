@@ -110,7 +110,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     t = time.perf_counter() - t
     
     print(f'Time required for {n} runs of this analysis: {t:.3f}s.')
-    print(f'--- TEST RESULTS ---')
+    print(f'--- ANALYSIS RESULTS ---')
     print(f'Total number of samples: {total}')
     print(f'Empirical minimal distance between two samples in a single selection: {min_dist:.2f} (r={r})')
     

@@ -77,7 +77,7 @@ class test_dipolarIsing:
         ax.set_xlabel(r"$\delta$ (relative exchange/dipolar strength)")
         ax.set_ylabel('AFM-ness')
         ax.set_xlim([df["delta"].min()-.005, df["delta"].max()+.005])
-        ax.set_ylim([-0.01, 1])
+        ax.set_ylim([ax.get_ylim()[0], 1])
         ax.axvline(0.85, linestyle=':', color='black')
         plt.gcf().tight_layout()
         if save:

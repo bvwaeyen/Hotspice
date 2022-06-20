@@ -80,7 +80,7 @@ if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
     # testWolff()
 
-    # ef.run_a_bit(mm, N=10e3, T=160, verbose=True)
+    # ef.run_a_bit(mm, N=10e2, T=160, verbose=True)
     # ef.neelTemperature(mm, T_max=400)
     # ef.animate_quenching(mm, avg='square', animate=3, speed=50)
     # animate_temp_rise(mm, animate=3, speed=100, T_step=.05)

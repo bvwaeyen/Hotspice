@@ -41,7 +41,7 @@ def clean_indices(indices2D):
     ''' Converts a generic iterable <indices2D> into a standardized form for representing 2D indices.
         @param <indices2D> [iterable]: may contain at most 2 dimensions of size > 1, at least one of which
             has size == 2. It is this size-2 dimension which will become the primary dim of the returned array.
-        @return [tuple(2)cp.array(2xN)]: A tuple containing exactly 2 CuPy arrays of length N. The first array
+        @return [tuple(2)]: A tuple containing exactly 2 CuPy arrays of length N. The first array
             represents y-indices, the second represents x-indices.
     '''
     indices2D = cp.atleast_2d(cp.asarray(indices2D).squeeze()) if indices2D is not None else cp.empty((2,0))

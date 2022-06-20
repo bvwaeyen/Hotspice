@@ -49,7 +49,7 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
     data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
     if save: save = data.save(dir=os.path.dirname(filename), name=f"{os.path.splitext(os.path.basename(filename))[0]}_metrics", timestamp=False)
     if plot or save: analysis_TAmetrics_Nk_plot(df, save=save, show=plot)
-    return df
+    return data
 
 def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
     k_vals = df["k"].nunique()
