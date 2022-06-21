@@ -1,4 +1,3 @@
-# import math
 import time
 
 import matplotlib.pyplot as plt
@@ -11,7 +10,7 @@ import examplefunctions as ef
 from context import hotspin
 
 
-## Parameters, meshgrid
+## Parameters
 T = 300 # [K]
 E_B = 5e-22 # [J]
 n = 100
@@ -40,7 +39,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    mask = hotspin.plottools.Average.resolve(mm._get_appropriate_avg()).mask
+    mask = hotspin.plottools.Average.resolve(mm._get_appropriate_avg()).mask.get()
     h = ax1.imshow(signal.convolve2d(mm.m, mask, mode='valid', boundary='wrap' if mm.PBC else 'fill').get(),
                              cmap='gray', origin='lower', vmin=-np.sum(mask), vmax=np.sum(mask), interpolation_stage='rgba', interpolation='antialiased')
     ax1.set_title(r'Averaged magnetization')

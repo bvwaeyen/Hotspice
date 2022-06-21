@@ -2,16 +2,14 @@ import math
 import time
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 from matplotlib import animation
-# from cupyx.scipy import signal
 
 import examplefunctions as ef
 from context import hotspin
 
 
-## Parameters, meshgrid
+## Parameters
 T = 300 # [K]
 E_B = 5e-22 # [J]
 n = 400

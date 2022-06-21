@@ -1,6 +1,4 @@
-import os
 import time
-import warnings
 
 import cupy as cp
 import numpy as np
@@ -41,7 +39,7 @@ def calculate_any_neighbors(pos, shape, center: int = 0):
         return final_array
 
 
-def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r=16, show_plot:bool=True, save:bool=False, PBC:bool=True, params:hotspin.SimParams=None, ASI_type:type[hotspin.Magnets]=None):
+def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r=16, plot:bool=True, save:bool=False, PBC:bool=True, params:hotspin.SimParams=None, ASI_type:type[hotspin.Magnets]=None):
     ''' In this analysis, the multiple-magnet-selection algorithm of hotspin.Magnets.select() is analyzed.
         The spatial distribution is calculated by performing <n> runs of the select() method.
         Also the probability distribution of the distance between two samples is calculated,
@@ -179,14 +177,9 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     plt.suptitle(f'{Lx}x{Ly} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
     plt.gcf().tight_layout()
     if save:
-        save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{mm.params.MULTISAMPLING_SCHEME}_{Lx}x{Ly}_r={r}{'_PBC' if PBC else ''}.pdf"
-        dirname = os.path.dirname(save_path)
-        if not os.path.exists(dirname): os.makedirs(dirname)
-        try:
-            plt.savefig(save_path)
-        except PermissionError:
-            warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)
-    if show_plot:
+        save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{mm.params.MULTISAMPLING_SCHEME}_{Lx}x{Ly}_r={r}{'_PBC' if PBC else ''}"
+        hotspin.plottools.save_plot(save_path, ext='.pdf')
+    if plot:
         plt.show()
 
 

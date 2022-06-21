@@ -24,7 +24,7 @@ rng = cp.random.default_rng() # There is no significant speed difference between
 
 @dataclass(slots=True)
 class SimParams:
-    SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are less than <this> switches in a single iteration, the energies are just summed, otherwise a convolution is used.
+    SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are strictly more than <this> switches in a single iteration, a convolution is used, otherwise the energies are just summed.
     # TODO: THOROUGH ANALYSIS OF REDUCED_KERNEL_SIZE AND TAKE APPROPRIATE MEASURES (e.g. full recalculation every <n> steps)
     REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
     UPDATE_SCHEME: str = 'Glauber' # Can be any of 'Néel', 'Glauber', 'Wolff'
@@ -86,7 +86,7 @@ class Magnets(ABC):
         self.PBC = PBC
         self.initialize_m(pattern, update_energy=False)
 
-        # Initialize field-like properties (!!! these need self.xx etc. to exist, since these are arrays of the same shape)
+        # Initialize field-like properties (!!! these need the geometry to exist already, since they have the same shape)
         self.T = T # [K]
         self.E_B = E_B # [J]
         self.moment = Msat*V if moment is None else moment # [Am²] moment is saturation magnetization multiplied by volume
@@ -96,7 +96,7 @@ class Magnets(ABC):
         self.history = History()
         self.switches, self.attempted_switches = 0, 0
 
-        # Finally initialize the energies, (at the end, since they might require self.orientation etc.)
+        # Finally initialize the energies (at the end, since they might require self.orientation etc.)
         for energy in energies: self.add_energy(energy)
 
     def _get_closest_dist(self):

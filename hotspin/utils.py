@@ -308,6 +308,7 @@ class Data:
 
             @param dir [str] ('hotspin_results'): the directory to create the .json file in.
             @param name [str] ('hotspin_simulation'): this text is used as the start of the filename.
+                This should not include an extension or timestamp, as these are generated automatically.
             @param timestamp [bool|str] (True): if true, a timestamp is added to the filename. A string
                 can be passed to override the auto-generated timestamp. If False, no timestamp is added.
             @return (str): the absolute path of the saved JSON file.

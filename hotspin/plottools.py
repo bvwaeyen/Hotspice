@@ -7,7 +7,6 @@ import warnings
 import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
 from cupyx.scipy import signal
 from enum import Enum
