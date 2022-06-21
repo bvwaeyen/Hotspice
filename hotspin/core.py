@@ -358,7 +358,8 @@ class Magnets(ABC):
                 not entirely eliminated but nonetheless significantly reduced as compared to poisson=False.
         '''
         if r is None: r = self.calc_r(0.01)
-        if poisson is None: poisson = (15*r)**2 < self.nx*self.ny # use poisson supercells only if there are not too many supercells
+        # if poisson is None: poisson = (15*r)**2 < self.nx*self.ny # use poisson supercells only if there are not too many supercells
+        if poisson is None: poisson = False # TODO: when parallel Poisson is implemented, uncomment the line above etc.
         Rx, Ry = math.ceil(r/self.dx) - 1, math.ceil(r/self.dy) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
         Rx, Ry = self.unitcell.x*math.ceil(Rx/self.unitcell.x), self.unitcell.y*math.ceil(Ry/self.unitcell.y) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
         Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself

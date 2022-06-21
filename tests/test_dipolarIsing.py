@@ -42,7 +42,7 @@ class test_dipolarIsing:
     def test(self, *args, **kwargs):
         self.data = self.test_delta_influence(*args, **kwargs)
 
-    def test_delta_influence(self, N=2, delta_range=np.arange(0, 3.01, .05), verbose=False, plot=True, save=True):
+    def test_delta_influence(self, N=2, delta_range=np.arange(0, 4.01, .05), verbose=False, plot=True, save=True):
         self.mm = hotspin.ASI.FullASI(self.size, self.a, E_B=0, T=self.T, energies=[hotspin.DipolarEnergy(), hotspin.ExchangeEnergy()], pattern='AFM', PBC=False)
         AFMness = np.zeros_like(delta_range)
         AFMness_std = np.zeros_like(delta_range)
@@ -57,7 +57,7 @@ class test_dipolarIsing:
             # if verbose: hotspin.plottools.show_m(self.mm)
             self.mm.relax()
             # if verbose: hotspin.plottools.show_m(self.mm)
-            AFMness[i] = np.mean(AFMnesses)
+            AFMness[i] = hotspin.plottools.get_AFMness(self.mm) # np.mean(AFMnesses)
             AFMness_std[i] = np.std(AFMnesses)
         
         df = pd.DataFrame({"delta": delta_range, "AFMness": AFMness, "AFMness_std": AFMness_std})
@@ -88,4 +88,4 @@ class test_dipolarIsing:
 
 
 if __name__ == "__main__":
-    test_dipolarIsing(size=40).test(verbose=True, save=True)
+    test_dipolarIsing(size=80).test(verbose=True, save=True)

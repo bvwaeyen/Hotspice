@@ -150,7 +150,8 @@ class KagomeASI(IP_ASI):
             if not kwargs.get('PBC', False): self.ny -= 1 # Remove dangling spins if no PBC
         else:
             self.ny = ny
-        self.dx, self.dy = kwargs.pop('dx', a/4), kwargs.pop('dy', math.sqrt(3)*self.dx)
+        self.dx = kwargs.pop('dx', a/4)
+        self.dy = kwargs.pop('dy', math.sqrt(3)*self.dx)
         super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str, angle=None):

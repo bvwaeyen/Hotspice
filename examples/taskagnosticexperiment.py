@@ -186,5 +186,5 @@ if __name__ == "__main__":
     simparams = hotspin.SimParams(UPDATE_SCHEME='Néel')
     sweep_taskagnostic(hotspin.ASI.SquareASI, variables={}, params=simparams,
                        E_B=hotspin.utils.eV_to_J(5), T=300, V=220e-9*80e-9*25e-9, Msat=860e3, a=320e-9, n=9, PBC=False, pattern='random',
-                       iterations=1000, ext_angle=math.pi/4, ext_magnitude=0.08, sine=200e6, verbose=True
+                       iterations=1000, ext_angle=math.pi/4, ext_magnitude=0.017, sine=200e6, verbose=True
     ) # TODO: continue developing this Tufte et al. situation, with the frequency correctly being taken into account in the Néel scheme.
