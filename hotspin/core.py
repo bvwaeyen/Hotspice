@@ -65,7 +65,6 @@ class Magnets(ABC):
         '''
         self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J] use dipolar energy by default
-        pattern = self._get_groundstate() if pattern is None else pattern
 
         # Initialize properties that are necessary to access by subsequent method calls
         self.energies = list[Energy]() # Don't manually add anything to this, instead call self.add_energy()
@@ -84,7 +83,7 @@ class Magnets(ABC):
         if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
         self.unitcell = self._get_unitcell() # This needs to be after occupation and initialize_ip, and before any defects are introduced
         self.PBC = PBC
-        self.initialize_m(pattern, update_energy=False)
+        self.initialize_m(self._get_groundstate() if pattern is None else pattern, update_energy=False)
 
         # Initialize field-like properties (!!! these need the geometry to exist already, since they have the same shape)
         self.T = T # [K]
