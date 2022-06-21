@@ -698,7 +698,9 @@ class Energy(ABC):
     
     @abstractmethod
     def update(self):
-        ''' Calculates the entire self.E array, for the situation in self.mm.m. '''
+        ''' Calculates the entire self.E array, for the situation in self.mm.m.
+            No approximations should be made here: this serves to (re)calculate the whole energy.
+        '''
         self.E = cp.zeros_like(self.mm.xx) # [J]
 
     @abstractmethod
