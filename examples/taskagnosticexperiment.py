@@ -4,9 +4,7 @@ import re
 import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
-import examplefunctions as ef
 from context import hotspin
 from hotspin.experiments import TaskAgnosticExperiment
 from hotspin.utils import Data, filter_kwargs
@@ -123,36 +121,38 @@ def load_sweep_to_experiments(data: Data):
         `TaskAgnosticExperiment` objects fully initialized to represent the data and other
         parameters (inputter, outputter...) as accurately as can possibly be determined from <data>.
     '''
-    # STEP 1: determine the variables
-    df = data.df
-    constants = data.constants
-    try:
-        ASI_type = eval(constants["ASI_type"])
-    except:
-        try:
-            ASI_type = eval(f'hotspin.ASI.{constants["ASI_type"]}')
-        except:
-            ASI_type = hotspin.ASI.IsingASI
+    # First determine what the variables are
     pattern = re.compile(r"\A(u|y[0-9]+)\Z") # Matches "u", "y0", "y1", ...
-    variables = {colname: df[colname].unique() for colname in df.columns if not pattern.match(colname)}
-    # STEP 2: create a nested array where axis=i represents variables[i]
-    all_experiments = np.empty([len(vals) for vals in variables.values()], dtype=object)
-    dfs_iterable = [dfi for vars, dfi in df.groupby(list(variables.keys()))]
+    variables = {colname: data.df[colname].unique() for colname in data.df.columns if not pattern.match(colname)}
+    # Then create a multidimensional array and fill it with experiments
+    all_experiments = np.empty([len(vals) for vals in variables.values()], dtype=object) # axis=i represents variables[i]
+    dfs_iterable = [dfi for vars, dfi in data.df.groupby(list(variables.keys()))]
     for index, _ in np.ndenumerate(all_experiments):
         i = np.ravel_multi_index(index, all_experiments.shape)
         variables_i = {key: fullrange[index[i]] for i, (key, fullrange) in enumerate(variables.items())} # Variable values in this iteration
-        kwargs_i = constants | variables_i # Variables overwrite constants if both present
-        kwargs_mm = {'a': 1, 'n': 10} | hotspin.utils.filter_kwargs(kwargs_i, hotspin.Magnets.__init__) | hotspin.utils.filter_kwargs(kwargs_i, ASI_type.__init__)
-        kwargs_exp = hotspin.utils.filter_kwargs(kwargs_i, create_TaskAgnosticExperiment)
-
-        mm = ASI_type(**kwargs_mm)
-        experiment = create_TaskAgnosticExperiment(mm, **kwargs_exp)
+        kwargs_i = data.constants | variables_i # Variables overwrite constants if both present
         dfi = dfs_iterable[i]
-        experiment.load_dataframe(dfi)
-        all_experiments[index] = experiment
+        all_experiments[index] = load_single_experiment(Data(dfi, constants=kwargs_i), calculate_metrics=False)
 
     calc_all_metrics(all_experiments)
     return variables, all_experiments
+
+def load_single_experiment(data: Data, *, calculate_metrics=True):
+    try:
+        ASI_type = eval(data.constants["ASI_type"])
+    except:
+        try:
+            ASI_type = eval(f'hotspin.ASI.{data.constants["ASI_type"]}')
+        except:
+            ASI_type = hotspin.ASI.IsingASI
+
+    kwargs_mm = {'a': 1, 'n': 10} | filter_kwargs(data.constants, hotspin.Magnets.__init__) | filter_kwargs(data.constants, ASI_type.__init__)
+    kwargs_exp = filter_kwargs(data.constants, create_TaskAgnosticExperiment)
+    mm = ASI_type(**kwargs_mm)
+    experiment = create_TaskAgnosticExperiment(mm, **kwargs_exp)
+    experiment.load_dataframe(data.df)
+    if calculate_metrics: experiment.calculate_all()
+    return experiment
 
 def calc_all_metrics(all_experiments):
     ''' For calculating all metrics of a collection of TaskAgnosticExperiments all at once. '''
@@ -173,6 +173,7 @@ if __name__ == "__main__":
     #                    iterations=20, ext_angle=math.pi/180*7, verbose=True)
 
     # load_sweep_to_experiments(Data.load("results/TaskAgnosticExperiment/Sweep/n,T_20220517162856.json"))
+    # print(load_single_experiment(Data.load("results/TaskAgnosticExperiment/Sweep/_20220617153123.json")).results)
 
 
     # A RANDOM TEST I TRIED WHICH I THOUGHT HAD REASONABLE VALUES:
