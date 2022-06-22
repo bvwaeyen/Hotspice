@@ -19,6 +19,7 @@ def PoissonGrid(nx: int, ny: int, k=10):
     ''' Selects non-adjacent cells (neither diagonally nor orthogonally) in an <nx> x <ny> periodic grid.
         The cell at (0, 0) is always chosen: additional randomization should be performed by _select_grid().
         (this is basically an optimized version of poisson_disc_samples() for choosing supercells specifically)
+        Inspired by https://github.com/emulbreh/bridson/blob/master/bridson/__init__.py.
     '''
     grid = np.zeros((nx, ny))
     annulus = [(-2, -1), (-2, 1), (-1, 2), (1, 2), (2, 1), (2, -1), (1, -2), (-1, -2)] # Chess horse

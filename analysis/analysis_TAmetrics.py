@@ -35,9 +35,9 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
             NL[index] = experiment.NL(k=k)
             MC[index] = experiment.MC(k=k)
             CP[index] = experiment.CP()
-            if verbose: print("Performed iteration", index)
+            if verbose: print("Performed iteration", index, "of", (k_range.size-1, N_range.size-1))
         except:
-            if verbose: print("Failed in iteration", index)
+            if verbose: print("Failed in iteration", index, "of", (k_range.size-1, N_range.size-1))
     
     # BELOW HERE IS STILL UNDER CONSTRUCTION, ABOVE HERE SHOULD BE OK
     df = pd.DataFrame({"N": N_grid.reshape(-1), "k": k_grid.reshape(-1), "NL": NL.reshape(-1), "MC": MC.reshape(-1), "CP": CP.reshape(-1)})
@@ -91,4 +91,5 @@ def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
 if __name__ == "__main__":
     save = True
     # analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/PinwheelASI_N=1000_test.json", k_range=[10, 20])
-    analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/SquareASI_N=1000_testsmol.json", k_range=[10], save=save)
+    # analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/SquareASI_N=1000_testsmol.json", k_range=[10], save=save)
+    analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/Sweep/Tufte_extmag0.017T.json", k_range=[10], save=False)

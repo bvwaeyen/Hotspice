@@ -183,7 +183,7 @@ if __name__ == "__main__":
     # )
 
     # THE SITUATION THEY HAVE IN 'Computation in artificial spin ice' BY TUFTE ET AL.:
-    simparams = hotspin.SimParams(UPDATE_SCHEME='Néel')
+    simparams = hotspin.SimParams(UPDATE_SCHEME='Néel') # Needed because we are working with frequency
     sweep_taskagnostic(hotspin.ASI.SquareASI, variables={}, params=simparams,
                        E_B=hotspin.utils.eV_to_J(5), T=300, V=220e-9*80e-9*25e-9, Msat=860e3, a=320e-9, n=9, PBC=False, pattern='random',
                        iterations=1000, ext_angle=math.pi/4, ext_magnitude=0.017, sine=200e6, verbose=True

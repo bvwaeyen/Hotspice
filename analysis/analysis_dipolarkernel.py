@@ -27,7 +27,7 @@ def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=4
     if pattern is not None: mm.initialize_m(pattern)
 
     steps_done = 0
-    interesting_iterations = np.arange(n)
+    interesting_iterations = np.arange(n) + 1
     switches = np.zeros_like(interesting_iterations, dtype=int)
     absdiff_avg = np.zeros_like(switches, dtype=float)
     absdiff_max = np.zeros_like(switches, dtype=float)
@@ -115,17 +115,17 @@ def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=4
 
 
 if __name__ == "__main__":
-    save = True
-    plot = False
+    save = False
+    plot = True
     # As many switches as possible:
     # analysis_dipolarkernel_cutoff(hotspin.ASI.PinwheelASI(100, 2e-6, T=1e6, E_B=5e-22),
     #                               n=10000, cutoff=20, pattern='uniform', plot=plot, save=save)
     # Reasonable values:
     # analysis_dipolarkernel_cutoff(hotspin.ASI.PinwheelASI(100, 2e-6, T=300, E_B=5e-22),
     #                               n=10000, cutoff=20, pattern='AFM', plot=plot, save=save)
-    # Modern art:
-    # analysis_dipolarkernel_cutoff(hotspin.ASI.PinwheelASI(100, 2e-6, T=30, E_B=5e-22),
-    #                               n=1000, cutoff=20, pattern='uniform', plot=plot, save=save)
+    # Procedurally generated modern art:
+    # analysis_dipolarkernel_cutoff(hotspin.ASI.PinwheelASI(100, 2e-6, T=80, E_B=5e-22),
+    #                               n=1, cutoff=20, pattern='uniform', plot=plot, save=save)
     # FullASI:
     # analysis_dipolarkernel_cutoff(hotspin.ASI.FullASI(100, 2e-6, T=300, E_B=5e-22),
     #                               n=1000, cutoff=20, pattern='AFM', plot=plot, save=save)

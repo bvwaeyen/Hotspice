@@ -3,12 +3,12 @@
 ## Core functionality
 
 1. High priority
-    - [ ] If kernel is cut off, recalculate it after every *something* steps (requires a parameter to specify this *something*, and further investigation of the error made when cutting off the kernel, because the recent estimated calculation did not seem to correspond to reality very well)
     - [ ] Implement parallel Poisson-disc sampling
     - [ ] Improve accuracy of $E_b$ calculation by using a four-state approach. For OOP ASI this might not be relevant yet, but can become so if we would use input methods with an in-plane component on OOP ASIs.
 
 2. Medium priority
     - [ ] Make unit tests
+    - [ ] If kernel is cut off, recalculate it after a certain amount of steps
     - [ ] Implement commonly used metrics to compare with theory/experiment (average magnetization and dimensionless amplitude ratio  $\langle m^2 \rangle^2/\langle m^4 \rangle$, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction or by looking at the dot/cross(?) product between vectors, susceptibility, width of domains (related to correlation probably)...)
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state (e.g. Néel vector?)
     - [ ] Can we come up with some sort of time measure for multiswitching Glauber dynamics?

@@ -18,10 +18,16 @@ class Datastream(ABC):
             Depending on the specific subclass, these can be int or float.
         """
 
+    @property
+    def is_binary(self): return False
+
 class BinaryDatastream(Datastream):
     """ Just an alias for Datastream: a normal Datastream can contain floats, while this only yields 0 or 1. """
     pass
 
+    @property
+    def is_binary(self): return True
+# TODO: calculate TAmetrics differently dependent on whether the input data is binary or not.
 
 class Inputter(ABC):
     def __init__(self, datastream: Datastream):
