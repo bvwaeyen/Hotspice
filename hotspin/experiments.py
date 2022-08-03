@@ -30,6 +30,9 @@ class Experiment(ABC):
         ''' Runs the entire experiment and records all the useful data. '''
 
 
+######## Below are subclasses of the superclasses above
+
+
 class KernelQualityExperiment(Experiment):
     def __init__(self, inputter, outputreader, mm):
         ''' Determines the output matrix rank for a given input signal and output readout.
@@ -128,13 +131,11 @@ class TaskAgnosticExperiment(Experiment):
             @param ignore_errors [bool] (False): if True, exceptions raised by the
                 self.<metric> functions are ignored (use with caution).
         '''
-        try:
-            self.results['NL'] = self.NL(**filter_kwargs(kwargs, self.NL))
-            self.results['MC'] = self.MC(**filter_kwargs(kwargs, self.MC))
-            self.results['CP'] = self.CP(**filter_kwargs(kwargs, self.CP))
-            self.results['S'] = self.S(**filter_kwargs(kwargs, self.S))
-        except Exception as e:
-            if not ignore_errors: raise
+        for metric, method in {"NL": self.NL, "MC": self.MC, "CP": self.CP, "S": self.S}.items():
+            try:
+                self.results[metric] = method(**filter_kwargs(kwargs, method))
+            except Exception:
+                if not ignore_errors: raise
 
     def NL(self, k: int = 10, local: bool = False, test_fraction: float = 1/4, verbose: bool = False): # Non-linearity
         ''' Returns a float (local=False) or a CuPy array (local=True) representing the nonlinearity,

@@ -87,15 +87,17 @@ class RandomUniformDatastream(Datastream):
 
 
 class FieldInputter(Inputter):
-    def __init__(self, datastream: Datastream, magnitude=1, angle=0, n=2, sine=0):
+    def __init__(self, datastream: Datastream, magnitude=1, angle=0, n=2, sine=0, half_period=True):
         ''' Applies an external field at <angle> rad, whose magnitude is <magnitude>*<datastream.get_next()>.
             <sine> specifies the frequency [Hz] of the sinusoidal field, if it is nonzero.
+            If <half_period> is True, only the first half-period of the sine is used, otherwise the full ∿ period.
         '''
         super().__init__(datastream)
         self.angle = angle
         self.magnitude = magnitude
         self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
         self.sine = sine # Whether or not to use a sinusoidal field strength
+        self.half_period = half_period
 
     @property
     def angle(self): # [rad]
@@ -125,9 +127,27 @@ class FieldInputter(Inputter):
         else:
             t0 = mm.t
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.sine)) < 1:
-                mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value*math.sin(progress*math.pi))
+                mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value*math.sin(progress*math.pi*(2-self.half_period)))
                 mm.update(t_max=0.1/self.sine) # At least 10 steps per sine-period
         return value
+
+
+class FieldInputterBinary(FieldInputter):
+    def __init__(self, datastream: Datastream, magnitudes: tuple = (.8, 1), **kwargs):
+        ''' Exactly the same as FieldInputter, but if <datastream> yields 0 then a field with
+            magnitude <magnitudes[0]> is applied, otherwise <magnitudes[1]>.
+            Using <sine=<frequency[Hz]>> yields behavior as in "Computation in artificial spin ice" by Jensen et al.
+            Differing attributes compared to FieldInputter:
+                <self.magnitude> is set to <magnitudes[1]>
+                <self.magnitude_ratio> is used to store the ratio <magnitudes[0]/magnitudes[1]>.
+        '''
+        self.magnitude_ratio = magnitudes[0]/magnitudes[1]
+        super().__init__(datastream, magnitude=magnitudes[1], half_period=False, **kwargs)
+
+    def input_single(self, mm: Magnets, value=None):
+        if value is None: value = self.datastream.get_next()
+        value = self.magnitude_ratio if value == 0 else 1
+        return super().input_single(mm, value=value)
 
 
 class PerpFieldInputter(FieldInputter):
