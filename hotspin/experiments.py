@@ -90,6 +90,9 @@ class TaskAgnosticExperiment(Experiment):
         ''' @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
             @param add [bool]: If True, the newly calculated iterations are appended to the
                 current <self.u> and <self.y> arrays, and <self.final_state> is updated.
+            @param verbose [int]: If 0, nothing is printed or plotted.
+                If 1, significant iterations are printed to console.
+                If 2, the magnetization profile is plotted after every input bit in addition to printing.
         '''
         if verbose:
             init_fonts()
@@ -107,7 +110,7 @@ class TaskAgnosticExperiment(Experiment):
             u[i] = self.inputter.input_single(self.mm)
             y[i,:] = self.outputreader.read_state().reshape(-1)
             if verbose:
-                fig = show_m(self.mm, figure=fig)
+                if verbose > 1: fig = show_m(self.mm, figure=fig)
                 if is_significant(i, N):
                     print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
         self.mm.relax()
@@ -117,12 +120,13 @@ class TaskAgnosticExperiment(Experiment):
         self.y = cp.concatenate([self.y, y], axis=0) if add else y
 
         if verbose: close_interactive(fig) # Close the realtime figure as it is no longer needed
+        # Still need to call self.calculate_all() manually after this method.
 
     def calculate_all(self, ignore_errors=False, **kwargs):
         ''' Recalculates NL, MC, CP and S. Arguments passed to calculate_all()
-            are directly passed through to the respective self.<metric> functions.
+            are directly passed through to the appropriate self.<metric> functions.
             @param ignore_errors [bool] (False): if True, exceptions raised by the
-                respective self.<metric> functions are ignored (use with caution).
+                self.<metric> functions are ignored (use with caution).
         '''
         try:
             self.results['NL'] = self.NL(**filter_kwargs(kwargs, self.NL))

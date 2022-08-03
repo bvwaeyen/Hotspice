@@ -35,7 +35,9 @@ class Inputter(ABC):
 
     @abstractmethod
     def input_single(self, mm: Magnets, value=None):
-        """ Performs an input corresponding to <value> (generated using <self.datastream>) into the <mm> simulation. """
+        """ Performs an input corresponding to <value> (generated using <self.datastream>)
+            into the <mm> simulation, and returns this <value>.
+        """
         if value is None: value = self.datastream.get_next()
         return value
 
@@ -46,9 +48,9 @@ class OutputReader(ABC):
 
     @abstractmethod
     def read_state(self, mm: Magnets) -> cp.ndarray:
-        """ Reads the current state of the <mm> simulation in some way (the exact manner should be
-            implemented through subclassing).
-        """
+        """ Reads the current state of the <mm> simulation in some way. """
+        self.state = cp.arange(self.n)
+        return self.state
 
     def configure_for(self, mm: Magnets):
         """ Subclassing this method is optional. When called, some properties of this OutputReader object

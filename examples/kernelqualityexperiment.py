@@ -25,7 +25,7 @@ def main_kernelquality():
 
     result = np.load(filename)
     plt.imshow(result, interpolation='nearest')
-    plt.title(f'{mm.nx}x{mm.ny} {type(mm).__name__}\nField {inputter.magnitude*1e3} mT $\\rightarrow$ rank {np.linalg.matrix_rank(result)}')
+    plt.title(f'{mm.nx}x{mm.ny} {type(mm).__name__}\nField {inputter.magnitude*1e3}\u2009mT $\\rightarrow$ rank {np.linalg.matrix_rank(result)}')
     plt.xlabel('Output feature')
     plt.ylabel(f'Input # ({values} values each)')
     plt.savefig(f'{os.path.splitext(filename)[0]}.pdf')

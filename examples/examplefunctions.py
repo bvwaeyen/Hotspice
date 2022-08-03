@@ -125,7 +125,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
         c1.ax.set_ylabel(f"Averaged magnetization\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
     ax1.set_xlabel('x [m]')
     ax1.set_ylabel('y [m]')
-    fig.suptitle(f'Temperature {mm.T.mean():.3f} K')
+    fig.suptitle(f'Temperature {mm.T.mean():.3f}\u2009K') # \u2009 is a small space similar to \, in LaTeX
 
     # This is the function that gets called each frame
     def animate_quenching_update(i):
@@ -138,7 +138,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
                 mm.T = T_low*np.exp(exponent*(((n_sweep - j) % n_sweep2)/n_sweep2))
             mm.update()
         h.set_array(hotspin.plottools.get_rgb(mm, fill=fill, avg=avg))
-        fig.suptitle(f'Temperature {mm.T.mean():.3f} K')
+        fig.suptitle(f'Temperature {mm.T.mean():.3f}\u2009K')
         return h, # This has to be an iterable!
 
     # Assign the animation to a variable, to prevent it from getting garbage-collected
@@ -164,7 +164,7 @@ def autocorrelation_dist_dependence(mm: hotspin.Magnets):
     print("Correlation length:", corr_length)
 
     fig = plt.figure(figsize=(10, 4))
-    fig.suptitle('T=%.2f' % mm.T.mean(), font={"size":12})
+    fig.suptitle('T=%.2f\u2009K' % mm.T.mean(), font={"size":12})
     ax1 = fig.add_subplot(121)
     # ax1.plot(d, corr) # Let's leave this here for now, in case we calculate the distance dependence anyway later on
     ax1.set_xlabel(r'Distance [a.u.]')

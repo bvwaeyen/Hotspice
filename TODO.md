@@ -15,11 +15,14 @@
     - [ ] Make a `get_summary()` method that returns a dict with important parameters of the simulation for easier creation of the "constants" in JSON data files (e.g. average `E_B`, `T`, `moment`...).
 
 3. Low priority
+    - [ ] Create a frustrated OOP ASI (e.g. hexagonal close packed, equilateral Cairo...)
     - [ ] Randomness: missing magnets and variation in `E_B` and `moment`. Probably no other randomness is possible since this would interfere with the unit cells (the variation in `E_B` and `moment` might already be tricky to take into account, idk). The only issue that can occur with missing spins, is probably that some multi-switching samples remain unused, but I could live with that.
 
 ## Analysis and tests
 
 1. High priority
+    - [ ] Compare with other models
+        - [ ] "Reservoir Computing in ASI": Pinwheel ASI with squinting
     - [ ] Calculate kernel-quality and task agnostic metrics as function of T, for different lattices with different interactions etc. First try easiest models and then go closer to experiment. Also I first have to determine suitable ranges for these metrics before I can put it on HPC ;)
         - [ ] To prevent using way too much calculation time, plot (NL, MC, CP) as function of the number of samples `len(experiment.u)` to determine when the metrics stabilize, and possibly also `k` if that is not too much work. This behavior might be situation-dependent.
 

@@ -92,4 +92,4 @@ if __name__ == "__main__":
     save = True
     # analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/PinwheelASI_N=1000_test.json", k_range=[10, 20])
     # analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/SquareASI_N=1000_testsmol.json", k_range=[10], save=save)
-    analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/Sweep/Tufte_extmag0.017T.json", k_range=[10], save=False)
+    analysis_TAmetrics_Nk("results/TaskAgnosticExperiment/Sweep/ComputationInASI_extmag0.015or0.017T.json", k_range=[10], save=False)

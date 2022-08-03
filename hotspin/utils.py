@@ -175,6 +175,9 @@ def shell():
     except (KeyboardInterrupt, SystemExit, EOFError):
         pass
 
+def timestamp():
+    ''' @return [str]: the current time, in YYYYMMDDhhmmss format. '''
+    return datetime.utcnow().strftime(r"%Y%m%d%H%M%S")
 
 def free_gpu_memory():
     ''' Garbage-collects unused memory on the currently active CUDA device. '''
@@ -241,7 +244,7 @@ class Data:
         if value is None: value = {}
         if not isinstance(value, dict): raise ValueError('Metadata must be provided as a dictionary.')
 
-        value.setdefault('datetime', datetime.utcnow().strftime(r"%Y%m%d%H%M%S"))
+        value.setdefault('datetime', timestamp())
         value.setdefault('author', getpass.getuser())
         try:
             creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
@@ -299,7 +302,7 @@ class Data:
             for key in self.metadata.keys():
                 if not isinstance(key, str): raise KeyError("Data.metadata keys must be of type string.")
 
-    def save(self, dir: str = None, name: str = None, timestamp=True):
+    def save(self, dir: str = None, name: str = None, *, timestamp=True):
         ''' Saves the currently stored data (<self.df>, <self.constants> and <self.metadata>)
             to a JSON file, with path "<dir>/<name>_<yyyymmddHHMMSS>.json". The automatically
             added timestamp in the filename can be disabled by passing <timestamp=False>.
@@ -382,7 +385,7 @@ class Data:
         nonconstants, constants, metadata = set(), dict(), dict()
         # 1st sweep: to possibly find constants which are not constant throughout <collection>
         for data in collection:
-            nonconstants = nonconstants.union(data.df.columns) # df columns are never constant
+            nonconstants = nonconstants.union(data.df.columns) # df columns are never considered to be constant
             for key in data.constants:
                 if key in constants: # Then this 'constant' was already encountered earlier
                     if constants[key] != data.constants[key]: # And it is not the same as earlier

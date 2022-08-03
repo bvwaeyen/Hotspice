@@ -114,6 +114,7 @@ class Magnets(ABC):
     
     def _get_unitcell(self, max_cell=100):
         ''' Returns a Unitcell containing the number of single grid cells in a unit cell along the x- and y-axis.
+            Only works for square-lattice unit cells. # TODO: allow manual assignment of more complex unit cells
             @param max_cell [int] (100): Only unitcells with ux+uy < max_cell are considered for performance reasons.
         '''
         for n in range(1, min(self.nx + self.ny + 1, max_cell + 1)): # Test possible unit cells in a triangle-like manner: (1,1), (2,1), (1,2), (3,1), (2,2), (1,3), ...
