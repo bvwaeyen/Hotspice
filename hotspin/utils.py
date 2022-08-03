@@ -288,12 +288,12 @@ class Data:
             is_column_constant = ~(self.df != self.df.iloc[0]).any()
             for column, is_constant in is_column_constant.items():
                 if is_constant:
-                    self.constants[column] = self.df[column].iloc[0]
-                    self.df.drop(columns=column)
+                    self._constants[column] = self.df[column].iloc[0]
+                    self._df = self._df.drop(columns=column)
             # Remove constants from self.constants that are also column labels in self.df
             for column in self.df.columns:
                 if column in self.constants.keys():
-                    del self.constants[column]
+                    del self._constants[column]
 
         if hasattr(self, 'constants'):
             for key in self.constants.keys():
@@ -420,7 +420,7 @@ class _CompactJSONEncoder(json.JSONEncoder):
             o = o.tolist()
         if isinstance(o, (list, tuple)):
             if self._is_single_line_list(o):
-                return "[" + ", ".join(json.dumps(el) for el in o) + "]"
+                return "[" + ", ".join(self.encode(el) for el in o) + "]"
             else:
                 self.indentation_level += 1
                 output = [self.indent_str + self.encode(el) for el in o]
@@ -434,8 +434,11 @@ class _CompactJSONEncoder(json.JSONEncoder):
                 return "{\n" + ",\n".join(output) + "\n" + self.indent_str + "}"
             else:
                 return "{ }"
+        elif (name := full_obj_name(o)).startswith('hotspin'): # Then it is some hotspin-defined class, so ...
+            return json.dumps(name) # use full obj name (e.g. hotspin.ASI.PinwheelASI etc.)
         else:
-            return json.dumps(o)
+            try: return json.dumps(o)
+            except: return json.dumps(str(o)) # Otherwise just use string representation of whatever kind of object this might be
 
     def _is_single_line_list(self, o):
         if isinstance(o, (list, tuple)):
@@ -456,9 +459,9 @@ class _CompactJSONEncoder(json.JSONEncoder):
 def full_obj_name(obj):
     klass = type(obj)
     if hasattr(klass, "__module__"):
-        return f'{klass.__module__}.{klass.__qualname__}'
-    else:
-        return klass.__qualname__
+        if klass.__module__ != "__main__":
+            return f'{klass.__module__}.{klass.__qualname__}'
+    return klass.__qualname__
 
 
 if __name__ == "__main__":
