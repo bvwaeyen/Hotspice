@@ -10,6 +10,7 @@ import statsmodels.api as sm
 
 from abc import ABC, abstractmethod
 from scipy.spatial import distance
+from typing import Any, Iterable
 
 from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import FullASI
@@ -28,6 +29,67 @@ class Experiment(ABC):
     @abstractmethod
     def run(self):
         ''' Runs the entire experiment and records all the useful data. '''
+
+
+class Sweep(ABC):
+    def __init__(self, groups: Iterable[tuple[str]] = None, **kwargs): # kwargs can be anything to specify the sweeping variables and their values.
+        ''' Sweep quacks like a generator yielding <Experiment>-like objects.
+            The purpose of a Sweep is to reliably generate a sequence of <Experiment>s in a consistent order.
+            @param groups [iterable[tuple[str]]] (None): a tuple of tuples of strings. Each tuple represents a group:
+                groups are sweeped together. The strings inside those tuples represent the names of the
+                variables that are being swept together. By sweeping together, it is meant that those
+                variables move through their sweeping values simultaneously, instead of forming a
+                hypercube through their values in which each pair is visited. We only visit the diagonal.
+                Example: groups=(("nx", "ny"), ("res_x", "res_y")) will cause the variables <nx> and <ny>
+                    to sweep through their values together, i.e. e.g. when <nx> is at its fourth value, also
+                    <ny> will be at its fourth value.
+            The additional arguments (kwargs) passed to this are interpreted as follows:
+            If a kwarg is iterable then it is stored in self.variables as a sweeped variable,
+                unless it has length 1, in which case its only element is stored in self.constants.
+                NOTE: watch out with multi-dimensional arrays, as their first axis can be interpreted as the 'sweep'!
+            If an argument is not iterable, its value is stored in self.constants without converting to a length-1 tuple.
+            Subclasses of <Sweep> determine which arguments are used.
+            @attr parameters [dict[str, tuple]]: stores all variables and constants with their values in a tuple,
+                even if this tuple only has length 1.
+            @attr variables [dict[str, tuple]]: stores the sweeped variables and their values in a tuple.
+            @attr constants [dict[str, Any]]: stores the non-sweeped variables and their only value.
+        '''
+        self.parameters: dict[str, tuple] = {k: Sweep.variable(v) for k, v in kwargs.items()}
+        self.variables = {k: v for k, v in self.parameters.items() if len(v) > 1}
+        self.constants = {k: v[0] for k, v in self.parameters.items() if len(v) == 1}
+
+        if groups is None: groups = []
+        groups = [tuple([key for key in group if key in self.variables.keys()]) for group in groups] # Remove non-variable groups
+        groups = [group for group in groups if len(group)] # Remove now-empty groups
+        for k in self.variables.keys(): # Add ungrouped variables to their own lonely group
+            if not any(k in group for group in groups): # Then we have a variable that is not in a group
+                groups.append((k,))
+        self.groups = tuple(groups) # Make immutable
+
+        # Check that vars in a single group have the same sweeping length
+        for group in self.groups:
+            l = [len(self.variables[key]) for key in group]
+            if not l.count(l[0]) == len(l): raise ValueError(f"Not all elements of {group} have same sweeping length: {l} respecitvely.")
+
+    @staticmethod
+    def variable(iterable):
+        ''' Converts <iterable> into a tuple, or a length-1 tuple if <iterable> is not iterable.'''
+        if isinstance(iterable, str): return (iterable,) # We don't want to parse strings character by character
+        try: return tuple(iterable)
+        except: return (iterable,)
+
+    @property
+    def sweeper(self):
+        n_per_group = [len(self.variables[group[0]]) for group in self.groups]
+        for index, _ in np.ndenumerate(np.zeros(n_per_group)): # Return an iterable of sorts for sweeping the hypercube of variables
+            yield {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
+
+    @abstractmethod
+    def __iter__(self) -> tuple[tuple[str, Any], Experiment]:
+        for vars in self.sweeper:
+            yield (vars, TaskAgnosticExperiment.dummy())
+
+# TODO: 1D and 2D plotters for a Sweep
 
 
 ######## Below are subclasses of the superclasses above
