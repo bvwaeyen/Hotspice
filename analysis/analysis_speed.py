@@ -24,7 +24,7 @@ def analysis_speed(mm: hotspin.Magnets, t_min: float = 1, n_min: int = 1, verbos
     return {"attempts/s": mm.attempted_switches/dt, "switches/s": mm.switches/dt, "MCsteps/s": mm.MCsteps/dt}
 
 
-def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.FullASI, save: bool = False, plot: bool = True, verbose: bool = False, **kwargs):
+def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.OOP_Square, save: bool = False, plot: bool = True, verbose: bool = False, **kwargs):
     L_range: np.ndarray = np.asarray(L_range)
     n = np.zeros_like(L_range)
     attempts_per_s = np.zeros_like(L_range, dtype='float')
@@ -86,12 +86,12 @@ if __name__ == "__main__":
 
     # plot = False
     # T = 100
-    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.FullASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
-    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.IsingASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
-    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.PinwheelASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
-    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.SquareASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
-    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.KagomeASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
-    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.TriangleASI, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.OOP_Square, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.IP_Ising, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.IP_Pinwheel, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.IP_Square, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.IP_Kagome, save=True, plot=plot, T=T, PBC=True, verbose=True)
+    # analysis_speed_size(L_range=L_range, ASI_type=hotspin.ASI.IP_Triangle, save=True, plot=plot, T=T, PBC=True, verbose=True)
 
     # openname = 'results/analysis_speed_size/something.json'
     # analysis_speed_size_plot(hotspin.utils.Data.load(openname).df, save=openname)

@@ -224,6 +224,6 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
 
 
 if __name__ == "__main__":
-    mm = hotspin.ASI.SquareASI(29, 2e-6, T=40, pattern='uniform', energies=[hotspin.DipolarEnergy()])
+    mm = hotspin.ASI.IP_Square(29, 2e-6, T=40, pattern='uniform', energies=[hotspin.DipolarEnergy()])
     autocorrelation_dist_dependence(mm)
     autocorrelation_temp_dependence(mm, N=41, T_min=10, T_max=90, L=100)

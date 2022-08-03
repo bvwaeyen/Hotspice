@@ -17,7 +17,7 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.IsingASI(n, 1e-6, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspin.ASI.IP_Ising(n, 1e-6, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 # mm.add_energy(hotspin.ExchangeEnergy(J=hotspin.utils.eV_to_J(0.0258/7)))
 # mm.remove_energy('dipolar')

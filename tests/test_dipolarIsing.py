@@ -43,7 +43,7 @@ class test_dipolarIsing:
         self.data = self.test_delta_influence(*args, **kwargs)
 
     def test_delta_influence(self, N=2, delta_range=np.arange(0, 4.01, .05), verbose=False, plot=True, save=True):
-        self.mm = hotspin.ASI.FullASI(self.size, self.a, E_B=0, T=self.T, energies=[hotspin.DipolarEnergy(), hotspin.ExchangeEnergy()], pattern='AFM', PBC=False)
+        self.mm = hotspin.ASI.OOP_Square(self.size, self.a, E_B=0, T=self.T, energies=[hotspin.DipolarEnergy(), hotspin.ExchangeEnergy()], pattern='AFM', PBC=False)
         AFMness = np.zeros_like(delta_range)
         AFMness_std = np.zeros_like(delta_range)
         for i, delta in enumerate(delta_range):

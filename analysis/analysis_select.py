@@ -51,7 +51,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     '''
     if Ly is None: Ly = L
     if Lx is None: Lx = L
-    if ASI_type is None: ASI_type = hotspin.ASI.FullASI
+    if ASI_type is None: ASI_type = hotspin.ASI.OOP_Square
     mm = ASI_type(Lx, 1, ny=Ly, PBC=PBC, params=params)
     INTEGER_BINS = False # If true, the bins are pure integers, otherwise they can be finer than this.
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
@@ -189,7 +189,7 @@ def analysis_select_speed(n: int=10000, L:int=400, r=16, PBC:bool=True, params:h
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     '''
-    mm = hotspin.ASI.FullASI(L, 1, PBC=PBC, params=params)
+    mm = hotspin.ASI.OOP_Square(L, 1, PBC=PBC, params=params)
     samples = 0
     t = time.perf_counter()
     for _ in range(n):

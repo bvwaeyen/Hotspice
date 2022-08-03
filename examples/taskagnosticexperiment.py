@@ -10,7 +10,7 @@ from hotspin.utils import Data
 class SweepTAExperiment(hotspin.experiments.Sweep): # Example of a fully implemented Sweep subclass
     def __init__(self, groups=None, **kwargs): # If unsure, provide a kwarg as a tuple directly
         kwargs = {
-            "ASI_type": hotspin.ASI.SquareASI, "a": 320e-9, "nx": 9, "ny": 9, "T": 300, "E_B": hotspin.utils.eV_to_J(5),
+            "ASI_type": hotspin.ASI.IP_Square, "a": 320e-9, "nx": 9, "ny": 9, "T": 300, "E_B": hotspin.utils.eV_to_J(5),
             "PBC": False, "moment": 220e-9*80e-9*25e-9*860e3,
             "H_min": 0.015, "H_max": 0.017, "H_angle": math.pi/4, "res_x": 5, "res_y": 5, "sine": 100e6
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
@@ -34,7 +34,7 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
             i.e. with binary input and RegionalOutputReader of variable resolution, with PerpFieldInputter.
         '''
         kwargs = {
-            "ASI_type": "PinwheelASI", "a": 600e-9, "nx": 21, "ny": 21, "T": 300, "E_B": hotspin.utils.eV_to_J(71),
+            "ASI_type": "IP_Pinwheel", "a": 600e-9, "nx": 21, "ny": 21, "T": 300, "E_B": hotspin.utils.eV_to_J(71),
             "PBC": False, "moment": 860e3*470e-9*170e-9*10e-9,
             "ext_field": 0.07, "ext_angle": 7*math.pi/180, "res_x": 5, "res_y": 5, "sine": False
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
     # * THE SITUATION IN 'Computation in artificial spin ice' BY JENSEN ET AL.:
     # simparams = hotspin.SimParams(UPDATE_SCHEME='Néel') # Needed because we are working with frequency
-    # sweep_taskagnostic(hotspin.ASI.SquareASI, variables={}, params=simparams,
+    # sweep_taskagnostic(hotspin.ASI.IP_Square, variables={}, params=simparams,
     #                    E_B=hotspin.utils.eV_to_J(5), T=300, V=220e-9*80e-9*25e-9, Msat=860e3, a=320e-9, n=9, PBC=False, pattern='random',
     #                    iterations=1000, ext_angle=math.pi/4, ext_magnitude=(0.015, 0.017), sine=100e6, verbose=1
     # ) # TODO: continue developing this Jensen et al. situation, with the frequency correctly being taken into account in the Néel scheme.

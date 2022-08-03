@@ -33,13 +33,13 @@
         - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization?)
         - [x] 2D Ising with long-range dipolar interactions ("Aging in a Two-Dimensional Ising Model with Dipolar Interactions")
             - [ ] Can we also check the 'aging' part of that paper?
-    - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???), but how to do this? In `FullASI` perhaps?
+    - [ ] Multi-switch: analyze influence of Q on physical behavior to see which values of Q are acceptable (0.01? 0.1? 1? 100???), but how to do this? In `OOP_Square` perhaps?
     - [x] Simulation speed (samples/sec) for different grid sizes?
         - [ ] Are certain nicely factorable grid sizes preferable? (all I notice now is that there is a dependence on whether or not the unitcells fit perfectly in the simulation area, but this is likely due to PBC)
 
 3. Low priority
     - Test physical accuracy of Hotspin
-        - [ ] Angle between 0° and 45° between SquareASI and PinwheelASI where AFM alignment changes to uniform and vice versa? Can be useful to compare to experiment
+        - [ ] Angle between 0° and 45° between IP_Square and IP_Pinwheel where AFM alignment changes to uniform and vice versa? Can be useful to compare to experiment
 
 ## Various smaller things that I will probably never come around to doing
 

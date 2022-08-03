@@ -397,7 +397,7 @@ class Magnets(ABC):
         else:
             return self._select_grid(r) # If no samples survived, try again
 
-    def _select_Poisson(self, r=None, **kwargs): # WARN: does not take occupation into account, so preferably only use on FullASI/IsingASI!
+    def _select_Poisson(self, r=None, **kwargs): # WARN: does not take occupation into account, so preferably only use on OOP_Square/IP_Ising!
         if r is None: r = self.calc_r(0.01)
         from .poisson import SequentialPoissonDiskSampling, poisson_disc_samples
 

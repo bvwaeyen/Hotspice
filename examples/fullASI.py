@@ -17,7 +17,7 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.FullASI(n, 1e-6, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspin.ASI.OOP_Square(n, 1e-6, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
@@ -68,7 +68,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
     plt.show()
 
 def testWolff():
-    mm = hotspin.ASI.FullASI(400, 1, energies=[hotspin.ExchangeEnergy(J=hotspin.kB*300)], PBC=True, pattern='uniform', T=481)
+    mm = hotspin.ASI.OOP_Square(400, 1, energies=[hotspin.ExchangeEnergy(J=hotspin.kB*300)], PBC=True, pattern='uniform', T=481)
     fig = None
     while True: 
         mm._update_Wolff()

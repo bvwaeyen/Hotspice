@@ -435,7 +435,7 @@ class _CompactJSONEncoder(json.JSONEncoder):
             else:
                 return "{ }"
         elif (name := full_obj_name(o)).startswith('hotspin'): # Then it is some hotspin-defined class, so ...
-            return json.dumps(name) # use full obj name (e.g. hotspin.ASI.PinwheelASI etc.)
+            return json.dumps(name) # use full obj name (e.g. hotspin.ASI.IP_Pinwheel etc.)
         else:
             try: return json.dumps(o)
             except: return json.dumps(str(o)) # Otherwise just use string representation of whatever kind of object this might be
