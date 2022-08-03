@@ -67,6 +67,37 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
                                     blit=False, repeat=False, init_func=lambda:0) # Provide empty init_func: otherwise the update func is used as init and is thus called twice for the 0th frame
     plt.show()
 
+def test(mm: hotspin.Magnets, T_low=200, T_high=400, T_steps=100, N=1e2, verbose=False):
+    ''' This function tests the time per step as a function of the # of switches per iteration. 
+        Hence, this function serves to verify if the value mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF is well-chosen.
+        Ideally, the plot rises to the left of the black line, and instantly becomes constant to the right of it.
+        Any excessive curvature (either up OR down) directly to the right of the black line indicates a less-than-ideal value.
+        NOTE: the curve is always quite smooth, since every iteration has a random # of samples so always
+              a random amount of them are below or above the summation/convolution threshold which smooths things out.
+        NOTE: the ideal value will depend on mm.params.REDUCED_KERNEL_SIZE, so this is gonna get quite complicated.
+        (This is highly dependent on the performance of the computer, so the user should decide this threshold manually)
+    '''
+    central = mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF # Alias this variable because its name is long af boii
+    temps = np.logspace(np.log10(T_low), np.log10(T_high), T_steps)
+    times = np.zeros_like(temps)
+    switches = np.zeros_like(times)
+    for i, temp in enumerate(temps):
+        mm.initialize_m(mm._get_groundstate())
+        if verbose: print(f'T={temp}')
+        n = mm.switches
+        times[i] = ef.run_a_bit(mm, N=N, T=temp, show_m=False)
+        switches[i] = mm.switches - n
+    import matplotlib.pyplot as plt
+    plt.plot(switches/N, times/N)
+    plt.scatter(switches/N, times/N, s=(temps/np.min(temps))**2*10) # Larger point means higher temperature
+    plt.axvline(central, linestyle=':', color='black')
+    plt.xlabel('Switches per iteration')
+    plt.ylabel('Time per iteration [s]')
+    plt.title(f'{type(mm).__name__}\nT={T_low:.1f}$\\rightarrow${T_high:.1f}\u2009K, {N:.0f} iterations per dot')
+    plt.text(central-1, np.min(times/N), "Summation", ha="right", va="bottom", size=10, bbox=dict(boxstyle="larrow,pad=0.3", fc="white", ec="#00000080", lw=2))
+    plt.text(central+1, np.min(times/N), "Convolution", ha="left", va="bottom", size=10, bbox=dict(boxstyle="rarrow,pad=0.3", fc="white", ec="#00000080", lw=2))
+    plt.show()
+
 def testWolff():
     mm = hotspin.ASI.OOP_Square(400, 1, energies=[hotspin.ExchangeEnergy(J=hotspin.kB*300)], PBC=True, pattern='uniform', T=481)
     fig = None
@@ -77,6 +108,7 @@ def testWolff():
 
 if __name__ == "__main__":
     print('Initialization energy:', mm.E_tot)
+    # test(mm, T_low=200, T_high=400, T_steps=20, verbose=True) # Tailored to nx=ny=100
     # testWolff()
 
     # ef.run_a_bit(mm, N=10e2, T=160, verbose=True)
