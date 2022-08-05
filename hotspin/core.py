@@ -380,7 +380,7 @@ class Magnets(ABC):
         else:
             supercells_x = self.ixx[:supercells_ny:2, :supercells_nx:2].ravel()
             supercells_y = self.iyy[:supercells_ny:2, :supercells_nx:2].ravel()
-        n = supercells_x.size # Number of selected supercells
+        n = supercells_x.size # Total number of selected supercells
 
         offset_x, offset_y = np.random.randint(self.nx), np.random.randint(self.ny) # To hide any weird edge effects
         dx, dy = offset_x % Rx, offset_y % Ry # offset in a single supercell

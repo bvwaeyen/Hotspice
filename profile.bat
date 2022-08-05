@@ -6,7 +6,7 @@ rem file as 'profile -l <name>.py'. Alternatively, you can run the command 'kern
 rem (kernprof is a module installable through 'pip install line_profiler'), but this does not save the output.
 rem Examples for each of the 3 cases:
 rem profile hotspin/core.py
-rem profile -l examples/pinwheelASI.py
+rem profile -l examples/ASI_IP_Pinwheel.py
 rem profile -m hotspin.experiments
 
 rem The output is saved in a file as "/profiling/<cProfile|kernprof>_<name>_<timestamp>.txt".

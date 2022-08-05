@@ -4,7 +4,7 @@ import cupy as cp
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib import cm
+from matplotlib import cm, patches
 from scipy.spatial import distance
 
 from context import hotspin
@@ -39,7 +39,7 @@ def calculate_any_neighbors(pos, shape, center: int = 0):
         return final_array
 
 
-def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r=16, plot:bool=True, save:bool=False, PBC:bool=True, params:hotspin.SimParams=None, ASI_type:type[hotspin.Magnets]=None):
+def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r:float=16, plot:bool=True, save:bool=False, PBC:bool=True, params:hotspin.SimParams=None, ASI_type:type[hotspin.Magnets]=None):
     ''' In this analysis, the multiple-magnet-selection algorithm of hotspin.Magnets.select() is analyzed.
         The spatial distribution is calculated by performing <n> runs of the select() method.
         Also the probability distribution of the distance between two samples is calculated,
@@ -154,7 +154,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     im2 = ax2.imshow(data2, vmin=1e-10, vmax=max(2e-10, np.max(data2)), extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='nearest', cmap=cmap)
     ax2.set_title(f'Prob. dens. of neighbors\naround any sample')
     ax2.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
-    ax2.add_patch(plt.Circle((0, 0), r, linewidth=1, fill=False, color='white', linestyle=':'))
+    ax2.add_patch(patches.Ellipse((0, 0), 2*r/mm.dx, 2*r/mm.dy, linewidth=1, fill=False, color='white', linestyle=':'))
     plt.colorbar(im2, extend='min')
 
     # PLOT 3: PROBABILITY OF CHOOSING EACH CELL
