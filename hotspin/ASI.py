@@ -60,6 +60,43 @@ class OOP_Square(OOP_ASI):
         return 'afm'
 
 
+class OOP_Triangle(OOP_ASI):
+    def __init__(self, n: int, a: float, *, nx: int = None, ny: int = None, **kwargs):
+        ''' Out-of-plane ASI on a triangular (hexagonal) lattice. '''
+        self.a = a # [m] The distance between two nearest neighboring spins
+        self.nx = nx or n
+        if ny is None:
+            self.ny = int(self.nx/math.sqrt(3))//2*2 # Try to make the domain reasonably square-shaped
+            if not kwargs.get('PBC', False): self.ny -= 1 # Remove dangling spins if no PBC
+        else:
+            self.ny = ny
+        self.dx = kwargs.pop('dx', a/2)
+        self.dy = kwargs.pop('dy', math.sqrt(3)*self.dx)
+        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
+
+    def _set_m(self, pattern: str):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = ((self.ixx - self.iyy)//2 % 2)*2 - 1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_occupation(self):
+        return (self.ixx + self.iyy) % 2 == 1
+
+    def _get_appropriate_avg(self): # TODO: not so relevant
+        return 'point'
+
+    def _get_AFMmask(self): # TODO: not so relevant
+        return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+
+    def _get_nearest_neighbors(self):
+        return cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
+
+    def _get_groundstate(self): # TODO: not so relevant
+        return 'afm'
+
+
 class IP_Ising(IP_ASI):
     def __init__(self, n: int, a: float, *, nx: int = None, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins on a square grid, all pointing in the same direction. '''
