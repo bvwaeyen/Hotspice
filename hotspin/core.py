@@ -814,15 +814,16 @@ class DipolarEnergy(Energy):
         ux = mirror4(rrx*rr_inv, negativex=True)
         uy = mirror4(rry*rr_inv, negativey=True)
         # Now we initialize the full ox
+        num_unitcells_x = 2*math.ceil(self.mm.nx/self.unitcell.x) + 1
+        num_unitcells_y = 2*math.ceil(self.mm.ny/self.unitcell.y) + 1
         if self.mm.in_plane:
             unitcell_ox = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,0]
             unitcell_oy = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,1]
+            toolargematrix_ox = cp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
+            toolargematrix_oy = cp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
         else:
-            unitcell_ox = unitcell_oy = cp.zeros((self.unitcell.y, self.unitcell.x))
-        num_unitcells_x = 2*math.ceil(self.mm.nx/self.unitcell.x) + 1
-        num_unitcells_y = 2*math.ceil(self.mm.ny/self.unitcell.y) + 1
-        toolargematrix_ox = cp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
-        toolargematrix_oy = cp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
+            unitcell_o = self.mm.occupation[:self.unitcell.y,:self.unitcell.x]
+            toolargematrix_o = cp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
         # Now comes the part where we start splitting the different cells in the unit cells
         self.kernel_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
         for y in range(self.unitcell.y):
@@ -841,7 +842,14 @@ class DipolarEnergy(Energy):
                     kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
                     kernel = -(kernel1 + kernel2 + kernel3)*rinv3
                 else:
-                    kernel = rinv3 # 'kernel' for out-of-plane is very simple
+                    o1 = unitcell_o[y,x] # occupation of cell 1
+                    if o1 == 0:
+                        continue # Empty cell in the unit cell, so keep self.kernel_unitcell[y][x] equal to None
+                    # Get the useful part of toolargematrix_o for this (x,y) in the unit cell
+                    slice_startx = (self.unitcell.x - ((self.mm.nx-1) % self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
+                    slice_starty = (self.unitcell.y - ((self.mm.ny-1) % self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
+                    o2 = toolargematrix_o[slice_starty:slice_starty+2*self.mm.ny-1,slice_startx:slice_startx+2*self.mm.nx-1]
+                    kernel = o2*rinv3 # 'kernel' for out-of-plane is very simple
 
                 if self.mm.PBC: # Just copy the kernel 8 times, for the 8 'nearest simulations'
                     kernelcopy = kernel.copy()
