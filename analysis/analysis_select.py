@@ -76,7 +76,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
         choices = cp.zeros_like(field)
         choices[pos[0], pos[1]] += 1
         field += choices
-        if PBC:
+        if mm.PBC:
             _, n_pos = pos.shape # The following approach is quite suboptimal, but it works :)
             all_pos = cp.zeros((2, n_pos*4), dtype=int)
             all_pos[:,:n_pos] = pos
@@ -101,7 +101,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
             if near_distances.size != 0:
                 bin_counts = cp.bincount(cp.clip(cp.floor(near_distances/r*(n_bins/scale)), 0, n_bins-1).astype(int))
                 distances_binned[:bin_counts.size] += bin_counts
-            field_local += calculate_any_neighbors(all_pos, (mm.ny*(1+PBC), mm.nx*(1+PBC)), center=r*scale)
+            field_local += calculate_any_neighbors(all_pos, (mm.ny*(1+mm.PBC), mm.nx*(1+mm.PBC)), center=r*scale)
             spectrum += cp.log(cp.abs(cp.fft.fftshift(cp.fft.fft2(choices)))) # Not sure if this should be done always or only if more than 1 sample exists
         
     field_local[r*scale, r*scale] = 0 # set center value to zero
@@ -174,10 +174,10 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     
     # TODO: show histogram of how many samples are generated for each call of select()
     # TODO: show one representative (or the worst i.e. least samples maybe? or lowest distance?) call of select() spatially for visual inspection (might not be necessary since we have the other plots already)
-    plt.suptitle(f'{Lx}x{Ly} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if PBC else "dis"}abled')
+    plt.suptitle(f'{Lx}x{Ly} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if mm.PBC else "dis"}abled')
     plt.gcf().tight_layout()
     if save:
-        save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{mm.params.MULTISAMPLING_SCHEME}_{Lx}x{Ly}_r={r}{'_PBC' if PBC else ''}"
+        save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{mm.params.MULTISAMPLING_SCHEME}_{Lx}x{Ly}_r={r}{'_PBC' if mm.PBC else ''}"
         hotspin.plottools.save_plot(save_path, ext='.pdf')
     if plot:
         plt.show()

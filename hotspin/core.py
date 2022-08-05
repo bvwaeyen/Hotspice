@@ -249,15 +249,21 @@ class Magnets(ABC):
     
     @PBC.setter
     def PBC(self, value: bool):
+        if hasattr(self, 'unitcell'): # First check if PBC are even possible with the current nx, ny and unitcell
+            if value and (self.nx % self.unitcell.x != 0 or self.ny % self.unitcell.y != 0): # Unit cells don't match along the edges
+                # We want an integer number of unit cells (if PBC should be True) otherwise all sorts of boundary issues will occur all throughout the code.
+                ideal_nx = self.unitcell.x*math.ceil(self.nx/self.unitcell.x)
+                ideal_ny = self.unitcell.y*math.ceil(self.ny/self.unitcell.y)
+                # Due to the way PBC are initialized etc., it is not easily possible to adjust nx and ny automatically. :(
+                warnings.warn(dedent(f"""
+                    WARNING: PBC can not be enabled, because there is a non-integer number of unit cells along the x- and/or y-axis,
+                             so the boundaries do not match (unit cell has size {self.unitcell.x}x{self.unitcell.y}). Create a new instance of this class with 
+                             nx and ny an appropriate multiple of this to allow PBC (e.g. {self.nx}x{self.ny} -> {ideal_nx}x{ideal_ny})."""), stacklevel=2)
+                self._PBC = False
+                return
         self._PBC = bool(value)
         if hasattr(self, 'energies'):
             for energy in self.energies: energy.initialize(self)
-        if hasattr(self, 'unitcell'):
-            if self._PBC and (self.nx % self.unitcell.x != 0 or self.ny % self.unitcell.y != 0): # Unit cells don't match along the edges
-                warnings.warn(dedent(f"""
-                    Be careful with PBC, as there are not an integer number of unit cells in the simulation!
-                    Hence, the boundaries might not nicely fit together. Adjust nx or ny to alleviate this
-                    (unit cell has size {self.unitcell.x}x{self.unitcell.y})."""), stacklevel=2)
 
     @property
     def kBT(self) -> cp.ndarray:
