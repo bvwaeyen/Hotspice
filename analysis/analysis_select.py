@@ -201,6 +201,7 @@ def analysis_select_speed(n: int=10000, L:int=400, r=16, PBC:bool=True, params:h
 # e.g. occupation sparsity, nx & ny for constant r or vice versa (or maybe 2D imshow changing nx=ny and r?)
 
 if __name__ == "__main__":
+    save = False
     PBC, simparams = True, hotspin.SimParams(MULTISAMPLING_SCHEME='grid')
     # analysis_select_speed(L=400, n=400, PBC=PBC, params=simparams)
-    analysis_select_distribution(Lx=300, Ly=200, n=1000, save=True, PBC=PBC, params=simparams)
+    analysis_select_distribution(Lx=300, Ly=200, n=10000, r=16, ASI_type=hotspin.ASI.OOP_Triangle, save=save, PBC=PBC, params=simparams)

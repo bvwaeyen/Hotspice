@@ -364,6 +364,7 @@ class Magnets(ABC):
                 samples at once, but provides a much better sample distribution where the orthogonal grid bias is
                 not entirely eliminated but nonetheless significantly reduced as compared to poisson=False.
         '''
+        ## Appropriately determine r, Rx, Ry
         if r is None: r = self.calc_r(0.01)
         # if poisson is None: poisson = (15*r)**2 < self.nx*self.ny # use poisson supercells only if there are not too many supercells
         if poisson is None: poisson = False # TODO: when parallel Poisson is implemented, uncomment the line above etc.
@@ -372,6 +373,7 @@ class Magnets(ABC):
         Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
         Rx, Ry = max(Rx, 1 if poisson else 2), max(Ry, 1 if poisson else 2) # Also don't take too small, too much randomness could be removed, resulting in nonphysical behavior
 
+        ## Determine size and indices of relevant supercells
         supercells_nx = self.nx//Rx + 1
         supercells_ny = self.ny//Ry + 1
         if poisson:
@@ -382,26 +384,39 @@ class Magnets(ABC):
             supercells_y = self.iyy[:supercells_ny:2, :supercells_nx:2].ravel()
         n = supercells_x.size # Total number of selected supercells
 
-        offset_x, offset_y = np.random.randint(self.nx), np.random.randint(self.ny) # To hide any weird edge effects
-        dx, dy = offset_x % Rx, offset_y % Ry # offset in a single supercell
-        occupation_supercell = self.occupation[dy:dy+Ry, dx:dx+Rx]
+        ## Move the supergrid to improve uniformity of random selection
+        if self.PBC:
+            offset_x, offset_y = np.random.randint(self.nx), np.random.randint(self.ny) # To hide all edge effects
+        else:
+            offset_x, offset_y = np.random.randint(-Rx, Rx), np.random.randint(-Ry, Ry) # Enough to fill gaps between supercells
+        if Rx == self.nx: offset_x = 0
+        if Ry == self.ny: offset_y = 0
+
+        ## Select an occupied cell in each supercell
+        dx, dy = offset_x % self.unitcell.x, offset_y % self.unitcell.y # offset in a single supercell
+        occupation_supercell = self.occupation[dy:dy+Ry, dx:dx+Rx] # occupation of a single supercell to choose only relevant cells
         occupation_nonzero = occupation_supercell.nonzero() # tuple: (array(x_indices), array(y_indices))
         random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, n) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
         idx_x = supercells_x*Rx + occupation_nonzero[1][random_nonzero_indices]
         idx_y = supercells_y*Ry + occupation_nonzero[0][random_nonzero_indices]
 
-        # Remove the max_x and max_y borders to ensure PBC
-        if self.PBC: # Cutoff index to ensure PBC if applicable (max() to ensure that (0,0) supercell is intact)
-            ok = (idx_x < max(Rx, self.nx - Rx)) & (idx_y < max(Ry, self.ny - Ry))
+        ## Add the offset to the selected indices and wrap/cut appropriately
+        if self.PBC:
+            # We remove a region of width R along x and y to ensure sufficient distance between all samples when taking PBC into account
+            ok = (idx_x < max(Rx, self.nx - Rx)) & (idx_y < max(Ry, self.ny - Ry)) #! max() to ensure that (0,0) supercell remains intact
             idx_x, idx_y = idx_x[ok], idx_y[ok]
+            idx_x = (idx_x + offset_x) % self.nx #! It is important to offset AFTER slicing the [ok] indices
+            idx_y = (idx_y + offset_y) % self.ny
+        else:
+            idx_x = idx_x + offset_x
+            idx_y = idx_y + offset_y
+            ok = (idx_x < self.nx) & (idx_y < self.ny) & (idx_x >= 0) & (idx_y >= 0)
+            idx_x, idx_y = idx_x[ok], idx_y[ok] #! It is important to slice AFTER the offset (contrary to PBC=True)
 
-        # Roll the supergrid somewhere randomly (necessary for uniform sampling)
-        if Rx < self.nx: idx_x = (idx_x + offset_x) % self.nx
-        if Ry < self.ny: idx_y = (idx_y + offset_y) % self.ny
         if idx_x.size != 0:
             return cp.asarray([idx_y.reshape(-1), idx_x.reshape(-1)])
         else:
-            return self._select_grid(r) # If no samples survived, try again
+            return self._select_single(r) # If no samples survived, just select a single one at random
 
     def _select_Poisson(self, r=None, **kwargs): # WARN: does not take occupation into account, so preferably only use on OOP_Square/IP_Ising!
         if r is None: r = self.calc_r(0.01)
