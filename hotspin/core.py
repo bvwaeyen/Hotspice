@@ -441,7 +441,7 @@ class Magnets(ABC):
         # TODO: see if the algorithm can be done efficiently for OOP ASI with long-range interactions
         # because it seems that it is certainly possible (if we define an interaction energy between magnets)
         # but that the limiting factor is the sheer number of 'neighbors' that a long-range interaction creates.
-        raise NotImplementedError("Can not (yet?) select Wolff cluster with long-range interactions.")
+        raise NotImplementedError("Can not (yet?) select Wolff cluster if long-range interactions are present.")
 
     def _select_cluster_exchange(self):
         exchange: ExchangeEnergy = self.get_energy('exchange')

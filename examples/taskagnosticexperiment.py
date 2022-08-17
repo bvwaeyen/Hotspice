@@ -60,8 +60,8 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
             If specified as a string, the base name of all saved files in this directory is this string.
         @return [str]: absolute path to the directory where all iterations of this sweep are stored.
     '''
-    all_data = []
-    savename = save if isinstance(save, str) else str(sweep.groups).replace('"', '').replace("'", "")
+    if save: savename = save if isinstance(save, str) else str(sweep.groups).replace('"', '').replace("'", "")
+    else: savename = ''
     temp_time = hotspin.utils.timestamp()
     temp_dir = f"results/TaskAgnosticExperiment/Sweep.temp{temp_time}"
     vars: dict
@@ -108,9 +108,8 @@ def TAsweep_load(dir: str, sweeptype: type[hotspin.experiments.Sweep] = None, sa
 
     sweep = sweeptype(groups=data.metadata["sweep"]["groups"], **data.metadata["sweep"]["parameters"])
     savedir = os.path.dirname(dir)
-    # savename = save if isinstance(save, str) else str(sweep.groups).replace('"', '').replace("'", "")
     savename = os.path.basename(dir)
-    
+
     df = pd.DataFrame()
     vars: dict
     experiment: hotspin.experiments.TaskAgnosticExperiment
@@ -126,13 +125,13 @@ def TAsweep_load(dir: str, sweeptype: type[hotspin.experiments.Sweep] = None, sa
         # 4) Save these <experiment.results> and <vars> to a dataframe that we are calculating on the fly
         all_info = vars | experiment.results
         df = pd.concat([df, pd.DataFrame(data=all_info, index=[0])])
-    
+
     data = Data(df, constants=data.constants, metadata=data.metadata)
     if save: save = data.save(dir=savedir, name=savename, timestamp=False)
 
 
 if __name__ == "__main__":
-    # * From 'Reservoir Computing in Artificial Spin Ice' by J. H. Jensen and G. Tufte:
+    ## From 'Reservoir Computing in Artificial Spin Ice' by J. H. Jensen and G. Tufte:
     # res_range = tuple([i+1 for i in range(11)])
     res_range = 5
     dist_range = tuple([500e-9+i*50e-9 for i in range(10)])
@@ -147,10 +146,10 @@ if __name__ == "__main__":
     # temp_dir = TAsweep(sweep, iterations=20, verbose=True, save=True)
     # TAsweep_load(temp_dir, save=True)
 
-    # * THE SITUATION IN 'Computation in artificial spin ice' BY JENSEN ET AL.:
+    ## THE SITUATION IN 'Computation in artificial spin ice' BY JENSEN ET AL.:
     # simparams = hotspin.SimParams(UPDATE_SCHEME='Néel') # Needed because we are working with frequency
     # sweep_taskagnostic(hotspin.ASI.IP_Square, variables={}, params=simparams,
     #                    E_B=hotspin.utils.eV_to_J(5), T=300, V=220e-9*80e-9*25e-9, Msat=860e3, a=320e-9, n=9, PBC=False, pattern='random',
     #                    iterations=1000, ext_angle=math.pi/4, ext_magnitude=(0.015, 0.017), sine=100e6, verbose=1
     # ) # TODO: continue developing this Jensen et al. situation, with the frequency correctly being taken into account in the Néel scheme.
-    # # TODO: sweep ext_magnitude, increase MCsteps_max or however this is called
+    #pass # TODO: sweep ext_magnitude, increase MCsteps_max or however this is called
