@@ -16,16 +16,14 @@ class SweepTAExperiment(hotspin.experiments.Sweep): # Example of a fully impleme
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
         super().__init__(groups=groups, **kwargs)
 
-    def __iter__(self):
-        for vars in self.sweeper:
-            params = vars | self.constants
-            mm = params["ASI_type"](params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
-                pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel'))
-            datastream = hotspin.io.RandomBinaryDatastream()
-            inputter = hotspin.io.FieldInputterBinary(datastream, magnitudes=(params["H_min"], params["H_max"]), angle=params["H_angle"], n=2, sine=params["sine"])
-            outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm)
-            experiment = TaskAgnosticExperiment(inputter, outputreader, mm)
-            yield (vars, experiment)
+    def create_experiment(self, params: dict) -> TaskAgnosticExperiment:
+        mm = params["ASI_type"](params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
+            pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel'))
+        datastream = hotspin.io.RandomBinaryDatastream()
+        inputter = hotspin.io.FieldInputterBinary(datastream, magnitudes=(params["H_min"], params["H_max"]), angle=params["H_angle"], n=2, sine=params["sine"])
+        outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm)
+        experiment = TaskAgnosticExperiment(inputter, outputreader, mm)
+        return experiment
 
 
 class SweepTA_RC_ASI(hotspin.experiments.Sweep):
@@ -33,23 +31,21 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
         ''' Performs a sweep as in `Reservoir Computing in Artificial Spin Ice` by J. H. Jensen and G. Tufte.
             i.e. with binary input and RegionalOutputReader of variable resolution, with PerpFieldInputter.
         '''
-        kwargs = {
+        kwargs = { # TODO: issue with ASI_type is that user can't define ASI types themselves for this like this
             "ASI_type": "IP_Pinwheel", "a": 600e-9, "nx": 21, "ny": 21, "T": 300, "E_B": hotspin.utils.eV_to_J(71),
             "PBC": False, "moment": 860e3*470e-9*170e-9*10e-9,
             "ext_field": 0.07, "ext_angle": 7*math.pi/180, "res_x": 5, "res_y": 5, "sine": False
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
         super().__init__(groups=groups, **kwargs)
 
-    def __iter__(self):
-        for vars in self.sweeper:
-            params = vars | self.constants # TODO: issue with ASI_type is that user can't define ASI types themselves for this like this
-            mm = getattr(hotspin.ASI, params["ASI_type"])(params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
-                pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel'))
-            datastream = hotspin.io.RandomBinaryDatastream()
-            inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=params["sine"])
-            outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm)
-            experiment = TaskAgnosticExperiment(inputter, outputreader, mm)
-            yield (vars, experiment)
+    def create_experiment(self, params: dict) -> TaskAgnosticExperiment:
+        mm = getattr(hotspin.ASI, params["ASI_type"])(params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
+            pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel'))
+        datastream = hotspin.io.RandomBinaryDatastream()
+        inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=params["sine"])
+        outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm)
+        experiment = TaskAgnosticExperiment(inputter, outputreader, mm)
+        return experiment
 
 
 def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, save=True):

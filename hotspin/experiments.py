@@ -65,6 +65,7 @@ class Sweep(ABC):
             if not any(k in group for group in groups): # Then we have a variable that is not in a group
                 groups.append((k,))
         self.groups = tuple(groups) # Make immutable
+        self.n_per_group = tuple([len(self.variables[group[0]]) for group in self.groups])
 
         # Check that vars in a single group have the same sweeping length
         for group in self.groups:
@@ -78,16 +79,35 @@ class Sweep(ABC):
         try: return tuple(iterable)
         except: return (iterable,)
 
+    def __len__(self) -> int:
+        return np.prod(self.n_per_group)
+
     @property
     def sweeper(self):
-        n_per_group = [len(self.variables[group[0]]) for group in self.groups]
-        for index, _ in np.ndenumerate(np.zeros(n_per_group)): # Return an iterable of sorts for sweeping the hypercube of variables
+        for index, _ in np.ndenumerate(np.zeros(self.n_per_group)): # Return an iterable of sorts for sweeping the hypercube of variables
             yield {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
 
-    @abstractmethod
-    def __iter__(self) -> tuple[tuple[str, Any], Experiment]:
+    def __iter__(self):
+        ''' A generator to conveniently iterate over self.sweeper. Yields a tuple containing
+            the variables with their values in this iteration, as well as the experiment object.
+        '''
         for vars in self.sweeper:
-            yield (vars, TaskAgnosticExperiment.dummy())
+            params = vars | self.constants
+            experiment = self.create_experiment(params)
+            yield (vars, experiment)
+
+    def get_iteration(self, i: int):
+        ''' Basically returns one iteration of the self.__iter__() generator, the <i>th that would normally be generated. '''
+        index = np.unravel_index(i, self.n_per_group)
+        vars = {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group} # TODO: double code, how to unify?
+        params = vars | self.constants
+        experiment = self.create_experiment(params)
+        return (vars, experiment)
+
+    @abstractmethod
+    def create_experiment(self, params: dict) -> Experiment:
+        ''' Subclasses should create an Experiment here according to <params> and return it. '''
+        pass
 
 # TODO: 1D and 2D plotters for a Sweep
 
