@@ -11,3 +11,4 @@ dependencies:
   - python=3.10.4=hbb2ffb3_0
   - scipy=1.7.3=py310h6d2d95c_0
   - statsmodels=0.13.2=py310h2bbff1b_0
+  - joblib=1.1.0=pyhd3eb1b0_0
