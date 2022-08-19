@@ -6,7 +6,7 @@ import math
 import os
 import subprocess
 import sys
-import warnings
+import threading
 
 import cupy as cp
 import cupy.lib.stride_tricks as striding
@@ -454,6 +454,18 @@ class _CompactJSONEncoder(json.JSONEncoder):
     def iterencode(self, o, **kwargs):
         """ Required to also work with `json.dump`. """
         return self.encode(o)
+
+
+def log(message, device_id=0):
+    try:
+        devices = [int(i) for i in os.environ["CUDA_VISIBLE_DEVICES"].split(",")]
+    except KeyError: # So CUDA_VISIBLE_DEVICES was not defined manually, that probably means they are all available
+        devices = list(range(cp.cuda.runtime.getDeviceCount()))
+    device = devices[device_id]
+
+    _rlock = threading.RLock() 
+    with _rlock: # Fix print to work with asynchronous queues on different GPUs, though this might not be entirely necessary
+        print(f"[GPU{device}] {message}")
 
 
 def full_obj_name(obj):

@@ -16,7 +16,7 @@ from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, show_m
-from .utils import filter_kwargs, is_significant, R_squared, strided
+from .utils import filter_kwargs, is_significant, R_squared, strided, log
 
 
 class Experiment(ABC):
@@ -131,7 +131,7 @@ class KernelQualityExperiment(Experiment):
         for i in range(self.outputreader.n): # To get a square matrix, tecord the state as many times as there are output values by the outputreader
             for j in range(input_length):
                 self.inputter.input_single(self.mm)
-                if verbose: print(f'Row {i+1}/{self.outputreader.n}, value {j+1}/{input_length}...')
+                if verbose: log(f'Row {i+1}/{self.outputreader.n}, value {j+1}/{input_length}...')
             state = self.outputreader.read_state()
             self.all_states[i,:] = state.reshape(-1)
             self.results['all_states'] = self.all_states
@@ -184,7 +184,7 @@ class TaskAgnosticExperiment(Experiment):
                 init_fonts()
                 init_interactive()
                 fig = None
-            print(f'[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...')
+            log(f'[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...')
 
         if not add: 
             self.mm.relax()
@@ -198,7 +198,7 @@ class TaskAgnosticExperiment(Experiment):
             if verbose:
                 if verbose > 1: fig = show_m(self.mm, figure=fig)
                 if is_significant(i, N):
-                    print(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
+                    log(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
         self.mm.relax()
         self.final_state = self.outputreader.read_state().reshape(-1)
 
@@ -225,7 +225,7 @@ class TaskAgnosticExperiment(Experiment):
             either globally or locally depending on <local>. For this, an estimator for the current readout state is
             trained which for any time instant has access to the <k> most recent inputs (including the present one).
         '''
-        if verbose: print(f"Calculating NL (local={local})...")
+        if verbose: log(f"Calculating NL (local={local})...")
         
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
         if train_test_cutoff < k: raise ValueError(f"NL: k={k} must be <={train_test_cutoff} for the available data.")
@@ -257,7 +257,7 @@ class TaskAgnosticExperiment(Experiment):
             either globally or locally depending on <local>. For this, an estimator is trained which
             for any time instant attempts to predict the previous <k> inputs based on the current readout state.
         '''
-        if verbose: print(f"Calculating MC (local={local})...")
+        if verbose: log(f"Calculating MC (local={local})...")
 
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
         if train_test_cutoff < k: raise ValueError(f"MC: k={k} must be <={train_test_cutoff} for the available data.")
