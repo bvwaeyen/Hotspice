@@ -18,9 +18,6 @@ from .utils import as_cupy_array, check_repetition, clean_indices, Field, full_o
 
 kB = 1.380649e-23
 
-# The random number generator used throughout hotspin.
-rng = cp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
-
 
 @dataclass(slots=True)
 class SimParams:
@@ -63,6 +60,7 @@ class Magnets(ABC):
             To add an extra rotation to all spins in addition to self._get_angles(), pass <angle> as a float (in radians).
             The parameter <in_plane> should only be used in a super().__init__() call when subclassing this class.
         '''
+        self.rng = cp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
         self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J] use dipolar energy by default
 
@@ -455,7 +453,7 @@ class Magnets(ABC):
         while cp.any(current_frontier := (1-checked)*signal.convolve2d(cluster, neighbors, mode='same', boundary='wrap' if self.PBC else 'fill')):
             checked[current_frontier != 0] = 1
             bond_prob = 1 - cp.exp(-2*exchange.J/self.kBT*current_frontier) # Swendsen-Wang bond probability
-            current_frontier[rng.random(size=cluster.shape) > bond_prob] = 0 # Rejected probabilistically
+            current_frontier[self.rng.random(size=cluster.shape) > bond_prob] = 0 # Rejected probabilistically
             cluster[current_frontier != 0] = 1
         return cp.asarray(cp.where(cluster == 1))
 
@@ -486,8 +484,8 @@ class Magnets(ABC):
         barrier = cp.maximum((delta_E := self.switch_energy(idx)), self.E_B[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
         exponential = cp.clip(cp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
-        idx_switch = idx[:,cp.where(rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
-        # idx = idx[:,cp.where(rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, unsure if this satisfied detailed balance
+        idx_switch = idx[:,cp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
+        # idx = idx[:,cp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, unsure if this satisfied detailed balance
         if idx_switch.shape[1] > 0:
             self.m[idx_switch[0], idx_switch[1]] *= -1
             self.switches += idx_switch.shape[1]
@@ -501,7 +499,7 @@ class Magnets(ABC):
         minBarrier = cp.min(barrier)
         barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
-            taus = rng.random(size=barrier.shape)*cp.exp(barrier/self.kBT) # Draw random relative times from an exponential distribution
+            taus = self.rng.random(size=barrier.shape)*cp.exp(barrier/self.kBT) # Draw random relative times from an exponential distribution
             indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
             time = taus[indexmin2D]*cp.exp(minBarrier/self.kBT[indexmin2D])/attempt_freq # This can become cp.inf quite quickly if T is small
             self.attempted_switches += 1
@@ -675,7 +673,7 @@ class Magnets(ABC):
                 self.m[S] = self._get_m_uniform(math.pi   )[S]
                 self.m[W] = self._get_m_uniform(math.pi/2 )[W]
             case str(unknown_pattern):
-                self.m = rng.integers(0, 2, size=self.xx.shape)*2 - 1
+                self.m = self.rng.integers(0, 2, size=self.xx.shape)*2 - 1
                 if unknown_pattern != 'random': warnings.warn(f'Pattern "{unknown_pattern}" not recognized, defaulting to "random".', stacklevel=2)
     
     @abstractmethod

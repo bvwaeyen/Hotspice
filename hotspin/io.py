@@ -7,11 +7,14 @@ import numpy as np
 from abc import ABC, abstractmethod
 # from cupyx.scipy import signal
 
-from .core import Magnets, rng
+from .core import Magnets
 from .plottools import show_m
 
 
 class Datastream(ABC):
+    def __init__(self):
+        self.rng = cp.random.default_rng()
+
     @abstractmethod
     def get_next(self, n=1):
         """ Calling this method returns a CuPy array containing exactly <n> elements, containing the requested data.
@@ -73,17 +76,19 @@ class RandomBinaryDatastream(BinaryDatastream):
             @param p0 [float] (0.5): the probability of 0 when generating a random bit.
         '''
         self.p0 = p0
+        super().__init__()
 
     def get_next(self, n=1):
-        return cp.where(rng.random(size=(n,)) < self.p0, 0, 1)
+        return cp.where(self.rng.random(size=(n,)) < self.p0, 0, 1)
 
 class RandomUniformDatastream(Datastream):
     def __init__(self, low=0, high=1):
         ''' Generates uniform random floats between <low=0> and <high=1>. '''
         self.low, self.high = low, high
+        super().__init__()
 
     def get_next(self, n=1):
-        return (self.high - self.low)*rng.random(size=(n,)) + self.low
+        return (self.high - self.low)*self.rng.random(size=(n,)) + self.low
 
 
 class FieldInputter(Inputter):
