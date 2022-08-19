@@ -180,9 +180,10 @@ class TaskAgnosticExperiment(Experiment):
                 If 2, the magnetization profile is plotted after every input bit in addition to printing.
         '''
         if verbose:
-            init_fonts()
-            init_interactive()
-            fig = None
+            if verbose > 1:
+                init_fonts()
+                init_interactive()
+                fig = None
             print(f'[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...')
 
         if not add: 
@@ -204,7 +205,7 @@ class TaskAgnosticExperiment(Experiment):
         self.u = cp.concatenate([self.u, u], axis=0) if add else u
         self.y = cp.concatenate([self.y, y], axis=0) if add else y
 
-        if verbose: close_interactive(fig) # Close the realtime figure as it is no longer needed
+        if verbose > 1: close_interactive(fig) # Close the realtime figure as it is no longer needed
         # Still need to call self.calculate_all() manually after this method.
 
     def calculate_all(self, ignore_errors=False, **kwargs):

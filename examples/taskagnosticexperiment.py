@@ -2,7 +2,8 @@ import math
 import os
 import pandas as pd
 
-from context import hotspin
+try: from context import hotspin
+except: import hotspin
 from hotspin.experiments import TaskAgnosticExperiment
 from hotspin.utils import Data
 
@@ -61,7 +62,7 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
     temp_time = hotspin.utils.timestamp()
     temp_dir = f"results/TaskAgnosticExperiment/Sweep.temp{temp_time}"
     vars: dict
-    experiment: hotspin.experiments.TaskAgnosticExperiment
+    experiment: TaskAgnosticExperiment
     for i, (vars, experiment) in enumerate(sweep):
         if verbose: print("Variables in this iteration:", vars, "\nConstants:", sweep.constants)
         experiment.run(N=iterations, verbose=verbose)
@@ -108,7 +109,7 @@ def TAsweep_load(dir: str, sweeptype: type[hotspin.experiments.Sweep] = None, sa
 
     df = pd.DataFrame()
     vars: dict
-    experiment: hotspin.experiments.TaskAgnosticExperiment
+    experiment: TaskAgnosticExperiment
     for i, (vars, experiment) in enumerate(sweep):
         # 1) Select the part with <vars> in <data>
         df_i = data.df.copy()
