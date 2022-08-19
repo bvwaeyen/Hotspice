@@ -5,7 +5,7 @@ import pandas as pd
 try: from context import hotspin
 except: import hotspin
 from hotspin.experiments import TaskAgnosticExperiment
-from hotspin.utils import Data
+from hotspin.utils import Data, log
 
 
 class SweepTAExperiment(hotspin.experiments.Sweep): # Example of a fully implemented Sweep subclass
@@ -51,12 +51,13 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
 
 def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, save=True):
     ''' Performs a parameter sweep of a TaskAgnosticExperiment.
+        (!ON A SINGLE GPU! To run on multiple GPU, use examples/GPUparallel.py and an approprate secondary script like examples/SweepTA_RC_ASI.py)
         @param sweep [hotspin.experiments.Sweep]: a Sweep instance that generates TaskAgnosticExperiment instances.
         @param iterations [int] (1000): the number of input bits applied for each value of parameters.
         @param save [bool|str] (True): if truthy, the sweep data is saved in "results/TaskAgnosticExperiment/Sweep.temp<timestamp>/".
             If specified as a string, the base name of all saved files in this directory is this string.
         @return [str]: absolute path to the directory where all iterations of this sweep are stored.
-    '''
+    ''' # TODO: this function seems to have become obsolete since the creation of GPUparallel.py
     if save: savename = save if isinstance(save, str) else str(sweep.groups).replace('"', '').replace("'", "")
     else: savename = ''
     temp_time = hotspin.utils.timestamp()
@@ -64,7 +65,7 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
     vars: dict
     experiment: TaskAgnosticExperiment
     for i, (vars, experiment) in enumerate(sweep):
-        if verbose: print("Variables in this iteration:", vars, "\nConstants:", sweep.constants)
+        if verbose: log("Variables in this iteration:", vars, "\nConstants:", sweep.constants)
         experiment.run(N=iterations, verbose=verbose)
 
         # Preliminary save of the data in this iteration, just in case an error would occur later on 
@@ -84,7 +85,6 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
             "ASI_type": hotspin.utils.full_obj_name(experiment.mm)} | sweep.constants
         data_i = Data(df_i, metadata=metadata, constants=constants)
         if save: save = data_i.save(dir=temp_dir, name=savename, timestamp=True)
-        all_data.append(data_i) # TODO: when TAsweep_load has been written, all_data can be removed from here
     
     return os.path.abspath(temp_dir)
 
@@ -96,7 +96,7 @@ def TAsweep_load(dir: str, sweeptype: type[hotspin.experiments.Sweep] = None, sa
             this is inferred from the data in <dir>, but that is not very reliable.
         @param save [bool|str] (True): if truthy, the results are saved to a file.
             If specified as a string, the base name of this saved file is this string.
-    '''
+    ''' # TODO: make this independent of specifically TaskAgnosticExperiment, just an Experiment that supports load_dataframe and calculate_all, which should become abstractmethods
     dir = os.path.normpath(dir)
     data = Data.load_collection(dir) # Load all the iterations' data into one large object
     if sweeptype is None:
