@@ -51,7 +51,7 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
 
 def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, save=True):
     ''' Performs a parameter sweep of a TaskAgnosticExperiment.
-        (!ON A SINGLE GPU! To run on multiple GPU, use examples/GPUparallel.py and an approprate secondary script like examples/SweepTA_RC_ASI.py)
+        (!ON A SINGLE GPU! To run on multiple GPU, use hotspin/scripts/GPUparallel.py and an approprate secondary script like examples/SweepTA_RC_ASI.py)
         @param sweep [hotspin.experiments.Sweep]: a Sweep instance that generates TaskAgnosticExperiment instances.
         @param iterations [int] (1000): the number of input bits applied for each value of parameters.
         @param save [bool|str] (True): if truthy, the sweep data is saved in "results/TaskAgnosticExperiment/Sweep.temp<timestamp>/".

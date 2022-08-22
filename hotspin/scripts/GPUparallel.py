@@ -19,19 +19,26 @@ import cupy as cp
 
 from joblib import Parallel, delayed
 
-try: from context import hotspin
-except: import hotspin
+import hotspin
+
+
+if __name__ != "__main__": raise RuntimeError("GPUparallel.py should only be run as a script, never as a module.")
 
 
 ## Define, parse and clean command-line arguments
-# Usage: python <this_file.py> <script_path>
-parser = argparse.ArgumentParser(description='Runs the sweep defined in another script on all available GPUs.')
-parser.add_argument('script_path', type=str, nargs='?', default=None,
-                    help='the path of the script file containing the parameter sweep to be performed')
+# Usage: python <this_file.py> [-h] [-o [OUTDIR]] [script_path]
+# Note that outdir and script_path are both relative to the current working directory, not to this file!
+parser = argparse.ArgumentParser(description="Runs the sweep defined in another script on all available GPUs.")
+parser.add_argument('script_path', type=str, nargs='?',
+                    default=os.path.join(os.path.dirname(__file__), "../../examples/SweepTA_RC_ASI.py"), #! hardcoded paths :(
+                    help="The path of the script file containing the parameter sweep to be performed.")
+parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?',
+                    default='results/Sweeps/Sweep',
+                    help="The output directory, relative to the current working directory.")
 args = parser.parse_args()
-if args.script_path is None: args.script_path = "examples/SweepTA_RC_ASI.py"
 args.script_path = os.path.abspath(args.script_path) # Make sure the path is ok
-if not os.path.exists(args.script_path): raise ValueError("Path provided as cmd argument does not exist.")
+if not os.path.exists(args.script_path):
+    raise ValueError(f"Path '{args.script_path}' provided as cmd argument does not exist.")
 
 
 ## Load script_path as module to access sweep
@@ -55,21 +62,20 @@ for device in range(N_GPU): q.put(device)
 ## Create some global variables for the entire sweep
 num_jobs = len(sweep)
 failed = []
-temp_time = hotspin.utils.timestamp()
-temp_dir = f"results/TaskAgnosticExperiment/Sweep.temp{temp_time}"
+outdir = args.outdir + (timestamp := hotspin.utils.timestamp())
 
 def runner(i):
     # Select an available gpu
     gpu = q.get()
     # Run a shell command that runs the relevant python script
     hotspin.utils.log(f"Attempting to run job #{i} of {num_jobs} on GPU{i}...")
-    cmd = f"python {args.script_path} {i}"
+    cmd = f"python {args.script_path} -o {outdir} {i}"
     try:
         env = os.environ.copy()
         env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  #! These os.environ statements must be done before running any cupy statement (importing is fine),
         env["CUDA_VISIBLE_DEVICES"] = f"{gpu:d}" #! but since cupy is imported separately in the subprocess python script this is not an issue.
-        subprocess.run(["python", args.script_path, '-o', temp_dir, str(i)], shell=False, check=True, env=env)
-    except subprocess.CalledProcessError:
+        subprocess.run(["python", args.script_path, '-o', outdir, str(i)], check=True, env=env)
+    except subprocess.CalledProcessError: # This error type is expected due to check=True
         failed.append(i)
         warnings.warn(f"The command '{cmd}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
 

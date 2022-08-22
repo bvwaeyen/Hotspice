@@ -8,12 +8,13 @@ from hotspin.utils import Data
 
 
 ## Define, parse and clean command-line arguments
-# Usage: <this_file.py> [-h] [-o [OUTDIR]] [N]
-parser = argparse.ArgumentParser(description='Process an iteration of the sweep defined in this file.')
-parser.add_argument('iteration', metavar='N', type=int, nargs='?', default=None,
-                    help='the index of the sweep-iteration to be performed')
-parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?', default='results/Sweep')
-args = parser.parse_args()
+# Usage: python <this_file.py> [-h] [-o [OUTDIR]] [N]
+if __name__ == "__main__": # Need this because, when imported as a module, the args are not meant for this script.
+    parser = argparse.ArgumentParser(description='Process an iteration of the sweep defined in this file.')
+    parser.add_argument('iteration', metavar='N', type=int, nargs='?', default=None,
+                        help='the index of the sweep-iteration to be performed')
+    parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?', default='results/Sweep')
+    args = parser.parse_args()
 
 
 ## Create custom Sweep class to generate the relevant type of experiments
@@ -40,6 +41,7 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
 
 
 ## From 'Reservoir Computing in Artificial Spin Ice' by J. H. Jensen and G. Tufte:
+#! Do not put this in an 'if __name__ == "__main__"' block! <sweep> variable must be importable!
 # res_range = tuple([i+1 for i in range(11)])
 res_range = 5
 dist_range = tuple([500e-9+i*50e-9 for i in range(10)])
@@ -91,6 +93,7 @@ if __name__ == "__main__":
             num_digits = len(str(len(sweep)-1))
             savename = str(sweep.groups).replace('"', '').replace("'", "") + "_" + str(args.iteration).zfill(num_digits) # zfill pads with zeros to the left
     else: savename = ''
+
     if args.iteration is not None:
         process_single(*sweep.get_iteration(args.iteration))
     else:

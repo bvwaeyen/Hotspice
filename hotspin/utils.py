@@ -4,9 +4,11 @@ import io
 import json
 import math
 import os
+import pathlib
 import subprocess
 import sys
 import threading
+import warnings
 
 import cupy as cp
 import cupy.lib.stride_tricks as striding
@@ -454,6 +456,18 @@ class _CompactJSONEncoder(json.JSONEncoder):
     def iterencode(self, o, **kwargs):
         """ Required to also work with `json.dump`. """
         return self.encode(o)
+
+
+def GPUparallel(sweepscript_path, outdir=None):
+    GPUparallel_py_path = pathlib.Path(__file__).parent / 'scripts/GPUparallel.py' #! Hardcoded path to GPUparallel.py!
+    command = ["python", str(GPUparallel_py_path), sweepscript_path]
+    if outdir is not None:
+        command[2:2] = ['-o', outdir] # Slicing inserts this list at index 2 of <command>
+
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError:
+        warnings.warn(f"The command '{' '.join(command)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
 
 
 def log(message, device_id=0):
