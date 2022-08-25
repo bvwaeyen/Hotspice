@@ -16,7 +16,7 @@ class Datastream(ABC):
         self.rng = cp.random.default_rng()
 
     @abstractmethod
-    def get_next(self, n=1):
+    def get_next(self, n=1) -> cp.ndarray:
         """ Calling this method returns a CuPy array containing exactly <n> elements, containing the requested data.
             Depending on the specific subclass, these can be int or float.
         """
@@ -30,7 +30,7 @@ class BinaryDatastream(Datastream):
 
     @property
     def is_binary(self): return True
-# TODO: calculate TAmetrics differently dependent on whether the input data is binary or not.
+
 
 class Inputter(ABC):
     def __init__(self, datastream: Datastream):
@@ -78,7 +78,7 @@ class RandomBinaryDatastream(BinaryDatastream):
         self.p0 = p0
         super().__init__()
 
-    def get_next(self, n=1):
+    def get_next(self, n=1) -> cp.ndarray:
         return cp.where(self.rng.random(size=(n,)) < self.p0, 0, 1)
 
 class RandomUniformDatastream(Datastream):
@@ -87,7 +87,7 @@ class RandomUniformDatastream(Datastream):
         self.low, self.high = low, high
         super().__init__()
 
-    def get_next(self, n=1):
+    def get_next(self, n=1) -> cp.ndarray:
         return (self.high - self.low)*self.rng.random(size=(n,)) + self.low
 
 

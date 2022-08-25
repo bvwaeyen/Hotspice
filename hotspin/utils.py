@@ -5,6 +5,7 @@ import json
 import math
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import threading
@@ -103,6 +104,15 @@ def is_significant(i: int, N: int, order: float=1) -> bool:
     if i == 0 or i == N - 1:
         return True
     return False
+
+
+def human_sort(text):
+    ''' To sort a <list> of strings in human order, use <list>.sort(key=hotspin.utils.human_sort).
+        Human order means that if there are numbers in the strings, they are treated as numbers,
+        such that e.g. 10 will come after 2, which is not the case with a naive sort.
+    '''
+    def atoi(text): return int(text) if text.isdigit() else text
+    return [atoi(c) for c in re.split(r'(\d+)', text)]
 
 
 def strided(a: cp.ndarray, W: int):

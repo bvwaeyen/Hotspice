@@ -16,7 +16,7 @@ from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, show_m
-from .utils import filter_kwargs, is_significant, R_squared, strided, log
+from .utils import filter_kwargs, human_sort, is_significant, log, R_squared, strided
 
 
 class Experiment(ABC):
@@ -29,6 +29,10 @@ class Experiment(ABC):
     @abstractmethod
     def run(self):
         ''' Runs the entire experiment and records all the useful data. '''
+    
+    @abstractmethod
+    def to_dataframe(self):
+        ''' Creates a Pandas dataframe from the saved results of self.run(). '''
 
 
 class Sweep(ABC):
@@ -117,35 +121,113 @@ class Sweep(ABC):
 
 class KernelQualityExperiment(Experiment):
     def __init__(self, inputter, outputreader, mm):
-        ''' Determines the output matrix rank for a given input signal and output readout.
-            By using different inputters, one can determine kernel-quality K, generalization-capability G, ...
-            By using this class on ASIs with different parameters, one can perform a sweep to determine the optimum.
+        ''' Follows the paper
+                Johannes H. Jensen and Gunnar Tufte. Reservoir Computing in Artificial Spin Ice. ALIFE 2020.
+            to implement a similar simulation to determine the kernel-quality K and generalization-capability G.
         '''
         super().__init__(inputter, outputreader, mm)
-    
-    def run(self, input_length: int, save=None, verbose=False):
+        if not self.inputter.datastream.is_binary: # This is necessary for the (admittedly bad) way that the inputs are recorded into a dataframe now
+            raise AttributeError("KernelQualityExperiment should be performed with a binary datastream only.")
+        self.n_out = self.outputreader.n
+        self.results = {'K': None, 'G': None, 'k': None, 'g': None} # Kernel-quality and Generalization-capability, and their normalized counterparts
+
+    def run(self, input_length: int = 100, constant_fraction: float = 0.6, verbose=False):
         ''' @param input_length [int]: the number of times inputter.input_single() is called,
                 before every recording of the output state.
         '''
-        self.all_states = cp.zeros((self.outputreader.n, self.outputreader.n))
-        for i in range(self.outputreader.n): # To get a square matrix, tecord the state as many times as there are output values by the outputreader
+        if verbose: log("Calculating kernel-quality K.")
+        self.run_K(input_length=input_length, verbose=verbose)
+        if verbose: log("Calculating generalization-capability G.")
+        self.run_G(input_length=input_length, constant_fraction=constant_fraction, verbose=verbose)
+
+    def run_K(self, input_length: int = 100, verbose=False):
+        self.mm.initialize_m('uniform', angle=0)
+        self.all_states_K = cp.zeros((self.n_out,)*2)
+        self.all_inputs_K = ["" for _ in range(self.n_out)]
+        for i in range(self.n_out): # To get a square matrix, record the state as many times as there are output values
             for j in range(input_length):
-                self.inputter.input_single(self.mm)
-                if verbose: log(f'Row {i+1}/{self.outputreader.n}, value {j+1}/{input_length}...')
+                if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=2):
+                    log(f'Row {i+1}/{self.n_out}, value {j+1}/{input_length}...')
+                value = self.inputter.input_single(self.mm)
+                self.all_inputs_K[i] += str(value)
             state = self.outputreader.read_state()
-            self.all_states[i,:] = state.reshape(-1)
-            self.results['all_states'] = self.all_states
-            self.results['rank'] = np.linalg.matrix_rank(self.all_states)
-        
-        if save:
-            if not isinstance(save, str):
-                save = f'results/{type(self).__name__}/{type(self.inputter).__name__}/{type(self.outputreader).__name__}_{self.mm.nx}x{self.mm.ny}_out{self.outputreader.nx}x{self.outputreader.nx}_in{input_length}values.npy'
-            dirname = os.path.dirname(save)
-            if not os.path.exists(dirname): os.makedirs(dirname)
-            with open(save, 'wb') as f:
-                np.save(f, self.all_states.get())
-        
-        return self.results['rank']
+            self.all_states_K[i,:] = state.reshape(-1)
+
+    def run_G(self, input_length: int = 100, constant_fraction=0.6, verbose=False):
+        ''' @param constant_fraction [float] (0.6): the last <constant_fraction>*<input_length> bits will
+                be equal for all <self.n_out> bit sequences.
+        '''
+        self.all_states_G = cp.zeros((self.n_out,)*2)
+        self.all_inputs_G = ["" for _ in range(self.n_out)]
+        constant_length = int(input_length*constant_fraction)
+        random_length = input_length - constant_length
+
+        for i in range(self.n_out): # To get a square matrix, record the state as many times as there are output values
+            for j in range(random_length):
+                if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=2):
+                    log(f'Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...')
+                value = self.inputter.input_single(self.mm)
+                self.all_inputs_G[i] += str(value)
+            constant_sequence = self.inputter.datastream.get_next(n=constant_length)
+            for j, value in enumerate(constant_sequence):
+                if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=2):
+                    log(f'Row {i+1}/{self.n_out}, constant value {j+1}/{constant_length}...')
+                constant = self.inputter.input_single(self.mm, value=float(value))
+                self.all_inputs_G[i] += str(constant)
+
+            state = self.outputreader.read_state()
+            self.all_states_G[i,:] = state.reshape(-1)
+
+    def calculate_all(self, **kwargs):
+        ''' Recalculates K, G, k and g if possible. '''
+        try:
+            self.results['K'] = np.linalg.matrix_rank(self.all_states_K)
+            self.results['k'] = self.results['K']/self.n_out
+        except AttributeError:
+            self.results['K'] = self.results['k'] = None
+
+        try:
+            self.results['G'] = np.linalg.matrix_rank(self.all_states_G)
+            self.results['g'] = self.results['G']/self.n_out
+        except AttributeError:
+            self.results['G'] = self.results['g'] = None
+
+
+    def to_dataframe(self):
+        ''' DF has columns "metric" and "y0", "y1", ... "y<self.n_out - 1>".
+            When "metric" == 'K', the row corresponds to a state from self.run_K(), and vice versa for 'G'.
+        '''
+        u = self.all_inputs_K + self.all_inputs_G # Both are lists so we can concatenate them like this
+        yK = cp.asarray(self.all_states_K).get() # Need as NumPy array for pd
+        yG = cp.asarray(self.all_states_G).get() # Need as NumPy array for pd
+        metric = np.array(['K']*yK.shape[0] + ['G']*yG.shape[0])
+        if yK.shape[1] != yG.shape[1]: raise ValueError(f'K and G were not simulated with an equal amount of readout nodes.')
+
+        df_front = pd.DataFrame({"metric": metric, "inputs": u})
+        df_yK = pd.DataFrame({f"y{i}": self.all_states_K[:,i].get() for i in range(self.all_states_K.shape[1])})
+        df_yG = pd.DataFrame({f"y{i}": self.all_states_G[:,i].get() for i in range(self.all_states_G.shape[1])})
+        df = pd.concat([df_yK, df_yG], axis=0) # Put K and G readouts below each other
+        df = pd.concat([df_front, df], axis=1) # Add the 'metric' column in front
+        return df
+
+    def load_dataframe(self, df: pd.DataFrame):
+        ''' Loads the CuPy arrays <all_states_K> and <all_states_G> stored in the dataframe <df>
+            into the <self.all_states_K> and <self.all_states_G> attributes, and returns both.
+        '''
+        df_K = df[df["metric"] == 'K']
+        df_G = df[df["metric"] == 'G']
+
+        # Select the y{i} columns
+        pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
+        y_cols = [colname for colname in df if pattern.match(colname)].sort(key=human_sort)
+        self.n_out = len(y_cols)
+
+        self.all_states_K = cp.asarray(df_K[y_cols])
+        self.all_states_G = cp.asarray(df_G[y_cols])
+        self.all_inputs_K = list(df_K["inputs"])
+        self.all_inputs_G = list(df_G["inputs"])
+
+        return self.all_states_K, self.all_states_G
 
 
 class TaskAgnosticExperiment(Experiment):
@@ -350,12 +432,12 @@ class TaskAgnosticExperiment(Experiment):
 
     def load_dataframe(self, df: pd.DataFrame, u: cp.ndarray = None, y: cp.ndarray = None):
         ''' Loads the CuPy arrays <u> and <y> stored in the dataframe <df>
-            into the <self.u> and <self.y> properties, and returns both.
+            into the <self.u> and <self.y> attributes, and returns both.
         '''
         if u is None: u = cp.asarray(df["u"])
         if y is None:
             pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
-            y_cols = [colname for colname in df if pattern.match(colname)]
+            y_cols = [colname for colname in df if pattern.match(colname)].sort(key=human_sort)
             y = cp.asarray(df[y_cols])
 
         self.u = cp.asarray(u).reshape(-1)
