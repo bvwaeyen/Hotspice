@@ -1,6 +1,8 @@
 import argparse
 import math
 
+import numpy as np
+
 try: from context import hotspin
 except: import hotspin
 from hotspin.experiments import TaskAgnosticExperiment
@@ -24,17 +26,17 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
             i.e. with binary input and RegionalOutputReader of variable resolution, with PerpFieldInputter.
         '''
         kwargs = { # TODO: issue with ASI_type is that user can't define ASI types themselves for this like this
-            "ASI_type": "IP_Pinwheel", "a": 600e-9, "nx": 21, "ny": 21, "T": 300, "E_B": hotspin.utils.eV_to_J(71),
-            "PBC": False, "moment": 860e3*470e-9*170e-9*10e-9,
-            "ext_field": 0.07, "ext_angle": 7*math.pi/180, "res_x": 5, "res_y": 5, "sine": False
+            "ASI_type": "IP_Pinwheel", "a": 300e-9, "nx": 21, "ny": 21, "T": 300, "E_B": hotspin.utils.eV_to_J(90),
+            "PBC": False, "moment": 860e3*220e-9*80e-9*20e-9,
+            "ext_field": 0.07, "ext_angle": 7*math.pi/180, "res_x": 5, "res_y": 5
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
         super().__init__(groups=groups, **kwargs)
 
     def create_experiment(self, params: dict) -> TaskAgnosticExperiment:
         mm = getattr(hotspin.ASI, params["ASI_type"])(params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
-            pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel'))
+            pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel')) # Need Néel for inputter
         datastream = hotspin.io.RandomBinaryDatastream()
-        inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=params["sine"])
+        inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=True, frequency=1, half_period=False) # Frequency does not matter as long as it is nonzero and reasonable
         outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm)
         experiment = TaskAgnosticExperiment(inputter, outputreader, mm)
         return experiment
@@ -44,14 +46,16 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
 #! Do not put this in an 'if __name__ == "__main__"' block! <sweep> variable must be importable!
 # res_range = tuple([i+1 for i in range(11)])
 res_range = 5
-dist_range = tuple([500e-9+i*50e-9 for i in range(10)])
-# dist_range = 600e-9
-field_range = tuple([0.06+i*0.002 for i in range(10)])
-# field_range = 0.07
+dist_range = tuple(np.cbrt(3e-23/(alpha := np.arange(3e-5, 3e-3, 16))))
+field_range = tuple(np.linspace(66, 81, 16))
+nx = ny = 21
 sweep = SweepTA_RC_ASI(groups=[("res_x", "res_y")],
+    nx=nx, ny=ny,
     res_x=res_range, res_y=res_range,
     ext_field=field_range,
-    a=dist_range
+    a=dist_range,
+    moment=3e-16, # As derived from flatspin alpha parameter
+    E_B = hotspin.utils.eV_to_J(90)*np.ones((nx, ny))*np.random.normal(1, 0.05, size=(nx, ny)) # Random 'coercivity'
 )
 
 

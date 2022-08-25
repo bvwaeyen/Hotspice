@@ -65,7 +65,7 @@ class Magnets(ABC):
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J] use dipolar energy by default
 
         # Initialize properties that are necessary to access by subsequent method calls
-        self.energies = list[Energy]() # Don't manually add anything to this, instead call self.add_energy()
+        self._energies = list[Energy]() # Don't manually add anything to this, instead call self.add_energy()
         self.in_plane = in_plane
         self.nx, self.ny = int(nx), int(ny)
         self.dx, self.dy = float(dx), float(dy)
@@ -153,49 +153,49 @@ class Magnets(ABC):
         self.orientation[:,:,1] = cp.sin(self.angles)*self.occupation
 
     def add_energy(self, energy: 'Energy', verbose=True):
-        ''' Adds an Energy object to self.energies. This object is stored under its reduced name,
+        ''' Adds an Energy object to self._energies. This object is stored under its reduced name,
             e.g. ZeemanEnergy is stored under 'zeeman'.
             @param energy [Energy]: the energy to be added.
         '''
         energy.initialize(self)
-        for i, e in enumerate(self.energies):
+        for i, e in enumerate(self._energies):
             if type(e) is type(energy):
                 if verbose: warnings.warn(f'An instance of {type(energy).__name__} was already included in the simulation, and has now been overwritten.', stacklevel=2)
-                self.energies[i] = energy
+                self._energies[i] = energy
                 return
-        self.energies.append(energy)
+        self._energies.append(energy)
 
-    def remove_energy(self, name: str, verbose=True):
-        ''' Removes the specified energy from self.energies.
+    def remove_energy(self, name: str, verbose=True): # This is faster when using self._energies as dict
+        ''' Removes the specified energy from self._energies.
             @param name [str]: the name of the energy to be removed. Case-insensitive and may or may not include
                 the 'energy' part of the class name. Valid options include e.g. 'dipolar', 'DipolarEnergy'...
         '''
         name = name.lower().replace('energy', '')
-        for i, e in enumerate(self.energies):
+        for i, e in enumerate(self._energies):
             if name == e.shortname:
-                self.energies.pop(i)
+                self._energies.pop(i)
                 return
-        if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self.energies]}", stacklevel=2)
+        if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self._energies]}", stacklevel=2)
 
-    def get_energy(self, name: str, verbose=True):
-        ''' Returns the specified energy from self.energies.
+    def get_energy(self, name: str, verbose=True): # This is faster when using self._energies as dict
+        ''' Returns the specified energy from self._energies.
             @param name [str]: the name of the energy to be returned. Case-insensitive and may or may not include
                 the 'energy' part of the class name. Valid options include e.g. 'dipolar', 'DipolarEnergy'...
             @returns [Energy]: the requested energy object.
         '''
         name = name.lower().replace('energy', '')
-        for e in self.energies:
+        for e in self._energies:
             if name == e.shortname: return e
-        if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self.energies]}", stacklevel=2)
+        if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self._energies]}", stacklevel=2)
         return None
 
-    def update_energy(self, index: np.ndarray|cp.ndarray = None):
+    def update_energy(self, index: np.ndarray|cp.ndarray = None): # This is faster when using self._energies as list
         ''' Updates all the energies which are currently present in the simulation.
             @param index [array] (None): if specified, only the magnets at these indices are considered in the calculation.
                 We need a NumPy or CuPy array (to easily determine its size: if =2, then only a single switch is considered.)
         '''
         if index is not None: index = clean_indices(index)
-        for energy in self.energies:
+        for energy in self._energies:
             if index is None: # No index specified, so update fully
                 energy.update()
             elif index[0].size == 1: # Only a single index is present, so just use update_single
@@ -206,7 +206,7 @@ class Magnets(ABC):
     def switch_energy(self, indices2D):
         ''' @return [cp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch. '''
         indices2D = clean_indices(indices2D)
-        return cp.sum(cp.asarray([energy.energy_switch(indices2D) for energy in self.energies]), axis=0)
+        return cp.sum(cp.asarray([energy.energy_switch(indices2D) for energy in self._energies]), axis=0)
 
     @property
     def MCsteps(self): # Number of Monte Carlo steps
@@ -214,7 +214,7 @@ class Magnets(ABC):
 
     @property
     def E(self) -> cp.ndarray: # This could be relatively expensive to calculate, so maybe not ideal
-        return cp.sum(cp.asarray([energy.E for energy in self.energies]), axis=0)
+        return cp.sum(cp.asarray([energy.E for energy in self._energies]), axis=0)
 
     @property
     def T(self) -> cp.ndarray:
@@ -261,7 +261,7 @@ class Magnets(ABC):
                 return
         self._PBC = bool(value)
         if hasattr(self, 'energies'):
-            for energy in self.energies: energy.initialize(self)
+            for energy in self._energies: energy.initialize(self)
 
     @property
     def kBT(self) -> cp.ndarray:
@@ -282,7 +282,7 @@ class Magnets(ABC):
 
     @property
     def E_tot(self) -> float:
-        return float(sum([e.E_tot for e in self.energies]))
+        return float(sum([e.E_tot for e in self._energies]))
 
     @property
     def T_avg(self) -> float:
