@@ -164,13 +164,13 @@ class KernelQualityExperiment(Experiment):
 
         for i in range(self.n_out): # To get a square matrix, record the state as many times as there are output values
             for j in range(random_length):
-                if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=2):
+                if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
                     log(f'Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...')
                 value = self.inputter.input_single(self.mm)
                 self.all_inputs_G[i] += str(value)
             constant_sequence = self.inputter.datastream.get_next(n=constant_length)
             for j, value in enumerate(constant_sequence):
-                if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=2):
+                if verbose and is_significant(i*input_length + j + random_length, input_length*self.n_out, order=1):
                     log(f'Row {i+1}/{self.n_out}, constant value {j+1}/{constant_length}...')
                 constant = self.inputter.input_single(self.mm, value=float(value))
                 self.all_inputs_G[i] += str(constant)
@@ -178,19 +178,19 @@ class KernelQualityExperiment(Experiment):
             state = self.outputreader.read_state()
             self.all_states_G[i,:] = state.reshape(-1)
 
-    def calculate_all(self, **kwargs):
+    def calculate_all(self, ignore_errors=True, **kwargs):
         ''' Recalculates K, G, k and g if possible. '''
         try:
             self.results['K'] = np.linalg.matrix_rank(self.all_states_K)
             self.results['k'] = self.results['K']/self.n_out
         except AttributeError:
-            self.results['K'] = self.results['k'] = None
+            if not ignore_errors: raise
 
         try:
             self.results['G'] = np.linalg.matrix_rank(self.all_states_G)
             self.results['g'] = self.results['G']/self.n_out
         except AttributeError:
-            self.results['G'] = self.results['g'] = None
+            if not ignore_errors: raise
 
 
     def to_dataframe(self):

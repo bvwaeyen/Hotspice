@@ -90,7 +90,7 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
 
 def TAsweep_load(dir: str, sweeptype: type[hotspin.experiments.Sweep] = None, save=True):
     ''' Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,
-        calculates the relevant results (i.e. NL, MC, CP, S) and saves these to a single file.
+        calculates the relevant results with Experiment().calculate_all() and saves these to a single file.
         @param dir [str]: the path to the directory where all the sweep data was stored.
         @param sweeptype [type] (None): the class of the appropriate sweep. If not specified,
             this is inferred from the data in <dir>, but that is not very reliable.

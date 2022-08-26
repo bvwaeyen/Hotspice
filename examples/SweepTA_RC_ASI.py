@@ -5,7 +5,7 @@ import numpy as np
 
 try: from context import hotspin
 except: import hotspin
-from hotspin.experiments import TaskAgnosticExperiment
+from hotspin.experiments import KernelQualityExperiment
 from hotspin.utils import Data
 
 
@@ -32,13 +32,13 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
         super().__init__(groups=groups, **kwargs)
 
-    def create_experiment(self, params: dict) -> TaskAgnosticExperiment:
+    def create_experiment(self, params: dict) -> KernelQualityExperiment:
         mm = getattr(hotspin.ASI, params["ASI_type"])(params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
             pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel')) # Need Néel for inputter
         datastream = hotspin.io.RandomBinaryDatastream()
         inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=True, frequency=1, half_period=False) # Frequency does not matter as long as it is nonzero and reasonable
         outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm)
-        experiment = TaskAgnosticExperiment(inputter, outputreader, mm)
+        experiment = KernelQualityExperiment(inputter, outputreader, mm)
         return experiment
 
 
@@ -59,17 +59,18 @@ sweep = SweepTA_RC_ASI(groups=[("res_x", "res_y")],
 )
 
 
-def process_single(vars: dict, experiment: TaskAgnosticExperiment):
+def process_single(vars: dict, experiment: KernelQualityExperiment, save=True, **kwargs):
     #! This is a pretty generic function that won't change much even for different Sweep or Experiment subclasses
     #! except for some arguments to the experiment.run() call and details in the (meta)data.
-    experiment.run(N=iterations, verbose=verbose)
+    experiment_kwargs = {k: kwargs[k] for k in ("input_length", "verbose") if k in kwargs}
+    experiment.run(**experiment_kwargs)
 
     ## Collect and save the (meta)data of this iteration in the output directory
     df_i = experiment.to_dataframe()
     for i, (varname, value) in enumerate(vars.items()): # Set variable columns to the value they had in this iteration
         df_i.insert(loc=i, column=varname, value=(value,)*len(df_i))
     metadata = {
-        "description": r"Contains the input values <u> and state vectors <y> as can be used for calculating task agnostic metrics of the system as proposed in `Task Agnostic Metrics for Reservoir Computing` by Love et al.",
+        "description": r"Contains the states (and input bit sequences) used to calculate kernel-quality and generalization-capability as in `Reservoir Computing in Artificial Spin Ice` by J. H. Jensen and G. Tufte.",
         "sweep": {
             "type": hotspin.utils.full_obj_name(sweep),
             "variables": sweep.variables,
@@ -86,9 +87,11 @@ def process_single(vars: dict, experiment: TaskAgnosticExperiment):
 
 
 if __name__ == "__main__":
-    iterations = 20
-    verbose = True
     save = True
+    options = {
+        "input_length": 10,
+        "verbose": True
+    }
     
     if save:
         if isinstance(save, str):
@@ -99,8 +102,8 @@ if __name__ == "__main__":
     else: savename = ''
 
     if args.iteration is not None:
-        process_single(*sweep.get_iteration(args.iteration))
+        process_single(*sweep.get_iteration(args.iteration), save=save, **options)
     else:
         hotspin.utils.log("No specific iteration was provided as command-line argument, so the entire sweep will be run.")
         for vars, experiment in sweep:
-            process_single(vars, experiment)
+            process_single(vars, experiment, save=save, **options)
