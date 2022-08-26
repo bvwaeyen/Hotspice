@@ -207,7 +207,7 @@ def readable_bytes(N):
     return f"{number:.2f} {('B', 'KiB', 'MiB', 'GiB', 'TiB')[i]}"
 
 
-class Data:
+class Data: # TODO: make generalized method for getting full column even if it is not in df but in constants
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
         ''' Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
             Constant columns in <df> are automatically moved to <constants>, and keys present

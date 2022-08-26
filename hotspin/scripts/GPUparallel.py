@@ -19,7 +19,8 @@ import cupy as cp
 
 from joblib import Parallel, delayed
 
-import hotspin
+try: import hotspin
+except: from context import hotspin
 
 
 if __name__ != "__main__": raise RuntimeError("GPUparallel.py should only be run as a script, never as a module.")
@@ -68,7 +69,7 @@ def runner(i):
     # Select an available gpu
     gpu = q.get()
     # Run a shell command that runs the relevant python script
-    hotspin.utils.log(f"Attempting to run job #{i} of {num_jobs} on GPU{i}...")
+    hotspin.utils.log(f"Attempting to run job #{i} of {num_jobs} on GPU{gpu}...")
     cmd = f"python {args.script_path} -o {outdir} {i}"
     try:
         env = os.environ.copy()

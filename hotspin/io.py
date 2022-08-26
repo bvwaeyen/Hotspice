@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 
 from .core import Magnets
 from .plottools import show_m
+from .utils import log
 
 
 class Datastream(ABC):
@@ -179,12 +180,12 @@ class PerpFieldInputter(FieldInputter):
         angle = self.angle + value*math.pi/2
         MCsteps0, t0 = mm.MCsteps, mm.t
         if self.sine: # Change magnitude sinusoidally
-            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e6: # t and MCsteps not exceeded, - 1e6 to be sure
+            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6: # t and MCsteps not exceeded, - 1e-6 to be sure
                 mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*math.sin(progress*math.pi*(2-self.half_period)), angle=angle)
-                mm.update(t_max=min(1-progress, 0.05)/self.frequency) # At least 20 (=1/0.05) steps per sine-period
+                mm.update(t_max=min(1-progress, 0.125)/self.frequency) # At least 8 (=1/0.125) steps per sine-period
         else: # Use constant magnitude
             mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
-            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e6:
+            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6:
                 if self.frequency:
                     mm.update(t_max=min(1-progress, 1)/self.frequency) # No sine, so no 20 steps per wavelength needed here
                 else:
@@ -223,7 +224,6 @@ class RegionalOutputReader(OutputReader):
             here = (self.region_x == i[0]) & (self.region_y == i[1])
             n[i] = cp.sum(mm.occupation[here])
         self.normalization_factor = np.max(cp.asarray(cp.max(self.mm.moment)*n).get())
-        self.normalization_factor[np.where(self.normalization_factor == 0)] = np.inf
 
         if mm.in_plane:
             self.state = cp.zeros((self.nx, self.ny, 2))

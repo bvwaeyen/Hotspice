@@ -126,7 +126,7 @@ class KernelQualityExperiment(Experiment):
             to implement a similar simulation to determine the kernel-quality K and generalization-capability G.
         '''
         super().__init__(inputter, outputreader, mm)
-        if not self.inputter.datastream.is_binary: # This is necessary for the (admittedly bad) way that the inputs are recorded into a dataframe now
+        if not self.inputter.datastream.is_binary: # This is necessary for the (admittedly very bad) way that the inputs are recorded into a dataframe now
             raise AttributeError("KernelQualityExperiment should be performed with a binary datastream only.")
         self.n_out = self.outputreader.n
         self.results = {'K': None, 'G': None, 'k': None, 'g': None} # Kernel-quality and Generalization-capability, and their normalized counterparts
@@ -141,15 +141,17 @@ class KernelQualityExperiment(Experiment):
         self.run_G(input_length=input_length, constant_fraction=constant_fraction, verbose=verbose)
 
     def run_K(self, input_length: int = 100, verbose=False):
-        self.mm.initialize_m('uniform', angle=0)
         self.all_states_K = cp.zeros((self.n_out,)*2)
         self.all_inputs_K = ["" for _ in range(self.n_out)]
+
         for i in range(self.n_out): # To get a square matrix, record the state as many times as there are output values
+            self.mm.initialize_m('uniform', angle=0)
             for j in range(input_length):
-                if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=2):
+                if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
                     log(f'Row {i+1}/{self.n_out}, value {j+1}/{input_length}...')
-                value = self.inputter.input_single(self.mm)
-                self.all_inputs_K[i] += str(value)
+                val = self.inputter.input_single(self.mm)
+                self.all_inputs_K[i] += str(int(val))
+
             state = self.outputreader.read_state()
             self.all_states_K[i,:] = state.reshape(-1)
 
@@ -160,20 +162,21 @@ class KernelQualityExperiment(Experiment):
         self.all_states_G = cp.zeros((self.n_out,)*2)
         self.all_inputs_G = ["" for _ in range(self.n_out)]
         constant_length = int(input_length*constant_fraction)
+        constant_sequence = self.inputter.datastream.get_next(n=constant_length)
         random_length = input_length - constant_length
 
         for i in range(self.n_out): # To get a square matrix, record the state as many times as there are output values
+            self.mm.initialize_m('uniform', angle=0)
             for j in range(random_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
                     log(f'Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...')
-                value = self.inputter.input_single(self.mm)
-                self.all_inputs_G[i] += str(value)
-            constant_sequence = self.inputter.datastream.get_next(n=constant_length)
+                val = self.inputter.input_single(self.mm)
+                self.all_inputs_G[i] += str(int(val))
             for j, value in enumerate(constant_sequence):
                 if verbose and is_significant(i*input_length + j + random_length, input_length*self.n_out, order=1):
                     log(f'Row {i+1}/{self.n_out}, constant value {j+1}/{constant_length}...')
                 constant = self.inputter.input_single(self.mm, value=float(value))
-                self.all_inputs_G[i] += str(constant)
+                self.all_inputs_G[i] += str(int(constant))
 
             state = self.outputreader.read_state()
             self.all_states_G[i,:] = state.reshape(-1)
@@ -206,8 +209,8 @@ class KernelQualityExperiment(Experiment):
         df_front = pd.DataFrame({"metric": metric, "inputs": u})
         df_yK = pd.DataFrame({f"y{i}": self.all_states_K[:,i].get() for i in range(self.all_states_K.shape[1])})
         df_yG = pd.DataFrame({f"y{i}": self.all_states_G[:,i].get() for i in range(self.all_states_G.shape[1])})
-        df = pd.concat([df_yK, df_yG], axis=0) # Put K and G readouts below each other
-        df = pd.concat([df_front, df], axis=1) # Add the 'metric' column in front
+        df = pd.concat([df_yK, df_yG], axis=0, ignore_index=True) # Put K and G readouts below each other
+        df = pd.concat([df_front, df], axis=1, ignore_index=False) # Add the 'metric' column in front
         return df
 
     def load_dataframe(self, df: pd.DataFrame):

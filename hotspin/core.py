@@ -546,7 +546,7 @@ class Magnets(ABC):
             self.attempted_switches += 1
             self.update_energy(index=indexmin2D)
     
-    def minimize_all(self, simultaneous=False):
+    def minimize_all(self, simultaneous=False, use_barrier=True):
         ''' Switches all magnets that can gain energy by switching.
             By default, several subsets of the domain are updated in a random order, such that in total
             every cell got exactly one chance at switching. This randomness may increase the runtime, but
@@ -563,7 +563,10 @@ class Magnets(ABC):
             y, x = divmod(i, step_x)
             if self.occupation[y, x] == 0: continue
             subset_indices = cp.asarray([self.iyy[y::step_y,x::step_x].reshape(-1), self.ixx[y::step_y,x::step_x].reshape(-1)])
-            indices = subset_indices[:, cp.where(self.switch_energy(subset_indices) < 0)[0]]
+            if use_barrier:
+                indices = subset_indices[:, cp.where(self.switch_energy(subset_indices)/2 + self.E_B[subset_indices[0], subset_indices[1]] < 0)[0]]
+            else:
+                indices = subset_indices[:, cp.where(self.switch_energy(subset_indices) < 0)[0]]
             if indices.size > 0:
                 self.m[indices[0], indices[1]] = -self.m[indices[0], indices[1]]
                 self.switches += indices.shape[1]
