@@ -34,10 +34,10 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
 
     def create_experiment(self, params: dict) -> KernelQualityExperiment:
         mm = getattr(hotspin.ASI, params["ASI_type"])(params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
-            pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel')) # Need Néel for inputter
+            pattern='uniform', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel')) # Need Néel for inputter
         datastream = hotspin.io.RandomBinaryDatastream()
         inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=True, frequency=1, half_period=False) # Frequency does not matter as long as it is nonzero and reasonable
-        outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm)
+        outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm) # TODO: update this!!1!1!!I!
         experiment = KernelQualityExperiment(inputter, outputreader, mm)
         return experiment
 
@@ -46,8 +46,10 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
 #! Do not put this in an 'if __name__ == "__main__"' block! <sweep> variable must be importable!
 # res_range = tuple([i+1 for i in range(11)])
 res_range = 5
-dist_range = tuple(np.cbrt(3e-23/(alpha := np.arange(3e-5, 3e-3, 16))))
-field_range = tuple(np.linspace(66, 81, 16))
+dist_range = tuple(np.cbrt(3e-23/(alpha := np.linspace(3e-5, 3e-3, 16))))
+# dist_range = tuple(np.cbrt(3e-23/(alpha := np.linspace(1.2e-3, 3e-3, 16))))
+field_range = tuple(np.linspace(66e-3, 81e-3, 16))
+# field_range = tuple(np.linspace(75e-3, 81e-3, 16))
 nx = ny = 21
 sweep = SweepTA_RC_ASI(groups=[("res_x", "res_y")],
     nx=nx, ny=ny,
@@ -55,7 +57,7 @@ sweep = SweepTA_RC_ASI(groups=[("res_x", "res_y")],
     ext_field=field_range,
     a=dist_range,
     moment=3e-16, # As derived from flatspin alpha parameter
-    E_B = hotspin.utils.eV_to_J(90)*np.ones((nx, ny))*np.random.normal(1, 0.05, size=(nx, ny)) # Random 'coercivity'
+    E_B=(hotspin.utils.eV_to_J(110)*np.ones((nx, ny))*np.random.normal(1, 0.05, size=(nx, ny)),) # Random 'coercivity'
 )
 
 

@@ -162,15 +162,46 @@ class FieldInputterBinary(FieldInputter):
 
 
 class PerpFieldInputter(FieldInputter):
-    def __init__(self, datastream: BinaryDatastream, magnitude=1, angle=0, n=2, sine=True, frequency=1, half_period=False):
+    def __init__(self, datastream: BinaryDatastream, magnitude=1, angle=0, n=2, relax=True, frequency=1, **kwargs):
         ''' Applies an external field, whose angle depends on the bit that is being applied:
             the bit '0' corresponds to an angle of <phi> radians, the bit '1' to <phi>+pi/2 radians.
             Also works for continuous numbers, resulting in intermediate angles, but this is not the intended use.
             For more information about the kwargs, see FieldInputter.
         '''
-        super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, sine=sine, frequency=frequency, half_period=half_period)
+        self.relax = relax
+        super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, frequency=frequency)
+
 
     def input_single(self, mm: Magnets, value=None):
+        if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
+            raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != 'Néel'.")
+        if not mm.in_plane:
+            raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
+        if value is None: value = self.datastream.get_next()
+
+        angle = self.angle + value*math.pi/2
+        MCsteps0, t0 = mm.MCsteps, mm.t
+
+        # pos and neg field
+        if self.relax:
+            mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
+            mm.relax()
+            mm.get_energy('Zeeman').set_field(magnitude=-self.magnitude, angle=angle)
+            mm.relax()
+            # log(f'Performed {mm.MCsteps - MCsteps0} MC steps.')
+        else:
+            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < .5 - 1e-6:
+                mm.update(t_max=0.5/self.frequency)
+                # log('updated forward')
+            mm.get_energy('Zeeman').set_field(magnitude=-self.magnitude, angle=angle)
+            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6:
+                mm.update(t_max=0.5/self.frequency)
+                # log('updated reverse')
+
+        return value
+
+
+    def input_single_generalized(self, mm: Magnets, value=None):
         if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
             raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != 'Néel'.")
         if not mm.in_plane:

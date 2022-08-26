@@ -89,6 +89,6 @@ print(f"Running {num_jobs} jobs on {N_GPU} GPU{'s' if N_GPU > 1 else ''}...")
 Parallel(n_jobs=N_GPU, backend="threading")(delayed(runner)(i) for i in range(num_jobs))
 
 if len(failed):
-    print(f"Failed sweep iterations: {failed}")
+    print(f"Failed sweep iterations (zero-indexed): {failed}")
 else:
     print(f"Sweep successfully finished.")
