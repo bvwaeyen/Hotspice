@@ -240,6 +240,7 @@ class TaskAgnosticExperiment(Experiment):
         super().__init__(inputter, outputreader, mm)
         self.results = {'NL': None, 'MC': None, 'CP': None, 'S': None}
         self.initial_state = self.outputreader.read_state().reshape(-1)
+        self.n_out = self.outputreader.n
 
     @classmethod
     def dummy(cls, mm: Magnets = None):
@@ -273,7 +274,7 @@ class TaskAgnosticExperiment(Experiment):
             self.initial_state = self.outputreader.read_state().reshape(-1)
         # Run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
         u = cp.zeros(N) # Inputs
-        y = cp.zeros((N, self.outputreader.n)) # Outputs
+        y = cp.zeros((N, self.n_out)) # Outputs
         for i in range(N):
             u[i] = self.inputter.input_single(self.mm)
             y[i,:] = self.outputreader.read_state().reshape(-1)
@@ -315,8 +316,8 @@ class TaskAgnosticExperiment(Experiment):
         y_train, y_test = cp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
         
         # u_train_strided, y_train = u_train_strided[k-1:], y_train[k-1:] # First <k-1> rows don't have <k> previous entries yet to use as 'samples'
-        Rsq = cp.empty(self.outputreader.n) # R² correlation coefficient
-        for j in range(self.outputreader.n): # Train an estimator for the j-th output feature
+        Rsq = cp.empty(self.n_out) # R² correlation coefficient
+        for j in range(self.n_out): # Train an estimator for the j-th output feature
             model = sm.OLS(y_train[:,j].get(), u_train_strided.get(), missing='drop') # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
             results = model.fit()
             y_hat_test = results.predict(u_test_strided.get())
@@ -347,7 +348,7 @@ class TaskAgnosticExperiment(Experiment):
         y_train, y_test = cp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
 
         Rsq = cp.empty(k) # R² correlation coefficient
-        if local: weights = cp.zeros((k, self.outputreader.n))
+        if local: weights = cp.zeros((k, self.n_out))
         for j in range(1, k+1): # Train an estimator for the input j iterations ago
             # This one is a mess of indices, but at least we don't need striding like for non-linearity
             results = sm.OLS(u_train[k-j:-j].get(), y_train[k:,:].get(), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
@@ -378,7 +379,7 @@ class TaskAgnosticExperiment(Experiment):
             warnings.warn(f"Not enough recorded iterations to reliably calculate complexity ({self.y.shape[0]} samples < {self.y.shape[1]} features)" , stacklevel=2)
         
         if transposed:
-            # Multiply with transposed to get a square matrix of size <self.outputreader.n> (suggested by J. Leliaert)
+            # Multiply with transposed to get a square matrix of size <self.n_out> (suggested by J. Leliaert)
             squarematrix = cp.matmul(self.y.T, self.y)
             rank = cp.linalg.matrix_rank(squarematrix)
         else:
@@ -442,6 +443,7 @@ class TaskAgnosticExperiment(Experiment):
 
         self.u = cp.asarray(u).reshape(-1)
         self.y = cp.asarray(y, dtype=float).reshape(self.u.shape[0], -1)
+        self.n_out = y.shape[1]
         if math.isnan(self.u[0]):
             self.initial_state = self.y[0,:]
             self.u = self.u[1:]
