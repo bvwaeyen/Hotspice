@@ -1,22 +1,25 @@
 import argparse
 import math
+import os
 
 import numpy as np
+import pandas as pd
 
 try: from context import hotspin
 except: import hotspin
 from hotspin.experiments import KernelQualityExperiment
-from hotspin.utils import Data
+from hotspin.utils import Data, is_significant
 
 
 ## Define, parse and clean command-line arguments
 # Usage: python <this_file.py> [-h] [-o [OUTDIR]] [N]
 if __name__ == "__main__": # Need this because, when imported as a module, the args are not meant for this script.
-    parser = argparse.ArgumentParser(description='Process an iteration of the sweep defined in this file.')
+    parser = argparse.ArgumentParser(description='Process an iteration of the sweep defined in this file. If not specified, the data in --outdir are summarized into a single data file using calculate_all().')
     parser.add_argument('iteration', metavar='N', type=int, nargs='?', default=None,
-                        help='the index of the sweep-iteration to be performed')
-    parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?', default='results/Sweep')
+                        help='the index of the sweep-iteration to be performed.')
+    parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?', default=None)
     args = parser.parse_args()
+    outdir = args.outdir if args.outdir is not None else 'results/Sweep'
 
 
 ## Create custom Sweep class to generate the relevant type of experiments
@@ -84,28 +87,29 @@ def process_single(vars: dict, experiment: KernelQualityExperiment, save=True, *
         "ASI_type": hotspin.utils.full_obj_name(experiment.mm)} | sweep.constants
     data_i = Data(df_i, metadata=metadata, constants=constants)
     if save:
-        saved_path = data_i.save(dir=args.outdir, name=savename, timestamp=True)
+        saved_path = data_i.save(dir=outdir, name=savename, timestamp=True)
         hotspin.utils.log(f"Saved iteration #{args.iteration} to {saved_path}")
 
 
 if __name__ == "__main__":
-    save = True
-    options = {
-        "input_length": 10,
-        "verbose": True
-    }
-    
-    if save:
-        if isinstance(save, str):
-            savename = save
-        else: #! important to include iteration number or other unique identifier, since timestamps can be the same for different finishing GPU processes!
-            num_digits = len(str(len(sweep)-1))
-            savename = str(sweep.groups).replace('"', '').replace("'", "") + "_" + str(args.iteration).zfill(num_digits) # zfill pads with zeros to the left
-    else: savename = ''
+    if args.iteration is not None: # Then one specific iteration of sweep() should be calculated on the first available GPU.
+        save = True
+        options = {
+            "input_length": 10,
+            "verbose": True
+        }
 
-    if args.iteration is not None:
+        if save:
+            if isinstance(save, str):
+                savename = save
+            else: # It is important to include iteration number or other unique identifier in savename (timestamps can be same for different finishing GPU processes)
+                num_digits = len(str(len(sweep)-1))
+                savename = str(sweep.groups).replace('"', '').replace("'", "") + "_" + str(args.iteration).zfill(num_digits) # zfill pads with zeros to the left
+        else: savename = ''
+        
         process_single(*sweep.get_iteration(args.iteration), save=save, **options)
-    else:
-        hotspin.utils.log("No specific iteration was provided as command-line argument, so the entire sweep will be run.")
-        for vars, experiment in sweep:
-            process_single(vars, experiment, save=save, **options)
+
+
+    if args.iteration is None: # This gets run if the file is called without command line arguments
+        sumdir = "results/Sweeps/Sweep_RC_ASI_sweep256_out50_in10" if args.outdir is None else args.outdir
+        sweep.load_results(sumdir, save=True, verbose=True)

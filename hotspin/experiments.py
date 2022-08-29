@@ -16,7 +16,7 @@ from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, show_m
-from .utils import filter_kwargs, human_sort, is_significant, log, R_squared, strided
+from .utils import Data, filter_kwargs, human_sort, is_significant, log, R_squared, strided
 
 
 class Experiment(ABC):
@@ -120,6 +120,41 @@ class Sweep(ABC):
     def create_experiment(self, params: dict) -> Experiment:
         ''' Subclasses should create an Experiment here according to <params> and return it. '''
         pass
+
+    def load_results(self, dir: str, save=True, verbose=True):
+        ''' Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,
+            calculates the relevant results with Experiment().calculate_all() and saves these all to a single file.
+            @param dir [str]: the path to the directory where all the sweep data was stored.
+            @param sweep [Sweep]: the sweep that generated all the data in <dir>.
+            @param save [bool|str] (True): if truthy, the results are saved to a file.
+                If specified as a string, the base name of this saved file is this string.
+        '''
+        dir = os.path.normpath(dir)
+        savedir = os.path.dirname(dir)
+        savename = os.path.basename(dir)
+
+        data = Data.load_collection(dir) # Load all the iterations' data into one large object
+
+        df = pd.DataFrame()
+        vars: dict
+        experiment: Experiment
+        for i, (vars, experiment) in enumerate(self):
+            if verbose and is_significant(i, len(self)): print(f'Calculating results of experiment {i+1} of {len(self)}...')
+            # 1) Select the part with <vars> in <data>
+            df_i = data.df.copy()
+            for varname, value in vars.items():
+                df_i = df_i.loc[np.isclose(df_i[varname], value)]
+            # 2) Re-initialize <experiment> with this data
+            experiment.load_dataframe(df_i)
+            # 3) Calculate relevant metrics
+            experiment.calculate_all(ignore_errors=False)
+            # 4) Save these <experiment.results> and <vars> to a dataframe that we are calculating on the fly
+            all_info = vars | experiment.results
+            df = pd.concat([df, pd.DataFrame(data=all_info, index=[0])], ignore_index=True)
+
+        data = Data(df, constants=data.constants, metadata=data.metadata)
+        if save: save = data.save(dir=savedir, name=savename, timestamp=False)
+        return data
 
 # TODO: 1D and 2D plotters for a Sweep
 

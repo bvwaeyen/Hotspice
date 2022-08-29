@@ -88,44 +88,6 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
     
     return os.path.abspath(temp_dir)
 
-def TAsweep_load(dir: str, sweeptype: type[hotspin.experiments.Sweep] = None, save=True):
-    ''' Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,
-        calculates the relevant results with Experiment().calculate_all() and saves these to a single file.
-        @param dir [str]: the path to the directory where all the sweep data was stored.
-        @param sweeptype [type] (None): the class of the appropriate sweep. If not specified,
-            this is inferred from the data in <dir>, but that is not very reliable.
-        @param save [bool|str] (True): if truthy, the results are saved to a file.
-            If specified as a string, the base name of this saved file is this string.
-    ''' # TODO: make this independent of specifically TaskAgnosticExperiment, just an Experiment that supports load_dataframe and calculate_all, which should become abstractmethods
-    dir = os.path.normpath(dir)
-    data = Data.load_collection(dir) # Load all the iterations' data into one large object
-    if sweeptype is None:
-        try: sweeptype = globals()[data.metadata["sweep"]["type"]]
-        except KeyError: raise NameError("Could not automatically determine the appropriate Sweep type.")
-
-    sweep = sweeptype(groups=data.metadata["sweep"]["groups"], **data.metadata["sweep"]["parameters"])
-    savedir = os.path.dirname(dir)
-    savename = os.path.basename(dir)
-
-    df = pd.DataFrame()
-    vars: dict
-    experiment: TaskAgnosticExperiment
-    for i, (vars, experiment) in enumerate(sweep):
-        # 1) Select the part with <vars> in <data>
-        df_i = data.df.copy()
-        for varname, value in vars.items():
-            df_i = df_i.loc[df_i[varname] == value]
-        # 2) Re-initialize <experiment> with this data
-        experiment.load_dataframe(df_i)
-        # 3) Calculate relevant metrics
-        experiment.calculate_all(ignore_errors=False)
-        # 4) Save these <experiment.results> and <vars> to a dataframe that we are calculating on the fly
-        all_info = vars | experiment.results
-        df = pd.concat([df, pd.DataFrame(data=all_info, index=[0])])
-
-    data = Data(df, constants=data.constants, metadata=data.metadata)
-    if save: save = data.save(dir=savedir, name=savename, timestamp=False)
-
 
 if __name__ == "__main__":
     ## From 'Reservoir Computing in Artificial Spin Ice' by J. H. Jensen and G. Tufte:
