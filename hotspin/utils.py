@@ -412,7 +412,10 @@ class Data: # TODO: make generalized method for getting full column even if it i
             df = data.df.copy() # To prevent changing the original data.df
             for const in data.constants:
                 if (impostor := const) in nonconstants: # If const is not deemed constant ඞ, move it to the df
-                    df[impostor] = data.constants[impostor]
+                    try:
+                        df[impostor] = data.constants[impostor]
+                    except ValueError:
+                        pass # ValueError occurs when data.constants is an iterable
             dataframes.append(df)
 
         # And now combine everything into one big Data() object

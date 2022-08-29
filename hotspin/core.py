@@ -203,10 +203,10 @@ class Magnets(ABC):
             elif index[0].size > 1: # Index is specified and contains multiple ints, so we must use update_multiple
                 energy.update_multiple(index)
     
-    def switch_energy(self, indices2D):
+    def switch_energy(self, indices2D=None):
         ''' @return [cp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch. '''
-        indices2D = clean_indices(indices2D)
-        return cp.sum(cp.asarray([energy.energy_switch(indices2D) for energy in self._energies]), axis=0)
+        if indices2D is not None: indices2D = clean_indices(indices2D)
+        return sum([energy.energy_switch(indices2D) for energy in self._energies])
 
     @property
     def MCsteps(self): # Number of Monte Carlo steps
@@ -214,7 +214,7 @@ class Magnets(ABC):
 
     @property
     def E(self) -> cp.ndarray: # This could be relatively expensive to calculate, so maybe not ideal
-        return cp.sum(cp.asarray([energy.E for energy in self._energies]), axis=0)
+        return sum([energy.E for energy in self._energies])
 
     @property
     def T(self) -> cp.ndarray:
@@ -536,12 +536,21 @@ class Magnets(ABC):
         return float(cp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
-    def minimize_single(self, N=1):
-        ''' Switches the magnet which has the highest switching probability. Repeat this <N> times. '''
-        all_indices = cp.asarray([self.iyy.reshape(-1), self.ixx.reshape(-1)])
-        for _ in range(N):
-            indexmin2D = divmod(cp.argmin(self.switch_energy(all_indices)), self.nx)
+    def minimize(self):
+        ''' Switches the magnet which has the highest switching probability.
+            Repeats this until there are no more magnets that can gain energy from switching. '''
+        visited = np.zeros_like(self.m) # Used to make sure we don't get an infinite loop
+        while True:
+            barrier = cp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)
+            indexmin2D = divmod(cp.argmin(barrier), self.nx) # The one with the most energy to gain from switching
+            E = barrier[indexmin2D]
+            if E >= 0: # Then energy would increase, so we have ended our minimization procedure.
+                break
             self.m[indexmin2D] = -self.m[indexmin2D]
+            if visited[indexmin2D] >= 3:
+                break
+            else:
+                visited[indexmin2D] += 1
             self.switches += 1
             self.attempted_switches += 1
             self.update_energy(index=indexmin2D)
@@ -795,8 +804,8 @@ class ZeemanEnergy(Energy):
         else:
             self.E = -self.mm.moment*self.mm.m*self.B_ext
 
-    def energy_switch(self, indices2D):
-        return -2*self.E[indices2D]
+    def energy_switch(self, indices2D=None):
+        return -2*self.E if indices2D is None else -2*self.E[indices2D]
 
     def update_single(self, index2D):
         self.E[index2D] *= -1
@@ -902,8 +911,8 @@ class DipolarEnergy(Energy):
                     total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')*self.mm._momentSq
         self.E = self.prefactor*total_energy
     
-    def energy_switch(self, indices2D):
-        return -2*self.E[indices2D]
+    def energy_switch(self, indices2D=None):
+        return -2*self.E if indices2D is None else -2*self.E[indices2D]
     
     def update_single(self, index2D):
         # First we get the x and y coordinates of magnet <i> in its unit cell
@@ -912,13 +921,10 @@ class DipolarEnergy(Energy):
         y_unitcell = int(y) % self.unitcell.y
         # The kernel to use is then
         kernel = self.kernel_unitcell[y_unitcell][x_unitcell]
-        if kernel is not None:
-            # Multiply with the magnetization
-            usefulkernel = kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-            interaction = self.prefactor*self.mm.m[index2D]*cp.multiply(self.mm.m, usefulkernel)*self.mm._momentSq
-        else:
-            interaction = cp.zeros_like(self.mm.m)
-
+        if kernel is None: return # Then there is no magnet there, so nothing happens
+        # Multiply with the magnetization
+        usefulkernel = kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
+        interaction = self.prefactor*self.mm.m[index2D]*cp.multiply(self.mm.m, usefulkernel)*self.mm._momentSq
         self.E += 2*interaction
         self.E[index2D] *= -1 # This magnet switched, so all its interactions are inverted
 
@@ -972,8 +978,8 @@ class ExchangeEnergy(Energy):
         else: # Use Ising hamiltonian
             self.E = -self.J*cp.multiply(signal.convolve2d(self.mm.m, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill'), self.mm.m)
 
-    def energy_switch(self, indices2D):
-        return -2*self.E[indices2D]
+    def energy_switch(self, indices2D=None):
+        return -2*self.E if indices2D is None else -2*self.E[indices2D]
     
     def update_single(self, index2D):
         self.update() # There are much faster ways of doing this, but this becomes difficult with PBC and in/out-of-plane
