@@ -334,7 +334,7 @@ class Data: # TODO: make generalized method for getting full column even if it i
         total_dict = {
             'metadata': self.metadata,
             'constants': self.constants,
-            'data': json.loads(self.df.to_json(orient='split', index=False)) # DataFrame -> JSON to save
+            'data': json.loads(self.df.to_json(orient='split', index=False, default_handler=str)) # DataFrame -> JSON to save, with unknown dtypes converted to str
         }
 
         if timestamp:
@@ -414,7 +414,7 @@ class Data: # TODO: make generalized method for getting full column even if it i
                 if (impostor := const) in nonconstants: # If const is not deemed constant ඞ, move it to the df
                     try:
                         df[impostor] = data.constants[impostor]
-                    except ValueError:
+                    except ValueError as e:
                         pass # ValueError occurs when data.constants is an iterable
             dataframes.append(df)
 

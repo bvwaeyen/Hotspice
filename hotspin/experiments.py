@@ -31,8 +31,16 @@ class Experiment(ABC):
         ''' Runs the entire experiment and records all the useful data. '''
     
     @abstractmethod
+    def calculate_all(self):
+        ''' (Re)calculates all the metrics in the self.results dict. '''
+    
+    @abstractmethod
     def to_dataframe(self):
         ''' Creates a Pandas dataframe from the saved results of self.run(). '''
+    
+    @abstractmethod
+    def load_dataframe(self):
+        ''' Loads the data from self.to_dataframe() to the current object. '''
 
 
 class Sweep(ABC):
@@ -184,13 +192,13 @@ class KernelQualityExperiment(Experiment):
     def calculate_all(self, ignore_errors=True, **kwargs):
         ''' Recalculates K, G, k and g if possible. '''
         try:
-            self.results['K'] = np.linalg.matrix_rank(self.all_states_K)
+            self.results['K'] = int(cp.linalg.matrix_rank(self.all_states_K))
             self.results['k'] = self.results['K']/self.n_out
         except AttributeError:
             if not ignore_errors: raise
 
         try:
-            self.results['G'] = np.linalg.matrix_rank(self.all_states_G)
+            self.results['G'] = int(cp.linalg.matrix_rank(self.all_states_G))
             self.results['g'] = self.results['G']/self.n_out
         except AttributeError:
             if not ignore_errors: raise
@@ -220,9 +228,13 @@ class KernelQualityExperiment(Experiment):
         df_K = df[df["metric"] == 'K']
         df_G = df[df["metric"] == 'G']
 
+        if df_K.empty or df_G.empty:
+            raise ValueError('Dataframe is empty, so could not be loaded to KernelQualityExperiment.')
+
         # Select the y{i} columns
         pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
-        y_cols = [colname for colname in df if pattern.match(colname)].sort(key=human_sort)
+        y_cols = [colname for colname in df if pattern.match(colname)]
+        y_cols.sort(key=human_sort) # Usually of the format 'y0', 'y1', 'y2', ..., 'y10', where human_sort makes sure e.g. 10 comes after 2
         self.n_out = len(y_cols)
 
         self.all_states_K = cp.asarray(df_K[y_cols])
