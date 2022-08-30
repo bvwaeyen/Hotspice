@@ -69,21 +69,26 @@ def J_to_eV(E: float, /):
 def eV_to_J(E: float, /):
     return E*1.602176634e-19
 
-Field = TypeVar("Field", int, float, np.ndarray, cp.ndarray) # Every type that can be parsed by as_cupy_array()
+Field = TypeVar("Field", int, float, list, np.ndarray, cp.ndarray) # Every type that can be parsed by as_cupy_array()
 def as_cupy_array(value: Field, shape: tuple) -> cp.ndarray:
     ''' Converts <value> to a CuPy array of shape <shape>. If <value> is scalar, the returned
         array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
         as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.
     '''
     is_scalar = True # Determine if <value> is scalar-like...
+    if isinstance(value, list):
+        try:
+            value = cp.asarray(value, dtype=float)
+        except ValueError:
+            raise ValueError("List of lists could not be converted to rectangular float64 CuPy array.")
     if isinstance(value, (np.ndarray, cp.ndarray)):
         if value.size != 1: is_scalar = False
 
     if is_scalar: # ... and act accordingly
-        return cp.ones(shape)*float(value)
+        return cp.ones(shape, dtype=float)*float(value)
     else:
         if value.size != math.prod(shape):
-            raise ValueError(f"Specified value (shape {value.shape}) is incompatible with desired shape {shape}.")
+            raise ValueError(f"Incorrect shape: passed array of shape {value.shape} is not of desired shape {shape}.")
         return cp.asarray(value).reshape(shape)
 
 

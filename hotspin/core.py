@@ -130,12 +130,21 @@ class Magnets(ABC):
             For large simulations, this can cause high memory consumption and very poor performance."""), stacklevel=2)
         return Unitcell(self.nx, self.ny)
 
-    def initialize_m(self, pattern='random', *, angle=0, update_energy=True):
+    def initialize_m(self, pattern: str|Field = 'random', *, angle: float = 0, update_energy: bool = True):
         ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
-            @param pattern [str]: can be any of "random", "uniform", "AFM".
+            @param pattern [str|utils.Field]: If type str, this can be any of "random", "uniform", "AFM" by default.
+            @param angle [float]: 
         '''
-        self._set_m(pattern)
-        self.m = self.m.astype(float)
+        if isinstance(pattern, str):
+            self._set_m(pattern)
+        else: # Then pattern is a Field-like object
+            try:
+                self.m = as_cupy_array(pattern, self.m.shape)
+            except (ValueError, TypeError):
+                raise ValueError(f"Argument <pattern> could not be parsed as a valid array for <self.m>.")
+
+        self.m = self.m.astype(float) # Need float to multiply correctly with other float arrays
+        self.m = cp.sign(self.m) # Put all to -1., 0. or 1.
         self.m = cp.multiply(self.m, self.occupation)
         self.m[cp.where(self._get_m_uniform() != self._get_m_uniform(angle))] *= -1 # Allow 'rotation' for any kind of initialized state
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
@@ -664,6 +673,7 @@ class Magnets(ABC):
     def _set_m(self, pattern: str):
         ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "vortex", "AFM" or "random".
             <self.m> is a shape (ny, nx) array containing only -1, 0 or 1 indicating the magnetization direction.
+            ONLY <self.m> should be set/changed/defined by this function.
         '''
         match str(pattern).strip().lower():
             case 'uniform':
