@@ -1,3 +1,5 @@
+# To create an env based on this file, run the command
+#   conda env create --name <env_name> --file=environment.yml
 name: hotspin310
 channels:
   - defaults
