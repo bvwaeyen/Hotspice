@@ -105,7 +105,7 @@ def poisson_disc_samples(width, height, r, k=5, random: Callable = np.random.ran
         qi = int(random()*len(queue))
         qx, qy = queue.pop(qi)
         for _ in range(k):
-            alpha = 2*math.pi*random()
+            alpha = math.tau*random()
             d = r*np.sqrt(3*random() + 1)
             px = qx + d*np.cos(alpha)
             py = qy + d*np.sin(alpha)

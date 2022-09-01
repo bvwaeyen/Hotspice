@@ -112,7 +112,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
         magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode='valid', boundary='fill')
         x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
         y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
-    angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % (2*math.pi)
+    angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % math.tau
     magnitudes_avg = cp.sqrt(x_comp_avg**2 + y_comp_avg**2)
     useless_angles = cp.where(cp.isclose(x_comp_avg, 0) & cp.isclose(y_comp_avg, 0), cp.NaN, 1) # No well-defined angle
     useless_magnitudes = cp.where(magnets_in_avg == 0, cp.NaN, 1) # No magnet (the NaNs here will be a subset of useless_angles)

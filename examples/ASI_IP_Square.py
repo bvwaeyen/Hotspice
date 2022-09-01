@@ -36,7 +36,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=True), cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi, interpolation_stage='rgba', interpolation='antialiased')
+    h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=True), cmap='hsv', origin='lower', vmin=0, vmax=math.tau, interpolation_stage='rgba', interpolation='antialiased')
     ax1.set_title(r'Averaged magnetization angle [rad]')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)

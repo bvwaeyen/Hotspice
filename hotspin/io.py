@@ -113,7 +113,7 @@ class FieldInputter(Inputter):
         return self._angle
     @angle.setter
     def angle(self, value):
-        self._angle = value % (2*math.pi)
+        self._angle = value % math.tau
 
     @property
     def magnitude(self): # [T]

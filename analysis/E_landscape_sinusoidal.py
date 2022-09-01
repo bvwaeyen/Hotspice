@@ -1,3 +1,5 @@
+import math
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -9,10 +11,10 @@ def E(E_B, ext_field, angle):
 
 def plot(E_B, ext_field, angle, verbose=True):
     if ext_field < 0: ext_field, angle = -ext_field, angle + np.pi
-    angle = angle % (2*np.pi)
+    angle = angle % math.tau
 
     E_func = E(E_B, ext_field, angle)
-    x = np.linspace(0, 2*np.pi, 1024+1)
+    x = np.linspace(0, math.tau, 1024+1)
     y = E_func(x)
     maxima = np.where((y > np.roll(y, 1)) & (y > np.roll(y, -1)))
     minima = np.where((y < np.roll(y, 1)) & (y < np.roll(y, -1)))
