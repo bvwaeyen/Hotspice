@@ -13,7 +13,7 @@ from scipy.spatial import distance
 from textwrap import dedent
 
 from .poisson import PoissonGrid
-from .utils import as_cupy_array, check_repetition, clean_indices, Field, full_obj_name, mirror4
+from .utils import as_cupy_array, check_repetition, Field, full_obj_name, mirror4
 
 
 kB = 1.380649e-23
@@ -200,10 +200,10 @@ class Magnets(ABC):
 
     def update_energy(self, index: np.ndarray|cp.ndarray = None): # This is faster when using self._energies as list
         ''' Updates all the energies which are currently present in the simulation.
-            @param index [array] (None): if specified, only the magnets at these indices are considered in the calculation.
+            @param index [cp.array(2, -)] (None): a 2D CuPy array with the first row representing the
+                y-coordinates and the second representing the x-coordinates of the indices. if specified, only the magnets at these indices are considered in the calculation.
                 We need a NumPy or CuPy array (to easily determine its size: if =2, then only a single switch is considered.)
         '''
-        if index is not None: index = clean_indices(index)
         for energy in self._energies:
             if index is None: # No index specified, so update fully
                 energy.update()
@@ -213,9 +213,10 @@ class Magnets(ABC):
                 energy.update_multiple(index)
     
     def switch_energy(self, indices2D=None):
-        ''' @return [cp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch. '''
-        if indices2D is not None: indices2D = clean_indices(indices2D)
-        return sum([energy.energy_switch(indices2D) for energy in self._energies])
+        ''' @param indices2D [cp.array(2, -)] (None): a 2D CuPy array with the first row representing the
+                y-coordinates and the second representing the x-coordinates of the indices.
+            @return [cp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch.
+        '''
 
     @property
     def MCsteps(self): # Number of Monte Carlo steps
@@ -479,7 +480,7 @@ class Magnets(ABC):
                 idx = self._update_Wolff(*args, **kwargs)
             case str(unrecognizedscheme):
                 raise ValueError(f"The Magnets.params object has an invalid value for UPDATE_SCHEME='{unrecognizedscheme}'.")
-        return clean_indices(idx)
+        return idx
 
     def _update_Glauber(self, idx=None, Q=0.05, r=0):
         # 1) Choose a bunch of magnets at random
@@ -749,8 +750,8 @@ class Energy(ABC):
     @abstractmethod
     def energy_switch(self, indices2D):
         ''' Returns the change in energy experienced by the magnets at <indices2D>, if they were to switch.
-            @param indices2D [tuple(2)]: A tuple containing two equal-size 1D arrays representing the y- and x-
-                indices of the sampled magnets, such that this tuple can be used directly to index self.E.
+            @param indices2D [cp.array(2, -)]: A 2D CuPy array with the first row containing the y-coordinates,
+                and the second row containing the corresponding x-coordinates of the sampled magnets.
             @return [list(N)]: A list containing the local changes in energy for each magnet of <indices2D>, in the same order.
         '''
 
@@ -815,13 +816,13 @@ class ZeemanEnergy(Energy):
             self.E = -self.mm.moment*self.mm.m*self.B_ext
 
     def energy_switch(self, indices2D=None):
-        return -2*self.E if indices2D is None else -2*self.E[indices2D]
+        return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]
 
     def update_single(self, index2D):
-        self.E[index2D] *= -1
+        self.E[index2D[0,0], index2D[1,0]] *= -1
     
     def update_multiple(self, indices2D):
-        self.E[indices2D] *= -1
+        self.E[indices2D[0], indices2D[1]] *= -1
     
     @property
     def E_tot(self):
@@ -866,7 +867,8 @@ class DipolarEnergy(Energy):
             unitcell_o = self.mm.occupation[:self.unitcell.y,:self.unitcell.x]
             toolargematrix_o = cp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
         # Now comes the part where we start splitting the different cells in the unit cells
-        self.kernel_unitcell = [[None for _ in range(self.unitcell.x)] for _ in range(self.unitcell.y)]
+        self.kernel_unitcell_indices = -cp.ones((self.unitcell.x, self.unitcell.y), dtype=int)
+        self.kernel_unitcell = []
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
                 if self.mm.in_plane:
@@ -904,17 +906,19 @@ class DipolarEnergy(Energy):
                     kernel[:self.mm.ny-1,self.mm.nx:] += kernelcopy[self.mm.ny:,:self.mm.nx-1]
 
                 kernel *= 1e-7 # [J/Am²], 1e-7 is mu_0/4Pi
-                self.kernel_unitcell[y][x] = kernel
+                self.kernel_unitcell_indices[y,x] = len(self.kernel_unitcell)
+                self.kernel_unitcell.append(kernel)
+        self.kernel_unitcell = cp.asarray(self.kernel_unitcell)
         self.update()
     
     def update(self):
         total_energy = cp.zeros_like(self.mm.m)
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
-                kernel = self.kernel_unitcell[y][x]
-                if kernel is None:
+                if (n := self.kernel_unitcell_indices[y, x]) < 0:
                     continue
                 else:
+                    kernel = self.kernel_unitcell[n,:,:]
                     partial_m = cp.zeros_like(self.mm.m)
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
 
@@ -922,44 +926,43 @@ class DipolarEnergy(Energy):
         self.E = self.prefactor*total_energy
     
     def energy_switch(self, indices2D=None):
-        return -2*self.E if indices2D is None else -2*self.E[indices2D]
+        return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]
     
     def update_single(self, index2D):
         # First we get the x and y coordinates of magnet <i> in its unit cell
-        y, x = index2D
-        x_unitcell = int(x) % self.unitcell.x
-        y_unitcell = int(y) % self.unitcell.y
-        # The kernel to use is then
-        kernel = self.kernel_unitcell[y_unitcell][x_unitcell]
-        if kernel is None: return # Then there is no magnet there, so nothing happens
+        y, x = index2D[0,0], index2D[1,0]
+        x_unitcell = x.astype(int) % self.unitcell.x
+        y_unitcell = y.astype(int) % self.unitcell.y
+        # Test if there is actually a kernel
+        n = self.kernel_unitcell_indices[y_unitcell, x_unitcell]
+        if n < 0: return # Then there is no magnet there, so nothing happens
         # Multiply with the magnetization
-        usefulkernel = kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-        interaction = self.prefactor*self.mm.m[index2D]*cp.multiply(self.mm.m, usefulkernel)*self.mm._momentSq
+        usefulkernel = self.kernel_unitcell[n,self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
+        interaction = self.prefactor*self.mm.m[y, x]*cp.multiply(self.mm.m, usefulkernel)*self.mm._momentSq
         self.E += 2*interaction
-        self.E[index2D] *= -1 # This magnet switched, so all its interactions are inverted
+        self.E[y, x] *= -1 # This magnet switched, so all its interactions are inverted
 
     def update_multiple(self, indices2D):
-        self.E[indices2D] *= -1
+        self.E[indices2D[0], indices2D[1]] *= -1
         indices2D_unitcell_raveled = (indices2D[1] % self.unitcell.x) + (indices2D[0] % self.unitcell.y)*self.unitcell.x
         binned_unitcell_raveled = cp.bincount(indices2D_unitcell_raveled)
         for i in binned_unitcell_raveled.nonzero()[0]: # Iterate over the unitcell indices present in indices2D
             y_unitcell, x_unitcell = divmod(int(i), self.unitcell.x)
-            kernel = self.kernel_unitcell[y_unitcell][x_unitcell]
-            if kernel is None: continue # This should never happen, but check anyway in case indices2D includes empty cells
-            indices_here = cp.where(indices2D_unitcell_raveled == i)[0]
-            indices2D_here = (indices2D[0][indices_here], indices2D[1][indices_here])
-            if indices_here.size > self.mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF:
+            if (n := self.kernel_unitcell_indices[y_unitcell, x_unitcell]) < 0: continue # This should never happen, but check anyway in case indices2D includes empty cells
+            kernel = self.kernel_unitcell[n,:,:]
+            indices2D_here = indices2D[:,indices2D_unitcell_raveled == i]
+            if indices2D_here.shape[1] > self.mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF:
                 ### EITHER WE DO THIS (CONVOLUTION) (starts to be better at approx. 40 simultaneous switches for 41x41 kernel, taking into account the need for complete recalculation every <something> steps, so especially for large T this is good)
                 switched_field = cp.zeros_like(self.mm.m)
-                switched_field[indices2D_here] = self.mm.m[indices2D_here]
+                switched_field[indices2D_here[0], indices2D_here[1]] = self.mm.m[indices2D_here[0], indices2D_here[1]]
                 n = self.mm.params.REDUCED_KERNEL_SIZE
                 usefulkernel = kernel[self.mm.ny-1-n:self.mm.ny+n, self.mm.nx-1-n:self.mm.nx+n] if n else kernel
                 convolvedkernel = signal.convolve2d(switched_field, usefulkernel, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
             else:
                 ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY NONPARALLEL) 
                 convolvedkernel = cp.zeros_like(self.mm.m) # Still is convolved, just not in parallel
-                for j in range(indices_here.size): # Here goes the manual convolution
-                    y, x = indices2D_here[0][j], indices2D_here[1][j]
+                for j in range(indices2D_here.shape[1]): # Here goes the manual convolution
+                    y, x = indices2D_here[0,j], indices2D_here[1,j]
                     convolvedkernel += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
             interaction = self.prefactor*cp.multiply(self.mm.m*self.mm._momentSq, convolvedkernel)
             self.E += 2*interaction
@@ -989,7 +992,7 @@ class ExchangeEnergy(Energy):
             self.E = -self.J*cp.multiply(signal.convolve2d(self.mm.m, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill'), self.mm.m)
 
     def energy_switch(self, indices2D=None):
-        return -2*self.E if indices2D is None else -2*self.E[indices2D]
+        return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]
     
     def update_single(self, index2D):
         self.update() # There are much faster ways of doing this, but this becomes difficult with PBC and in/out-of-plane
