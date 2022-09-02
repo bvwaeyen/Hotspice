@@ -77,6 +77,7 @@ class Magnets(ABC):
         # Main initialization steps to create the geometry
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
         self.n = int(cp.sum(self.occupation)) # Number of magnets in the simulation
+        self.nonzero = cp.asarray(cp.nonzero(self.occupation)).reshape(2, -1) # Indices of nonzero elements
         if self.n == 0: raise ValueError(f"Can not initialize {full_obj_name(self)} of size {self.nx}x{self.ny}, as this does not contain any spins.")
         if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
         self.unitcell = self._get_unitcell() # This needs to be after occupation and initialize_ip, and before any defects are introduced
@@ -109,7 +110,7 @@ class Magnets(ABC):
             return self.occupation*(2*((self.orientation[:,:,0]*cp.cos(angle) + self.orientation[:,:,1]*cp.sin(angle)) >= 0) - 1)
         else:
             return cp.ones_like(self.xx)*((cp.floor(angle/math.pi - .5) % 2)*2 - 1)
-    
+
     def _get_unitcell(self, max_cell=100):
         ''' Returns a Unitcell containing the number of single grid cells in a unit cell along the x- and y-axis.
             Only works for square-lattice unit cells. # TODO: allow manual assignment of more complex unit cells
@@ -211,12 +212,13 @@ class Magnets(ABC):
                 energy.update_single(index)
             elif index[0].size > 1: # Index is specified and contains multiple ints, so we must use update_multiple
                 energy.update_multiple(index)
-    
+
     def switch_energy(self, indices2D=None):
         ''' @param indices2D [cp.array(2, -)] (None): a 2D CuPy array with the first row representing the
                 y-coordinates and the second representing the x-coordinates of the indices.
             @return [cp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch.
         '''
+        return sum(energy.energy_switch(indices2D) for energy in self._energies)
 
     @property
     def MCsteps(self): # Number of Monte Carlo steps
@@ -229,7 +231,7 @@ class Magnets(ABC):
     @property
     def T(self) -> cp.ndarray:
         return self._T
-    
+
     @T.setter
     def T(self, value: Field):
         self._T = as_cupy_array(value, self.xx.shape)
@@ -237,7 +239,7 @@ class Magnets(ABC):
     @property
     def E_B(self) -> cp.ndarray:
         return self._E_B
-    
+
     @E_B.setter
     def E_B(self, value: Field):
         self._E_B = as_cupy_array(value, self.xx.shape)
@@ -245,7 +247,7 @@ class Magnets(ABC):
     @property
     def moment(self) -> cp.ndarray:
         return self._moment
-    
+
     @moment.setter
     def moment(self, value: Field):
         self._moment = as_cupy_array(value, self.xx.shape)
@@ -254,7 +256,7 @@ class Magnets(ABC):
     @property
     def PBC(self):
         return self._PBC
-    
+
     @PBC.setter
     def PBC(self, value: bool):
         if hasattr(self, 'unitcell'): # First check if PBC are even possible with the current nx, ny and unitcell
@@ -297,15 +299,15 @@ class Magnets(ABC):
     @property
     def T_avg(self) -> float:
         return float(cp.mean(self.T))
-    
+
     @property
     def E_B_avg(self) -> float:
         return float(cp.mean(self.E_B))
-    
+
     @property
     def moment_avg(self) -> float:
         return float(cp.mean(self.moment))
-    
+
     def set_T(self, f, /, *, center=False, crystalunits=False):
         ''' Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
             @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy arrays as x and y).
@@ -354,14 +356,13 @@ class Magnets(ABC):
             valid = np.where(self.occupation[pos[0], pos[1]])[0]
         else: valid = np.zeros(0)
         return pos[:,valid] if valid.size > 0 else self.select(**kwargs) # If at first you don't succeed try, try and try again
-    
+
     def _select_single(self, **kwargs):
         ''' Selects just a single magnet from the simulation domain.
             Strictly speaking, this is the only physically correct sampling scheme.
         '''
-        nonzero_y, nonzero_x = cp.nonzero(self.occupation)
-        nonzero_idx = cp.random.choice(self.n, 1) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
-        return cp.asarray([nonzero_y[nonzero_idx], nonzero_x[nonzero_idx]]).reshape(2, -1)
+        idx = np.random.randint(self.n) # MUCH faster than cp.random
+        return self.nonzero[:,idx].reshape(2,-1)
 
     def _select_grid(self, r=None, poisson=None, **kwargs):
         ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
@@ -434,7 +435,7 @@ class Magnets(ABC):
         p = poisson_disc_samples(self.ny*self.dy, self.nx*self.dx, r, k=4)
         points = (np.array(p)/self.dx).astype(int)
         return cp.asarray(points.T)
-    
+
     def _select_cluster(self, **kwargs):
         ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model.
             This is supposed to alleviate the 'critical slowing down' near the critical temperature.
@@ -501,7 +502,7 @@ class Magnets(ABC):
             self.switches += idx_switch.shape[1]
             self.update_energy(index=idx_switch)
         return idx_switch # TODO: can we get some sort of elapsed time? Yes for one switch, but what about many at once?
-    
+
     def _update_Néel(self, t_max=1, attempt_freq=1e10):
         ''' Performs a single magnetization switch, if the switch would occur sooner than <t_max> seconds. '''
         # TODO: we might be able to multi-switch here as well, by taking into account the double-switch time
@@ -564,7 +565,7 @@ class Magnets(ABC):
             self.switches += 1
             self.attempted_switches += 1
             self.update_energy(index=indexmin2D)
-    
+
     def minimize_all(self, simultaneous=False, use_barrier=True):
         ''' Switches all magnets that can gain energy by switching.
             By default, several subsets of the domain are updated in a random order, such that in total
@@ -577,13 +578,13 @@ class Magnets(ABC):
             step_x = step_y = 1
         else:
             step_x, step_y = self.unitcell.x*2, self.unitcell.y*2
-        order = cp.random.permutation(step_x*step_y) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports permutation() method
+        order = np.random.permutation(step_x*step_y) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports permutation() method
         for i in order:
             y, x = divmod(i, step_x)
-            if self.occupation[y, x] == 0: continue
-            subset_indices = cp.asarray([self.iyy[y::step_y,x::step_x].reshape(-1), self.ixx[y::step_y,x::step_x].reshape(-1)])
+            if not self.occupation[y, x]: continue
+            subset_indices = cp.asarray(cp.meshgrid(cp.arange(y, self.ny, step_y), cp.arange(x, self.nx, step_x))).reshape(2, -1)
             if use_barrier:
-                indices = subset_indices[:, cp.where(self.switch_energy(subset_indices)/2 + self.E_B[subset_indices[0], subset_indices[1]] < 0)[0]]
+                indices = subset_indices[:,self.switch_energy(subset_indices)/2 + self.E_B[subset_indices[0], subset_indices[1]] < 0]
             else:
                 indices = subset_indices[:, cp.where(self.switch_energy(subset_indices) < 0)[0]]
             if indices.size > 0:
@@ -591,7 +592,7 @@ class Magnets(ABC):
                 self.switches += indices.shape[1]
                 self.attempted_switches += indices.shape[1]
                 self.update_energy(index=indices)
-    
+
     def relax(self, verbose=False):
         ''' Relaxes self.m to a (meta)stable state using multiple self.minimize_all() calls.
             NOTE: this can be an expensive operation for large simulations.
@@ -628,13 +629,13 @@ class Magnets(ABC):
         if t is not None: self.history.t[-1] = float(t)
         if T is not None: self.history.T[-1] = float(cp.mean(T) if isinstance(T, cp.ndarray) else np.mean(T))
         if m_avg is not None: self.history.m[-1] = float(m_avg)
-    
+
     def history_entry(self):
         self.history.entry(self)
-    
+
     def history_clear(self):
         self.history.clear()
-    
+
 
     def autocorrelation(self, *, normalize=True):
         ''' In case of a 2D signal, this basically calculates the autocorrelation of the
@@ -655,7 +656,7 @@ class Magnets(ABC):
             corr = corr*self.m.size/self.n/corr_norm # Put between 0 and 1
         
         return corr[(self.ny-1):(2*self.ny-1),(self.nx-1):(2*self.nx-1)]**2
-    
+
     def correlation_length(self, correlation=None):
         if correlation is None: correlation = self.autocorrelation()
         # First calculate the distance between all spins in the simulation.
@@ -698,12 +699,12 @@ class Magnets(ABC):
             case str(unknown_pattern):
                 self.m = self.rng.integers(0, 2, size=self.xx.shape)*2 - 1
                 if unknown_pattern != 'random': warnings.warn(f'Pattern "{unknown_pattern}" not recognized, defaulting to "random".', stacklevel=2)
-    
+
     @abstractmethod
     def _get_occupation(self):
         ''' Returns a 2D CuPy array which contains 1 at the cells which are occupied by a magnet, and 0 elsewhere. '''
         return cp.ones_like(self.ixx) # Example
-    
+
     @abstractmethod
     def _get_groundstate(self):
         ''' Returns <pattern> in self.initialize_m(<pattern>) which corresponds to a global ground state of the system.
@@ -733,13 +734,13 @@ class Energy(ABC):
             on a specific given Magnets() object. It is not required to override this method.
         '''
         pass
-    
+
     @abstractmethod
     def initialize(self, mm: Magnets):
         ''' Do all the things which can be done when given a certain Magnets() object. '''
         self.mm = mm # Like this
         self.update() # And this, to initialize the energies etc.
-    
+
     @abstractmethod
     def update(self):
         ''' Calculates the entire self.E array, for the situation in self.mm.m.
@@ -760,7 +761,7 @@ class Energy(ABC):
         ''' Updates self.E by only taking into account that a single magnet (at index2D) switched.
             @param index2D [tuple(2)]: A tuple containing two size-1 arrays representing y- and x-index of the switched magnet.
         '''
-    
+
     @abstractmethod
     def update_multiple(self, indices2D):
         ''' Updates self.E by only taking into account that some magnets (at indices2D) switched.
@@ -820,10 +821,10 @@ class ZeemanEnergy(Energy):
 
     def update_single(self, index2D):
         self.E[index2D[0,0], index2D[1,0]] *= -1
-    
+
     def update_multiple(self, indices2D):
         self.E[indices2D[0], indices2D[1]] *= -1
-    
+
     @property
     def E_tot(self):
         return cp.sum(self.E)
@@ -910,7 +911,7 @@ class DipolarEnergy(Energy):
                 self.kernel_unitcell.append(kernel)
         self.kernel_unitcell = cp.asarray(self.kernel_unitcell)
         self.update()
-    
+
     def update(self):
         total_energy = cp.zeros_like(self.mm.m)
         for y in range(self.unitcell.y):
@@ -924,10 +925,10 @@ class DipolarEnergy(Energy):
 
                     total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')*self.mm._momentSq
         self.E = self.prefactor*total_energy
-    
+
     def energy_switch(self, indices2D=None):
         return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]
-    
+
     def update_single(self, index2D):
         # First we get the x and y coordinates of magnet <i> in its unit cell
         y, x = index2D[0,0], index2D[1,0]
@@ -966,7 +967,7 @@ class DipolarEnergy(Energy):
                     convolvedkernel += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
             interaction = self.prefactor*cp.multiply(self.mm.m*self.mm._momentSq, convolvedkernel)
             self.E += 2*interaction
-    
+
     @property
     def E_tot(self):
         return cp.sum(self.E)/2
@@ -980,7 +981,7 @@ class ExchangeEnergy(Energy):
         self.mm = mm
         self.local_interaction = self.mm._get_nearest_neighbors()
         self.update()
-    
+
     def update(self):
         if self.mm.in_plane: # Use the XY hamiltonian (but spin has fixed axis so model is still Ising-like)
             mx = self.mm.orientation[:,:,0]*self.mm.m
@@ -993,13 +994,13 @@ class ExchangeEnergy(Energy):
 
     def energy_switch(self, indices2D=None):
         return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]
-    
+
     def update_single(self, index2D):
         self.update() # There are much faster ways of doing this, but this becomes difficult with PBC and in/out-of-plane
-    
+
     def update_multiple(self, indices2D):
         self.update()
-    
+
     @property
     def E_tot(self):
         return cp.sum(self.E)/2

@@ -1,7 +1,7 @@
 ''' Run this file using the command
         python <this_file.py> <script_path.py>
     to run the python script located at path <script_path.py> on all available GPUs.
-    It is assumed that <script_path.py> contains a global hotspin.experiments.Sweep() subclass instance named 'sweep'.
+    It is assumed that <script_path.py> contains a global instance of a hotspin.experiments.Sweep() subclass, named 'sweep'.
     Also, <script_path.py> should be callable from shell as
         python <script_path.py> [-h] [-o [OUTDIR]] [N]
     where N specifies the index of the iteration of the sweep that the script should actually execute when called.
