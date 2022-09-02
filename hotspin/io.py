@@ -179,21 +179,21 @@ class PerpFieldInputter(FieldInputter):
             raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
         if value is None: value = self.datastream.get_next()
 
+        e = mm.get_energy('Zeeman')
         angle = self.angle + value*math.pi/2
         MCsteps0, t0 = mm.MCsteps, mm.t
 
         # pos and neg field
         if self.relax:
-            mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
-            mm.relax()
-            mm.get_energy('Zeeman').set_field(magnitude=-self.magnitude, angle=angle)
-            mm.relax()
+            for mag in [self.magnitude, -self.magnitude]:
+                e.set_field(magnitude=mag, angle=angle)
+                mm.minimize()
             # log(f'Performed {mm.MCsteps - MCsteps0} MC steps.')
         else:
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < .5 - 1e-6:
                 mm.update(t_max=0.5/self.frequency)
                 # log('updated forward')
-            mm.get_energy('Zeeman').set_field(magnitude=-self.magnitude, angle=angle)
+            e.set_field(magnitude=-self.magnitude, angle=angle)
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6:
                 mm.update(t_max=0.5/self.frequency)
                 # log('updated reverse')

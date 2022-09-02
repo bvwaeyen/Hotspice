@@ -111,5 +111,5 @@ if __name__ == "__main__":
 
 
     if args.iteration is None: # This gets run if the file is called without command line arguments
-        sumdir = "results/Sweeps/Sweep_RC_ASI_sweep256_out50_in10" if args.outdir is None else args.outdir
+        sumdir = "results/Sweeps/Sweep_RC_ASI_sweep256_out50_in10_minimize" if args.outdir is None else args.outdir
         sweep.load_results(sumdir, save=True, verbose=True)

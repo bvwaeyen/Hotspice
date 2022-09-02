@@ -56,7 +56,5 @@ elif args[0] == "-l":
     run(["del", tempfile])
 else:
     outfile = os.path.abspath(f"{outdir}/cProfile_{os.path.basename(args[0])}_{timestamp}.txt")
-    print(args)
-    print(outfile)
     print(["python", "-m", "cProfile", "-s", "tottime"] + args + [">", outfile])
     run(["python", "-m", "cProfile", "-s", "tottime"] + args + [">", outfile])

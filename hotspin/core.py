@@ -520,7 +520,7 @@ class Magnets(ABC):
             self.m[indexmin2D] *= -1
             self.switches += 1
             self.t += time
-        self.update_energy(index=indexmin2D)
+        self.update_energy(index=cp.asarray(indexmin2D).reshape(2,-1))
         return indexmin2D
 
     def _update_Wolff(self):
@@ -548,23 +548,29 @@ class Magnets(ABC):
 
 
     def minimize(self):
-        ''' Switches the magnet which has the highest switching probability.
-            Repeats this until there are no more magnets that can gain energy from switching. '''
+        ''' NOTE: this is basically the sequential version of self.relax().
+            Switches the magnet which has the highest switching probability.
+            Repeats this until there are no more magnets that can gain energy from switching.
+            NOTE: it can take a while for large simulations to become fully relaxed, especially with this
+                sequential procedure. Consider using self.relax() for large simulations.
+        '''
         visited = np.zeros_like(self.m) # Used to make sure we don't get an infinite loop
         while True:
             barrier = cp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)
-            indexmin2D = divmod(cp.argmin(barrier), self.nx) # The one with the most energy to gain from switching
-            E = barrier[indexmin2D]
-            if E >= 0: # Then energy would increase, so we have ended our minimization procedure.
-                break
-            self.m[indexmin2D] = -self.m[indexmin2D]
-            if visited[indexmin2D] >= 3:
-                break
-            else:
-                visited[indexmin2D] += 1
+            if (n := (nobarrier := cp.where(barrier < -self.kBT))[0].size) != 0: # Then some magnet(s) simply has/have no barrier at all for switching
+                # Randomly switch half of them (this ratio can be optimized probably? TODO?), this is because if we switch them all we might end up in an infinite loop
+                rand = cp.random.choice(n, size=math.ceil(n/2), replace=False)
+                idx = (nobarrier[0][rand], nobarrier[1][rand])
+            else: # No ultra-prone switchers, so choose the one that would gain the most energy
+                idx = divmod(cp.argmin(barrier), self.nx) # The one with the most energy to gain from switching
+                if barrier[idx] >= 0: break # Then energy would increase, so we have ended our minimization procedure.
+                visited[idx] += 1
+                if cp.any(visited[idx] >= 3): break
+            idx = cp.asarray(idx).reshape(2,-1)
+            self.m[idx] = -self.m[idx]
             self.switches += 1
             self.attempted_switches += 1
-            self.update_energy(index=indexmin2D)
+            self.update_energy(index=idx)
 
     def minimize_all(self, simultaneous=False, use_barrier=True):
         ''' Switches all magnets that can gain energy by switching.
@@ -586,7 +592,7 @@ class Magnets(ABC):
             if use_barrier:
                 indices = subset_indices[:,self.switch_energy(subset_indices)/2 + self.E_B[subset_indices[0], subset_indices[1]] < 0]
             else:
-                indices = subset_indices[:, cp.where(self.switch_energy(subset_indices) < 0)[0]]
+                indices = subset_indices[:,cp.where(self.switch_energy(subset_indices) < 0)[0]]
             if indices.size > 0:
                 self.m[indices[0], indices[1]] = -self.m[indices[0], indices[1]]
                 self.switches += indices.shape[1]
@@ -594,8 +600,9 @@ class Magnets(ABC):
                 self.update_energy(index=indices)
 
     def relax(self, verbose=False):
-        ''' Relaxes self.m to a (meta)stable state using multiple self.minimize_all() calls.
-            NOTE: this can be an expensive operation for large simulations.
+        ''' NOTE: this is basically the parallel version of self.minimize().
+            Relaxes self.m to a (meta)stable state using multiple self.minimize_all() calls.
+            NOTE: it can take a while for large simulations to become fully relaxed.
         '''
         if verbose:
             import matplotlib.pyplot as plt
@@ -792,19 +799,22 @@ class ZeemanEnergy(Energy):
             @param magnitude [float] (0): The magnitude of the external field.
             @param angle [float] (0): The angle (in radians) of the external field.
         '''
-        self.magnitude, self.angle = magnitude, angle # [T], [rad]
-    
+        self._magnitude, self._angle = magnitude, angle # [T], [rad]
+
     def initialize(self, mm: Magnets):
         self.mm = mm
-        self.set_field(self.magnitude, self.angle)
+        self.set_field()
 
     def set_field(self, magnitude=None, angle=None):
-        self.magnitude = self.magnitude if magnitude is None else magnitude
-        self.angle = self.angle if angle is None else angle
+        if magnitude is not None: self._magnitude = magnitude
+        if angle is not None: self._angle = angle
         if self.mm.in_plane:
+            if self.magnitude < 0:
+                self.magnitude *= -1
+                self.angle = (self.angle + math.pi) % math.tau
             self.B_ext = self.magnitude*cp.array([math.cos(self.angle), math.sin(self.angle)]) # [T]
         else:
-            self.B_ext = self.magnitude # [T]
+            self.B_ext = cp.array(self.magnitude) # [T]
             if self.angle != 0:
                 self.angle = 0
                 warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.', stacklevel=2)
@@ -828,6 +838,20 @@ class ZeemanEnergy(Energy):
     @property
     def E_tot(self):
         return cp.sum(self.E)
+
+    @property
+    def magnitude(self): return self._magnitude
+
+    @magnitude.setter
+    def magnitude(self, value):
+        self.set_field(value, self._angle)
+
+    @property
+    def angle(self): return self._angle
+
+    @angle.setter
+    def angle(self, value):
+        self.set_field(self._magnitude, value)
 
 
 class DipolarEnergy(Energy):
