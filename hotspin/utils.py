@@ -21,105 +21,7 @@ from IPython.terminal.embed import InteractiveShellEmbed
 from typing import Callable, Iterable, TypeVar
 
 
-def mirror4(arr, /, *, negativex=False, negativey=False):
-    ''' Mirrors the 2D CuPy array <arr> along some of the edges, in such a manner that the
-        original element at [0,0] ends up in the middle of the returned array.
-        Hence, if <arr> has shape (a, b), the returned array has shape (2*a - 1, 2*b - 1).
-    '''
-    ny, nx = arr.shape
-    arr4 = cp.zeros((2*ny-1, 2*nx-1))
-    xp = -1 if negativex else 1
-    yp = -1 if negativey else 1
-    arr4[ny-1:, nx-1:] = arr
-    arr4[ny-1:, nx-1::-1] = xp*arr
-    arr4[ny-1::-1, nx-1:] = yp*arr
-    arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
-    return arr4
-
-
-def filter_kwargs(kwargs: dict, func: Callable):
-    return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames}
-
-
-def J_to_eV(E: float, /):
-    return E/1.602176634e-19
-def eV_to_J(E: float, /):
-    return E*1.602176634e-19
-
-Field = TypeVar("Field", int, float, list, np.ndarray, cp.ndarray) # Every type that can be parsed by as_cupy_array()
-def as_cupy_array(value: Field, shape: tuple) -> cp.ndarray:
-    ''' Converts <value> to a CuPy array of shape <shape>. If <value> is scalar, the returned
-        array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
-        as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.
-    '''
-    is_scalar = True # Determine if <value> is scalar-like...
-    if isinstance(value, list):
-        try:
-            value = cp.asarray(value, dtype=float)
-        except ValueError:
-            raise ValueError("List of lists could not be converted to rectangular float64 CuPy array.")
-    if isinstance(value, (np.ndarray, cp.ndarray)):
-        if value.size != 1: is_scalar = False
-
-    if is_scalar: # ... and act accordingly
-        return cp.ones(shape, dtype=float)*float(value)
-    else:
-        if value.size != math.prod(shape):
-            raise ValueError(f"Incorrect shape: passed array of shape {value.shape} is not of desired shape {shape}.")
-        return cp.asarray(value).reshape(shape)
-
-
-def is_significant(i: int, N: int, order: float=1) -> bool:
-    ''' Returns True if <i> iterations is an 'important' milestone if there are <N> in total.
-        Useful for verbose print statements in long simulations.
-        @param i [int]: the index of the current iteration (starting at 0)
-        @param N [int]: the total number of iterations
-        @param order [float]: strictly speaking this can be any float, but integers work best.
-            Basically, approximately <10**order> values of i (equally spaced) will yield True.
-            An example can be useful to illustrate the behavior of this parameter:
-                If N=1000 and order=0, True will be returned if i = 0 or 999,
-                while for order=1 any of i = 0, 99, 199, 299, ..., 999 yield True.
-                A float example: for order=0.6 only i = 0, 251, 502, 753, 999 yield True.
-    '''
-    if (i + 1) % 10**(math.floor(math.log10(N))-order) < 1:
-        return True
-    if i == 0 or i == N - 1:
-        return True
-    return False
-
-
-def human_sort(text):
-    ''' To sort a <list> of strings in human order, use <list>.sort(key=hotspin.utils.human_sort).
-        Human order means that if there are numbers in the strings, they are treated as numbers,
-        such that e.g. 10 will come after 2, which is not the case with a naive sort.
-    '''
-    def atoi(text): return int(text) if text.isdigit() else text
-    return [atoi(c) for c in re.split(r'(\d+)', text)]
-
-
-def strided(a: cp.ndarray, W: int):
-    ''' <a> is a 1D CuPy array, which gets expanded into 2D shape (a.size, W) where every row
-        is a successively shifted version of the original <a>:
-        the first row is [a[0], NaN, NaN, ...] with total length <W>.
-        The second row is [a[1], a[0], NaN, ...], and this continues until <a> is exhausted.
-        
-        NOTE: the returned array is only a view, hence it is quite fast but care has to be
-                taken when editing the array; e.g. editing one element directly changes the
-                corresponding value in <a>, resulting in a whole diagonal being changed at once.
-    '''
-    a_ext = cp.concatenate((cp.full(W - 1, cp.nan), a))
-    n = a_ext.strides[0]
-    return striding.as_strided(a_ext[W - 1:], shape=(a.size, W), strides=(n, -n))
-
-def R_squared(a, b):
-    ''' Returns the R² metric between two 1D arrays <a> and <b> as defined in
-        "Task Agnostic Metrics for Reservoir Computing" by Love et al.
-    '''
-    a, b = cp.asarray(a), cp.asarray(b)
-    cov = cp.mean((a - cp.mean(a))*(b - cp.mean(b)))
-    return cov**2/cp.var(a)/cp.var(b) # Same as cp.corrcoef(a, b)[0,1]**2, but faster
-
-
+## ARRAY MANIPULATIONS/OPERATIONS
 def check_repetition(arr, nx: int, ny: int):
     ''' Checks if <arr> is periodic with period <nx> along axis=1 and period <ny> along axis=0.
         If there are any further axes (axis=2, axis=3 etc.), the array is simply seen as a
@@ -146,6 +48,76 @@ def check_repetition(arr, nx: int, ny: int):
         i += 1
     return True
 
+def mirror4(arr, /, *, negativex=False, negativey=False):
+    ''' Mirrors the 2D CuPy array <arr> along some of the edges, in such a manner that the
+        original element at [0,0] ends up in the middle of the returned array.
+        Hence, if <arr> has shape (a, b), the returned array has shape (2*a - 1, 2*b - 1).
+    '''
+    ny, nx = arr.shape
+    arr4 = cp.zeros((2*ny-1, 2*nx-1))
+    xp = -1 if negativex else 1
+    yp = -1 if negativey else 1
+    arr4[ny-1:, nx-1:] = arr
+    arr4[ny-1:, nx-1::-1] = xp*arr
+    arr4[ny-1::-1, nx-1:] = yp*arr
+    arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
+    return arr4
+
+def R_squared(a, b):
+    ''' Returns the R² metric between two 1D arrays <a> and <b> as defined in
+        "Task Agnostic Metrics for Reservoir Computing" by Love et al.
+    '''
+    a, b = cp.asarray(a), cp.asarray(b)
+    cov = cp.mean((a - cp.mean(a))*(b - cp.mean(b)))
+    return cov**2/cp.var(a)/cp.var(b) # Same as cp.corrcoef(a, b)[0,1]**2, but faster
+
+def strided(a: cp.ndarray, W: int):
+    ''' <a> is a 1D CuPy array, which gets expanded into 2D shape (a.size, W) where every row
+        is a successively shifted version of the original <a>:
+        the first row is [a[0], NaN, NaN, ...] with total length <W>.
+        The second row is [a[1], a[0], NaN, ...], and this continues until <a> is exhausted.
+        
+        NOTE: the returned array is only a view, hence it is quite fast but care has to be
+                taken when editing the array; e.g. editing one element directly changes the
+                corresponding value in <a>, resulting in a whole diagonal being changed at once.
+    '''
+    a_ext = cp.concatenate((cp.full(W - 1, cp.nan), a))
+    n = a_ext.strides[0]
+    return striding.as_strided(a_ext[W - 1:], shape=(a.size, W), strides=(n, -n))
+
+
+## EASE-OF-USE UTILITIES (e.g. for printing)
+def human_sort(text):
+    ''' To sort a <list> of strings in human order, use <list>.sort(key=hotspin.utils.human_sort).
+        Human order means that if there are numbers in the strings, they are treated as numbers,
+        such that e.g. 10 will come after 2, which is not the case with a naive sort.
+    '''
+    def atoi(text): return int(text) if text.isdigit() else text
+    return [atoi(c) for c in re.split(r'(\d+)', text)]
+
+def is_significant(i: int, N: int, order: float=1) -> bool:
+    ''' Returns True if <i> iterations is an 'important' milestone if there are <N> in total.
+        Useful for verbose print statements in long simulations.
+        @param i [int]: the index of the current iteration (starting at 0)
+        @param N [int]: the total number of iterations
+        @param order [float]: strictly speaking this can be any float, but integers work best.
+            Basically, approximately <10**order> values of i (equally spaced) will yield True.
+            An example can be useful to illustrate the behavior of this parameter:
+                If N=1000 and order=0, True will be returned if i = 0 or 999,
+                while for order=1 any of i = 0, 99, 199, 299, ..., 999 yield True.
+                A float example: for order=0.6 only i = 0, 251, 502, 753, 999 yield True.
+    '''
+    if (i + 1) % 10**(math.floor(math.log10(N))-order) < 1:
+        return True
+    if i == 0 or i == N - 1:
+        return True
+    return False
+
+def readable_bytes(N):
+    if N < 1024: return f"{N:.0f} B"
+    i = int(math.floor(math.log(N, 1024)))
+    number = N / 1024**i
+    return f"{number:.2f} {('B', 'KiB', 'MiB', 'GiB', 'TiB')[i]}"
 
 def shell():
     ''' Pauses the program and opens an interactive shell where the user
@@ -169,9 +141,46 @@ def shell():
     except (KeyboardInterrupt, SystemExit, EOFError):
         pass
 
-def timestamp():
-    ''' @return [str]: the current time, in YYYYMMDDhhmmss format. '''
-    return datetime.utcnow().strftime(r"%Y%m%d%H%M%S")
+
+## CONVERSION
+Field = TypeVar("Field", int, float, list, np.ndarray, cp.ndarray) # Every type that can be parsed by as_cupy_array()
+def as_cupy_array(value: Field, shape: tuple) -> cp.ndarray:
+    ''' Converts <value> to a CuPy array of shape <shape>. If <value> is scalar, the returned
+        array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
+        as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.
+    '''
+    is_scalar = True # Determine if <value> is scalar-like...
+    if isinstance(value, list):
+        try:
+            value = cp.asarray(value, dtype=float)
+        except ValueError:
+            raise ValueError("List of lists could not be converted to rectangular float64 CuPy array.")
+    if isinstance(value, (np.ndarray, cp.ndarray)):
+        if value.size != 1: is_scalar = False
+
+    if is_scalar: # ... and act accordingly
+        return cp.ones(shape, dtype=float)*float(value)
+    else:
+        if value.size != math.prod(shape):
+            raise ValueError(f"Incorrect shape: passed array of shape {value.shape} is not of desired shape {shape}.")
+        return cp.asarray(value).reshape(shape)
+
+def eV_to_J(E: float, /):
+    return E*1.602176634e-19
+def J_to_eV(E: float, /):
+    return E/1.602176634e-19
+
+def filter_kwargs(kwargs: dict, func: Callable):
+    return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames}
+
+
+## VARIOUS INFORMATION
+def full_obj_name(obj):
+    klass = type(obj)
+    if hasattr(klass, "__module__"):
+        if klass.__module__ != "__main__":
+            return f'{klass.__module__}.{klass.__qualname__}'
+    return klass.__qualname__
 
 def free_gpu_memory():
     ''' Garbage-collects unused memory on the currently active CUDA device. '''
@@ -180,15 +189,43 @@ def free_gpu_memory():
 def get_gpu_memory():
     ''' @return [dict]: keys "free" and "total" memory (in bytes) of the currently active CUDA device. '''
     free, total = cp.cuda.Device().mem_info # mem_info is a tuple: (free, total) memory in bytes
-    return {"free": free, "total": total}
+    return {"free": readable_bytes(free), "total": readable_bytes(total)}
 
-def readable_bytes(N):
-    if N < 1024: return f"{N:.0f} B"
-    i = int(math.floor(math.log(N, 1024)))
-    number = N / 1024**i
-    return f"{number:.2f} {('B', 'KiB', 'MiB', 'GiB', 'TiB')[i]}"
+def timestamp():
+    ''' @return [str]: the current time, in YYYYMMDDhhmmss format. '''
+    return datetime.utcnow().strftime(r"%Y%m%d%H%M%S")
 
 
+## MULTI-GPU UTILITIES
+def GPUparallel(sweepscript_path, outdir=None, _GPUparallel_py_path=None):
+    ''' Just runs the GPUparallel.py script using a python function instead of from the command line. '''
+    if _GPUparallel_py_path is None:
+        _GPUparallel_py_path = pathlib.Path(__file__).parent / 'scripts/GPUparallel.py'
+    command = ["python", str(_GPUparallel_py_path), sweepscript_path]
+    if outdir is not None:
+        command[2:2] = ['-o', outdir] # Slicing inserts this list at index 2 of <command>
+
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError:
+        warnings.warn(f"The command '{' '.join(command)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
+
+def log(message, device_id=0):
+    ''' Can print <message> to console from subprocesses running on GPU <device_id>.
+        The device id is printed in front of the message.
+    '''
+    try:
+        devices = [int(i) for i in os.environ["CUDA_VISIBLE_DEVICES"].split(",")]
+    except KeyError: # So CUDA_VISIBLE_DEVICES was not defined manually, that probably means they are all available
+        devices = list(range(cp.cuda.runtime.getDeviceCount()))
+    device = devices[device_id]
+
+    _rlock = threading.RLock() 
+    with _rlock: # Fix print to work with asynchronous queues on different GPUs, though this might not be entirely necessary
+        print(f"[GPU{device}] {message}")
+
+
+## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPIN EXAMPLES
 class Data: # TODO: make generalized method for getting full column even if it is not in df but in constants
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
         ''' Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
@@ -451,38 +488,6 @@ class _CompactJSONEncoder(json.JSONEncoder):
     def iterencode(self, o, **kwargs):
         """ Required to also work with `json.dump`. """
         return self.encode(o)
-
-
-def GPUparallel(sweepscript_path, outdir=None):
-    GPUparallel_py_path = pathlib.Path(__file__).parent / 'scripts/GPUparallel.py' #! Hardcoded path to GPUparallel.py!
-    command = ["python", str(GPUparallel_py_path), sweepscript_path]
-    if outdir is not None:
-        command[2:2] = ['-o', outdir] # Slicing inserts this list at index 2 of <command>
-
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError:
-        warnings.warn(f"The command '{' '.join(command)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
-
-
-def log(message, device_id=0):
-    try:
-        devices = [int(i) for i in os.environ["CUDA_VISIBLE_DEVICES"].split(",")]
-    except KeyError: # So CUDA_VISIBLE_DEVICES was not defined manually, that probably means they are all available
-        devices = list(range(cp.cuda.runtime.getDeviceCount()))
-    device = devices[device_id]
-
-    _rlock = threading.RLock() 
-    with _rlock: # Fix print to work with asynchronous queues on different GPUs, though this might not be entirely necessary
-        print(f"[GPU{device}] {message}")
-
-
-def full_obj_name(obj):
-    klass = type(obj)
-    if hasattr(klass, "__module__"):
-        if klass.__module__ != "__main__":
-            return f'{klass.__module__}.{klass.__qualname__}'
-    return klass.__qualname__
 
 
 if __name__ == "__main__":
