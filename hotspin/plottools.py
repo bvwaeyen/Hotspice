@@ -13,6 +13,7 @@ from enum import Enum
 from matplotlib import cm, colors, patches, widgets
 
 from .core import Magnets
+from .utils import unit_prefix_to_mul
 
 try: # TODO: maybe don't do this by default, only when some sort of display is used? but how to detect this consistently...
     ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
@@ -74,7 +75,7 @@ def _get_averaged_extent(mm: Magnets, avg):
         movex, movey = 0.5*mm.dx, 0.5*mm.dy
     else:
         movex, movey = mask.shape[1]/2*mm.dx, mask.shape[0]/2*mm.dy # The averaged imshow should be displaced by this much
-    return [mm.x_min-mm.dx+movex,mm.x_max-movex+mm.dx,mm.y_min-mm.dy+movey,mm.y_max-movey+mm.dy] # [m]
+    return np.array([mm.x_min-mm.dx+movex,mm.x_max-movex+mm.dx,mm.y_min-mm.dy+movey,mm.y_max-movey+mm.dy]) # [m]
 
 def get_m_polar(mm: Magnets, m=None, avg=True):
     '''
@@ -179,7 +180,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
 def get_rgb(*args, **kwargs):
     return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
-def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, figure=None):
+def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, unit='µ', figure=None, **figparams):
     ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
         the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -195,10 +196,18 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
         @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this show_m().
     '''
     avg = Average.resolve(avg, mm)
+    figparams.setdefault('fontsize_colorbar', 10)
+    figparams.setdefault('fontsize_axes', 10)
+    figparams.setdefault('text_averaging', True)
+    init_fonts(small=figparams['fontsize_axes'])
     if m is None: m = mm.m
-    show_quiver = mm.m.size < 1e5 and mm.in_plane # Quiver becomes very slow for more than 100k cells, so just dont show it then
-    averaged_extent = _get_averaged_extent(mm, avg)
-    full_extent = [mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dx/2]
+    if mm.in_plane:
+        show_quiver = mm.n < 1e5 or overlay_quiver # Quiver becomes very slow for more than 100k quivers, so just dont show it then
+    else:
+        show_quiver = False
+    unit_factor = unit_prefix_to_mul(unit)
+    averaged_extent = _get_averaged_extent(mm, avg)/unit_factor # List comp to convert to micrometre
+    full_extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dx/2])/unit_factor
 
     num_plots = 1
     num_plots += 1 if show_energy else 0
@@ -206,7 +215,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
     axes = []
     if figure is not None and not plt.isinteractive(): init_interactive()
     if not plt.get_fignums(): figure = None
-    fig = plt.figure(figsize=(3.5*num_plots, 3)) if figure is None else figure
+    fig = plt.figure(figsize=(3.5*num_plots*figscale, 3*figscale)) if figure is None else figure
     if figure is not None: fig.clear()
     ax1 = fig.add_subplot(1, num_plots, 1)
     im = get_rgb(mm, m=m, avg=avg, fill=fill)
@@ -215,8 +224,10 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
         im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
                         extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
         c1 = plt.colorbar(im1)
-        c1.ax.get_yaxis().labelpad = 30
-        c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=10)
+        c1.ax.get_yaxis().labelpad = 10 + 2*figparams['fontsize_colorbar']
+        text = "Averaged magnetization angle [rad]"
+        if figparams["text_averaging"]: text += f"\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})"
+        c1.ax.set_ylabel(text, rotation=270, fontsize=figparams['fontsize_colorbar'])
     else:
         r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
         r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
@@ -233,10 +244,12 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
         im1 = ax1.imshow(im, cmap=newcmap, origin='lower', vmin=-1, vmax=1,
                          extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba')
         c1 = plt.colorbar(im1)
-        c1.ax.get_yaxis().labelpad = 30
-        c1.ax.set_ylabel(f"Averaged magnetization\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=10)
-    ax1.set_xlabel('x [m]')
-    ax1.set_ylabel('y [m]')
+        c1.ax.get_yaxis().labelpad = 10 + 2*figparams['fontsize_colorbar']
+        text = "Averaged magnetization"
+        if figparams["text_averaging"]: text += f"\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})"
+        c1.ax.set_ylabel(text, rotation=270, fontsize=figparams['fontsize_colorbar'])
+    ax1.set_xlabel(f'x [{unit}m]')
+    ax1.set_ylabel(f'y [{unit}m]')
     axes.append(ax1)
     if show_quiver:
         if overlay_quiver:
@@ -245,24 +258,26 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
             ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
             ax2.set_aspect('equal')
             ax2.set_title(r'$m$')
-            ax2.set_xlabel('x [m]')
-            ax2.set_ylabel('y [m]')
+            ax2.set_xlabel(f'x [{unit}m]')
+            ax2.set_ylabel(f'y [{unit}m]')
             axes.append(ax2)
         nonzero = mm.m.get().nonzero()
         mx, my = cp.multiply(m, mm.orientation[:,:,0]).get()[nonzero], cp.multiply(m, mm.orientation[:,:,1]).get()[nonzero]
-        ax2.quiver(mm.xx.get()[nonzero], mm.yy.get()[nonzero], mx, my,
+        ax2.quiver(mm.xx.get()[nonzero]/unit_factor, mm.yy.get()[nonzero]/unit_factor, mx/unit_factor, my/unit_factor,
                 color=(cmap((np.arctan2(my, mx)/2/np.pi) % 1) if color_quiver else 'black'),
                 pivot='mid', scale=1.1/mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
+        ax2.set_xlim(full_extent[:2])
+        ax2.set_ylim(full_extent[2:])
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
         im3 = ax3.imshow(np.where(mm.m.get() != 0, mm.E.get(), np.nan), origin='lower',
                             extent=full_extent, interpolation='antialiased', interpolation_stage='rgba')
         c3 = plt.colorbar(im3)
         c3.ax.get_yaxis().labelpad = 15
-        c3.ax.set_ylabel("Local energy [J]", rotation=270, fontsize=10)
+        c3.ax.set_ylabel("Local energy [J]", rotation=270, fontsize=figparams['fontsize_colorbar'])
         ax3.set_title(r'$E_{int}$')
-        ax3.set_xlabel('x [m]')
-        ax3.set_ylabel('y [m]')
+        ax3.set_xlabel(f'x [{unit}m]')
+        ax3.set_ylabel(f'y [{unit}m]')
         axes.append(ax3)
     multi = widgets.MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
     plt.gcf().tight_layout()
@@ -399,7 +414,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
     return result.get()
 
 
-def init_fonts(backend=True):
+def init_fonts(backend=True, small=10, medium=11, large=12):
     ''' Sets various parameters for consistent plotting across all Hotspin scripts.
         This should be called before instantiating any subplots.
         This should not be called directly by any function in hotspin.plottools itself,
@@ -415,17 +430,13 @@ def init_fonts(backend=True):
             warnings.warn(f"Could not activate 'TkAgg' backend for Hotspin (using {matplotlib.get_backend()} instead).", stacklevel=2)
     
     # Call this function before instantiating subplots!
-    smol = 10
-    medium = 11
-    chonk = 12
-
-    plt.rc('font', size=smol)          # controls default text sizes
+    plt.rc('font', size=small)          # controls default text sizes
     plt.rc('axes', titlesize=medium)     # fontsize of the axes title
-    plt.rc('axes', labelsize=smol)   # fontsize of the x and y labels
-    plt.rc('xtick', labelsize=smol)    # fontsize of the tick labels
-    plt.rc('ytick', labelsize=smol)    # fontsize of the tick labels
-    plt.rc('legend', fontsize=smol)    # legend fontsize
-    plt.rc('figure', titlesize=chonk)  # fontsize of the figure title
+    plt.rc('axes', labelsize=small)   # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=small)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=small)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=small)    # legend fontsize
+    plt.rc('figure', titlesize=large)  # fontsize of the figure title
 
 
 def init_interactive():
