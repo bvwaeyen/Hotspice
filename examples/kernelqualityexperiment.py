@@ -81,7 +81,7 @@ def plot2Dsweep(summary_file, save=True, plot=True, title=None,
 
 
 def main_kernelquality():
-    mm = hotspin.ASI.IP_Pinwheel(25, 1e-6, T=300, V=3.5e-22, energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy())) # Same volume as in 'RC in ASI' paper
+    mm = hotspin.ASI.IP_Pinwheel(1e-6, 25, T=300, V=3.5e-22, energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy())) # Same volume as in 'RC in ASI' paper
     datastream = hotspin.io.RandomBinaryDatastream()
     inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=1e-4, angle=math.pi/180*7, n=2)
     outputreader = hotspin.io.RegionalOutputReader(2, 2, mm)

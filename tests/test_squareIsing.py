@@ -33,7 +33,7 @@ class test_squareIsing:
             @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.
         '''
         simparams = hotspin.SimParams(UPDATE_SCHEME="Glauber")
-        self.mm = hotspin.ASI.OOP_Square(self.size, self.a, energies=[hotspin.ExchangeEnergy(J=self.J)], PBC=True, pattern=('random' if reverse else 'uniform'), params=simparams)
+        self.mm = hotspin.ASI.OOP_Square(self.a, self.size, energies=[hotspin.ExchangeEnergy(J=self.J)], PBC=True, pattern=('random' if reverse else 'uniform'), params=simparams)
 
         T_range = np.linspace(self.T_lim[0], self.T_lim[1], T_steps)
         if reverse: T_range = np.flip(T_range)

@@ -189,7 +189,7 @@ def analysis_select_speed(n: int=10000, L:int=400, r=16, PBC:bool=True, params:h
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     '''
-    mm = hotspin.ASI.OOP_Square(L, 1, PBC=PBC, params=params)
+    mm = hotspin.ASI.OOP_Square(1, L, PBC=PBC, params=params)
     samples = 0
     t = time.perf_counter()
     for _ in range(n):

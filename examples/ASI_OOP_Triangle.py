@@ -11,7 +11,7 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.OOP_Triangle(n, 800e-9, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspin.ASI.OOP_Triangle(800e-9, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 

@@ -17,7 +17,7 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.OOP_Square(n, 1e-6, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspin.ASI.OOP_Square(1e-6, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
@@ -99,7 +99,7 @@ def test(mm: hotspin.Magnets, T_low=200, T_high=400, T_steps=100, N=1e2, verbose
     plt.show()
 
 def testWolff():
-    mm = hotspin.ASI.OOP_Square(400, 1, energies=[hotspin.ExchangeEnergy(J=hotspin.kB*300)], PBC=True, pattern='uniform', T=481)
+    mm = hotspin.ASI.OOP_Square(1, 400, energies=[hotspin.ExchangeEnergy(J=hotspin.kB*300)], PBC=True, pattern='uniform', T=481)
     fig = None
     while True: 
         mm._update_Wolff()

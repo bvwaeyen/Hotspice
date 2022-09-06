@@ -298,7 +298,7 @@ class TaskAgnosticExperiment(Experiment):
             @param mm [hotspin.Magnets] (None): if specified, this is used as Magnets()
                 object. Otherwise, a minimalistic hotspin.ASI.OOP_Square() instance is used.
         '''
-        if mm is None: mm = OOP_Square(10, 10, energies=(DipolarEnergy(), ZeemanEnergy()))
+        if mm is None: mm = OOP_Square(1, 10, energies=(DipolarEnergy(), ZeemanEnergy()))
         datastream = RandomUniformDatastream(low=-1, high=1)
         inputter = FieldInputter(datastream)
         outputreader = RegionalOutputReader(2, 2, mm)

@@ -18,7 +18,7 @@ def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=4
         @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify <L> for square domain.
         @param cutoff [int] (16): the size of the reduced kernel. TODO: could it be interesting to sweep this?
     '''
-    if mm is None: mm = hotspin.ASI.OOP_Square((Lx or L), 1e-6, ny=(Ly or L), PBC=True)
+    if mm is None: mm = hotspin.ASI.OOP_Square(1e-6, nx=(Lx or L), ny=(Ly or L), PBC=True)
 
     if mm.get_energy('dipolar', verbose=False) is None: mm.add_energy(hotspin.DipolarEnergy())
     mm.params.REDUCED_KERNEL_SIZE = cutoff
@@ -118,20 +118,20 @@ if __name__ == "__main__":
     save = False
     plot = True
     # As many switches as possible:
-    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Pinwheel(100, 2e-6, T=1e6, E_B=5e-22),
+    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Pinwheel(2e-6, 100, T=1e6, E_B=5e-22),
     #                               n=10000, cutoff=20, pattern='uniform', plot=plot, save=save)
     # Reasonable values:
-    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Pinwheel(100, 2e-6, T=300, E_B=5e-22),
+    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Pinwheel(2e-6, 100, T=300, E_B=5e-22),
     #                               n=10000, cutoff=20, pattern='AFM', plot=plot, save=save)
     # Reasonable values with low T:
-    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Pinwheel(200, 1e-6, T=500, E_B=5e-22),
+    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Pinwheel(1e-6, 200, T=500, E_B=5e-22),
     #                               n=10000, cutoff=20, pattern='AFM', plot=plot, save=save)
     # Procedurally generated modern art:
-    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Pinwheel(100, 2e-6, T=80, E_B=5e-22),
+    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Pinwheel(2e-6, 100, T=80, E_B=5e-22),
     #                               n=1, cutoff=20, pattern='uniform', plot=plot, save=save)
     # OOP_Square:
-    # analysis_dipolarkernel_cutoff(hotspin.ASI.OOP_Square(100, 2e-6, T=300, E_B=5e-22),
+    # analysis_dipolarkernel_cutoff(hotspin.ASI.OOP_Square(2e-6, 100, T=300, E_B=5e-22),
     #                               n=1000, cutoff=20, pattern='AFM', plot=plot, save=save)
     # IP_Kagome:
-    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Kagome(128, 4e-6, T=500, E_B=5e-22, PBC=True),
+    # analysis_dipolarkernel_cutoff(hotspin.ASI.IP_Kagome(4e-6, 128, T=500, E_B=5e-22, PBC=True),
     #                               n=10000, cutoff=20, pattern='uniform', plot=plot, save=save)

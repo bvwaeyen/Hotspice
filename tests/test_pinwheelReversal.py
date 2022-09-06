@@ -64,7 +64,7 @@ class test_pinwheelReversal:
         '''
         if verbose: print(f'External field angle is {round(angle*180/math.pi):d} degrees.')
         if not (-math.pi/4 < angle < math.pi/4): warnings.warn(f"Field angle {angle} is outside the nominal -pi/4 < angle < pi/4 range. Undesired behavior might occur.", stacklevel=2)
-        self.mm = hotspin.ASI.IP_Pinwheel(self.size, self.a, E_B=self.E_B, T=self.T, PBC=False, Msat=860e3, V=self.V, params=hotspin.SimParams(UPDATE_SCHEME=self.scheme))
+        self.mm = hotspin.ASI.IP_Pinwheel(self.a, self.size, E_B=self.E_B, T=self.T, PBC=False, Msat=860e3, V=self.V, params=hotspin.SimParams(UPDATE_SCHEME=self.scheme))
         self.mm.initialize_m(pattern='uniform', angle=0)
         self.mm.add_energy(hotspin.ZeemanEnergy(magnitude=self.H_max, angle=angle))
         thresholds = Threshold([.7, .35, 0, -.35, -.7], start_value=self.mm.m_avg_x) # If the average magnetization crosses this, a plot is shown.
