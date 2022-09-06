@@ -273,7 +273,7 @@ def show_m(mm: Magnets, m=None, avg=True, show_energy=True, fill=True, overlay_q
         update_interactive(fig)
     return fig
 
-def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, scale: float = .8, save: bool = False):
+def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, scale: float = .8, save: bool = False, save_ext: str = '.pdf'):
     ''' Shows a minimalistic rendition of the lattice on which the spins are placed.
         @param mm [Magnets]: an instance of the ASI class whose lattice should be plotted.
         @param nx, ny [int] (3): the number of unit cells that will be shown.
@@ -291,7 +291,7 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
     xmin, xmax, ymin, ymax = positions_x.min(), positions_x.max(), positions_y.min(), positions_y.max()
     ux, uy = mm.unitcell.x*mm.dx, mm.unitcell.y*mm.dy
 
-    figsize = 3
+    figsize = 6
     fig = plt.figure(figsize=(figsize, figsize*uy*ny/ux/nx))
     ax = fig.add_subplot(111)
     ax.set_aspect('equal')
@@ -313,7 +313,8 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
     ax.set_ylim(ymin-size/2, ymax+size/2)
 
     plt.gcf().tight_layout()
-    if save: save_plot(f'results/lattices/{type(mm).__name__}_{nx//mm.unitcell.x:.0f}x{ny//mm.unitcell.y:.0f}.pdf')
+    if save:
+        save_plot(f'results/lattices/{type(mm).__name__}_{nx//mm.unitcell.x:.0f}x{ny//mm.unitcell.y:.0f}', ext=save_ext)
     plt.show()
 
 def show_history(mm: Magnets, *, y_quantity=None, y_label=r'Average magnetization'):
