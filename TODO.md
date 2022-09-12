@@ -8,6 +8,8 @@
 
 2. Medium priority
     - [ ] Make unit tests
+    - [x] Allow choosing between CPU and GPU computing (i.e. CuPy or NumPy)
+        - [ ] Somehow make this possible for each ASI object separately?
     - [ ] If kernel is cut off, recalculate it after a certain amount of steps
     - [ ] Implement commonly used metrics to compare with theory/experiment (average magnetization and dimensionless amplitude ratio  $\langle m^2 \rangle^2/\langle m^4 \rangle$, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction or by looking at the dot/cross(?) product between vectors, susceptibility, width of domains (related to correlation probably)...)
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state (e.g. Néel vector?)
@@ -16,7 +18,8 @@
 
 3. Low priority
     - [ ] Create a frustrated OOP ASI (e.g. hexagonal close packed, equilateral Cairo...)
-    - [ ] Randomness: missing magnets and variation in `E_B` and `moment`. Probably no other randomness is possible since this would interfere with the unit cells (the variation in `E_B` and `moment` might already be tricky to take into account, idk). The only issue that can occur with missing spins, is probably that some multi-switching samples remain unused, but I could live with that.
+    - [ ] Randomly missing magnets. The only foreseeable issue that could occur with missing spins, is that some `Magnets().select()` samples remain unused, but I could live with that.
+        - [ ] An extension of this randomness could be to generate an 'ensemble' of systems, which could be calculated efficiently in a parallel manner on GPU by extending arrays into a third dimension, and then using advanced indexing or some `stride_tricks` to manipulate each 2D slice differently while still being parallel. The issue with this is that this will be a lot of work where not a single slice may be wrong, and that a lot of code will have to be refactored to work with this extra dimension. Currently it seems that only `E_B`, `moment` and `T` should be moved into the 3rd dimension. But selecting magnets will become problematic, as for Glauber this will result in different number of samples in each element of the ensemble (so the indices can no longer be a rectangular CuPy array unless padded with e.g. -1), and for Néel this will require an argmin along only two of the three axes. The question is whether this will use more of the GPU at once, or whether this excessive indexing would slow things down more than we gain. There is only one way to find out, I guess, since the proof is in the pudding...
 
 ## Analysis and tests
 

@@ -1,11 +1,8 @@
 import math
-# import warnings
 
-import cupy as cp
 import numpy as np
 
 from abc import ABC, abstractmethod
-# from cupyx.scipy import signal
 
 from .core import Magnets
 from .plottools import show_m

@@ -2,7 +2,6 @@ import math
 import warnings
 
 import cupy as cp
-import cupyx as cpx
 import numpy as np
 
 from abc import ABC, abstractmethod
@@ -559,7 +558,7 @@ class Magnets(ABC):
             barrier = cp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)
             if (n := (nobarrier := cp.where(barrier < -self.kBT))[0].size) != 0: # Then some magnet(s) simply has/have no barrier at all for switching
                 # Randomly switch half of them (this ratio can be optimized probably? TODO?), this is because if we switch them all we might end up in an infinite loop
-                rand = cp.random.choice(n, size=math.ceil(n/2), replace=False)
+                rand = np.random.choice(n, size=math.ceil(n/2), replace=False)
                 idx = (nobarrier[0][rand], nobarrier[1][rand])
             else: # No ultra-prone switchers, so choose the one that would gain the most energy
                 idx = divmod(cp.argmin(barrier), self.nx) # The one with the most energy to gain from switching
@@ -874,7 +873,7 @@ class DipolarEnergy(Energy):
         rry = self.mm.yy - self.mm.yy[0,0]
         rr_sq = rrx**2 + rry**2
         rr_sq[0,0] = cp.inf
-        rr_inv = cpx.rsqrt(rr_sq) # Due to the previous line, this is now never infinite
+        rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
         rr_inv3 = rr_inv**3
         rinv3 = mirror4(rr_inv3)
         # Now we determine the normalized rx and ry

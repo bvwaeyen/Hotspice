@@ -250,8 +250,8 @@ class KernelQualityExperiment(Experiment):
         if yK.shape[1] != yG.shape[1]: raise ValueError(f'K and G were not simulated with an equal amount of readout nodes.')
 
         df_front = pd.DataFrame({"metric": metric, "inputs": u})
-        df_yK = pd.DataFrame({f"y{i}": self.all_states_K[:,i].get() for i in range(self.all_states_K.shape[1])})
-        df_yG = pd.DataFrame({f"y{i}": self.all_states_G[:,i].get() for i in range(self.all_states_G.shape[1])})
+        df_yK = pd.DataFrame({f"y{i}": yK[:,i] for i in range(yK.shape[1])})
+        df_yG = pd.DataFrame({f"y{i}": yG[:,i] for i in range(yG.shape[1])})
         df = pd.concat([df_yK, df_yG], axis=0, ignore_index=True) # Put K and G readouts below each other
         df = pd.concat([df_front, df], axis=1, ignore_index=False) # Add the 'metric' column in front
         return df

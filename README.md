@@ -63,6 +63,20 @@ The `hotspin.experiments` module contains classes to bundle many input/output ru
 
 The `GPUparallel.py` script can be used to run a `hotspin.experiments.Sweep` on multiple GPUs.
 
+### Choosing between GPU or CPU
+
+By default, hotspin runs on the GPU. One can also choose to run hotspin on the CPU instead, which can be useful for small simulations with only several tens of magnets, where the parallelism of GPU computing is not quite beneficial.
+
+When hotspin is imported through `import hotspin`, it checks the environment variable `HOTSPIN_USE_CPU` (default: `False`) to determine whether to compute on CPU or GPU. *Hence, this variable must be set **BEFORE** importing the hotspin module*, and thus the choice can only be made once in a given script (unless hotspin is somehow re-loaded completely, e.g. using `importlib.reload`).
+
+One can set this environment variable in a python script as follows:
+
+```python
+import os
+os.environ["HOTSPIN_USE_CPU"] = True
+import hotspin # Only import AFTER setting HOTSPIN_USE_CPU!
+```
+
 ## Available spin ices
 
 Several geometries are available out-of-the-box in hotspin.
@@ -71,7 +85,7 @@ They all follow the pattern `hotspin.ASI.<name>(a, n, nx=None, ny=None, **kwargs
 
 ### Out-of-plane
 
-Since all magnets of an out-of-plane spin ice have a magnetic moment with no in-plane component, they is simply represented as circles.
+Since all magnets of an out-of-plane spin ice have a magnetic moment with no in-plane component, they are simply represented as circles.
 
 #### `OOP_Square`
 

@@ -37,7 +37,8 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
 
     def create_experiment(self, params: dict) -> KernelQualityExperiment:
         mm = getattr(hotspin.ASI, params["ASI_type"])(params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
-            pattern='uniform', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel')) # Need Néel for inputter
+            pattern='uniform', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()),
+            params=hotspin.SimParams(UPDATE_SCHEME='Néel', SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF=0)) # Need Néel for inputter
         datastream = hotspin.io.RandomBinaryDatastream()
         inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=True, frequency=1, half_period=False) # Frequency does not matter as long as it is nonzero and reasonable
         outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm) # TODO: update this!!1!1!!I!

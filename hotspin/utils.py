@@ -498,7 +498,7 @@ class _CompactJSONEncoder(json.JSONEncoder):
 
 if __name__ == "__main__":
     def test_save():
-        full_json = Data(pd.DataFrame({"H_range": cp.arange(15).get(), "m": (cp.arange(15)**2).get()}))
+        full_json = Data(pd.DataFrame({"H_range": np.arange(15), "m": np.arange(15)**2}))
         fullpath = full_json.save(name='This is just a test. Do not panic.')
         print(Data.load(fullpath))
     test_save()

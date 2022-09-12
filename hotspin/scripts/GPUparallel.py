@@ -15,9 +15,8 @@ import subprocess
 import sys
 import warnings
 
-import cupy as cp
-
 from joblib import Parallel, delayed
+from cupy.cuda.runtime import getDeviceCount
 
 try: import hotspin
 except: from context import hotspin
@@ -55,7 +54,7 @@ except:
 
 ## Create queue
 multiprocessing.set_start_method('spawn')
-N_GPU = cp.cuda.runtime.getDeviceCount()
+N_GPU = getDeviceCount()
 q = multiprocessing.Queue(maxsize=N_GPU)
 for device in range(N_GPU): q.put(device)
 
