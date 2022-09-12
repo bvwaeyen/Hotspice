@@ -160,7 +160,7 @@ def as_2D_array(value: Field, shape: tuple) -> cp.ndarray:
     ''' Converts <value> to a 2D array of shape <shape>. If <value> is scalar, the returned
         array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
         as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.
-        Either a CuPy or NumPy array is returned, depending on config.USE_CPU.
+        Either a CuPy or NumPy array is returned, depending on config.USE_GPU.
     '''
     is_scalar = True # Determine if <value> is scalar-like...
     if isinstance(value, list):

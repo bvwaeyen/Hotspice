@@ -5,9 +5,19 @@ The time evolution can either follow the Néel-Arrhenius law of switching over a
 
 ## Dependencies
 
-Hotspin relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs.
+To create a new conda environment which only includes the necessary modules for hotspin, one can use the `environment.yml` file through the command
 
-There are several ways to [install CuPy](https://docs.cupy.dev/en/stable/install.html), but likely the easiest method is to use the following `conda` command, since this automatically installs the appropriate version of the CUDA toolkit:
+```shell
+conda env create -n hotspin310 -f environment.yml
+```
+
+where `hotspin310` is the name of the new environment (because it uses Python 3.10).
+
+### CuPy
+
+Hotspin relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
+
+To [install CuPy](https://docs.cupy.dev/en/stable/install.html) separately, the easiest method is likely to use the following `conda` command, as this automatically installs the appropriate version of the CUDA toolkit:
 
 ```shell
 conda install -c conda-forge cupy
@@ -67,14 +77,14 @@ The `GPUparallel.py` script can be used to run a `hotspin.experiments.Sweep` on 
 
 By default, hotspin runs on the GPU. One can also choose to run hotspin on the CPU instead, which can be useful for small simulations with only several tens of magnets, where the parallelism of GPU computing is not quite beneficial.
 
-When hotspin is imported through `import hotspin`, it checks the environment variable `HOTSPIN_USE_CPU` (default: `False`) to determine whether to compute on CPU or GPU. *Hence, this variable must be set **BEFORE** importing the hotspin module*, and thus the choice can only be made once in a given script (unless hotspin is somehow re-loaded completely, e.g. using `importlib.reload`).
+When hotspin is imported through `import hotspin`, it checks the environment variable `HOTSPIN_USE_GPU` (default: `True`) to determine whether to use the CPU or GPU. *Hence, this environment variable must be set **BEFORE** importing the hotspin module*, and thus the choice can only be made once in a given script.
 
 One can set this environment variable in a python script as follows:
 
 ```python
 import os
-os.environ["HOTSPIN_USE_CPU"] = True
-import hotspin # Only import AFTER setting HOTSPIN_USE_CPU!
+os.environ["HOTSPIN_USE_GPU"] = 'False'
+import hotspin # Only import AFTER setting HOTSPIN_USE_GPU!
 ```
 
 ## Available spin ices
