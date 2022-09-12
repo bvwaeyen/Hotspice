@@ -1,6 +1,5 @@
 import time
 
-import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -8,6 +7,10 @@ import pandas as pd
 from matplotlib import cm, widgets
 
 from context import hotspin
+if hotspin.config.USE_GPU:
+    import cupy as cp
+else:
+    import numpy as cp
 
 
 def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=400, Lx:int=None, Ly:int=None, cutoff=16, pattern:str=None, plot:bool=True, save:bool=False):
@@ -64,7 +67,7 @@ def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=4
 
     # PLOT 1: THE RECALCULATED ENERGY PROFILE
     ax1 = fig.add_subplot(2, 2, 1)
-    im1 = ax1.imshow(E_recalculated.get(), origin='lower', cmap=cmap)
+    im1 = ax1.imshow(hotspin.utils.asnumpy(E_recalculated), origin='lower', cmap=cmap)
     c1 = plt.colorbar(im1)
     c1.ax.get_yaxis().labelpad = 15
     c1.ax.set_ylabel(f"Dipolar energy [J]", rotation=270, fontsize=10)
@@ -72,7 +75,7 @@ def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=4
 
     # PLOT 2: THE TRUNCATED ENERGY PROFILE
     ax2 = fig.add_subplot(2, 2, 3, sharex=ax1, sharey=ax1)
-    im2 = ax2.imshow(E_incremented.get(), origin='lower', cmap=cmap)
+    im2 = ax2.imshow(hotspin.utils.asnumpy(E_incremented), origin='lower', cmap=cmap)
     c2 = plt.colorbar(im2)
     c2.ax.get_yaxis().labelpad = 15
     c2.ax.set_ylabel(f"Dipolar energy [J]", rotation=270, fontsize=10)
@@ -80,7 +83,7 @@ def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=4
 
     # PLOT 3: THE ABSOLUTE DIFFERENCE
     ax3 = fig.add_subplot(2, 2, 2, sharex=ax1, sharey=ax1)
-    im3 = ax3.imshow(E_absdiff.get(), origin='lower', cmap=cmap)
+    im3 = ax3.imshow(hotspin.utils.asnumpy(E_absdiff), origin='lower', cmap=cmap)
     c3 = plt.colorbar(im3)
     c3.ax.get_yaxis().labelpad = 15
     c3.ax.set_ylabel(f"Energy [J]", rotation=270, fontsize=10)

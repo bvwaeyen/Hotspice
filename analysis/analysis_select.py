@@ -1,6 +1,5 @@
 import time
 
-import cupy as cp
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -8,6 +7,10 @@ from matplotlib import cm, patches
 from scipy.spatial import distance
 
 from context import hotspin
+if hotspin.config.USE_GPU:
+    import cupy as cp
+else:
+    import numpy as cp
 
 
 def calculate_any_neighbors(pos, shape, center: int = 0):
@@ -59,7 +62,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
 
     distances_binned = cp.zeros(n_bins := int(r*scale+1)) if INTEGER_BINS else cp.zeros(n_bins := 99)
     bin_width = r*scale/(n_bins-1)
-    distance_bins = cp.linspace(0, r*scale-bin_width, n_bins)
+    distance_bins = np.linspace(0, r*scale-bin_width, n_bins)
     max_dist_bin = r*scale
     
     t = time.perf_counter()
@@ -88,11 +91,11 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
             all_pos = pos
         if all_pos.shape[1] > 1: # if there is more than 1 sample
             if ONLY_SMALLEST_DISTANCE:
-                dist_matrix = cp.asarray(distance.cdist(all_pos.T.get(), all_pos.T.get()))
+                dist_matrix = cp.asarray(distance.cdist(hotspin.utils.asnumpy(all_pos.T), hotspin.utils.asnumpy(all_pos.T)))
                 dist_matrix[dist_matrix==0] = np.inf
                 distances = cp.min(dist_matrix, axis=1)
             else:
-                distances = cp.asarray(distance.pdist(all_pos.T.get()))
+                distances = cp.asarray(distance.pdist(hotspin.utils.asnumpy(all_pos.T)))
             # if min_dist > (m := cp.min(distances)) and m < r:
             #     indices = cp.where(distances == m)[0]
             #     print(m, pos[:,indices])
@@ -122,16 +125,16 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     if ONLY_SMALLEST_DISTANCE:
         color_left = 'C1'
         ax1.set_xlabel('Distance to nearest neighbor (binned)')
-        data1_left = (distances_binned/cp.sum(distances_binned)).get()/(bin_width/r)
-        ax1.fill_between(distance_bins.get(), data1_left, step='post', edgecolor=color_left, facecolor=color_left, alpha=0.7)
+        data1_left = hotspin.utils.asnumpy(distances_binned/cp.sum(distances_binned))/(bin_width/r)
+        ax1.fill_between(distance_bins, data1_left, step='post', edgecolor=color_left, facecolor=color_left, alpha=0.7)
         ax1.set_ylabel('Probability density [$r^{-1}$]', color=color_left)
         ax1.tick_params(axis='y', labelcolor=color_left)
 
         ax1_right = ax1.twinx() # instantiate a second axes that shares the same x-axis
         color_right = 'C0'
         ax1_right.set_ylabel('Cumulative probability', color=color_right)
-        data1_right = cp.cumsum(distances_binned/cp.sum(distances_binned)).get()
-        ax1_right.bar(distance_bins.get(), data1_right, align='edge', width=bin_width, color=color_right)
+        data1_right = hotspin.utils.asnumpy(cp.cumsum(distances_binned/cp.sum(distances_binned)))
+        ax1_right.bar(distance_bins, data1_right, align='edge', width=bin_width, color=color_right)
         ax1_right.tick_params(axis='y', labelcolor=color_right)
         ax1.set_zorder(ax1_right.get_zorder() + 1)
         ax1.patch.set_visible(False)
@@ -139,7 +142,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
         ax1.set_ylim([0, ax1.get_ylim()[1]])
         ax1_right.set_ylim([0, ax1_right.get_ylim()[1]]) # might want to set this to [0, 1]
     else:
-        ax1.bar(distance_bins.get(), distances_binned.get(), align='edge', width=bin_width)
+        ax1.bar(distance_bins, hotspin.utils.asnumpy(distances_binned), align='edge', width=bin_width)
         ax1.set_xlabel('Distance to any other sample (binned)')
         ax1.set_title('Inter-sample distances')
         ax1.set_ylabel('# occurences')
@@ -150,7 +153,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
 
     # PLOT 2: PROBABILITY DENSITY OF NEIGHBORS AROUND ANY SAMPLE
     ax2 = fig.add_subplot(2, 2, 2)
-    data2 = field_local.get()/total
+    data2 = hotspin.utils.asnumpy(field_local)/total
     im2 = ax2.imshow(data2, vmin=1e-10, vmax=max(2e-10, np.max(data2)), extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='nearest', cmap=cmap)
     ax2.set_title(f'Prob. dens. of neighbors\naround any sample')
     ax2.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
@@ -159,15 +162,15 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
 
     # PLOT 3: PROBABILITY OF CHOOSING EACH CELL
     ax3 = fig.add_subplot(2, 2, 3) # TODO: add x and y histograms to the sides of this
-    data3 = field.get()
+    data3 = hotspin.utils.asnumpy(field)
     im3 = ax3.imshow(data3, vmin=1e-10, origin='lower', interpolation_stage='rgba', interpolation='none', cmap=cmap)
     ax3.set_title(f"# choices for each cell")
     plt.colorbar(im3, extend='min')
 
     # PLOT 4: PERIODOGRAM
     ax4 = fig.add_subplot(2, 2, 4)
-    freq = cp.fft.fftshift(cp.fft.fftfreq(mm.nx, d=1)).get() # use fftshift to get ascending frequency order
-    data4 = spectrum.get()/total
+    freq = hotspin.utils.asnumpy(cp.fft.fftshift(cp.fft.fftfreq(mm.nx, d=1))) # use fftshift to get ascending frequency order
+    data4 = hotspin.utils.asnumpy(spectrum)/total
     im4 = ax4.imshow(data4, extent=[-.5+freq[0], .5+freq[-1], -.5+freq[0], .5+freq[-1]], interpolation_stage='rgba', interpolation='none', cmap='gray')
     ax4.set_title(f'Periodogram')
     plt.colorbar(im4)

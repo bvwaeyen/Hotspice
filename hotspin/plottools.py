@@ -4,16 +4,21 @@ import matplotlib
 import os
 import warnings
 
-import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from cupyx.scipy import signal
 from enum import Enum
 from matplotlib import cm, colors, patches, widgets
 
 from .core import Magnets
-from .utils import unit_prefix_to_mul
+from .utils import asnumpy, unit_prefix_to_mul
+from . import config
+if config.USE_GPU:
+    import cupy as cp
+    from cupyx.scipy import signal
+else:
+    import numpy as cp
+    from scipy import signal
 
 try: # TODO: maybe don't do this by default, only when some sort of display is used? but how to detect this consistently...
     ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
@@ -173,7 +178,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
     saturation[affectedpositions] = 0
     value[affectedpositions] = 1
     # Create the hsv matrix with correct axes ordering for matplotlib.colors.hsv_to_rgb:
-    hsv = np.array([hue.get(), saturation.get(), value.get()]).swapaxes(0, 2).swapaxes(0, 1)
+    hsv = np.array([asnumpy(hue), asnumpy(saturation), asnumpy(value)]).swapaxes(0, 2).swapaxes(0, 1)
     if fill: hsv = fill_neighbors(hsv, NaNangles & NaNmagnitudes, mm=mm)
     return hsv
 
@@ -261,16 +266,16 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
             ax2.set_xlabel(f'x [{unit}m]')
             ax2.set_ylabel(f'y [{unit}m]')
             axes.append(ax2)
-        nonzero = mm.m.get().nonzero()
-        mx, my = cp.multiply(m, mm.orientation[:,:,0]).get()[nonzero], cp.multiply(m, mm.orientation[:,:,1]).get()[nonzero]
-        ax2.quiver(mm.xx.get()[nonzero]/unit_factor, mm.yy.get()[nonzero]/unit_factor, mx/unit_factor, my/unit_factor,
+        nonzero = mm.m.nonzero()
+        mx, my = asnumpy(cp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(cp.multiply(m, mm.orientation[:,:,1])[nonzero])
+        ax2.quiver(asnumpy(mm.xx[nonzero])/unit_factor, asnumpy(mm.yy[nonzero])/unit_factor, mx/unit_factor, my/unit_factor,
                 color=(cmap((np.arctan2(my, mx)/2/np.pi) % 1) if color_quiver else 'black'),
                 pivot='mid', scale=1.1/mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
         ax2.set_xlim(full_extent[:2])
         ax2.set_ylim(full_extent[2:])
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
-        im3 = ax3.imshow(np.where(mm.m.get() != 0, mm.E.get(), np.nan), origin='lower',
+        im3 = ax3.imshow(asnumpy(cp.where(mm.m != 0, mm.E, cp.nan)), origin='lower',
                             extent=full_extent, interpolation='antialiased', interpolation_stage='rgba')
         c3 = plt.colorbar(im3)
         c3.ax.get_yaxis().labelpad = 15
@@ -301,8 +306,9 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
         raise ValueError(f"Lattice of {type(mm).__name__} is too small: ({mm.nx}x{mm.ny})<({nx}x{ny}).")
 
     occupation = mm.occupation[:ny,:nx]
-    positions_x = mm.xx[np.where(occupation)].get()
-    positions_y = mm.yy[np.where(occupation)].get()
+    occupied_indices = cp.where(occupation)
+    positions_x = asnumpy(mm.xx[occupied_indices])
+    positions_y = asnumpy(mm.yy[occupied_indices])
     xmin, xmax, ymin, ymax = positions_x.min(), positions_x.max(), positions_y.min(), positions_y.max()
     ux, uy = mm.unitcell.x*mm.dx, mm.unitcell.y*mm.dy
 
@@ -313,8 +319,8 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
     ax.set_axis_off()
     size = mm._get_closest_dist()*scale
     if mm.in_plane:
-        ox = mm.orientation[:,:,0][np.where(occupation)].get()
-        oy = mm.orientation[:,:,1][np.where(occupation)].get()
+        ox = asnumpy(mm.orientation[:,:,0][occupied_indices])
+        oy = asnumpy(mm.orientation[:,:,1][occupied_indices])
         angles = np.arctan2(oy, ox)*180/math.pi
     else:
         angles = np.zeros_like(positions_x)
@@ -385,7 +391,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
         @return [2D np.array]: The interpolated array.
     '''
     if hsv.shape[0] < 2 or hsv.shape[1] < 2: return hsv
-    hsv = hsv.get() if isinstance(hsv, cp.ndarray) else np.asarray(hsv)
+    hsv = asnumpy(hsv) if isinstance(hsv, cp.ndarray) else np.asarray(hsv)
     replaceable = cp.asarray(replaceable, dtype='bool')
 
     # Extend arrays a bit to fill NaNs near boundaries as well
@@ -411,7 +417,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
         substitution_colors = cp.asarray(get_hsv(mm, fill=False, avg=Average.SQUAREFOUR))
         result[whites[0], whites[1], :] = substitution_colors[whites[0], whites[1], :]
 
-    return result.get()
+    return asnumpy(result)
 
 
 def init_fonts(backend=True, small=10, medium=11, large=12):

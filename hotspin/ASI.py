@@ -1,8 +1,11 @@
 import math
 
-import cupy as cp
-
 from .core import Magnets
+from . import config
+if config.USE_GPU:
+    import cupy as cp
+else:
+    import numpy as cp
 
 
 class OOP_ASI(Magnets):

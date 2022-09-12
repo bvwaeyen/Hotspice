@@ -11,14 +11,20 @@ import sys
 import threading
 import warnings
 
-import cupy as cp
-import cupy.lib.stride_tricks as striding
 import numpy as np
 import pandas as pd
 
 from datetime import datetime
 from IPython.terminal.embed import InteractiveShellEmbed
 from typing import Callable, Iterable, TypeVar
+
+from . import config
+if config.USE_GPU:
+    import cupy as cp
+    import cupy.lib.stride_tricks as striding
+else:
+    import numpy as cp
+    import numpy.lib.stride_tricks as striding
 
 
 ## ARRAY MANIPULATIONS/OPERATIONS
@@ -149,11 +155,12 @@ def shell():
 
 
 ## CONVERSION
-Field = TypeVar("Field", int, float, list, np.ndarray, cp.ndarray) # Every type that can be parsed by as_cupy_array()
-def as_cupy_array(value: Field, shape: tuple) -> cp.ndarray:
-    ''' Converts <value> to a CuPy array of shape <shape>. If <value> is scalar, the returned
+Field = TypeVar("Field", int, float, list, np.ndarray, cp.ndarray) # Every type that can be parsed by as_2D_array()
+def as_2D_array(value: Field, shape: tuple) -> cp.ndarray:
+    ''' Converts <value> to a 2D array of shape <shape>. If <value> is scalar, the returned
         array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
         as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.
+        Either a CuPy or NumPy array is returned, depending on config.USE_CPU.
     '''
     is_scalar = True # Determine if <value> is scalar-like...
     if isinstance(value, list):
@@ -170,6 +177,13 @@ def as_cupy_array(value: Field, shape: tuple) -> cp.ndarray:
         if value.size != math.prod(shape):
             raise ValueError(f"Incorrect shape: passed array of shape {value.shape} is not of desired shape {shape}.")
         return cp.asarray(value).reshape(shape)
+
+def asnumpy(array: cp.ndarray) -> np.ndarray:
+    ''' Converts the CuPy/NumPy array to a NumPy array, which is necessary for e.g. matplotlib. '''
+    try: # TODO: can not yet use 'isinstance', that is only possible when we have 'np', 'xp' and 'cp'.
+        return array.get() # If it is a CuPy array
+    except AttributeError:
+        return np.asarray(array)
 
 def eV_to_J(E: float, /):
     return E*1.602176634e-19

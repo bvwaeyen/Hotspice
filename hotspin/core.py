@@ -1,19 +1,23 @@
 import math
 import warnings
 
-import cupy as cp
 import numpy as np
 
 from abc import ABC, abstractmethod
-from cupyx.scipy import signal
 from dataclasses import dataclass, field
 from functools import cache
 from scipy.spatial import distance
 from textwrap import dedent
 
 from .poisson import PoissonGrid
-from .utils import as_cupy_array, check_repetition, Field, full_obj_name, mirror4
-
+from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, mirror4
+from . import config
+if config.USE_GPU:
+    import cupy as cp
+    from cupyx.scipy import signal
+else:
+    import numpy as cp
+    from scipy import signal
 
 kB = 1.380649e-23
 
@@ -100,7 +104,7 @@ class Magnets(ABC):
         ''' Returns the closest distance between two magnets in the simulation. '''
         slice = cp.where(self.occupation[:self.unitcell.y*2,:self.unitcell.x*2]) # We only need at most two unit cells
         pos_x, pos_y = self.xx[slice], self.yy[slice]
-        return distance.pdist(cp.asarray([pos_x, pos_y]).get().T).min()
+        return distance.pdist(asnumpy(cp.asarray([pos_x, pos_y]).T)).min()
 
     def _get_m_uniform(self, angle=0):
         ''' Returns the self.m state with all magnets aligned along <angle> as much as possible. '''
@@ -139,7 +143,7 @@ class Magnets(ABC):
             self._set_m(pattern)
         else: # Then pattern is a Field-like object
             try:
-                self.m = as_cupy_array(pattern, self.m.shape)
+                self.m = as_2D_array(pattern, self.m.shape)
             except (ValueError, TypeError):
                 raise ValueError(f"Argument <pattern> could not be parsed as a valid array for <self.m>.")
 
@@ -233,7 +237,7 @@ class Magnets(ABC):
 
     @T.setter
     def T(self, value: Field):
-        self._T = as_cupy_array(value, self.xx.shape)
+        self._T = as_2D_array(value, self.xx.shape)
 
     @property
     def E_B(self) -> cp.ndarray:
@@ -241,7 +245,7 @@ class Magnets(ABC):
 
     @E_B.setter
     def E_B(self, value: Field):
-        self._E_B = as_cupy_array(value, self.xx.shape)
+        self._E_B = as_2D_array(value, self.xx.shape)
 
     @property
     def moment(self) -> cp.ndarray:
@@ -249,7 +253,7 @@ class Magnets(ABC):
 
     @moment.setter
     def moment(self, value: Field):
-        self._moment = as_cupy_array(value, self.xx.shape)
+        self._moment = as_2D_array(value, self.xx.shape)
         self._momentSq = self._moment*self._moment
 
     @property
@@ -608,7 +612,7 @@ class Magnets(ABC):
             plt.ion()
             fig = plt.figure(figsize=(5, 5))
             ax = fig.add_subplot(111)
-            im = ax.imshow(self.m.get())
+            im = ax.imshow(asnumpy(self.m))
 
         # TODO: use a better stopping criterion than just "oh no we exceeded n_max steps", and remove verbose code when all is fixed
         n, n_max = 0, int(math.sqrt(self.nx**2 + self.ny**2)) # Maximum steps is to get signal across the whole grid
@@ -616,7 +620,7 @@ class Magnets(ABC):
         while not cp.allclose(previous_states[2], previous_states[0]) and n < n_max: # Loop exits once we detect a 2-cycle, i.e. the only thing happening is some magnets keep switching back and forth
             self.minimize_all()
             if verbose:
-                im.set_array(self.m.get())
+                im.set_array(asnumpy(self.m))
                 fig.canvas.draw_idle()
                 fig.canvas.flush_events()
             previous_states[2] = previous_states[1].copy()

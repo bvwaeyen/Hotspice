@@ -3,7 +3,6 @@ import os
 import re
 import warnings
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -16,7 +15,12 @@ from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, show_m
-from .utils import Data, filter_kwargs, human_sort, is_significant, log, R_squared, strided
+from .utils import asnumpy, Data, filter_kwargs, human_sort, is_significant, log, R_squared, strided
+from . import config
+if config.USE_GPU:
+    import cupy as cp
+else:
+    import numpy as cp
 
 
 class Experiment(ABC):
@@ -244,8 +248,8 @@ class KernelQualityExperiment(Experiment):
             When "metric" == 'K', the row corresponds to a state from self.run_K(), and vice versa for 'G'.
         '''
         u = self.all_inputs_K + self.all_inputs_G # Both are lists so we can concatenate them like this
-        yK = cp.asarray(self.all_states_K).get() # Need as NumPy array for pd
-        yG = cp.asarray(self.all_states_G).get() # Need as NumPy array for pd
+        yK = asnumpy(self.all_states_K) # Need as NumPy array for pd
+        yG = asnumpy(self.all_states_G) # Need as NumPy array for pd
         metric = np.array(['K']*yK.shape[0] + ['G']*yG.shape[0])
         if yK.shape[1] != yG.shape[1]: raise ValueError(f'K and G were not simulated with an equal amount of readout nodes.')
 
@@ -362,15 +366,15 @@ class TaskAgnosticExperiment(Experiment):
         
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
         if train_test_cutoff < k: raise ValueError(f"NL: k={k} must be <={train_test_cutoff} for the available data.")
-        u_train_strided, u_test_strided = np.split(strided(self.u, k), [train_test_cutoff])
+        u_train_strided, u_test_strided = cp.split(strided(self.u, k), [train_test_cutoff])
         y_train, y_test = cp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
         
         # u_train_strided, y_train = u_train_strided[k-1:], y_train[k-1:] # First <k-1> rows don't have <k> previous entries yet to use as 'samples'
         Rsq = cp.empty(self.n_out) # R² correlation coefficient
         for j in range(self.n_out): # Train an estimator for the j-th output feature
-            model = sm.OLS(y_train[:,j].get(), u_train_strided.get(), missing='drop') # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
+            model = sm.OLS(asnumpy(y_train[:,j]), asnumpy(u_train_strided), missing='drop') # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
             results = model.fit()
-            y_hat_test = results.predict(u_test_strided.get())
+            y_hat_test = results.predict(asnumpy(u_test_strided))
             sigma_y_hat, sigma_y = np.var(y_hat_test), np.var(y_test[:,j])
             if sigma_y_hat == 0: # (highly unlikely) predicting constant value, so R² depends on whether this constant is the average or not
                 Rsq[j] = float(cp.mean(y_hat_test) == cp.mean(y_test[:,j]))
@@ -401,9 +405,9 @@ class TaskAgnosticExperiment(Experiment):
         if local: weights = cp.zeros((k, self.n_out))
         for j in range(1, k+1): # Train an estimator for the input j iterations ago
             # This one is a mess of indices, but at least we don't need striding like for non-linearity
-            results = sm.OLS(u_train[k-j:-j].get(), y_train[k:,:].get(), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
+            results = sm.OLS(asnumpy(u_train[k-j:-j]), asnumpy(y_train[k:,:]), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
             if local: weights[j-1,:] = cp.asarray(results.params) # TODO: this gives an error I think
-            u_hat_test = results.predict(y_test[j:,:].get()) # Start at y_test[j] to prevent leakage between train/test
+            u_hat_test = results.predict(asnumpy(y_test[j:,:])) # Start at y_test[j] to prevent leakage between train/test
             Rsq[j-1] = R_squared(u_hat_test, u_test[:-j])
         Rsq[cp.isnan(Rsq)] = 0 # If some std=0, then it is constant so R² actually gives 0
 
@@ -454,7 +458,7 @@ class TaskAgnosticExperiment(Experiment):
 
         initial_readout = self.initial_state # Assuming this was relaxed first
         final_readout = self.final_state # Assuming this was also relaxed first
-        return 1 - distance.cosine(initial_readout.get(), final_readout.get())/2 # distance.cosine is in range [0., 2.]
+        return 1 - distance.cosine(asnumpy(initial_readout), asnumpy(final_readout))/2 # distance.cosine is in range [0., 2.]
         # Another possibly interesting metric: Hamming distance 
         # (is proportion of disagreeing elements, but would require full access to state mm.m to work properly (-1 or 1 binary state))
 
@@ -472,8 +476,8 @@ class TaskAgnosticExperiment(Experiment):
         if y is None:
             y = cp.concatenate((self.initial_state.reshape(1, -1), self.y, self.final_state.reshape(1, -1)), axis=0) # self.y with pristine state as 0th index
         
-        u = cp.asarray(u).get() # Need as NumPy array for pd
-        y = cp.asarray(y).get() # Need as NumPy array for pd
+        u = asnumpy(u) # Need as NumPy array for pd
+        y = asnumpy(y) # Need as NumPy array for pd
         if u.shape[0] != y.shape[0]: raise ValueError(f'Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.')
 
         df_u = pd.DataFrame({"u": u})
