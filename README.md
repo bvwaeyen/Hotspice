@@ -88,57 +88,24 @@ import hotspin # Only import AFTER setting HOTSPIN_USE_GPU!
 ```
 
 ## Available spin ices
-<!-- markdownlint-disable MD033 markdownlint-disable MD051 -->
-Several geometries are available out-of-the-box in hotspin.
+<!-- markdownlint-disable MD033 -->
+Several predefined geometries are available in hotspin.
 They are listed below with a small description of their peculiarities.
-They all follow the pattern `hotspin.ASI.<name>(a, n, nx=None, ny=None, **kwargs)`, where `n` is only required if either `nx` or `ny` is not specified.
-
-### Out-of-plane
-
-Since all magnets of an out-of-plane spin ice have a magnetic moment with no in-plane component, they are simply represented as circles.
-
-#### `OOP_Square`
-
-<img src="./figures/ASI_lattices/OOP_Square_11x11.png" alt="OOP_Square_11x11" width="200"/>
-
-`a` is the distance between nearest neighbors. The occupation is full.
-
-#### `OOP_Triangle`
-
-<img src="./figures/ASI_lattices/OOP_Triangle_7x4.png" alt="OOP_Triangle_7x4" width="200"/>
-
-`a` is the distance between nearest neighbors. The occupation is 1/2.
+They all follow the pattern `hotspin.ASI.<class>(a, n, nx=None, ny=None, **kwargs)`, where `n` is only required if either `nx` or `ny` is not specified.
 
 ### In-plane
 
-Since all magnets of an in-plane spin ice have an anisotropy causing their magnetic moment to lay along a certain axis, called the 'easy axis', they are represented as ellipses whose long axis corresponds to this easy axis.
+| Class | Lattice | Parameters |
+|---|---|---|
+| `IP_Ising` | <img src="./figures/ASI_lattices/IP_Ising_8x8.png" alt="IP_Ising_8x8" width="200"/> | `a` is the distance between nearest neighbors. The occupation is full. |
+| `IP_Square` | <img src="./figures/ASI_lattices/IP_Square_5x5.png" alt="IP_Square_5x5" width="200"/> | `a` is the side length of a square, i.e. the side length of a unit cell. The occupation is 1/2. |
+| `IP_Pinwheel` | <img src="./figures/ASI_lattices/IP_Pinwheel_5x5.png" alt="IP_Pinwheel_5x5" width="200"/> | Same as `IP_Square`, but with all magnets rotated 45°. |
+| `IP_Kagome` | <img src="./figures/ASI_lattices/IP_Kagome_5x3.png" alt="IP_Kagome_5x3" width="200"/> | `a` is the distance between opposing edges of a hexagon. The occupation is 3/8. |
+| `IP_Triangle` | <img src="./figures/ASI_lattices/IP_Triangle_5x3.png" alt="IP_Triangle_5x3" width="200"/> | Same as `IP_Kagome`, but with all magnets rotated 90°. |
 
-#### `IP_Ising`
+### Out-of-plane
 
-<img src="./figures/ASI_lattices/IP_Ising_8x8.png" alt="IP_Ising_8x8" width="200"/>
-
-`a` is the distance between nearest neighbors. The occupation is full.
-
-#### `IP_Square`
-
-<img src="./figures/ASI_lattices/IP_Square_5x5.png" alt="IP_Square_5x5" width="200"/>
-
-`a` is the side length of a square, i.e. the side length of a unit cell. The occupation is 1/2.
-
-#### `IP_Pinwheel`
-
-<img src="./figures/ASI_lattices/IP_Pinwheel_5x5.png" alt="IP_Pinwheel_5x5" width="200"/>
-
-This is the same as [`IP_Square`](#ipsquare), but with all spins rotated 45°.
-
-#### `IP_Kagome`
-
-<img src="./figures/ASI_lattices/IP_Kagome_5x3.png" alt="IP_Kagome_5x3" width="200"/>
-
-`a` is the distance between opposing edges of a hexagon. The occupation is 3/8.
-
-#### `IP_Triangle`
-
-<img src="./figures/ASI_lattices/IP_Triangle_5x3.png" alt="IP_Triangle_5x3" width="200"/>
-
-This is the same as [`IP_Kagome`](#ipkagome), but with all spins rotated 90°.
+| Class | Lattice | Parameters |
+|---|---|---|
+| `OOP_Square` | <img src="./figures/ASI_lattices/OOP_Square_11x11.png" alt="OOP_Square_11x11" width="200"/> | `a` is the distance between nearest neighbors. The occupation is full. |
+| `OOP_Triangle` | <img src="./figures/ASI_lattices/OOP_Triangle_7x4.png" alt="OOP_Triangle_7x4" width="200"/> | `a` is the distance between nearest neighbors. The occupation is 1/2. |
