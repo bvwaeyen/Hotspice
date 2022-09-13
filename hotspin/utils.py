@@ -314,6 +314,7 @@ class Data: # TODO: make generalized method for getting full column even if it i
         except:
             gpu_info = []
         value.setdefault('GPU', gpu_info)
+        value.setdefault('hotspin_config', config.get_dict())
 
         self._metadata = value
         assert isinstance(self._metadata, dict)

@@ -1,4 +1,5 @@
 # Hotspin
+<!-- markdownlint-disable MD033 -->
 
 Hotspin is a tool for simulating thermally active artificial spin ices, using an Ising-like approximation: the axis and position of each spin is fixed, only their binary state can switch.
 The time evolution can either follow the Néel-Arrhenius law of switching over an energy barrier in a chronological manner, or use Glauber dynamics to model the statistical behavior while making abstraction of the time variable.
@@ -75,20 +76,25 @@ The `GPUparallel.py` script can be used to run a `hotspin.experiments.Sweep` on 
 
 ### Choosing between GPU or CPU
 
-By default, hotspin runs on the GPU. One can also choose to run hotspin on the CPU instead, which can be useful for small simulations with only several tens of magnets, where the parallelism of GPU computing is not quite beneficial.
+*By default, hotspin runs on the GPU.* One can also choose to run hotspin on the CPU instead, e.g. for small simulations with only several tens of magnets, where the parallelism of GPU computing is not quite beneficial.
 
-When hotspin is imported through `import hotspin`, it checks the environment variable `HOTSPIN_USE_GPU` (default: `True`) to determine whether to use the CPU or GPU. *Hence, this environment variable must be set **BEFORE** importing the hotspin module*, and thus the choice can only be made once in a given script.
+At the moment when hotspin is imported through `import hotspin`, it
 
-One can set this environment variable in a python script as follows:
+1) checks if the command-line argument `--hotspin-use-cpu` is present. If it is, the CPU is used. Otherwise,
+2) the environment variable `'HOTSPIN_USE_GPU'` (default: `'True'`) is checked instead, and either the GPU or CPU is used based on this value.
+
+*When invoking a script* from the command line, the cmd argument can be used. *Inside a python script*, however, it is discouraged to meddle with `sys.argv`. In that case, it is better to set the environment variable as follows:
 
 ```python
 import os
-os.environ["HOTSPIN_USE_GPU"] = 'False'
+os.environ['HOTSPIN_USE_GPU'] = 'False' # Must be type 'str'
 import hotspin # Only import AFTER setting HOTSPIN_USE_GPU!
 ```
 
+*Note that the CPU/GPU choice must be made **BEFORE** the `import hotspin` statement* (and can thus be made only once)! <sub><sup>This is because behind-the-scenes, this choice determines which modules are imported by hotspin (either NumPy or CuPy), and it is not possible to re-assign these without significant issues.</sup></sub>
+
 ## Available spin ices
-<!-- markdownlint-disable MD033 -->
+
 Several predefined geometries are available in hotspin.
 They are listed below with a small description of their peculiarities.
 They all follow the pattern `hotspin.ASI.<class>(a, n, nx=None, ny=None, **kwargs)`, where `n` is only required if either `nx` or `ny` is not specified.
@@ -96,7 +102,7 @@ They all follow the pattern `hotspin.ASI.<class>(a, n, nx=None, ny=None, **kwarg
 ### In-plane
 
 | Class | Lattice | Parameters |
-|---|---|---|
+|---|:---:|---|
 | `IP_Ising` | <img src="./figures/ASI_lattices/IP_Ising_8x8.png" alt="IP_Ising_8x8" width="200"/> | `a` is the distance between nearest neighbors. The occupation is full. |
 | `IP_Square` | <img src="./figures/ASI_lattices/IP_Square_5x5.png" alt="IP_Square_5x5" width="200"/> | `a` is the side length of a square, i.e. the side length of a unit cell. The occupation is 1/2. |
 | `IP_Pinwheel` | <img src="./figures/ASI_lattices/IP_Pinwheel_5x5.png" alt="IP_Pinwheel_5x5" width="200"/> | Same as `IP_Square`, but with all magnets rotated 45°. |
@@ -106,6 +112,6 @@ They all follow the pattern `hotspin.ASI.<class>(a, n, nx=None, ny=None, **kwarg
 ### Out-of-plane
 
 | Class | Lattice | Parameters |
-|---|---|---|
+|---|:---:|---|
 | `OOP_Square` | <img src="./figures/ASI_lattices/OOP_Square_11x11.png" alt="OOP_Square_11x11" width="200"/> | `a` is the distance between nearest neighbors. The occupation is full. |
 | `OOP_Triangle` | <img src="./figures/ASI_lattices/OOP_Triangle_7x4.png" alt="OOP_Triangle_7x4" width="200"/> | `a` is the distance between nearest neighbors. The occupation is 1/2. |
