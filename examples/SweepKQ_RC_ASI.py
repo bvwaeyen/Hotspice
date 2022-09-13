@@ -23,7 +23,7 @@ if __name__ == "__main__": # Need this because, when imported as a module, the a
 
 
 ## Create custom Sweep class to generate the relevant type of experiments
-class SweepTA_RC_ASI(hotspin.experiments.Sweep):
+class SweepKQ_RC_ASI(hotspin.experiments.Sweep):
     def __init__(self, groups=None, **kwargs): # If unsure, provide a kwarg as a tuple directly
         ''' Performs a sweep as in `Reservoir Computing in Artificial Spin Ice` by J. H. Jensen and G. Tufte.
             i.e. with binary input and RegionalOutputReader of variable resolution, with PerpFieldInputter.
@@ -55,7 +55,7 @@ dist_range = tuple(np.cbrt(3e-23/(alpha := np.linspace(3e-5, 3e-3, 16))))
 field_range = tuple(np.linspace(66e-3, 81e-3, 16))
 # field_range = tuple(np.linspace(75e-3, 81e-3, 16))
 nx = ny = 21
-sweep = SweepTA_RC_ASI(groups=[("res_x", "res_y")],
+sweep = SweepKQ_RC_ASI(groups=[("res_x", "res_y")],
     nx=nx, ny=ny,
     res_x=res_range, res_y=res_range,
     ext_field=field_range,

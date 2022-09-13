@@ -30,7 +30,7 @@ if __name__ != "__main__": raise RuntimeError("GPUparallel.py should only be run
 # Note that outdir and script_path are both relative to the current working directory, not to this file!
 parser = argparse.ArgumentParser(description="Runs the sweep defined in another script on all available GPUs.")
 parser.add_argument('script_path', type=str, nargs='?',
-                    default=os.path.join(os.path.dirname(__file__), "../../examples/SweepTA_RC_ASI.py"), #! hardcoded paths :(
+                    default=os.path.join(os.path.dirname(__file__), "../../examples/SweepKQ_RC_ASI.py"), #! hardcoded paths :(
                     help="The path of the script file containing the parameter sweep to be performed.")
 parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?',
                     default='results/Sweeps/Sweep',
