@@ -11,6 +11,7 @@ import sys
 import threading
 import warnings
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 
@@ -20,10 +21,10 @@ from typing import Callable, Iterable, TypeVar
 
 from . import config
 if config.USE_GPU:
-    import cupy as cp
+    import cupy as xp
     import cupy.lib.stride_tricks as striding
 else:
-    import numpy as cp
+    import numpy as xp
     import numpy.lib.stride_tricks as striding
 
 
@@ -40,44 +41,44 @@ def check_repetition(arr, nx: int, ny: int):
     end_y, end_x = current_checking.shape[:2]
     while end_y < arr.shape[0] or end_x < arr.shape[1]:
         if i % 2: # Extend in x-direction (axis=1)
-            current_checking = cp.tile(current_checking, (1, 2, *extra_dims))
+            current_checking = xp.tile(current_checking, (1, 2, *extra_dims))
             start_x = current_checking.shape[1]//2
             end_y, end_x = current_checking.shape[:2]
-            if not cp.allclose(current_checking[:max_y,start_x:max_x, ...], arr[:end_y, start_x:end_x, ...]):
+            if not xp.allclose(current_checking[:max_y,start_x:max_x, ...], arr[:end_y, start_x:end_x, ...]):
                 return False
         else: # Extend in y-direction (axis=0)
-            current_checking = cp.tile(current_checking, (2, 1, *extra_dims))
+            current_checking = xp.tile(current_checking, (2, 1, *extra_dims))
             start_y = current_checking.shape[0]//2
             end_y, end_x = current_checking.shape[:2]
-            if not cp.allclose(current_checking[start_y:max_y, :max_x, ...], arr[start_y:end_y, :end_x, ...]):
+            if not xp.allclose(current_checking[start_y:max_y, :max_x, ...], arr[start_y:end_y, :end_x, ...]):
                 return False
         i += 1
     return True
 
 def mirror4(arr, /, *, negativex=False, negativey=False):
-    ''' Mirrors the 2D CuPy array <arr> along some of the edges, in such a manner that the
+    ''' Mirrors the 2D array <arr> along some of the edges, in such a manner that the
         original element at [0,0] ends up in the middle of the returned array.
         Hence, if <arr> has shape (a, b), the returned array has shape (2*a - 1, 2*b - 1).
     '''
     ny, nx = arr.shape
-    arr4 = cp.zeros((2*ny-1, 2*nx-1))
-    xp = -1 if negativex else 1
-    yp = -1 if negativey else 1
+    arr4 = xp.zeros((2*ny-1, 2*nx-1))
+    x_sign = -1 if negativex else 1
+    y_sign = -1 if negativey else 1
     arr4[ny-1:, nx-1:] = arr
-    arr4[ny-1:, nx-1::-1] = xp*arr
-    arr4[ny-1::-1, nx-1:] = yp*arr
-    arr4[ny-1::-1, nx-1::-1] = xp*yp*arr
+    arr4[ny-1:, nx-1::-1] = x_sign*arr
+    arr4[ny-1::-1, nx-1:] = y_sign*arr
+    arr4[ny-1::-1, nx-1::-1] = x_sign*y_sign*arr
     return arr4
 
 def R_squared(a, b):
     ''' Returns the R² metric between two 1D arrays <a> and <b> as defined in
         "Task Agnostic Metrics for Reservoir Computing" by Love et al.
     '''
-    a, b = cp.asarray(a), cp.asarray(b)
-    cov = cp.mean((a - cp.mean(a))*(b - cp.mean(b)))
-    return cov**2/cp.var(a)/cp.var(b) # Same as cp.corrcoef(a, b)[0,1]**2, but faster
+    a, b = xp.asarray(a), xp.asarray(b)
+    cov = xp.mean((a - xp.mean(a))*(b - xp.mean(b)))
+    return cov**2/xp.var(a)/xp.var(b) # Same as xp.corrcoef(a, b)[0,1]**2, but faster
 
-def strided(a: cp.ndarray, W: int):
+def strided(a: xp.ndarray, W: int):
     ''' <a> is a 1D CuPy array, which gets expanded into 2D shape (a.size, W) where every row
         is a successively shifted version of the original <a>:
         the first row is [a[0], NaN, NaN, ...] with total length <W>.
@@ -87,7 +88,7 @@ def strided(a: cp.ndarray, W: int):
                 taken when editing the array; e.g. editing one element directly changes the
                 corresponding value in <a>, resulting in a whole diagonal being changed at once.
     '''
-    a_ext = cp.concatenate((cp.full(W - 1, cp.nan), a))
+    a_ext = xp.concatenate((xp.full(W - 1, xp.nan), a))
     n = a_ext.strides[0]
     return striding.as_strided(a_ext[W - 1:], shape=(a.size, W), strides=(n, -n))
 
@@ -156,7 +157,7 @@ def shell():
 
 ## CONVERSION
 Field = TypeVar("Field", int, float, list, np.ndarray, cp.ndarray) # Every type that can be parsed by as_2D_array()
-def as_2D_array(value: Field, shape: tuple) -> cp.ndarray:
+def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
     ''' Converts <value> to a 2D array of shape <shape>. If <value> is scalar, the returned
         array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
         as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.
@@ -165,24 +166,24 @@ def as_2D_array(value: Field, shape: tuple) -> cp.ndarray:
     is_scalar = True # Determine if <value> is scalar-like...
     if isinstance(value, list):
         try:
-            value = cp.asarray(value, dtype=float)
+            value = xp.asarray(value, dtype=float)
         except ValueError:
             raise ValueError("List of lists could not be converted to rectangular float64 CuPy array.")
     if isinstance(value, (np.ndarray, cp.ndarray)):
         if value.size != 1: is_scalar = False
 
     if is_scalar: # ... and act accordingly
-        return cp.ones(shape, dtype=float)*float(value)
+        return xp.ones(shape, dtype=float)*float(value)
     else:
         if value.size != math.prod(shape):
             raise ValueError(f"Incorrect shape: passed array of shape {value.shape} is not of desired shape {shape}.")
-        return cp.asarray(value).reshape(shape)
+        return xp.asarray(value).reshape(shape)
 
-def asnumpy(array: cp.ndarray) -> np.ndarray:
+def asnumpy(array: xp.ndarray) -> np.ndarray:
     ''' Converts the CuPy/NumPy array to a NumPy array, which is necessary for e.g. matplotlib. '''
-    try: # TODO: can not yet use 'isinstance', that is only possible when we have 'np', 'xp' and 'cp'.
-        return array.get() # If it is a CuPy array
-    except AttributeError:
+    if isinstance(array, cp.ndarray):
+        return array.get()
+    else:
         return np.asarray(array)
 
 def eV_to_J(E: float, /):
