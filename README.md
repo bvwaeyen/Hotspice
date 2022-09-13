@@ -5,7 +5,7 @@ The time evolution can either follow the Néel-Arrhenius law of switching over a
 
 ## Dependencies
 
-To create a new conda environment which only includes the necessary modules for hotspin, one can use the `environment.yml` file through the command
+To create a new conda environment which only includes the necessary modules for hotspin, one can use the [`environment.yml`](environment.yml) file through the command
 
 ```shell
 conda env create -n hotspin310 -f environment.yml
@@ -88,7 +88,7 @@ import hotspin # Only import AFTER setting HOTSPIN_USE_GPU!
 ```
 
 ## Available spin ices
-
+<!-- markdownlint-disable MD033 markdownlint-disable MD051 -->
 Several geometries are available out-of-the-box in hotspin.
 They are listed below with a small description of their peculiarities.
 They all follow the pattern `hotspin.ASI.<name>(a, n, nx=None, ny=None, **kwargs)`, where `n` is only required if either `nx` or `ny` is not specified.

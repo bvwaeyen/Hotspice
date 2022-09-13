@@ -110,14 +110,14 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
         x_comp = m
         y_comp = cp.zeros_like(m)
     mask = avg.mask
-    if mm.PBC:
-        magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode='same', boundary='wrap')
-        x_comp_avg = signal.convolve2d(x_comp, mask, mode='same', boundary='wrap')/magnets_in_avg
-        y_comp_avg = signal.convolve2d(y_comp, mask, mode='same', boundary='wrap')/magnets_in_avg
-    else:
-        magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode='valid', boundary='fill')
-        x_comp_avg = signal.convolve2d(x_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
-        y_comp_avg = signal.convolve2d(y_comp, mask, mode='valid', boundary='fill')/magnets_in_avg
+
+    mode = 'same' if mm.PBC else 'valid'
+    boundary = 'wrap' if mm.PBC else 'fill'
+    magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode=mode, boundary=boundary)
+    magnets_in_avg[cp.where(magnets_in_avg == 0)] = cp.inf # Prevent 0/0 warning
+    x_comp_avg = signal.convolve2d(x_comp, mask, mode=mode, boundary=boundary)/magnets_in_avg
+    y_comp_avg = signal.convolve2d(y_comp, mask, mode=mode, boundary=boundary)/magnets_in_avg
+
     angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % math.tau
     magnitudes_avg = cp.sqrt(x_comp_avg**2 + y_comp_avg**2)
     useless_angles = cp.where(cp.isclose(x_comp_avg, 0) & cp.isclose(y_comp_avg, 0), cp.NaN, 1) # No well-defined angle
@@ -147,6 +147,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
             s = cp.sign(mm.orientation[:,:,0])
             mask = Average.resolve(avg).mask
             n = signal.convolve2d(mm.occupation, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
+            n[cp.where(n == 0)] = cp.inf # Prevent 0/0 warning
             max_mag_x = signal.convolve2d(mm.orientation[:,:,0]*s, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
             max_mag_y = signal.convolve2d(mm.orientation[:,:,1]*s, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
             max_mean_magnitude = cp.sqrt(max_mag_x**2 + max_mag_y**2)/n
@@ -194,11 +195,16 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
             mm.update() has been called since: one can then pass these saved profiles as the <m> parameter to
             draw them onto the geometry stored in <mm>.
         @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon'.
+        @param figscale [float] (1): the figure is 3*<figscale> inches high. The width scales similarly. 
         @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
         @param overlay_quiver [bool] (False): if True, the quiver plot is shown overlaid on the color average plot.
         @param color_quiver [bool] (True): if True, the quiver plot arrows are colored according to their angle.
+        @param unit [str] ('µ'): the symbol of the unit. Automatically converts this to a power of 10 for scaling.
         @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this show_m().
+        @param fontsize_colorbar [int] (10): the font size of the color bar description.
+        @param fontsize_axes [int] (10): the font size of the axes labels and titles.
+        @param text_averaging [bool] (True): if False, the averaging mask is not stated in the colorbar description.
     '''
     avg = Average.resolve(avg, mm)
     figparams.setdefault('fontsize_colorbar', 10)
@@ -231,27 +237,27 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         c1 = plt.colorbar(im1)
         c1.ax.get_yaxis().labelpad = 10 + 2*figparams['fontsize_colorbar']
         text = "Averaged magnetization angle [rad]"
-        if figparams["text_averaging"]: text += f"\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})"
+        if figparams['text_averaging']: text += f"\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})"
         c1.ax.set_ylabel(text, rotation=270, fontsize=figparams['fontsize_colorbar'])
     else:
         r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
         r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
-        cdict = {'red':   [[0.0,  r0, r0], # x, value_left, value_right
-                   [0.5,  0.0, 0.0],
-                   [1.0,  r1, r1]],
-         'green': [[0.0,  g0, g0],
-                   [0.5, 0.0, 0.0],
-                   [1.0,  g1, g1]],
-         'blue':  [[0.0,  b0, b0],
-                   [0.5,  0.0, 0.0],
-                   [1.0,  b1, b1]]}
+        cdict = {'red':   [[0.0, r0,  r0], # x, value_left, value_right
+                           [0.5, 0.0, 0.0],
+                           [1.0, r1,  r1]],
+                 'green': [[0.0, g0,  g0],
+                           [0.5, 0.0, 0.0],
+                           [1.0, g1,  g1]],
+                 'blue':  [[0.0, b0,  b0],
+                           [0.5, 0.0, 0.0],
+                           [1.0, b1,  b1]]}
         newcmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
         im1 = ax1.imshow(im, cmap=newcmap, origin='lower', vmin=-1, vmax=1,
                          extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba')
         c1 = plt.colorbar(im1)
         c1.ax.get_yaxis().labelpad = 10 + 2*figparams['fontsize_colorbar']
         text = "Averaged magnetization"
-        if figparams["text_averaging"]: text += f"\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})"
+        if figparams['text_averaging']: text += f"\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})"
         c1.ax.set_ylabel(text, rotation=270, fontsize=figparams['fontsize_colorbar'])
     ax1.set_xlabel(f'x [{unit}m]')
     ax1.set_ylabel(f'y [{unit}m]')

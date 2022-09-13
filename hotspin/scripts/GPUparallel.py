@@ -66,7 +66,8 @@ outdir = args.outdir + (timestamp := hotspin.utils.timestamp())
 
 def runner(i):
     # Select an available gpu
-    gpu = q.get()
+    q_num = q.get()
+    gpu = q_num % N_GPU
     # Run a shell command that runs the relevant python script
     hotspin.utils.log(f"Attempting to run job #{i} of {num_jobs} on GPU{gpu}...")
     cmd = f"python {args.script_path} -o {outdir} {i}"
@@ -80,7 +81,7 @@ def runner(i):
         warnings.warn(f"The command '{cmd}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
 
     # Return gpu id to queue
-    q.put(gpu)
+    q.put(q_num)
 
 
 ## Run the jobs
