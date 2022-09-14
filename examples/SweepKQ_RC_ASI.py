@@ -6,9 +6,7 @@ import numpy as np
 import pandas as pd
 
 try: from context import hotspin
-except: import hotspin
-from hotspin.experiments import KernelQualityExperiment
-from hotspin.utils import Data, is_significant
+except ModuleNotFoundError: import hotspin
 
 
 ## Define, parse and clean command-line arguments
@@ -35,14 +33,14 @@ class SweepKQ_RC_ASI(hotspin.experiments.Sweep):
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
         super().__init__(groups=groups, **kwargs)
 
-    def create_experiment(self, params: dict) -> KernelQualityExperiment:
+    def create_experiment(self, params: dict) -> hotspin.experiments.KernelQualityExperiment:
         mm = getattr(hotspin.ASI, params["ASI_type"])(params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
             pattern='uniform', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()),
             params=hotspin.SimParams(UPDATE_SCHEME='Néel', SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF=0)) # Need Néel for inputter
         datastream = hotspin.io.RandomBinaryDatastream()
         inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=True, frequency=1, half_period=False) # Frequency does not matter as long as it is nonzero and reasonable
         outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm) # TODO: update this!!1!1!!I!
-        experiment = KernelQualityExperiment(inputter, outputreader, mm)
+        experiment = hotspin.experiments.KernelQualityExperiment(inputter, outputreader, mm)
         return experiment
 
 
@@ -65,7 +63,7 @@ sweep = SweepKQ_RC_ASI(groups=[("res_x", "res_y")],
 )
 
 
-def process_single(vars: dict, experiment: KernelQualityExperiment, save=True, **kwargs):
+def process_single(vars: dict, experiment: hotspin.experiments.KernelQualityExperiment, save=True, **kwargs):
     #! This is a pretty generic function that won't change much even for different Sweep or Experiment subclasses
     #! except for some arguments to the experiment.run() call and details in the (meta)data.
     experiment_kwargs = {k: kwargs[k] for k in ("input_length", "verbose") if k in kwargs}
@@ -86,7 +84,7 @@ def process_single(vars: dict, experiment: KernelQualityExperiment, save=True, *
     }
     constants = {"inputter": hotspin.utils.full_obj_name(experiment.inputter), "outputreader": hotspin.utils.full_obj_name(experiment.outputreader), "datastream": hotspin.utils.full_obj_name(experiment.inputter.datastream),
         "ASI_type": hotspin.utils.full_obj_name(experiment.mm)} | sweep.constants
-    data_i = Data(df_i, metadata=metadata, constants=constants)
+    data_i = hotspin.utils.Data(df_i, metadata=metadata, constants=constants)
     if save:
         saved_path = data_i.save(dir=outdir, name=savename, timestamp=True)
         hotspin.utils.log(f"Saved iteration #{args.iteration} to {saved_path}")

@@ -428,7 +428,7 @@ class Magnets(ABC):
         if idx_x.size != 0:
             return cp.asarray([idx_y.reshape(-1), idx_x.reshape(-1)])
         else:
-            return self._select_single(r) # If no samples survived, just select a single one at random
+            return self._select_single() # If no samples survived, just select a single one at random
 
     def _select_Poisson(self, r=None, **kwargs): # WARN: does not take occupation into account, so preferably only use on OOP_Square/IP_Ising!
         if r is None: r = self.calc_r(0.01)
@@ -895,7 +895,7 @@ class DipolarEnergy(Energy):
             unitcell_o = self.mm.occupation[:self.unitcell.y,:self.unitcell.x]
             toolargematrix_o = cp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
         # Now comes the part where we start splitting the different cells in the unit cells
-        self.kernel_unitcell_indices = -cp.ones((self.unitcell.x, self.unitcell.y), dtype=int)
+        self.kernel_unitcell_indices = -cp.ones((self.unitcell.y, self.unitcell.x), dtype=int) # unitcell (y,x) -> kernel (i)
         self.kernel_unitcell = []
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
@@ -943,7 +943,7 @@ class DipolarEnergy(Energy):
         total_energy = cp.zeros_like(self.mm.m)
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
-                if (n := self.kernel_unitcell_indices[y, x]) < 0:
+                if (n := self.kernel_unitcell_indices[y,x]) < 0:
                     continue
                 else:
                     kernel = self.kernel_unitcell[n,:,:]

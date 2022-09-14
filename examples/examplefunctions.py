@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib import animation, cm, colors
 
 try: from context import hotspin
-except: import hotspin
+except ModuleNotFoundError: import hotspin
 
 
 def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, verbose=False, show_m=True, **kwargs):

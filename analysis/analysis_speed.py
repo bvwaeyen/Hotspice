@@ -20,7 +20,7 @@ def analysis_speed(mm: hotspin.Magnets, t_min: float = 1, n_min: int = 1, verbos
     while (i := i + 1) < n_min or time.perf_counter() - t0 < t_min: # Do this for at least <n_min> iterations and <t_min> seconds
         mm.update()
     dt = time.perf_counter() - t0
-    if verbose: print(f'[{hotspin.utils.readable_bytes(hotspin.utils.get_gpu_memory()["free"])} free on GPU] Time required for {i} runs ({mm.switches} switches) of Magnets.select() on {mm.nx}x{mm.ny} grid: {dt:.3f}s.')
+    if verbose: print(f'[{hotspin.utils.get_gpu_memory()["free"]} free on GPU] Time required for {i} runs ({mm.switches} switches) of Magnets.select() on {mm.nx}x{mm.ny} grid: {dt:.3f}s.')
     return {"attempts/s": mm.attempted_switches/dt, "switches/s": mm.switches/dt, "MCsteps/s": mm.MCsteps/dt}
 
 
@@ -30,10 +30,11 @@ def analysis_speed_size(L_range, ASI_type: type[hotspin.Magnets] = hotspin.ASI.O
     attempts_per_s = np.zeros_like(L_range, dtype='float')
     switches_per_s = np.zeros_like(L_range, dtype='float')
     MCsteps_per_s = np.zeros_like(L_range, dtype='float')
+    # TODO: add initialization time (perhaps on the right axis? or 'initializations per second' which is a bit weird?)
     for i, L in enumerate(L_range):
         try:
-            mm = ASI_type(L, 1e-6, ny=L, **kwargs)
-        except:
+            mm = ASI_type(1e-6, L, ny=L, **kwargs)
+        except Exception:
             if verbose: print(f"Could not initialize {ASI_type} for L={L}.")
             continue
         x = analysis_speed(mm, verbose=verbose)
@@ -81,8 +82,9 @@ def analysis_speed_size_plot(df: pd.DataFrame, save=False, show=True):
 
 
 if __name__ == "__main__":
-    L_range = np.concatenate([np.arange(1, 100, 1), np.arange(100, 400, 5), np.arange(400, 600, 10), np.arange(600, 1001, 25)])
-    analysis_speed_size(L_range=L_range, save=True, plot=True, T=100, PBC=True, verbose=True)
+    L_range = np.concatenate([np.arange(1, 100, 1), np.arange(100, 400, 5), np.arange(400, 600, 10), np.arange(600, 1001, 25)]) # for GPU
+    # L_range = np.concatenate([np.arange(1, 100, 1), np.arange(100, 251, 5)]) # for CPU
+    # analysis_speed_size(L_range=L_range, save=True, plot=True, T=100, PBC=True, verbose=True)
 
     # plot = False
     # T = 100

@@ -1,11 +1,8 @@
 import math
 import os
-import pandas as pd
 
 try: from context import hotspin
-except: import hotspin
-from hotspin.experiments import TaskAgnosticExperiment
-from hotspin.utils import Data, log
+except ModuleNotFoundError: import hotspin
 
 
 class SweepTAExperiment(hotspin.experiments.Sweep): # Example of a fully implemented Sweep subclass
@@ -17,13 +14,13 @@ class SweepTAExperiment(hotspin.experiments.Sweep): # Example of a fully impleme
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
         super().__init__(groups=groups, **kwargs)
 
-    def create_experiment(self, params: dict) -> TaskAgnosticExperiment:
+    def create_experiment(self, params: dict) -> hotspin.experiments.TaskAgnosticExperiment:
         mm = params["ASI_type"](params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
             pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel'))
         datastream = hotspin.io.RandomBinaryDatastream()
         inputter = hotspin.io.FieldInputterBinary(datastream, magnitudes=(params["H_min"], params["H_max"]), angle=params["H_angle"], n=2, sine=params["sine"])
         outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm)
-        experiment = TaskAgnosticExperiment(inputter, outputreader, mm)
+        experiment = hotspin.experiments.TaskAgnosticExperiment(inputter, outputreader, mm)
         return experiment
 
 
@@ -39,13 +36,13 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
         super().__init__(groups=groups, **kwargs)
 
-    def create_experiment(self, params: dict) -> TaskAgnosticExperiment:
+    def create_experiment(self, params: dict) -> hotspin.experiments.TaskAgnosticExperiment:
         mm = getattr(hotspin.ASI, params["ASI_type"])(params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
             pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel'))
         datastream = hotspin.io.RandomBinaryDatastream()
         inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=params["sine"])
         outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm)
-        experiment = TaskAgnosticExperiment(inputter, outputreader, mm)
+        experiment = hotspin.experiments.TaskAgnosticExperiment(inputter, outputreader, mm)
         return experiment
 
 
@@ -63,9 +60,9 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
     temp_time = hotspin.utils.timestamp()
     temp_dir = f"results/TaskAgnosticExperiment/Sweep.temp{temp_time}"
     vars: dict
-    experiment: TaskAgnosticExperiment
+    experiment: hotspin.experiments.TaskAgnosticExperiment
     for i, (vars, experiment) in enumerate(sweep):
-        if verbose: log("Variables in this iteration:", vars, "\nConstants:", sweep.constants)
+        if verbose: hotspin.utils.log("Variables in this iteration:", vars, "\nConstants:", sweep.constants)
         experiment.run(N=iterations, verbose=verbose)
 
         # Preliminary save of the data in this iteration, just in case an error would occur later on 
@@ -83,7 +80,7 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
         }
         constants = {"inputter": hotspin.utils.full_obj_name(experiment.inputter), "outputreader": hotspin.utils.full_obj_name(experiment.outputreader), "datastream": hotspin.utils.full_obj_name(experiment.inputter.datastream),
             "ASI_type": hotspin.utils.full_obj_name(experiment.mm)} | sweep.constants
-        data_i = Data(df_i, metadata=metadata, constants=constants)
+        data_i = hotspin.utils.Data(df_i, metadata=metadata, constants=constants)
         if save: save = data_i.save(dir=temp_dir, name=savename, timestamp=True)
     
     return os.path.abspath(temp_dir)

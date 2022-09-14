@@ -55,7 +55,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     if Ly is None: Ly = L
     if Lx is None: Lx = L
     if ASI_type is None: ASI_type = hotspin.ASI.OOP_Square
-    mm = ASI_type(Lx, 1, ny=Ly, PBC=PBC, params=params)
+    mm = ASI_type(1, Lx, ny=Ly, PBC=PBC, params=params)
     INTEGER_BINS = False # If true, the bins are pure integers, otherwise they can be finer than this.
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
     scale: int = 3 if ONLY_SMALLEST_DISTANCE else 4 # The distances are stored up to scale*r, beyond that we dont keep in memory

@@ -93,7 +93,7 @@ class Sweep(ABC):
         ''' Converts <iterable> into a tuple, or a length-1 tuple if <iterable> is not iterable.'''
         if isinstance(iterable, str): return (iterable,) # We don't want to parse strings character by character
         try: return tuple(iterable)
-        except: return (iterable,)
+        except TypeError: return (iterable,)
 
     def __len__(self) -> int:
         return np.prod(self.n_per_group)
@@ -292,6 +292,8 @@ class TaskAgnosticExperiment(Experiment):
             to implement task-agnostic metrics for reservoir computing using a single random input signal.
         '''
         super().__init__(inputter, outputreader, mm)
+        if self.inputter.datastream.is_binary:
+            warnings.warn("A TaskAgnosticExperiment might not work properly for a binary datastream.", stacklevel=2)
         self.results = {'NL': None, 'MC': None, 'CP': None, 'S': None}
         self.initial_state = self.outputreader.read_state().reshape(-1)
         self.n_out = self.outputreader.n

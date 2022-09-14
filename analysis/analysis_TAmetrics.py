@@ -36,7 +36,7 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
             MC[index] = experiment.MC(k=k)
             CP[index] = experiment.CP()
             if verbose: print("Performed iteration", index, "of", (k_range.size-1, N_range.size-1))
-        except:
+        except Exception:
             if verbose: print("Failed in iteration", index, "of", (k_range.size-1, N_range.size-1))
     
     # BELOW HERE IS STILL UNDER CONSTRUCTION, ABOVE HERE SHOULD BE OK

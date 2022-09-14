@@ -120,10 +120,11 @@ def is_significant(i: int, N: int, order: float=1) -> bool:
         return True
     return False
 
-def readable_bytes(N):
+def readable_bytes(N: int):
+    if not isinstance(N, int): raise ValueError('Number of bytes must be an integer.')
     if N < 1024: return f"{N:.0f} B"
     i = int(math.floor(math.log(N, 1024)))
-    number = N / 1024**i
+    number = N/(1024**i)
     return f"{number:.2f} {('B', 'KiB', 'MiB', 'GiB', 'TiB')[i]}"
 
 def unit_prefix_to_mul(unit):
@@ -147,7 +148,7 @@ def shell():
         print(f'(i.e. {caller.filename}:{caller.lineno}-{caller.function}).')
         print(f'Call "exit" to stop this interactive shell.')
         print(f'Warning: Ctrl+C will stop the program entirely, not just this shell, so take care which commands you run.')
-    except:
+    except Exception:
         pass # Just to make sure we don't break when logging
     try:
         InteractiveShellEmbed().mainloop(stack_depth=1)
@@ -273,7 +274,7 @@ class Data: # TODO: make generalized method for getting full column even if it i
         if not isinstance(value, pd.DataFrame):
             try: # Then assume <value> is a JSON-parseable object
                 value = pd.read_json(json.dumps(value), orient='split') 
-            except: # So no DataFrame, and not JSON-parseable? Just stop this madness.
+            except Exception: # So no DataFrame, and not JSON-parseable? Just stop this madness.
                 raise ValueError('Could not parse DataFrame-like object correctly.')
         self._df = value
         self._check_consistency()
@@ -302,7 +303,7 @@ class Data: # TODO: make generalized method for getting full column even if it i
             creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
             if 'hotspin' in creator_info:
                 creator_info = '...\\' + creator_info[len(creator_info.split('hotspin')[0]):]
-        except:
+        except Exception:
             creator_info = ''
         value.setdefault('creator', creator_info)
         value.setdefault('simulator', "Hotspin")
@@ -312,7 +313,7 @@ class Data: # TODO: make generalized method for getting full column even if it i
                 ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
                 encoding='utf-8').strip())).to_json(orient='table', index=False))['data']
             gpu_info = [{key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in d.items()} for d in gpu_info] # Remove spaces around key and value text
-        except:
+        except Exception:
             gpu_info = []
         value.setdefault('GPU', gpu_info)
         value.setdefault('hotspin_config', config.get_dict())
@@ -411,7 +412,7 @@ class Data: # TODO: make generalized method for getting full column even if it i
             except json.JSONDecodeError: # Nope, but EAFP ;)
                 try: # See if <JSON> is actually a file-like object
                     JSONdict = json.load(JSON)
-                except: # See if <JSON> is actually a string representing a file path
+                except Exception: # See if <JSON> is actually a string representing a file path
                     with open(JSON, 'r') as infile: JSONdict = json.load(infile)
         else:
             raise ValueError("Could not parse JSON-like object correctly.")
@@ -494,7 +495,7 @@ class _CompactJSONEncoder(json.JSONEncoder):
             return json.dumps(name) # use full obj name (e.g. hotspin.ASI.IP_Pinwheel etc.)
         else:
             try: return json.dumps(o)
-            except: return json.dumps(str(o)) # Otherwise just use string representation of whatever kind of object this might be
+            except Exception: return json.dumps(str(o)) # Otherwise just use string representation of whatever kind of object this might be
 
     def _is_single_line_list(self, o):
         if isinstance(o, (list, tuple)):

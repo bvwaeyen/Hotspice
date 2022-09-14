@@ -19,7 +19,7 @@ from joblib import Parallel, delayed
 from cupy.cuda.runtime import getDeviceCount
 
 try: import hotspin
-except: from context import hotspin
+except ModuleNotFoundError: from context import hotspin
 
 
 if __name__ != "__main__": raise RuntimeError("GPUparallel.py should only be run as a script, never as a module.")
@@ -48,7 +48,7 @@ sys.modules["sweepscript"] = foo
 spec.loader.exec_module(foo)
 try:
     sweep = foo.sweep
-except:
+except AttributeError:
     raise AttributeError("There is no global variable named 'sweep' in the provided script.")
 
 
