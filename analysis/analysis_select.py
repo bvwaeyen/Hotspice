@@ -8,17 +8,17 @@ from scipy.spatial import distance
 
 from context import hotspin
 if hotspin.config.USE_GPU:
-    import cupy as cp
+    import cupy as xp
 else:
-    import numpy as cp
+    import numpy as xp
 
 
 def calculate_any_neighbors(pos, shape, center: int = 0):
-    ''' @param pos [cp.array(2xN)]: the array of indices (row 0: y, row 1: x)
+    ''' @param pos [xp.array(2xN)]: the array of indices (row 0: y, row 1: x)
         @param shape [tuple(2)]: the maximum indices (+1) in y- and x- direction
         @param center [int]: if 0, then the full neighbor array is returned. If nonzero, only the 
             middle region (of at most <center> cells away from the middle) is returned.
-        @return [cp.array2D]: an array representing where the other samples are relative to every
+        @return [xp.array2D]: an array representing where the other samples are relative to every
             other sample. To this end, each sample is placed in the middle of the array, and all
             positions where another sample exists are incremented by 1. As such, the array is
             point-symmetric about its middle.
@@ -26,19 +26,19 @@ def calculate_any_neighbors(pos, shape, center: int = 0):
     # Note that this function can entirely be replaced by
     # signal.convolve2d(arr, arr, mode='full')
     # but this is very slow for large, sparse arrays like we are dealing with here.
-    final_array = cp.zeros((2*shape[0]-1)*(2*shape[1]-1))
+    final_array = xp.zeros((2*shape[0]-1)*(2*shape[1]-1))
     pairwise_distances = (pos.T[:,None,:] - pos.T).reshape(-1,2).T # The real distances as coordinates
     # But we need to bin them, so we have to increase everything so there are no nonzero elements, and flatten:
     pairwise_distances_flat = (pairwise_distances[0] + shape[0] - 1)*(2*shape[1]-1) + (pairwise_distances[1] + shape[1] - 1)
-    pairwise_distances_flat_binned = cp.bincount(pairwise_distances_flat)
+    pairwise_distances_flat_binned = xp.bincount(pairwise_distances_flat)
     final_array[:pairwise_distances_flat_binned.size] = pairwise_distances_flat_binned
     final_array = final_array.reshape((2*shape[0]-1, 2*shape[1]-1))
     if center == 0:
         return final_array # No need to center it at all
     else:
         pad_x, pad_y = -(shape[1] - center - 1), -(shape[0] - center - 1) # How much padding(>0)/cropping(<0) needed to center the array
-        final_array = final_array[:,-pad_x:-pad_x + 2*center+1] if pad_x < 0 else cp.pad(final_array, ((0,0), (pad_x,pad_x))) # x cropping/padding
-        final_array = final_array[-pad_y:-pad_y + 2*center+1,:] if pad_y < 0 else cp.pad(final_array, ((pad_y,pad_y), (0,0))) # y cropping/padding
+        final_array = final_array[:,-pad_x:-pad_x + 2*center+1] if pad_x < 0 else xp.pad(final_array, ((0,0), (pad_x,pad_x))) # x cropping/padding
+        final_array = final_array[-pad_y:-pad_y + 2*center+1,:] if pad_y < 0 else xp.pad(final_array, ((pad_y,pad_y), (0,0))) # y cropping/padding
         return final_array
 
 
@@ -60,28 +60,29 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
     scale: int = 3 if ONLY_SMALLEST_DISTANCE else 4 # The distances are stored up to scale*r, beyond that we dont keep in memory
 
-    distances_binned = cp.zeros(n_bins := int(r*scale+1)) if INTEGER_BINS else cp.zeros(n_bins := 99)
+    n_bins = int(r*scale+1) if INTEGER_BINS else 99
+    distances_binned = xp.zeros(n_bins)
     bin_width = r*scale/(n_bins-1)
     distance_bins = np.linspace(0, r*scale-bin_width, n_bins)
     max_dist_bin = r*scale
     
     t = time.perf_counter()
     total = 0 # Number of samples
-    min_dist = cp.inf # Minimal distance between 2 samples in 1 mm.select() call
-    field = cp.zeros_like(mm.m) # The number of times each given cell was chosen
-    field_local = cp.zeros((2*r*scale+1, 2*r*scale+1)) # Basically distances_binned, but in 2D (distribution of neighbors around a choice)
-    spectrum = cp.zeros_like(field)
+    min_dist = xp.inf # Minimal distance between 2 samples in 1 mm.select() call
+    field = xp.zeros_like(mm.m) # The number of times each given cell was chosen
+    field_local = xp.zeros((2*r*scale+1, 2*r*scale+1)) # Basically distances_binned, but in 2D (distribution of neighbors around a choice)
+    spectrum = xp.zeros_like(field)
     for _ in range(n):
         # from poisson_disc import Bridson_sampling
-        # pos = cp.asarray(Bridson_sampling(dims=np.array([Ly, Lx]), radius=r, k=5).T, dtype=int) # POISSON DISC SAMPLING BRIDSON2007
+        # pos = xp.asarray(Bridson_sampling(dims=np.array([Ly, Lx]), radius=r, k=5).T, dtype=int) # POISSON DISC SAMPLING BRIDSON2007
         pos = mm.select(r=r)
         total += pos.shape[1]
-        choices = cp.zeros_like(field)
+        choices = xp.zeros_like(field)
         choices[pos[0], pos[1]] += 1
         field += choices
         if mm.PBC:
             _, n_pos = pos.shape # The following approach is quite suboptimal, but it works :)
-            all_pos = cp.zeros((2, n_pos*4), dtype=int)
+            all_pos = xp.zeros((2, n_pos*4), dtype=int)
             all_pos[:,:n_pos] = pos
             all_pos[0,n_pos:n_pos*2] = all_pos[0,:n_pos] + mm.ny
             all_pos[1,n_pos:n_pos*2] = all_pos[1,:n_pos]
@@ -91,21 +92,21 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
             all_pos = pos
         if all_pos.shape[1] > 1: # if there is more than 1 sample
             if ONLY_SMALLEST_DISTANCE:
-                dist_matrix = cp.asarray(distance.cdist(hotspin.utils.asnumpy(all_pos.T), hotspin.utils.asnumpy(all_pos.T)))
+                dist_matrix = xp.asarray(distance.cdist(hotspin.utils.asnumpy(all_pos.T), hotspin.utils.asnumpy(all_pos.T)))
                 dist_matrix[dist_matrix==0] = np.inf
-                distances = cp.min(dist_matrix, axis=1)
+                distances = xp.min(dist_matrix, axis=1)
             else:
-                distances = cp.asarray(distance.pdist(hotspin.utils.asnumpy(all_pos.T)))
-            # if min_dist > (m := cp.min(distances)) and m < r:
-            #     indices = cp.where(distances == m)[0]
+                distances = xp.asarray(distance.pdist(hotspin.utils.asnumpy(all_pos.T)))
+            # if min_dist > (m := xp.min(distances)) and m < r:
+            #     indices = xp.where(distances == m)[0]
             #     print(m, pos[:,indices])
-            min_dist = min(min_dist, cp.min(distances))
+            min_dist = min(min_dist, xp.min(distances))
             near_distances = distances[distances < max_dist_bin]
             if near_distances.size != 0:
-                bin_counts = cp.bincount(cp.clip(cp.floor(near_distances/r*(n_bins/scale)), 0, n_bins-1).astype(int))
+                bin_counts = xp.bincount(xp.clip(xp.floor(near_distances/r*(n_bins/scale)), 0, n_bins-1).astype(int))
                 distances_binned[:bin_counts.size] += bin_counts
             field_local += calculate_any_neighbors(all_pos, (mm.ny*(1+mm.PBC), mm.nx*(1+mm.PBC)), center=r*scale)
-            spectrum += cp.log(cp.abs(cp.fft.fftshift(cp.fft.fft2(choices)))) # Not sure if this should be done always or only if more than 1 sample exists
+            spectrum += xp.log(xp.abs(xp.fft.fftshift(xp.fft.fft2(choices)))) # Not sure if this should be done always or only if more than 1 sample exists
         
     field_local[r*scale, r*scale] = 0 # set center value to zero
     t = time.perf_counter() - t
@@ -125,7 +126,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     if ONLY_SMALLEST_DISTANCE:
         color_left = 'C1'
         ax1.set_xlabel('Distance to nearest neighbor (binned)')
-        data1_left = hotspin.utils.asnumpy(distances_binned/cp.sum(distances_binned))/(bin_width/r)
+        data1_left = hotspin.utils.asnumpy(distances_binned/xp.sum(distances_binned))/(bin_width/r)
         ax1.fill_between(distance_bins, data1_left, step='post', edgecolor=color_left, facecolor=color_left, alpha=0.7)
         ax1.set_ylabel('Probability density [$r^{-1}$]', color=color_left)
         ax1.tick_params(axis='y', labelcolor=color_left)
@@ -133,7 +134,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
         ax1_right = ax1.twinx() # instantiate a second axes that shares the same x-axis
         color_right = 'C0'
         ax1_right.set_ylabel('Cumulative probability', color=color_right)
-        data1_right = hotspin.utils.asnumpy(cp.cumsum(distances_binned/cp.sum(distances_binned)))
+        data1_right = hotspin.utils.asnumpy(xp.cumsum(distances_binned/xp.sum(distances_binned)))
         ax1_right.bar(distance_bins, data1_right, align='edge', width=bin_width, color=color_right)
         ax1_right.tick_params(axis='y', labelcolor=color_right)
         ax1.set_zorder(ax1_right.get_zorder() + 1)
@@ -169,7 +170,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
 
     # PLOT 4: PERIODOGRAM
     ax4 = fig.add_subplot(2, 2, 4)
-    freq = hotspin.utils.asnumpy(cp.fft.fftshift(cp.fft.fftfreq(mm.nx, d=1))) # use fftshift to get ascending frequency order
+    freq = hotspin.utils.asnumpy(xp.fft.fftshift(xp.fft.fftfreq(mm.nx, d=1))) # use fftshift to get ascending frequency order
     data4 = hotspin.utils.asnumpy(spectrum)/total
     im4 = ax4.imshow(data4, extent=[-.5+freq[0], .5+freq[-1], -.5+freq[0], .5+freq[-1]], interpolation_stage='rgba', interpolation='none', cmap='gray')
     ax4.set_title(f'Periodogram')

@@ -73,8 +73,8 @@ def runner(i):
     cmd = f"python {args.script_path} -o {outdir} {i}"
     try:
         env = os.environ.copy()
-        env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  #! These os.environ statements must be done before running any cupy statement (importing is fine),
-        env["CUDA_VISIBLE_DEVICES"] = f"{gpu:d}" #! but since cupy is imported separately in the subprocess python script this is not an issue.
+        env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  #! These os.environ statements must be done before running any CuPy statement (importing is fine),
+        env["CUDA_VISIBLE_DEVICES"] = f"{gpu:d}" #! but since CuPy is imported separately in the subprocess python script this is not an issue.
         subprocess.run(["python", args.script_path, '-o', outdir, str(i)], check=True, env=env)
     except subprocess.CalledProcessError: # This error type is expected due to check=True
         failed.append(i)

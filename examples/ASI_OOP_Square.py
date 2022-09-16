@@ -8,10 +8,10 @@ from matplotlib import animation
 import examplefunctions as ef
 from context import hotspin
 if hotspin.config.USE_GPU:
-    import cupy as cp
+    import cupy as xp
     from cupyx.scipy import signal
 else:
-    import numpy as cp
+    import numpy as xp
     from scipy import signal
 
 
@@ -43,7 +43,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
     mask = hotspin.utils.asnumpy(hotspin.plottools.Average.resolve(mm._get_appropriate_avg()).mask)
-    image = signal.convolve2d(mm.m, cp.asarray(mask), mode='valid', boundary='wrap' if mm.PBC else 'fill')
+    image = signal.convolve2d(mm.m, xp.asarray(mask), mode='valid', boundary='wrap' if mm.PBC else 'fill')
     h = ax1.imshow(hotspin.utils.asnumpy(image), cmap='gray', origin='lower',
                    vmin=-np.sum(mask), vmax=np.sum(mask), interpolation_stage='rgba', interpolation='antialiased')
     ax1.set_title(r'Averaged magnetization')

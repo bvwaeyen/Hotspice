@@ -1,5 +1,6 @@
 import math
 
+import cupy as cp
 import numpy as np
 
 from abc import ABC, abstractmethod
@@ -9,18 +10,18 @@ from .plottools import show_m
 from .utils import log
 from . import config
 if config.USE_GPU:
-    import cupy as cp
+    import cupy as xp
 else:
-    import numpy as cp
+    import numpy as xp
 
 
 class Datastream(ABC):
     def __init__(self):
-        self.rng = cp.random.default_rng()
+        self.rng = xp.random.default_rng()
 
     @abstractmethod
-    def get_next(self, n=1) -> cp.ndarray:
-        """ Calling this method returns a CuPy array containing exactly <n> elements, containing the requested data.
+    def get_next(self, n=1) -> xp.ndarray:
+        """ Calling this method returns an array containing exactly <n> elements, containing the requested data.
             Depending on the specific subclass, these can be int or float.
         """
 
@@ -53,9 +54,9 @@ class OutputReader(ABC):
         if mm is not None: self.configure_for(mm)
 
     @abstractmethod
-    def read_state(self, mm: Magnets) -> cp.ndarray:
+    def read_state(self, mm: Magnets) -> xp.ndarray:
         """ Reads the current state of the <mm> simulation in some way. """
-        self.state = cp.arange(self.n)
+        self.state = xp.arange(self.n)
         return self.state
 
     def configure_for(self, mm: Magnets):
@@ -81,8 +82,8 @@ class RandomBinaryDatastream(BinaryDatastream):
         self.p0 = p0
         super().__init__()
 
-    def get_next(self, n=1) -> cp.ndarray:
-        return cp.where(self.rng.random(size=(n,)) < self.p0, 0, 1)
+    def get_next(self, n=1) -> xp.ndarray:
+        return xp.where(self.rng.random(size=(n,)) < self.p0, 0, 1)
 
 class RandomUniformDatastream(Datastream):
     def __init__(self, low=0, high=1):
@@ -90,7 +91,7 @@ class RandomUniformDatastream(Datastream):
         self.low, self.high = low, high
         super().__init__()
 
-    def get_next(self, n=1) -> cp.ndarray:
+    def get_next(self, n=1) -> xp.ndarray:
         return (self.high - self.low)*self.rng.random(size=(n,)) + self.low
 
 
@@ -244,26 +245,26 @@ class RegionalOutputReader(OutputReader):
 
     def configure_for(self, mm: Magnets):
         self.mm = mm
-        self.region_x = cp.floor(cp.linspace(0, self.nx, mm.nx)).astype(int)
-        self.region_y = cp.floor(cp.linspace(0, self.ny, mm.ny)).astype(int)
+        self.region_x = xp.floor(xp.linspace(0, self.nx, mm.nx)).astype(int)
+        self.region_y = xp.floor(xp.linspace(0, self.ny, mm.ny)).astype(int)
         self.region_x[-1] = self.nx - 1
         self.region_y[-1] = self.ny - 1
         self.region_x = np.tile(self.region_x, (mm.ny, 1))
         self.region_y = np.tile(self.region_y, (mm.nx, 1)).T
 
-        n = cp.zeros_like(self.grid)
+        n = xp.zeros_like(self.grid)
         # Determine the number of magnets in each region
         for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
             here = (self.region_x == i[0]) & (self.region_y == i[1])
-            n[i] = cp.sum(mm.occupation[here])
-        self.normalization_factor = float(cp.max(self.mm.moment))*n
+            n[i] = xp.sum(mm.occupation[here])
+        self.normalization_factor = float(xp.max(self.mm.moment))*n
 
         if mm.in_plane:
-            self.state = cp.zeros((self.nx, self.ny, 2))
+            self.state = xp.zeros((self.nx, self.ny, 2))
         else:
-            self.state = cp.zeros((self.nx, self.ny))
+            self.state = xp.zeros((self.nx, self.ny))
 
-    def read_state(self, mm: Magnets = None, m=None) -> cp.ndarray:
+    def read_state(self, mm: Magnets = None, m=None) -> xp.ndarray:
         if mm is not None: self.configure_for(mm) # If mm not specified, we suppose configure_for() already happened
         if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
         if self.mm.in_plane:
@@ -274,17 +275,17 @@ class RegionalOutputReader(OutputReader):
         for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
             here = (self.region_x == i[0]) & (self.region_y == i[1])
             if self.mm.in_plane:
-                self.state[i[0], i[1], 0] = cp.sum(m_x[here]) # Average m_x
-                self.state[i[0], i[1], 1] = cp.sum(m_y[here]) # Average m_y
+                self.state[i[0], i[1], 0] = xp.sum(m_x[here]) # Average m_x
+                self.state[i[0], i[1], 1] = xp.sum(m_y[here]) # Average m_y
             else:
-                self.state[i[0], i[1]] = cp.sum(m[here])
+                self.state[i[0], i[1]] = xp.sum(m[here])
 
         return self.state # [Am²]
 
-    def inflate_flat_array(self, arr: np.ndarray|cp.ndarray):
+    def inflate_flat_array(self, arr: np.ndarray|xp.ndarray):
         ''' Transforms a 1D array <arr> to have the same shape as <self.state>.
             Basically the inverse transformation as done on <self.state> when calling <self.state.reshape(-1)>.
-            @param arr [array]: a NumPy or CuPy array of shape (<self.n>,).
+            @param arr [array]: an array of shape (<self.n>,).
         '''
         if self.mm.in_plane:
             return arr.reshape(self.nx, self.ny, 2)

@@ -18,9 +18,9 @@ from .plottools import close_interactive, init_interactive, init_fonts, show_m
 from .utils import asnumpy, Data, filter_kwargs, human_sort, is_significant, log, R_squared, strided
 from . import config
 if config.USE_GPU:
-    import cupy as cp
+    import cupy as xp
 else:
-    import numpy as cp
+    import numpy as xp
 
 
 class Experiment(ABC):
@@ -188,7 +188,7 @@ class KernelQualityExperiment(Experiment):
         self.run_G(input_length=input_length, constant_fraction=constant_fraction, verbose=verbose)
 
     def run_K(self, input_length: int = 100, verbose=False):
-        self.all_states_K = cp.zeros((self.n_out,)*2)
+        self.all_states_K = xp.zeros((self.n_out,)*2)
         self.all_inputs_K = ["" for _ in range(self.n_out)]
 
         for i in range(self.n_out): # To get a square matrix, record the state as many times as there are output values
@@ -206,7 +206,7 @@ class KernelQualityExperiment(Experiment):
         ''' @param constant_fraction [float] (0.6): the last <constant_fraction>*<input_length> bits will
                 be equal for all <self.n_out> bit sequences.
         '''
-        self.all_states_G = cp.zeros((self.n_out,)*2)
+        self.all_states_G = xp.zeros((self.n_out,)*2)
         self.all_inputs_G = ["" for _ in range(self.n_out)]
         constant_length = int(input_length*constant_fraction)
         constant_sequence = self.inputter.datastream.get_next(n=constant_length)
@@ -231,13 +231,13 @@ class KernelQualityExperiment(Experiment):
     def calculate_all(self, ignore_errors=True, **kwargs):
         ''' Recalculates K, G, k and g if possible. '''
         try:
-            self.results['K'] = int(cp.linalg.matrix_rank(self.all_states_K))
+            self.results['K'] = int(xp.linalg.matrix_rank(self.all_states_K))
             self.results['k'] = self.results['K']/self.n_out
         except AttributeError:
             if not ignore_errors: raise
 
         try:
-            self.results['G'] = int(cp.linalg.matrix_rank(self.all_states_G))
+            self.results['G'] = int(xp.linalg.matrix_rank(self.all_states_G))
             self.results['g'] = self.results['G']/self.n_out
         except AttributeError:
             if not ignore_errors: raise
@@ -261,7 +261,7 @@ class KernelQualityExperiment(Experiment):
         return df
 
     def load_dataframe(self, df: pd.DataFrame):
-        ''' Loads the CuPy arrays <all_states_K> and <all_states_G> stored in the dataframe <df>
+        ''' Loads the arrays <all_states_K> and <all_states_G> stored in the dataframe <df>
             into the <self.all_states_K> and <self.all_states_G> attributes, and returns both.
         '''
         df_K = df[df["metric"] == 'K']
@@ -276,8 +276,8 @@ class KernelQualityExperiment(Experiment):
         y_cols.sort(key=human_sort) # Usually of the format 'y0', 'y1', 'y2', ..., 'y10', where human_sort makes sure e.g. 10 comes after 2
         self.n_out = len(y_cols)
 
-        self.all_states_K = cp.asarray(df_K[y_cols])
-        self.all_states_G = cp.asarray(df_G[y_cols])
+        self.all_states_K = xp.asarray(df_K[y_cols])
+        self.all_states_G = xp.asarray(df_G[y_cols])
         self.all_inputs_K = list(df_K["inputs"])
         self.all_inputs_G = list(df_G["inputs"])
 
@@ -329,8 +329,8 @@ class TaskAgnosticExperiment(Experiment):
             self.mm.relax()
             self.initial_state = self.outputreader.read_state().reshape(-1)
         # Run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
-        u = cp.zeros(N) # Inputs
-        y = cp.zeros((N, self.n_out)) # Outputs
+        u = xp.zeros(N) # Inputs
+        y = xp.zeros((N, self.n_out)) # Outputs
         for i in range(N):
             u[i] = self.inputter.input_single(self.mm)
             y[i,:] = self.outputreader.read_state().reshape(-1)
@@ -341,8 +341,8 @@ class TaskAgnosticExperiment(Experiment):
         self.mm.relax()
         self.final_state = self.outputreader.read_state().reshape(-1)
 
-        self.u = cp.concatenate([self.u, u], axis=0) if add else u
-        self.y = cp.concatenate([self.y, y], axis=0) if add else y
+        self.u = xp.concatenate([self.u, u], axis=0) if add else u
+        self.y = xp.concatenate([self.y, y], axis=0) if add else y
 
         if verbose > 1: close_interactive(fig) # Close the realtime figure as it is no longer needed
         # Still need to call self.calculate_all() manually after this method.
@@ -360,7 +360,7 @@ class TaskAgnosticExperiment(Experiment):
                 if not ignore_errors: raise
 
     def NL(self, k: int = 10, local: bool = False, test_fraction: float = 1/4, verbose: bool = False): # Non-linearity
-        ''' Returns a float (local=False) or a CuPy array (local=True) representing the nonlinearity,
+        ''' Returns a float (local=False) or an array (local=True) representing the nonlinearity,
             either globally or locally depending on <local>. For this, an estimator for the current readout state is
             trained which for any time instant has access to the <k> most recent inputs (including the present one).
         '''
@@ -368,18 +368,18 @@ class TaskAgnosticExperiment(Experiment):
         
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
         if train_test_cutoff < k: raise ValueError(f"NL: k={k} must be <={train_test_cutoff} for the available data.")
-        u_train_strided, u_test_strided = cp.split(strided(self.u, k), [train_test_cutoff])
-        y_train, y_test = cp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
+        u_train_strided, u_test_strided = xp.split(strided(self.u, k), [train_test_cutoff])
+        y_train, y_test = xp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
         
         # u_train_strided, y_train = u_train_strided[k-1:], y_train[k-1:] # First <k-1> rows don't have <k> previous entries yet to use as 'samples'
-        Rsq = cp.empty(self.n_out) # R² correlation coefficient
+        Rsq = xp.empty(self.n_out) # R² correlation coefficient
         for j in range(self.n_out): # Train an estimator for the j-th output feature
             model = sm.OLS(asnumpy(y_train[:,j]), asnumpy(u_train_strided), missing='drop') # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
             results = model.fit()
             y_hat_test = results.predict(asnumpy(u_test_strided))
             sigma_y_hat, sigma_y = np.var(y_hat_test), np.var(y_test[:,j])
             if sigma_y_hat == 0: # (highly unlikely) predicting constant value, so R² depends on whether this constant is the average or not
-                Rsq[j] = float(cp.mean(y_hat_test) == cp.mean(y_test[:,j]))
+                Rsq[j] = float(xp.mean(y_hat_test) == xp.mean(y_test[:,j]))
             elif sigma_y == 0: # Constant readout, so NL should logically be 0, so Rsq = 1-NL = 1
                 Rsq[j] = 1.
             else: # Rsq is 1 for very predictable 
@@ -389,10 +389,10 @@ class TaskAgnosticExperiment(Experiment):
         if local:
             return 1 - Rsq
         else:
-            return float(1 - cp.mean(Rsq))
+            return float(1 - xp.mean(Rsq))
     
     def MC(self, k=10, local=False, test_fraction=1/4, verbose=False): # Memory capacity
-        ''' Returns a float (local=False) or a CuPy array (local=True) representing the memory capacity,
+        ''' Returns a float (local=False) or an array (local=True) representing the memory capacity,
             either globally or locally depending on <local>. For this, an estimator is trained which
             for any time instant attempts to predict the previous <k> inputs based on the current readout state.
         '''
@@ -400,28 +400,28 @@ class TaskAgnosticExperiment(Experiment):
 
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
         if train_test_cutoff < k: raise ValueError(f"MC: k={k} must be <={train_test_cutoff} for the available data.")
-        u_train, u_test = cp.split(self.u, [train_test_cutoff])
-        y_train, y_test = cp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
+        u_train, u_test = xp.split(self.u, [train_test_cutoff])
+        y_train, y_test = xp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
 
-        Rsq = cp.empty(k) # R² correlation coefficient
-        if local: weights = cp.zeros((k, self.n_out))
+        Rsq = xp.empty(k) # R² correlation coefficient
+        if local: weights = xp.zeros((k, self.n_out))
         for j in range(1, k+1): # Train an estimator for the input j iterations ago
             # This one is a mess of indices, but at least we don't need striding like for non-linearity
             results = sm.OLS(asnumpy(u_train[k-j:-j]), asnumpy(y_train[k:,:]), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
-            if local: weights[j-1,:] = cp.asarray(results.params) # TODO: this gives an error I think
+            if local: weights[j-1,:] = xp.asarray(results.params) # TODO: this gives an error I think
             u_hat_test = results.predict(asnumpy(y_test[j:,:])) # Start at y_test[j] to prevent leakage between train/test
             Rsq[j-1] = R_squared(u_hat_test, u_test[:-j])
-        Rsq[cp.isnan(Rsq)] = 0 # If some std=0, then it is constant so R² actually gives 0
+        Rsq[xp.isnan(Rsq)] = 0 # If some std=0, then it is constant so R² actually gives 0
 
         # Handle <local> True or False and return appropriately
         if local:
             # TODO: I think some normalization is wrong here (result is all near 0.5, not full range between 0 and 1 as in paper)
-            weights = weights - cp.min(weights, axis=1).reshape(-1, 1) # Minimum value becomes 0
-            weights = weights / cp.max(weights, axis=1).reshape(-1, 1) # Maximum value becomes 1
-            weights_avg = cp.mean(weights, axis=0) # Average across 'time'
+            weights = weights - xp.min(weights, axis=1).reshape(-1, 1) # Minimum value becomes 0
+            weights = weights / xp.max(weights, axis=1).reshape(-1, 1) # Maximum value becomes 1
+            weights_avg = xp.mean(weights, axis=0) # Average across 'time'
             return weights_avg
         else:
-            return float(cp.sum(Rsq))
+            return float(xp.sum(Rsq))
 
     def CP(self, transposed=False): # Complexity
         ''' Calculates the complexity: i.e. the effective rank of the kernel matrix as used in KernelQualityExperiment.
@@ -436,11 +436,11 @@ class TaskAgnosticExperiment(Experiment):
         
         if transposed:
             # Multiply with transposed to get a square matrix of size <self.n_out> (suggested by J. Leliaert)
-            squarematrix = cp.matmul(self.y.T, self.y)
-            rank = cp.linalg.matrix_rank(squarematrix)
+            squarematrix = xp.matmul(self.y.T, self.y)
+            rank = xp.linalg.matrix_rank(squarematrix)
         else:
-            ranks = cp.asarray([cp.linalg.matrix_rank(self.y[i:i+self.y.shape[1],:]) for i in range(max(1, self.y.shape[0]-self.y.shape[1]+1))])
-            rank = cp.mean(ranks)
+            ranks = xp.asarray([xp.linalg.matrix_rank(self.y[i:i+self.y.shape[1],:]) for i in range(max(1, self.y.shape[0]-self.y.shape[1]+1))])
+            rank = xp.mean(ranks)
         return float(rank)/self.y.shape[1]
     
     def S(self, relax=False): # Stability
@@ -465,7 +465,7 @@ class TaskAgnosticExperiment(Experiment):
         # (is proportion of disagreeing elements, but would require full access to state mm.m to work properly (-1 or 1 binary state))
 
 
-    def to_dataframe(self, u: cp.ndarray = None, y: cp.ndarray = None):
+    def to_dataframe(self, u: xp.ndarray = None, y: xp.ndarray = None):
         ''' If <u> and <y> are not explicitly provided, the saved <self.u> and <self.y>
             arrays are used. When providing <u> and <y> directly,
                 <u> should be a 1D array of length N, and
@@ -474,9 +474,9 @@ class TaskAgnosticExperiment(Experiment):
         '''
         if (u is None) != (y is None): raise ValueError('Either none or both of <u> and <y> arguments must be provided.')
         if u is None:
-            u = cp.concatenate((cp.asarray([cp.nan]), self.u, cp.asarray([cp.nan]))) # self.u with NaN input as 0th index
+            u = xp.concatenate((xp.asarray([xp.nan]), self.u, xp.asarray([xp.nan]))) # self.u with NaN input as 0th index
         if y is None:
-            y = cp.concatenate((self.initial_state.reshape(1, -1), self.y, self.final_state.reshape(1, -1)), axis=0) # self.y with pristine state as 0th index
+            y = xp.concatenate((self.initial_state.reshape(1, -1), self.y, self.final_state.reshape(1, -1)), axis=0) # self.y with pristine state as 0th index
         
         u = asnumpy(u) # Need as NumPy array for pd
         y = asnumpy(y) # Need as NumPy array for pd
@@ -487,18 +487,18 @@ class TaskAgnosticExperiment(Experiment):
         df = pd.concat([df_u, df_y], axis=1)
         return df
 
-    def load_dataframe(self, df: pd.DataFrame, u: cp.ndarray = None, y: cp.ndarray = None):
-        ''' Loads the CuPy arrays <u> and <y> stored in the dataframe <df>
+    def load_dataframe(self, df: pd.DataFrame, u: xp.ndarray = None, y: xp.ndarray = None):
+        ''' Loads the arrays <u> and <y> stored in the dataframe <df>
             into the <self.u> and <self.y> attributes, and returns both.
         '''
-        if u is None: u = cp.asarray(df["u"])
+        if u is None: u = xp.asarray(df["u"])
         if y is None:
             pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
             y_cols = [colname for colname in df if pattern.match(colname)].sort(key=human_sort)
-            y = cp.asarray(df[y_cols])
+            y = xp.asarray(df[y_cols])
 
-        self.u = cp.asarray(u).reshape(-1)
-        self.y = cp.asarray(y, dtype=float).reshape(self.u.shape[0], -1)
+        self.u = xp.asarray(u).reshape(-1)
+        self.y = xp.asarray(y, dtype=float).reshape(self.u.shape[0], -1)
         self.n_out = y.shape[1]
         if math.isnan(self.u[0]):
             self.initial_state = self.y[0,:]

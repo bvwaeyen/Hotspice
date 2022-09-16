@@ -8,9 +8,9 @@ from matplotlib import cm, widgets
 
 from context import hotspin
 if hotspin.config.USE_GPU:
-    import cupy as cp
+    import cupy as xp
 else:
-    import numpy as cp
+    import numpy as xp
 
 
 def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=400, Lx:int=None, Ly:int=None, cutoff=16, pattern:str=None, plot:bool=True, save:bool=False):
@@ -45,9 +45,9 @@ def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=4
         mm.get_energy('dipolar').update() # Completely recalculate the dipolar energy from scratch
         E_recalculated = mm.get_energy('dipolar').E.copy()
         E_diff = E_recalculated - E_incremented
-        E_absdiff = cp.abs(E_diff)
-        absdiff_avg[i] = cp.mean(E_absdiff)
-        absdiff_max[i] = cp.max(E_absdiff)
+        E_absdiff = xp.abs(E_diff)
+        absdiff_avg[i] = xp.mean(E_absdiff)
+        absdiff_max[i] = xp.max(E_absdiff)
         cutoffs[i] = cutoff # This is here in case we want to sweep <cutoff>
         switches[i] = mm.switches
         mm.get_energy('dipolar').E = E_incremented
@@ -55,11 +55,11 @@ def analysis_dipolarkernel_cutoff(mm: hotspin.Magnets=None, n:int=10000, L:int=4
 
     print(f"Time required for {n} iterations ({mm.switches} switches): {t:.3f}s.")
     print(f"--- ANALYSIS RESULTS ---")
-    print(f"max inc: {cp.max(cp.abs(E_incremented))}")
-    print(f"max rec: {cp.max(cp.abs(E_recalculated))}")
+    print(f"max inc: {xp.max(xp.abs(E_incremented))}")
+    print(f"max rec: {xp.max(xp.abs(E_recalculated))}")
     print('-'*4)
-    print(f"avg diff: {cp.mean(cp.abs(E_diff[mm.occupation != 0]))}")
-    print(f"max diff: {cp.max(cp.abs(E_diff[mm.occupation != 0]))}")
+    print(f"avg diff: {xp.mean(xp.abs(E_diff[mm.occupation != 0]))}")
+    print(f"max diff: {xp.max(xp.abs(E_diff[mm.occupation != 0]))}")
     
     cmap = cm.get_cmap('viridis').copy()
     hotspin.plottools.init_fonts()

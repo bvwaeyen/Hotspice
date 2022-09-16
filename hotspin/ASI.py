@@ -3,9 +3,9 @@ import math
 from .core import Magnets
 from . import config
 if config.USE_GPU:
-    import cupy as cp
+    import cupy as xp
 else:
-    import numpy as cp
+    import numpy as xp
 
 
 class OOP_ASI(Magnets):
@@ -19,7 +19,7 @@ class OOP_ASI(Magnets):
 
     def _get_angles(self):
         # This abstract method is irrelevant for OOP ASI, so just return NaNs.
-        return cp.nan*cp.zeros_like(self.ixx)
+        return xp.nan*xp.zeros_like(self.ixx)
 
 
 class IP_ASI(Magnets):
@@ -50,16 +50,16 @@ class OOP_Square(OOP_ASI):
                 super()._set_m(pattern=unknown_pattern)
 
     def _get_occupation(self):
-        return cp.ones_like(self.xx)
+        return xp.ones_like(self.xx)
 
     def _get_appropriate_avg(self):
         return 'point'
 
     def _get_AFMmask(self):
-        return cp.array([[0, -1], [-1, 2]], dtype='float')/4 # Possible situations: ▚/▞ -> 1, ▀▀/▄▄/█ / █ -> 0.5, ██ -> 0 
+        return xp.array([[0, -1], [-1, 2]], dtype='float')/4 # Possible situations: ▚/▞ -> 1, ▀▀/▄▄/█ / █ -> 0.5, ██ -> 0 
 
     def _get_nearest_neighbors(self):
-        return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
+        return xp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
 
     def _get_groundstate(self):
         return 'afm'
@@ -95,10 +95,10 @@ class OOP_Triangle(OOP_ASI):
         return 'point'
 
     def _get_AFMmask(self): # TODO: not so relevant
-        return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
 
     def _get_nearest_neighbors(self):
-        return cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
+        return xp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
 
     def _get_groundstate(self): # TODO: not so relevant
         return 'afm'
@@ -122,19 +122,19 @@ class IP_Ising(IP_ASI):
                 super()._set_m(pattern=unknown_pattern)
 
     def _get_angles(self):
-        return cp.zeros_like(self.xx)
+        return xp.zeros_like(self.xx)
 
     def _get_occupation(self):
-        return cp.ones_like(self.xx)
+        return xp.ones_like(self.xx)
 
     def _get_appropriate_avg(self):
         return 'point'
 
     def _get_AFMmask(self):
-        return cp.array([[1, 1], [-1, -1]])/4
+        return xp.array([[1, 1], [-1, -1]])/4
 
     def _get_nearest_neighbors(self):
-        return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
+        return xp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
 
     def _get_groundstate(self):
         return 'uniform'
@@ -158,7 +158,7 @@ class IP_Square(IP_ASI):
                 super()._set_m(pattern=unknown_pattern)
 
     def _get_angles(self):
-        angles = cp.zeros_like(self.xx)
+        angles = xp.zeros_like(self.xx)
         angles[self.iyy % 2 == 1] = math.pi/2
         return angles
 
@@ -169,10 +169,10 @@ class IP_Square(IP_ASI):
         return 'cross'
 
     def _get_AFMmask(self):
-        return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
 
     def _get_nearest_neighbors(self):
-        return cp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
+        return xp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
 
     def _get_groundstate(self):
         return 'afm'
@@ -207,19 +207,19 @@ class IP_Kagome(IP_ASI):
     def _set_m(self, pattern: str, angle=None):
         match str(pattern).strip().lower():
             case 'afm':
-                self.m = cp.ones_like(self.ixx)
+                self.m = xp.ones_like(self.ixx)
                 self.m[(self.ixx + self.iyy) % 4 == 3] *= -1
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
     def _get_angles(self):
-        angles = cp.ones_like(self.xx)*math.pi/2
+        angles = xp.ones_like(self.xx)*math.pi/2
         angles[((self.ixx - self.iyy) % 4 == 1) & (self.ixx % 2 == 1)] = -math.pi/6
         angles[((self.ixx + self.iyy) % 4 == 3) & (self.ixx % 2 == 1)] = math.pi/6
         return angles
 
     def _get_occupation(self):
-        occupation = cp.zeros_like(self.xx)
+        occupation = xp.zeros_like(self.xx)
         occupation[(self.ixx + self.iyy) % 4 == 1] = 1 # One bunch of diagonals \
         occupation[(self.ixx - self.iyy) % 4 == 3] = 1 # Other bunch of diagonals /
         return occupation
@@ -228,10 +228,10 @@ class IP_Kagome(IP_ASI):
         return 'hexagon'
 
     def _get_AFMmask(self):
-        return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
 
     def _get_nearest_neighbors(self):
-        return cp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
+        return xp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
 
     def _get_groundstate(self):
         return 'uniform'

@@ -14,10 +14,10 @@ from .core import Magnets
 from .utils import asnumpy, unit_prefix_to_mul
 from . import config
 if config.USE_GPU:
-    import cupy as cp
+    import cupy as xp
     from cupyx.scipy import signal
 else:
-    import numpy as cp
+    import numpy as xp
     from scipy import signal
 
 try: # TODO: maybe don't do this by default, only when some sort of display is used? but how to detect this consistently...
@@ -33,7 +33,7 @@ class Average(Enum):
           obj._value_ = len(cls.__members__) + 1
           return obj
     def __init__(self, mask):
-          self.mask = cp.asarray(mask, dtype='float')
+          self.mask = xp.asarray(mask, dtype='float')
     
     POINT = [[1]]
     CROSS = [[0, 1, 0], # For Pinwheel and Square ASI
@@ -104,24 +104,24 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     avg = Average.resolve(avg, mm)
 
     if mm.in_plane:
-        x_comp = cp.multiply(m, mm.orientation[:,:,0])
-        y_comp = cp.multiply(m, mm.orientation[:,:,1])
+        x_comp = xp.multiply(m, mm.orientation[:,:,0])
+        y_comp = xp.multiply(m, mm.orientation[:,:,1])
     else:
         x_comp = m
-        y_comp = cp.zeros_like(m)
+        y_comp = xp.zeros_like(m)
     mask = avg.mask
 
     mode = 'same' if mm.PBC else 'valid'
     boundary = 'wrap' if mm.PBC else 'fill'
-    magnets_in_avg = signal.convolve2d(cp.abs(m), mask, mode=mode, boundary=boundary)
-    magnets_in_avg[cp.where(magnets_in_avg == 0)] = cp.inf # Prevent 0/0 warning
+    magnets_in_avg = signal.convolve2d(xp.abs(m), mask, mode=mode, boundary=boundary)
+    magnets_in_avg[xp.where(magnets_in_avg == 0)] = xp.inf # Prevent 0/0 warning
     x_comp_avg = signal.convolve2d(x_comp, mask, mode=mode, boundary=boundary)/magnets_in_avg
     y_comp_avg = signal.convolve2d(y_comp, mask, mode=mode, boundary=boundary)/magnets_in_avg
 
-    angles_avg = cp.arctan2(y_comp_avg, x_comp_avg) % math.tau
-    magnitudes_avg = cp.sqrt(x_comp_avg**2 + y_comp_avg**2)
-    useless_angles = cp.where(cp.isclose(x_comp_avg, 0) & cp.isclose(y_comp_avg, 0), cp.NaN, 1) # No well-defined angle
-    useless_magnitudes = cp.where(magnets_in_avg == 0, cp.NaN, 1) # No magnet (the NaNs here will be a subset of useless_angles)
+    angles_avg = xp.arctan2(y_comp_avg, x_comp_avg) % math.tau
+    magnitudes_avg = xp.sqrt(x_comp_avg**2 + y_comp_avg**2)
+    useless_angles = xp.where(xp.isclose(x_comp_avg, 0) & xp.isclose(y_comp_avg, 0), xp.NaN, 1) # No well-defined angle
+    useless_magnitudes = xp.where(magnets_in_avg == 0, xp.nan, 1) # No magnet (the NaNs here will be a subset of useless_angles)
     angles_avg *= useless_angles
     magnitudes_avg *= useless_magnitudes
     if avg == 'triangle':
@@ -130,27 +130,27 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     elif avg == 'hexagon': # Only keep the centers of hexagons, throw away the rest
         angles_avg = angles_avg[::2,::2]
         magnitudes_avg = magnitudes_avg[::2,::2]
-        ixx, iyy = cp.meshgrid(cp.arange(0, angles_avg.shape[1]), cp.arange(0, angles_avg.shape[0])) # DO NOT REMOVE THIS, THIS IS NOT THE SAME AS mm.ixx, mm.iyy!
+        ixx, iyy = xp.meshgrid(xp.arange(0, angles_avg.shape[1]), xp.arange(0, angles_avg.shape[0])) # DO NOT REMOVE THIS, THIS IS NOT THE SAME AS mm.ixx, mm.iyy!
         NaN_occupation = (ixx + iyy) % 2 == 1 # These are not the centers of hexagons, so dont draw these
-        angles_avg[NaN_occupation] = cp.NaN
-        magnitudes_avg[NaN_occupation] = cp.NaN
+        angles_avg[NaN_occupation] = xp.nan
+        magnitudes_avg[NaN_occupation] = xp.nan
     return angles_avg, magnitudes_avg
 
 def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=False, autoscale=True):
     ''' Returns the hsv values for the polar coordinates defined by angles [rad] and magnitudes [A/m]. 
-        TAKES CUPY ARRAYS AS INPUT, YIELDS NUMPY ARRAYS AS OUTPUT
-        @param angles [2D cp.array()] (None): The averaged angles.
+        TAKES CUPY/NUMPY ARRAYS AS INPUT, ONLY YIELDS NUMPY ARRAYS AS OUTPUT
+        @param angles [2D xp.array()] (None): The averaged angles.
     '''
     if angles is None or magnitudes is None:
         angles, magnitudes = get_m_polar(mm, m=m, avg=avg)
         if autoscale and mm.in_plane:
-            s = cp.sign(mm.orientation[:,:,0])
+            s = xp.sign(mm.orientation[:,:,0])
             mask = Average.resolve(avg).mask
             n = signal.convolve2d(mm.occupation, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
-            n[cp.where(n == 0)] = cp.inf # Prevent 0/0 warning
+            n[xp.where(n == 0)] = xp.inf # Prevent 0/0 warning
             max_mag_x = signal.convolve2d(mm.orientation[:,:,0]*s, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
             max_mag_y = signal.convolve2d(mm.orientation[:,:,1]*s, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
-            max_mean_magnitude = cp.sqrt(max_mag_x**2 + max_mag_y**2)/n
+            max_mean_magnitude = xp.sqrt(max_mag_x**2 + max_mag_y**2)/n
             ny, nx = magnitudes.shape
             shape = max_mean_magnitude.shape
             max_mean_magnitude = max_mean_magnitude[(shape[0]-ny)//2:(shape[0]-ny)//2+ny, (shape[1]-nx)//2:(shape[1]-nx)//2+nx]
@@ -161,21 +161,21 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
     # Normalize to ranges between 0 and 1 and determine NaN-positions
     angles = angles/2/math.pi
     magnitudes = magnitudes
-    NaNangles = cp.isnan(angles)
-    NaNmagnitudes = cp.isnan(magnitudes)
+    NaNangles = xp.isnan(angles)
+    NaNmagnitudes = xp.isnan(magnitudes)
     # Create hue, saturation and value arrays
-    hue = cp.zeros_like(angles)
-    saturation = cp.ones_like(angles)
-    value = cp.zeros_like(angles)
+    hue = xp.zeros_like(angles)
+    saturation = xp.ones_like(angles)
+    value = xp.zeros_like(angles)
     # Situation 1: angle and magnitude both well-defined (an average => color (hue=angle, saturation=1, value=magnitude))
-    affectedpositions = cp.where(~NaNangles & ~NaNmagnitudes)
+    affectedpositions = xp.where(~NaNangles & ~NaNmagnitudes)
     hue[affectedpositions] = angles[affectedpositions]
     value[affectedpositions] = magnitudes[affectedpositions]
     # Situation 2: magnitude is zero, so angle is NaN (zero average => black (hue=anything, saturation=anything, value=0))
-    affectedpositions = cp.where(NaNangles & (magnitudes == 0))
+    affectedpositions = xp.where(NaNangles & (magnitudes == 0))
     value[affectedpositions] = 0
     # Situation 3: magnitude is NaN, so angle is NaN (no magnet => white (hue=0, saturation=0, value=1))
-    affectedpositions = cp.where(NaNangles & NaNmagnitudes)
+    affectedpositions = xp.where(NaNangles & NaNmagnitudes)
     saturation[affectedpositions] = 0
     value[affectedpositions] = 1
     # Create the hsv matrix with correct axes ordering for matplotlib.colors.hsv_to_rgb:
@@ -232,7 +232,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
     im = get_rgb(mm, m=m, avg=avg, fill=fill)
     cmap = cm.get_cmap('hsv')
     if mm.in_plane:
-        im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*cp.pi,
+        im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi,
                         extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
         c1 = plt.colorbar(im1)
         c1.ax.get_yaxis().labelpad = 10 + 2*figparams['fontsize_colorbar']
@@ -273,7 +273,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
             ax2.set_ylabel(f'y [{unit}m]')
             axes.append(ax2)
         nonzero = mm.m.nonzero()
-        mx, my = asnumpy(cp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(cp.multiply(m, mm.orientation[:,:,1])[nonzero])
+        mx, my = asnumpy(xp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(xp.multiply(m, mm.orientation[:,:,1])[nonzero])
         ax2.quiver(asnumpy(mm.xx[nonzero])/unit_factor, asnumpy(mm.yy[nonzero])/unit_factor, mx/unit_factor, my/unit_factor,
                 color=(cmap((np.arctan2(my, mx)/2/np.pi) % 1) if color_quiver else 'black'),
                 pivot='mid', scale=1.1/mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
@@ -281,7 +281,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         ax2.set_ylim(full_extent[2:])
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
-        im3 = ax3.imshow(asnumpy(cp.where(mm.m != 0, mm.E, cp.nan)), origin='lower',
+        im3 = ax3.imshow(asnumpy(xp.where(mm.m != 0, mm.E, xp.nan)), origin='lower',
                             extent=full_extent, interpolation='antialiased', interpolation_stage='rgba')
         c3 = plt.colorbar(im3)
         c3.ax.get_yaxis().labelpad = 15
@@ -312,7 +312,7 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
         raise ValueError(f"Lattice of {type(mm).__name__} is too small: ({mm.nx}x{mm.ny})<({nx}x{ny}).")
 
     occupation = mm.occupation[:ny,:nx]
-    occupied_indices = cp.where(occupation)
+    occupied_indices = xp.where(occupation)
     positions_x = asnumpy(mm.xx[occupied_indices])
     positions_y = asnumpy(mm.yy[occupied_indices])
     xmin, xmax, ymin, ymax = positions_x.min(), positions_x.max(), positions_y.min(), positions_y.max()
@@ -353,7 +353,7 @@ def show_history(mm: Magnets, *, y_quantity=None, y_label=r'Average magnetizatio
     '''
     if y_quantity is None:
         y_quantity = mm.history.m
-    if cp.all(cp.isclose(mm.history.T, mm.history.T[0])):
+    if xp.all(xp.isclose(mm.history.T, mm.history.T[0])):
         x_quantity, x_label = mm.history.t, 'Time [s]'
     else:
         x_quantity, x_label = mm.history.T, 'Temperature [K]'
@@ -380,9 +380,9 @@ def get_AFMness(mm: Magnets, AFM_mask=None):
             provided explicitly, it is determined automatically based on the type of ASI.
         @return [float]: The average normalized AFM-ness.
     '''
-    AFM_mask = mm._get_AFMmask() if AFM_mask is None else cp.asarray(AFM_mask)
-    AFM_ness = cp.mean(cp.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='wrap' if mm.PBC else 'fill')))
-    return float(AFM_ness/cp.sum(cp.abs(AFM_mask))/cp.sum(mm.occupation)*mm.m.size)
+    AFM_mask = mm._get_AFMmask() if AFM_mask is None else xp.asarray(AFM_mask)
+    AFM_ness = xp.mean(xp.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='wrap' if mm.PBC else 'fill')))
+    return float(AFM_ness/xp.sum(xp.abs(AFM_mask))/xp.sum(mm.occupation)*mm.m.size)
 
 def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False): # TODO: this is quite messy because we are working with color here instead of angles/magnitudes
     ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
@@ -397,30 +397,30 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
         @return [2D np.array]: The interpolated array.
     '''
     if hsv.shape[0] < 2 or hsv.shape[1] < 2: return hsv
-    hsv = asnumpy(hsv) if isinstance(hsv, cp.ndarray) else np.asarray(hsv)
-    replaceable = cp.asarray(replaceable, dtype='bool')
+    hsv = asnumpy(hsv)
+    replaceable = xp.asarray(replaceable, dtype='bool')
 
     # Extend arrays a bit to fill NaNs near boundaries as well
-    a = np.insert(hsv, 0, hsv[1], axis=0) # TODO: make this cupy once cupy supports the .insert function
+    a = np.insert(hsv, 0, hsv[1], axis=0) # TODO: make this CuPy once CuPy supports the .insert function
     a = np.insert(a, 0, a[:,1], axis=1)
-    a = cp.append(a, a[-2].reshape(1,-1,3), axis=0)
-    a = cp.append(a, a[:,-2].reshape(-1,1,3), axis=1)
+    a = xp.append(a, a[-2].reshape(1,-1,3), axis=0)
+    a = xp.append(a, a[:,-2].reshape(-1,1,3), axis=1)
 
     N = a[:-2, 1:-1, :]
     E = a[1:-1, 2:, :]
     S = a[2:, 1:-1, :]
     W = a[1:-1, :-2, :]
-    equal_neighbors = cp.isclose(N, E) & cp.isclose(E, S) & cp.isclose(S, W)
+    equal_neighbors = xp.isclose(N, E) & xp.isclose(E, S) & xp.isclose(S, W)
     equal_neighbors = equal_neighbors[:,:,0] & equal_neighbors[:,:,1] & equal_neighbors[:,:,2]
 
-    result = cp.where(cp.repeat((replaceable & equal_neighbors)[:,:,cp.newaxis], 3, axis=2), N, cp.asarray(hsv))
+    result = xp.where(xp.repeat((replaceable & equal_neighbors)[:,:,xp.newaxis], 3, axis=2), N, xp.asarray(hsv))
 
     if fillblack:
-        blacks = cp.where(replaceable & ((N[:,:,2] == 0) | (E[:,:,2] == 0) | (S[:,:,2] == 0) | (W[:,:,2] == 0)))
+        blacks = xp.where(replaceable & ((N[:,:,2] == 0) | (E[:,:,2] == 0) | (S[:,:,2] == 0) | (W[:,:,2] == 0)))
         result[blacks[0], blacks[1], 2] = 0
     if fillwhite: # If any NaNs remain, they will be white, and we might want to fill them as well
-        whites = cp.where((result[:,:,1] == 0) & (result[:,:,2] == 1))
-        substitution_colors = cp.asarray(get_hsv(mm, fill=False, avg=Average.SQUAREFOUR))
+        whites = xp.where((result[:,:,1] == 0) & (result[:,:,2] == 1))
+        substitution_colors = xp.asarray(get_hsv(mm, fill=False, avg=Average.SQUAREFOUR))
         result[whites[0], whites[1], :] = substitution_colors[whites[0], whites[1], :]
 
     return asnumpy(result)

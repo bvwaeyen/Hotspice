@@ -79,7 +79,7 @@ def R_squared(a, b):
     return cov**2/xp.var(a)/xp.var(b) # Same as xp.corrcoef(a, b)[0,1]**2, but faster
 
 def strided(a: xp.ndarray, W: int):
-    ''' <a> is a 1D CuPy array, which gets expanded into 2D shape (a.size, W) where every row
+    ''' <a> is a 1D array, which gets expanded into 2D shape (a.size, W) where every row
         is a successively shifted version of the original <a>:
         the first row is [a[0], NaN, NaN, ...] with total length <W>.
         The second row is [a[1], a[0], NaN, ...], and this continues until <a> is exhausted.
@@ -169,7 +169,7 @@ def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
         try:
             value = xp.asarray(value, dtype=float)
         except ValueError:
-            raise ValueError("List of lists could not be converted to rectangular float64 CuPy array.")
+            raise ValueError("List of lists could not be converted to rectangular float64 array.")
     if isinstance(value, (np.ndarray, cp.ndarray)):
         if value.size != 1: is_scalar = False
 
@@ -181,7 +181,7 @@ def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
         return xp.asarray(value).reshape(shape)
 
 def asnumpy(array: xp.ndarray) -> np.ndarray:
-    ''' Converts the CuPy/NumPy array to a NumPy array, which is necessary for e.g. matplotlib. '''
+    ''' Converts the CuPy/NumPy <array> to a NumPy array, which is necessary for e.g. matplotlib. '''
     if isinstance(array, cp.ndarray):
         return array.get()
     else:

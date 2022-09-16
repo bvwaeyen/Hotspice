@@ -1,11 +1,10 @@
 import os
 import sys
 
-if '--hotspin-use-cpu' in sys.argv:
-    USE_GPU = False
-else: # Then check the environment variable
-    USE_GPU = os.environ.get('HOTSPIN_USE_GPU', 'True').lower() in ('true', 't', '1')
-# TODO: change 'cp' to 'xp' and keep the things that have to REALLY be CuPy (can't be numpy in any way) named 'cp'
+if '--hotspin-use-cpu' in sys.argv: # Perhaps a bit weird to have 'use-cpu' here, and 'USE_GPU' in the env?
+    os.environ['HOTSPIN_USE_GPU'] = 'False'
+
+USE_GPU = os.environ.get('HOTSPIN_USE_GPU', 'True').lower() in ('true', 't', '1', 'y', 'yes', 'on')
 
 
 def get_dict():

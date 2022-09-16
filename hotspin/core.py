@@ -13,10 +13,10 @@ from .poisson import PoissonGrid
 from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, mirror4
 from . import config
 if config.USE_GPU:
-    import cupy as cp
+    import cupy as xp
     from cupyx.scipy import signal
 else:
-    import numpy as cp
+    import numpy as xp
     from scipy import signal
 
 kB = 1.380649e-23
@@ -63,7 +63,7 @@ class Magnets(ABC):
             To add an extra rotation to all spins in addition to self._get_angles(), pass <angle> as a float (in radians).
             The parameter <in_plane> should only be used in a super().__init__() call when subclassing this class.
         '''
-        self.rng = cp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
+        self.rng = xp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
         self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J] use dipolar energy by default
 
@@ -72,15 +72,15 @@ class Magnets(ABC):
         self.in_plane = in_plane
         self.nx, self.ny = int(nx), int(ny)
         self.dx, self.dy = float(dx), float(dy)
-        self.xx, self.yy = cp.meshgrid(cp.linspace(0, self.dx*(self.nx-1), self.nx), cp.linspace(0, self.dy*(self.ny-1), self.ny)) # [m]
+        self.xx, self.yy = xp.meshgrid(xp.linspace(0, self.dx*(self.nx-1), self.nx), xp.linspace(0, self.dy*(self.ny-1), self.ny)) # [m]
         self.index = range(self.xx.size)
-        self.ixx, self.iyy = cp.meshgrid(cp.arange(0, self.nx), cp.arange(0, self.ny))
+        self.ixx, self.iyy = xp.meshgrid(xp.arange(0, self.nx), xp.arange(0, self.ny))
         self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
 
         # Main initialization steps to create the geometry
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
-        self.n = int(cp.sum(self.occupation)) # Number of magnets in the simulation
-        self.nonzero = cp.asarray(cp.nonzero(self.occupation)).reshape(2, -1) # Indices of nonzero elements
+        self.n = int(xp.sum(self.occupation)) # Number of magnets in the simulation
+        self.nonzero = xp.asarray(xp.nonzero(self.occupation)).reshape(2, -1) # Indices of nonzero elements
         if self.n == 0: raise ValueError(f"Can not initialize {full_obj_name(self)} of size {self.nx}x{self.ny}, as this does not contain any spins.")
         if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
         self.unitcell = self._get_unitcell() # This needs to be after occupation and initialize_ip, and before any defects are introduced
@@ -102,17 +102,17 @@ class Magnets(ABC):
 
     def _get_closest_dist(self):
         ''' Returns the closest distance between two magnets in the simulation. '''
-        slice = cp.where(self.occupation[:self.unitcell.y*2,:self.unitcell.x*2]) # We only need at most two unit cells
+        slice = xp.where(self.occupation[:self.unitcell.y*2,:self.unitcell.x*2]) # We only need at most two unit cells
         pos_x, pos_y = self.xx[slice], self.yy[slice]
-        return distance.pdist(asnumpy(cp.asarray([pos_x, pos_y]).T)).min()
+        return distance.pdist(asnumpy(xp.asarray([pos_x, pos_y]).T)).min()
 
     def _get_m_uniform(self, angle=0):
         ''' Returns the self.m state with all magnets aligned along <angle> as much as possible. '''
         angle += 1e-6 # To avoid possible ambiguous rounding for popular angles, if <angle> ⊥ <self.orientation>
         if self.in_plane:
-            return self.occupation*(2*((self.orientation[:,:,0]*cp.cos(angle) + self.orientation[:,:,1]*cp.sin(angle)) >= 0) - 1)
+            return self.occupation*(2*((self.orientation[:,:,0]*xp.cos(angle) + self.orientation[:,:,1]*xp.sin(angle)) >= 0) - 1)
         else:
-            return cp.ones_like(self.xx)*((cp.floor(angle/math.pi - .5) % 2)*2 - 1)
+            return xp.ones_like(self.xx)*((xp.floor(angle/math.pi - .5) % 2)*2 - 1)
 
     def _get_unitcell(self, max_cell=100):
         ''' Returns a Unitcell containing the number of single grid cells in a unit cell along the x- and y-axis.
@@ -148,9 +148,9 @@ class Magnets(ABC):
                 raise ValueError(f"Argument <pattern> could not be parsed as a valid array for <self.m>.")
 
         self.m = self.m.astype(float) # Need float to multiply correctly with other float arrays
-        self.m = cp.sign(self.m) # Put all to -1., 0. or 1.
-        self.m = cp.multiply(self.m, self.occupation)
-        self.m[cp.where(self._get_m_uniform() != self._get_m_uniform(angle))] *= -1 # Allow 'rotation' for any kind of initialized state
+        self.m = xp.sign(self.m) # Put all to -1., 0. or 1.
+        self.m = xp.multiply(self.m, self.occupation)
+        self.m[xp.where(self._get_m_uniform() != self._get_m_uniform(angle))] *= -1 # Allow 'rotation' for any kind of initialized state
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
 
     def _initialize_ip(self, angle: float = 0.):
@@ -161,9 +161,9 @@ class Magnets(ABC):
         '''
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
         self.angles = (self._get_angles() + angle)*self.occupation
-        self.orientation = cp.zeros(self.xx.shape + (2,))
-        self.orientation[:,:,0] = cp.cos(self.angles)*self.occupation
-        self.orientation[:,:,1] = cp.sin(self.angles)*self.occupation
+        self.orientation = xp.zeros(self.xx.shape + (2,))
+        self.orientation[:,:,0] = xp.cos(self.angles)*self.occupation
+        self.orientation[:,:,1] = xp.sin(self.angles)*self.occupation
 
     def add_energy(self, energy: 'Energy', verbose=True):
         ''' Adds an Energy object to self._energies. This object is stored under its reduced name,
@@ -202,9 +202,9 @@ class Magnets(ABC):
         if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self._energies]}", stacklevel=2)
         return None
 
-    def update_energy(self, index: np.ndarray|cp.ndarray = None): # This is faster when using self._energies as list
+    def update_energy(self, index: xp.ndarray = None): # This is faster when using self._energies as list
         ''' Updates all the energies which are currently present in the simulation.
-            @param index [cp.array(2, -)] (None): a 2D CuPy array with the first row representing the
+            @param index [xp.array(2, -)] (None): a 2D array with the first row representing the
                 y-coordinates and the second representing the x-coordinates of the indices. if specified, only the magnets at these indices are considered in the calculation.
                 We need a NumPy or CuPy array (to easily determine its size: if =2, then only a single switch is considered.)
         '''
@@ -217,9 +217,9 @@ class Magnets(ABC):
                 energy.update_multiple(index)
 
     def switch_energy(self, indices2D=None):
-        ''' @param indices2D [cp.array(2, -)] (None): a 2D CuPy array with the first row representing the
+        ''' @param indices2D [xp.array(2, -)] (None): a 2D array with the first row representing the
                 y-coordinates and the second representing the x-coordinates of the indices.
-            @return [cp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch.
+            @return [xp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch.
         '''
         return sum(energy.energy_switch(indices2D) for energy in self._energies)
 
@@ -228,11 +228,11 @@ class Magnets(ABC):
         return self.attempted_switches/self.n
 
     @property
-    def E(self) -> cp.ndarray: # This could be relatively expensive to calculate, so maybe not ideal
+    def E(self) -> xp.ndarray: # This could be relatively expensive to calculate, so maybe not ideal
         return sum([energy.E for energy in self._energies])
 
     @property
-    def T(self) -> cp.ndarray:
+    def T(self) -> xp.ndarray:
         return self._T
 
     @T.setter
@@ -240,7 +240,7 @@ class Magnets(ABC):
         self._T = as_2D_array(value, self.xx.shape)
 
     @property
-    def E_B(self) -> cp.ndarray:
+    def E_B(self) -> xp.ndarray:
         return self._E_B
 
     @E_B.setter
@@ -248,7 +248,7 @@ class Magnets(ABC):
         self._E_B = as_2D_array(value, self.xx.shape)
 
     @property
-    def moment(self) -> cp.ndarray:
+    def moment(self) -> xp.ndarray:
         return self._moment
 
     @moment.setter
@@ -279,18 +279,18 @@ class Magnets(ABC):
             for energy in self._energies: energy.initialize(self)
 
     @property
-    def kBT(self) -> cp.ndarray:
+    def kBT(self) -> xp.ndarray:
         return kB*self._T
 
     @property
     def m_avg_x(self) -> float:
-        return float(cp.mean(cp.multiply(self.m, self.orientation[:,:,0])))*self.nx*self.ny/self.n if self.in_plane else 0
+        return float(xp.mean(xp.multiply(self.m, self.orientation[:,:,0])))*self.nx*self.ny/self.n if self.in_plane else 0
     @property
     def m_avg_y(self) -> float:
-        return float(cp.mean(cp.multiply(self.m, self.orientation[:,:,1])))*self.nx*self.ny/self.n if self.in_plane else 0
+        return float(xp.mean(xp.multiply(self.m, self.orientation[:,:,1])))*self.nx*self.ny/self.n if self.in_plane else 0
     @property
     def m_avg(self) -> float:
-        return (self.m_avg_x**2 + self.m_avg_y**2)**(1/2) if self.in_plane else float(cp.mean(self.m))
+        return (self.m_avg_x**2 + self.m_avg_y**2)**(1/2) if self.in_plane else float(xp.mean(self.m))
     @property
     def m_avg_angle(self) -> float: # If m_avg=0, this is 0. For OOP ASI, this is 0 if m_avg > 0, and Pi if m_avg < 0
         return math.atan2(self.m_avg_y, self.m_avg_x) if self.in_plane else 0. + (self.m_avg < 0)*math.pi
@@ -301,19 +301,19 @@ class Magnets(ABC):
 
     @property
     def T_avg(self) -> float:
-        return float(cp.mean(self.T))
+        return float(xp.mean(self.T))
 
     @property
     def E_B_avg(self) -> float:
-        return float(cp.mean(self.E_B))
+        return float(xp.mean(self.E_B))
 
     @property
     def moment_avg(self) -> float:
-        return float(cp.mean(self.moment))
+        return float(xp.mean(self.moment))
 
     def set_T(self, f, /, *, center=False, crystalunits=False):
         ''' Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
-            @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy arrays as x and y).
+            @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy/NumPy arrays as x and y).
             @param center [bool] (False): if True, the origin is put in the middle of the simulation,
                 otherwise it is in the usual lower left corner.
             @param crystalunits [bool] (False): if True, x and y are assumed to be a number of cells instead of a distance in meters (but still float).
@@ -343,7 +343,7 @@ class Magnets(ABC):
             - 'cluster': only to be used in the Wolff update scheme. This is supposed to reduce "critical
                 slowing down" in the 2D square-lattice exchange-coupled Ising model.
             @param r [float] (self.calc_r(0.01)): minimal distance between magnets, in meters
-            @return [cp.array]: a 2xN array, where the 2 rows represent y- and x-coordinates (!), respectively.
+            @return [xp.array]: a 2xN array, where the 2 rows represent y- and x-coordinates (!), respectively.
                 (this is because the indexing of 2D arrays is e.g. self.m[y,x])
         '''
         match self.params.MULTISAMPLING_SCHEME:
@@ -390,7 +390,7 @@ class Magnets(ABC):
         supercells_ny = self.ny//Ry + 1
         if poisson:
             # TODO: with parallel Poisson sampling, generate a lot more samples than necessary at once so we have enough for the next several iterations as well
-            supercells_x, supercells_y = cp.asarray(PoissonGrid(supercells_nx, supercells_ny))
+            supercells_x, supercells_y = xp.asarray(PoissonGrid(supercells_nx, supercells_ny))
         else:
             supercells_x = self.ixx[:supercells_ny:2, :supercells_nx:2].ravel()
             supercells_y = self.iyy[:supercells_ny:2, :supercells_nx:2].ravel()
@@ -408,7 +408,8 @@ class Magnets(ABC):
         dx, dy = offset_x % self.unitcell.x, offset_y % self.unitcell.y # offset in a single supercell
         occupation_supercell = self.occupation[dy:dy+Ry, dx:dx+Rx] # occupation of a single supercell to choose only relevant cells
         occupation_nonzero = occupation_supercell.nonzero() # tuple: (array(x_indices), array(y_indices))
-        random_nonzero_indices = cp.random.choice(occupation_nonzero[0].size, n) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
+        # TODO: is it faster to use np.random.choice here?
+        random_nonzero_indices = xp.random.choice(occupation_nonzero[0].size, n) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
         idx_x = supercells_x*Rx + occupation_nonzero[1][random_nonzero_indices]
         idx_y = supercells_y*Ry + occupation_nonzero[0][random_nonzero_indices]
 
@@ -426,7 +427,7 @@ class Magnets(ABC):
             idx_x, idx_y = idx_x[ok], idx_y[ok] #! It is important to slice AFTER the offset (contrary to PBC=True)
 
         if idx_x.size != 0:
-            return cp.asarray([idx_y.reshape(-1), idx_x.reshape(-1)])
+            return xp.asarray([idx_y.reshape(-1), idx_x.reshape(-1)])
         else:
             return self._select_single() # If no samples survived, just select a single one at random
 
@@ -437,7 +438,7 @@ class Magnets(ABC):
         # p = SequentialPoissonDiskSampling(self.ny*self.dy, self.nx*self.dx, r, tries=1).fill()
         p = poisson_disc_samples(self.ny*self.dy, self.nx*self.dx, r, k=4)
         points = (np.array(p)/self.dx).astype(int)
-        return cp.asarray(points.T)
+        return xp.asarray(points.T)
 
     def _select_cluster(self, **kwargs):
         ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model.
@@ -460,19 +461,19 @@ class Magnets(ABC):
         if exchange is None: raise NotImplementedError("Can not select Wolff cluster if there is no exchange energy in the system.")
         neighbors = exchange.local_interaction # self._get_nearest_neighbors()
         seed = tuple(self._select_single().flat)
-        cluster = cp.zeros_like(self.m)
+        cluster = xp.zeros_like(self.m)
         cluster[seed] = 1
-        checked = cp.copy(cluster)
-        checked[cp.where(self.m != self.m[seed])] = 1
-        while cp.any(current_frontier := (1-checked)*signal.convolve2d(cluster, neighbors, mode='same', boundary='wrap' if self.PBC else 'fill')):
+        checked = xp.copy(cluster)
+        checked[xp.where(self.m != self.m[seed])] = 1
+        while xp.any(current_frontier := (1-checked)*signal.convolve2d(cluster, neighbors, mode='same', boundary='wrap' if self.PBC else 'fill')):
             checked[current_frontier != 0] = 1
-            bond_prob = 1 - cp.exp(-2*exchange.J/self.kBT*current_frontier) # Swendsen-Wang bond probability
+            bond_prob = 1 - xp.exp(-2*exchange.J/self.kBT*current_frontier) # Swendsen-Wang bond probability
             current_frontier[self.rng.random(size=cluster.shape) > bond_prob] = 0 # Rejected probabilistically
             cluster[current_frontier != 0] = 1
-        return cp.asarray(cp.where(cluster == 1))
+        return xp.asarray(xp.where(cluster == 1))
 
     def update(self, *args, **kwargs):
-        if cp.any(self.T == 0):
+        if xp.any(self.T == 0):
             warnings.warn('Temperature is zero somewhere, so no switch will be simulated to prevent DIV/0 errors.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
         match self.params.UPDATE_SCHEME:
@@ -492,14 +493,14 @@ class Magnets(ABC):
         self.attempted_switches += idx.shape[1]
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
         # OPTION 1: TRUE GLAUBER, NO ENERGY BARRIER (or at least not explicitly)
-        # exponential = cp.clip(cp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
+        # exponential = xp.clip(xp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # OPTION 2: AD-HOC ADJUSTED GLAUBER, where we assume that the 'other state' is at the top of the energy barrier
         # TODO: more accurate energy barrier using 4-state approach? (might not be worth the computational cost)
-        barrier = cp.maximum((delta_E := self.switch_energy(idx)), self.E_B[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
-        exponential = cp.clip(cp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
+        barrier = xp.maximum((delta_E := self.switch_energy(idx)), self.E_B[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
+        exponential = xp.clip(xp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
-        idx_switch = idx[:,cp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
-        # idx = idx[:,cp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, unsure if this satisfied detailed balance
+        idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
+        # idx = idx[:,xp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, unsure if this satisfied detailed balance
         if idx_switch.shape[1] > 0:
             self.m[idx_switch[0], idx_switch[1]] *= -1
             self.switches += idx_switch.shape[1]
@@ -510,12 +511,12 @@ class Magnets(ABC):
         ''' Performs a single magnetization switch, if the switch would occur sooner than <t_max> seconds. '''
         # TODO: we might be able to multi-switch here as well, by taking into account the double-switch time
         barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
-        minBarrier = cp.min(barrier)
+        minBarrier = xp.min(barrier)
         barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
-            taus = self.rng.random(size=barrier.shape)*cp.exp(barrier/self.kBT) # Draw random relative times from an exponential distribution
-            indexmin2D = divmod(cp.argmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
-            time = taus[indexmin2D]*cp.exp(minBarrier/self.kBT[indexmin2D])/attempt_freq # This can become cp.inf quite quickly if T is small
+            taus = self.rng.random(size=barrier.shape)*xp.exp(barrier/self.kBT) # Draw random relative times from an exponential distribution
+            indexmin2D = divmod(xp.argmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
+            time = taus[indexmin2D]*xp.exp(minBarrier/self.kBT[indexmin2D])/attempt_freq # This can become infinite quite quickly if T is small
             self.attempted_switches += 1
             if time > t_max:
                 self.t += t_max
@@ -523,7 +524,7 @@ class Magnets(ABC):
             self.m[indexmin2D] *= -1
             self.switches += 1
             self.t += time
-        self.update_energy(index=cp.asarray(indexmin2D).reshape(2,-1))
+        self.update_energy(index=xp.asarray(indexmin2D).reshape(2,-1))
         return indexmin2D
 
     def _update_Wolff(self):
@@ -536,18 +537,18 @@ class Magnets(ABC):
         return cluster
 
 
-    def calc_r(self, Q, as_scalar=True) -> float|cp.ndarray:
+    def calc_r(self, Q, as_scalar=True) -> float|xp.ndarray:
         ''' Calculates the minimal value of r (IN METERS). Considering two nearby sampled magnets, the switching probability
             of the first magnet will depend on the state of the second. For magnets further than <calc_r(Q)> apart, the switching
             probability of the first will not change by more than <Q> if the second magnet switches.
             @param Q [float]: (0<Q<1) the maximum allowed change in switching probability of a sample if any other sample switches.
             @param as_scalar [bool] (True): if True, a safe value for the whole grid is returned.
-                If False, a CuPy array is returned which can for example be used in adaptive Poisson disc sampling.
-            @return [float|cp.ndarray]: the minimal distance (in meters) between samples, if their mutual influence on their
+                If False, an array is returned which can for example be used in adaptive Poisson disc sampling.
+            @return [float|xp.ndarray]: the minimal distance (in meters) between samples, if their mutual influence on their
                 switching probabilities is to be less than <Q>.
         '''
         r = (8e-7*self._momentSq/(Q*self.kBT))**(1/3)
-        return float(cp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
+        return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
     def minimize(self):
@@ -559,17 +560,17 @@ class Magnets(ABC):
         '''
         visited = np.zeros_like(self.m) # Used to make sure we don't get an infinite loop
         while True:
-            barrier = cp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)
-            if (n := (nobarrier := cp.where(barrier < -self.kBT))[0].size) != 0: # Then some magnet(s) simply has/have no barrier at all for switching
+            barrier = xp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)
+            if (n := (nobarrier := xp.where(barrier < -self.kBT))[0].size) != 0: # Then some magnet(s) simply has/have no barrier at all for switching
                 # Randomly switch half of them (this ratio can be optimized probably? TODO?), this is because if we switch them all we might end up in an infinite loop
                 rand = np.random.choice(n, size=math.ceil(n/2), replace=False)
                 idx = (nobarrier[0][rand], nobarrier[1][rand])
             else: # No ultra-prone switchers, so choose the one that would gain the most energy
-                idx = divmod(cp.argmin(barrier), self.nx) # The one with the most energy to gain from switching
+                idx = divmod(xp.argmin(barrier), self.nx) # The one with the most energy to gain from switching
                 if barrier[idx] >= 0: break # Then energy would increase, so we have ended our minimization procedure.
                 visited[idx] += 1
-                if cp.any(visited[idx] >= 3): break
-            idx = cp.asarray(idx).reshape(2,-1)
+                if xp.any(visited[idx] >= 3): break
+            idx = xp.asarray(idx).reshape(2,-1)
             self.m[idx] = -self.m[idx]
             self.switches += 1
             self.attempted_switches += 1
@@ -587,15 +588,15 @@ class Magnets(ABC):
             step_x = step_y = 1
         else:
             step_x, step_y = self.unitcell.x*2, self.unitcell.y*2
-        order = np.random.permutation(step_x*step_y) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports permutation() method
+        order = np.random.permutation(step_x*step_y)
         for i in order:
             y, x = divmod(i, step_x)
             if not self.occupation[y, x]: continue
-            subset_indices = cp.asarray(cp.meshgrid(cp.arange(y, self.ny, step_y), cp.arange(x, self.nx, step_x))).reshape(2, -1)
+            subset_indices = xp.asarray(xp.meshgrid(xp.arange(y, self.ny, step_y), xp.arange(x, self.nx, step_x))).reshape(2, -1)
             if use_barrier:
                 indices = subset_indices[:,self.switch_energy(subset_indices)/2 + self.E_B[subset_indices[0], subset_indices[1]] < 0]
             else:
-                indices = subset_indices[:,cp.where(self.switch_energy(subset_indices) < 0)[0]]
+                indices = subset_indices[:,xp.where(self.switch_energy(subset_indices) < 0)[0]]
             if indices.size > 0:
                 self.m[indices[0], indices[1]] = -self.m[indices[0], indices[1]]
                 self.switches += indices.shape[1]
@@ -616,8 +617,8 @@ class Magnets(ABC):
 
         # TODO: use a better stopping criterion than just "oh no we exceeded n_max steps", and remove verbose code when all is fixed
         n, n_max = 0, int(math.sqrt(self.nx**2 + self.ny**2)) # Maximum steps is to get signal across the whole grid
-        previous_states = [self.m.copy(), cp.zeros_like(self.m), cp.zeros_like(self.m)] # Current state, previous, and the one before
-        while not cp.allclose(previous_states[2], previous_states[0]) and n < n_max: # Loop exits once we detect a 2-cycle, i.e. the only thing happening is some magnets keep switching back and forth
+        previous_states = [self.m.copy(), xp.zeros_like(self.m), xp.zeros_like(self.m)] # Current state, previous, and the one before
+        while not xp.allclose(previous_states[2], previous_states[0]) and n < n_max: # Loop exits once we detect a 2-cycle, i.e. the only thing happening is some magnets keep switching back and forth
             self.minimize_all()
             if verbose:
                 im.set_array(asnumpy(self.m))
@@ -630,14 +631,14 @@ class Magnets(ABC):
         if verbose: print(f"Used {n} (out of {n_max}) steps in relax().")
 
 
-    def history_save(self, *, E_tot=None, t=None, T=None, m_avg=None):
-        ''' Records E_tot, t, T and m_avg as they were last calculated. This default behavior can be overruled: if
-            passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T|m_avg> value(s).
+    def history_save(self, *, E_tot=None, t=None, T_avg=None, m_avg=None):
+        ''' Records E_tot, t, T_avg and m_avg as they were last calculated. This default behavior can be overruled: if
+            passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T_avg|m_avg> value(s).
         '''
         self.history_entry()
         if E_tot is not None: self.history.E[-1] = float(E_tot)
         if t is not None: self.history.t[-1] = float(t)
-        if T is not None: self.history.T[-1] = float(cp.mean(T) if isinstance(T, cp.ndarray) else np.mean(T))
+        if T_avg is not None: self.history.T[-1] = float(T_avg)
         if m_avg is not None: self.history.m[-1] = float(m_avg)
 
     def history_entry(self):
@@ -662,7 +663,7 @@ class Magnets(ABC):
             corr = signal.correlate2d(self.m, self.m, boundary='wrap' if self.PBC else 'fill')
 
         if normalize:
-            corr_norm = signal.correlate2d(cp.ones_like(self.m), cp.ones_like(self.m), boundary='wrap' if self.PBC else 'fill') # Is this necessary? (this is number of occurences of each cell in correlation sum)
+            corr_norm = signal.correlate2d(xp.ones_like(self.m), xp.ones_like(self.m), boundary='wrap' if self.PBC else 'fill') # Is this necessary? (this is number of occurences of each cell in correlation sum)
             corr = corr*self.m.size/self.n/corr_norm # Put between 0 and 1
         
         return corr[(self.ny-1):(2*self.ny-1),(self.nx-1):(2*self.nx-1)]**2
@@ -671,7 +672,7 @@ class Magnets(ABC):
         if correlation is None: correlation = self.autocorrelation()
         # First calculate the distance between all spins in the simulation.
         rr = (self.xx**2 + self.yy**2)**(1/2) # This only works if dx, dy is the same for every cell!
-        return float(cp.sum(cp.abs(correlation) * rr * rr)/cp.max(cp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
+        return float(xp.sum(xp.abs(correlation) * rr * rr)/xp.max(xp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
 
     ######## Now, some useful functions to overwrite when subclassing this class
     @abstractmethod # Not needed for out-of-plane ASI, but essential for in-plane ASI, therefore abstractmethod anyway
@@ -679,7 +680,7 @@ class Magnets(ABC):
         ''' Returns a 2D array containing the angle (measured counterclockwise from the x-axis)
             of each spin. The angle of unoccupied cells (self._get_occupation() == 0) is ignored.
         '''
-        return cp.zeros_like(self.ixx) # Example
+        return xp.zeros_like(self.ixx) # Example
 
     @abstractmethod # TODO: should this really be an abstractmethod? Uniform and random can be defaults and subclasses can define more of course
     def _set_m(self, pattern: str):
@@ -694,14 +695,14 @@ class Magnets(ABC):
                 # When using 'angle' property of Magnets.initialize_m:
                 #   <angle> near 0 or math.pi: clockwise/anticlockwise vortex, respectively
                 #   <angle> near math.pi/2 or -math.pi/2: bowtie configuration (top region: up/down, respectively)
-                self.m = cp.ones_like(self.xx)
+                self.m = xp.ones_like(self.xx)
                 distSq = ((self.ixx - (self.nx-1)/2)**2 + (self.iyy - (self.ny-1)/2)**2) # Try to put the vortex close to the center of the simulation
-                distSq[cp.where(self.occupation == 1)] = cp.nan # We don't want to place the vortex center at an occupied cell
-                middle_y, middle_x = divmod(cp.argmax(distSq == cp.min(distSq[~cp.isnan(distSq)])), self.nx) # The non-occupied cell closest to the center
-                N = cp.where((self.ixx - middle_x < self.iyy - middle_y) & (self.ixx + self.iyy >= middle_x + middle_y))
-                E = cp.where((self.ixx - middle_x >= self.iyy - middle_y) & (self.ixx + self.iyy > middle_x + middle_y))
-                S = cp.where((self.ixx - middle_x > self.iyy - middle_y) & (self.ixx + self.iyy <= middle_x + middle_y))
-                W = cp.where((self.ixx - middle_x <= self.iyy - middle_y) & (self.ixx + self.iyy < middle_x + middle_y))
+                distSq[xp.where(self.occupation == 1)] = xp.nan # We don't want to place the vortex center at an occupied cell
+                middle_y, middle_x = divmod(xp.argmax(distSq == xp.min(distSq[~xp.isnan(distSq)])), self.nx) # The non-occupied cell closest to the center
+                N = xp.where((self.ixx - middle_x < self.iyy - middle_y) & (self.ixx + self.iyy >= middle_x + middle_y))
+                E = xp.where((self.ixx - middle_x >= self.iyy - middle_y) & (self.ixx + self.iyy > middle_x + middle_y))
+                S = xp.where((self.ixx - middle_x > self.iyy - middle_y) & (self.ixx + self.iyy <= middle_x + middle_y))
+                W = xp.where((self.ixx - middle_x <= self.iyy - middle_y) & (self.ixx + self.iyy < middle_x + middle_y))
                 self.m[N] = self._get_m_uniform(0         )[N]
                 self.m[E] = self._get_m_uniform(-math.pi/2)[E]
                 self.m[S] = self._get_m_uniform(math.pi   )[S]
@@ -712,8 +713,8 @@ class Magnets(ABC):
 
     @abstractmethod
     def _get_occupation(self):
-        ''' Returns a 2D CuPy array which contains 1 at the cells which are occupied by a magnet, and 0 elsewhere. '''
-        return cp.ones_like(self.ixx) # Example
+        ''' Returns a 2D array which contains 1 at the cells which are occupied by a magnet, and 0 elsewhere. '''
+        return xp.ones_like(self.ixx) # Example
 
     @abstractmethod
     def _get_groundstate(self):
@@ -725,7 +726,7 @@ class Magnets(ABC):
     @abstractmethod
     def _get_nearest_neighbors(self):
         ''' Returns a small mask with the magnet at the center, and 1 at the positions of its nearest neighbors (elsewhere 0). '''
-        return cp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]) # Example
+        return xp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]) # Example
 
     @abstractmethod # TODO: this is a pretty archaic method at this point
     def _get_appropriate_avg(self):
@@ -735,7 +736,7 @@ class Magnets(ABC):
     @abstractmethod # TODO: this is a pretty archaic method at this point as well. Sould this really be abstract?
     def _get_AFMmask(self):
         ''' Returns the (normalized) mask used to determine how anti-ferromagnetic the magnetization profile is. '''
-        return cp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float') # Example
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float') # Example
 
 
 class Energy(ABC):
@@ -756,12 +757,12 @@ class Energy(ABC):
         ''' Calculates the entire self.E array, for the situation in self.mm.m.
             No approximations should be made here: this serves to (re)calculate the whole energy.
         '''
-        self.E = cp.zeros_like(self.mm.xx) # [J]
+        self.E = xp.zeros_like(self.mm.xx) # [J]
 
     @abstractmethod
     def energy_switch(self, indices2D):
         ''' Returns the change in energy experienced by the magnets at <indices2D>, if they were to switch.
-            @param indices2D [cp.array(2, -)]: A 2D CuPy array with the first row containing the y-coordinates,
+            @param indices2D [xp.array(2, -)]: A 2D array with the first row containing the y-coordinates,
                 and the second row containing the corresponding x-coordinates of the sampled magnets.
             @return [list(N)]: A list containing the local changes in energy for each magnet of <indices2D>, in the same order.
         '''
@@ -815,9 +816,9 @@ class ZeemanEnergy(Energy):
             if self.magnitude < 0:
                 self.magnitude *= -1
                 self.angle = (self.angle + math.pi) % math.tau
-            self.B_ext = self.magnitude*cp.array([math.cos(self.angle), math.sin(self.angle)]) # [T]
+            self.B_ext = self.magnitude*xp.array([math.cos(self.angle), math.sin(self.angle)]) # [T]
         else:
-            self.B_ext = cp.array(self.magnitude) # [T]
+            self.B_ext = xp.array(self.magnitude) # [T]
             if self.angle != 0:
                 self.angle = 0
                 warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.', stacklevel=2)
@@ -825,7 +826,7 @@ class ZeemanEnergy(Energy):
 
     def update(self):
         if self.mm.in_plane:
-            self.E = -self.mm.moment*cp.multiply(self.mm.m, self.B_ext[0]*self.mm.orientation[:,:,0] + self.B_ext[1]*self.mm.orientation[:,:,1])
+            self.E = -self.mm.moment*xp.multiply(self.mm.m, self.B_ext[0]*self.mm.orientation[:,:,0] + self.B_ext[1]*self.mm.orientation[:,:,1])
         else:
             self.E = -self.mm.moment*self.mm.m*self.B_ext
 
@@ -840,7 +841,7 @@ class ZeemanEnergy(Energy):
 
     @property
     def E_tot(self):
-        return cp.sum(self.E)
+        return xp.sum(self.E)
 
     @property
     def magnitude(self): return self._magnitude
@@ -868,7 +869,7 @@ class DipolarEnergy(Energy):
     def initialize(self, mm: Magnets):
         self.mm = mm
         self.unitcell = self.mm.unitcell
-        self.E = cp.zeros_like(self.mm.xx)
+        self.E = xp.zeros_like(self.mm.xx)
         
         # Let us first make the four-mirrored distance matrix rinv3
         # WARN: this four-mirrored technique only works if (dx, dy) is the same for every cell everywhere!
@@ -876,7 +877,7 @@ class DipolarEnergy(Energy):
         rrx = self.mm.xx - self.mm.xx[0,0]
         rry = self.mm.yy - self.mm.yy[0,0]
         rr_sq = rrx**2 + rry**2
-        rr_sq[0,0] = cp.inf
+        rr_sq[0,0] = xp.inf
         rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
         rr_inv3 = rr_inv**3
         rinv3 = mirror4(rr_inv3)
@@ -889,13 +890,13 @@ class DipolarEnergy(Energy):
         if self.mm.in_plane:
             unitcell_ox = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,0]
             unitcell_oy = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,1]
-            toolargematrix_ox = cp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
-            toolargematrix_oy = cp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
+            toolargematrix_ox = xp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
+            toolargematrix_oy = xp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
         else:
             unitcell_o = self.mm.occupation[:self.unitcell.y,:self.unitcell.x]
-            toolargematrix_o = cp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
+            toolargematrix_o = xp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
         # Now comes the part where we start splitting the different cells in the unit cells
-        self.kernel_unitcell_indices = -cp.ones((self.unitcell.y, self.unitcell.x), dtype=int) # unitcell (y,x) -> kernel (i)
+        self.kernel_unitcell_indices = -xp.ones((self.unitcell.y, self.unitcell.x), dtype=int) # unitcell (y,x) -> kernel (i)
         self.kernel_unitcell = []
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
@@ -936,18 +937,18 @@ class DipolarEnergy(Energy):
                 kernel *= 1e-7 # [J/Am²], 1e-7 is mu_0/4Pi
                 self.kernel_unitcell_indices[y,x] = len(self.kernel_unitcell)
                 self.kernel_unitcell.append(kernel)
-        self.kernel_unitcell = cp.asarray(self.kernel_unitcell)
+        self.kernel_unitcell = xp.asarray(self.kernel_unitcell)
         self.update()
 
     def update(self):
-        total_energy = cp.zeros_like(self.mm.m)
+        total_energy = xp.zeros_like(self.mm.m)
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
                 if (n := self.kernel_unitcell_indices[y,x]) < 0:
                     continue
                 else:
                     kernel = self.kernel_unitcell[n,:,:]
-                    partial_m = cp.zeros_like(self.mm.m)
+                    partial_m = xp.zeros_like(self.mm.m)
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
 
                     total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')*self.mm._momentSq
@@ -966,14 +967,14 @@ class DipolarEnergy(Energy):
         if n < 0: return # Then there is no magnet there, so nothing happens
         # Multiply with the magnetization
         usefulkernel = self.kernel_unitcell[n,self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-        interaction = self.prefactor*self.mm.m[y, x]*cp.multiply(self.mm.m, usefulkernel)*self.mm._momentSq
+        interaction = self.prefactor*self.mm.m[y, x]*xp.multiply(self.mm.m, usefulkernel)*self.mm._momentSq
         self.E += 2*interaction
         self.E[y, x] *= -1 # This magnet switched, so all its interactions are inverted
 
     def update_multiple(self, indices2D):
         self.E[indices2D[0], indices2D[1]] *= -1
         indices2D_unitcell_raveled = (indices2D[1] % self.unitcell.x) + (indices2D[0] % self.unitcell.y)*self.unitcell.x
-        binned_unitcell_raveled = cp.bincount(indices2D_unitcell_raveled)
+        binned_unitcell_raveled = xp.bincount(indices2D_unitcell_raveled)
         for i in binned_unitcell_raveled.nonzero()[0]: # Iterate over the unitcell indices present in indices2D
             y_unitcell, x_unitcell = divmod(int(i), self.unitcell.x)
             if (n := self.kernel_unitcell_indices[y_unitcell, x_unitcell]) < 0: continue # This should never happen, but check anyway in case indices2D includes empty cells
@@ -981,23 +982,23 @@ class DipolarEnergy(Energy):
             indices2D_here = indices2D[:,indices2D_unitcell_raveled == i]
             if indices2D_here.shape[1] > self.mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF:
                 ### EITHER WE DO THIS (CONVOLUTION) (starts to be better at approx. 40 simultaneous switches for 41x41 kernel, taking into account the need for complete recalculation every <something> steps, so especially for large T this is good)
-                switched_field = cp.zeros_like(self.mm.m)
+                switched_field = xp.zeros_like(self.mm.m)
                 switched_field[indices2D_here[0], indices2D_here[1]] = self.mm.m[indices2D_here[0], indices2D_here[1]]
                 n = self.mm.params.REDUCED_KERNEL_SIZE
                 usefulkernel = kernel[self.mm.ny-1-n:self.mm.ny+n, self.mm.nx-1-n:self.mm.nx+n] if n else kernel
                 convolvedkernel = signal.convolve2d(switched_field, usefulkernel, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
             else:
                 ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY NONPARALLEL) 
-                convolvedkernel = cp.zeros_like(self.mm.m) # Still is convolved, just not in parallel
+                convolvedkernel = xp.zeros_like(self.mm.m) # Still is convolved, just not in parallel
                 for j in range(indices2D_here.shape[1]): # Here goes the manual convolution
                     y, x = indices2D_here[0,j], indices2D_here[1,j]
                     convolvedkernel += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-            interaction = self.prefactor*cp.multiply(self.mm.m*self.mm._momentSq, convolvedkernel)
+            interaction = self.prefactor*xp.multiply(self.mm.m*self.mm._momentSq, convolvedkernel)
             self.E += 2*interaction
 
     @property
     def E_tot(self):
-        return cp.sum(self.E)/2
+        return xp.sum(self.E)/2
 
 
 class ExchangeEnergy(Energy):
@@ -1015,9 +1016,9 @@ class ExchangeEnergy(Energy):
             my = self.mm.orientation[:,:,1]*self.mm.m
             sum_mx = signal.convolve2d(mx, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
             sum_my = signal.convolve2d(my, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
-            self.E = -self.J*(cp.multiply(sum_mx, mx) + cp.multiply(sum_my, my))
+            self.E = -self.J*(xp.multiply(sum_mx, mx) + xp.multiply(sum_my, my))
         else: # Use Ising hamiltonian
-            self.E = -self.J*cp.multiply(signal.convolve2d(self.mm.m, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill'), self.mm.m)
+            self.E = -self.J*xp.multiply(signal.convolve2d(self.mm.m, self.local_interaction, mode='same', boundary='wrap' if self.mm.PBC else 'fill'), self.mm.m)
 
     def energy_switch(self, indices2D=None):
         return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]
@@ -1030,7 +1031,7 @@ class ExchangeEnergy(Energy):
 
     @property
     def E_tot(self):
-        return cp.sum(self.E)/2
+        return xp.sum(self.E)/2
 
 
 @dataclass
