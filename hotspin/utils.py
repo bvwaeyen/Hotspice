@@ -17,6 +17,7 @@ import pandas as pd
 
 from datetime import datetime
 from IPython.terminal.embed import InteractiveShellEmbed
+from textwrap import dedent, indent
 from typing import Callable, Iterable, TypeVar
 
 from . import config
@@ -248,7 +249,7 @@ def log(message, device_id=0):
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPIN EXAMPLES
-class Data: # TODO: make generalized method for getting full column even if it is not in df but in constants
+class Data:
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
         ''' Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
             Constant columns in <df> are automatically moved to <constants>, and keys present
@@ -463,6 +464,32 @@ class Data: # TODO: make generalized method for getting full column even if it i
         # And now combine everything into one big Data() object
         big_df = pd.concat(dataframes, ignore_index=True) # Concatenate all rows of dataframes
         return Data(big_df, constants=constants, metadata=metadata)
+    
+    def get(self, param_name):
+        """ Returns the full column of <param_name>, even if it is actually a constant. """
+        if param_name in self.df:
+            return self.df[param_name]
+        elif param_name in self.constants:
+            return pd.Series([self.constants[param_name]]*len(self.df))
+        else:
+            raise ValueError(f"Unknown parameter name '{param_name}'.")
+    
+    def __str__(self):
+        c = '\n'.join([f'{k} = {v}' for k, v in self.constants.items()])
+        return dedent(
+            f"""
+            {'='*32}
+            Data created by {self.metadata['author']} on {self.metadata['datetime']}.
+            {self.metadata['description']}
+
+            Constants:
+            {indent(c, ' '*4)}
+
+            Data:
+            {indent(self.df.to_string(index=False), ' '*4)}
+            {'='*32}
+            """
+        )
 
 
 class _CompactJSONEncoder(json.JSONEncoder):
