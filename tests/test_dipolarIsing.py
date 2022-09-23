@@ -6,8 +6,6 @@ r''' This file tests the correspondence between theory and simulation for a
         J. H. Toloza, F. A. Tamarit, and S. A. Cannas. Aging in a two-dimensional Ising model
         with dipolar interactions. Physical Review B, 58(14):R8885, 1998.
 '''
-import math
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd

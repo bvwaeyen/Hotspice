@@ -6,7 +6,6 @@ import numpy as np
 
 from matplotlib import cm
 
-import examplefunctions as ef
 from context import hotspin
 
 

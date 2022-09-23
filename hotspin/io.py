@@ -1,6 +1,5 @@
 import math
 
-import cupy as cp
 import numpy as np
 
 from abc import ABC, abstractmethod

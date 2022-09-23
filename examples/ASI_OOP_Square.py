@@ -93,7 +93,6 @@ def test(mm: hotspin.Magnets, T_low=200, T_high=400, T_steps=100, N=1e2, verbose
         n = mm.switches
         times[i] = ef.run_a_bit(mm, N=N, T=temp, show_m=False)
         switches[i] = mm.switches - n
-    import matplotlib.pyplot as plt
     plt.plot(switches/N, times/N)
     plt.scatter(switches/N, times/N, s=(temps/np.min(temps))**2*10) # Larger point means higher temperature
     plt.axvline(central, linestyle=':', color='black')

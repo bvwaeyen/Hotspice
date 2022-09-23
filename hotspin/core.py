@@ -9,7 +9,7 @@ from functools import cache
 from scipy.spatial import distance
 from textwrap import dedent
 
-from .poisson import PoissonGrid
+from .poisson import PoissonGrid, SequentialPoissonDiskSampling, poisson_disc_samples
 from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, mirror4
 from . import config
 if config.USE_GPU:
@@ -433,7 +433,6 @@ class Magnets(ABC):
 
     def _select_Poisson(self, r=None, **kwargs): # WARN: does not take occupation into account, so preferably only use on OOP_Square/IP_Ising!
         if r is None: r = self.calc_r(0.01)
-        from .poisson import SequentialPoissonDiskSampling, poisson_disc_samples
 
         # p = SequentialPoissonDiskSampling(self.ny*self.dy, self.nx*self.dx, r, tries=1).fill()
         p = poisson_disc_samples(self.ny*self.dy, self.nx*self.dx, r, k=4)
