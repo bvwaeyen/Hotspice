@@ -35,7 +35,7 @@ parser.add_argument('script_path', type=str, nargs='?',
 parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?',
                     default='results/Sweeps/Sweep',
                     help="The output directory, relative to the current working directory.")
-args = parser.parse_args()
+args, _ = parser.parse_known_args()
 args.script_path = os.path.abspath(args.script_path) # Make sure the path is ok
 if not os.path.exists(args.script_path):
     raise ValueError(f"Path '{args.script_path}' provided as cmd argument does not exist.")
@@ -69,7 +69,7 @@ def runner(i):
     q_num = q.get()
     gpu = q_num % N_GPU
     # Run a shell command that runs the relevant python script
-    hotspin.utils.log(f"Attempting to run job #{i} of {num_jobs} on GPU{gpu}...")
+    hotspin.utils.log(f"Attempting to run job #{i} of {num_jobs} on GPU{gpu}...", style='header')
     cmd = f"python {args.script_path} -o {outdir} {i}"
     try:
         env = os.environ.copy()
@@ -85,10 +85,10 @@ def runner(i):
 
 
 ## Run the jobs
-print(f"Running {num_jobs} jobs on {N_GPU} GPU{'s' if N_GPU > 1 else ''}...")
+hotspin.utils.log(f"Running {num_jobs} jobs on {N_GPU} GPU{'s' if N_GPU > 1 else ''}...", style='header', show_gpu=False)
 Parallel(n_jobs=N_GPU, backend="threading")(delayed(runner)(i) for i in range(num_jobs))
 
 if len(failed):
-    print(f"Failed sweep iterations (zero-indexed): {failed}")
+    hotspin.utils.log(f"Failed sweep iterations (zero-indexed): {failed}", style='issue', show_gpu=False)
 else:
-    print(f"Sweep successfully finished.")
+    hotspin.utils.log(f"Sweep successfully finished.", style='success', show_gpu=False)

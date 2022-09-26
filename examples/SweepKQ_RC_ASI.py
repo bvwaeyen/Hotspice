@@ -1,9 +1,7 @@
 import argparse
 import math
-import os
 
 import numpy as np
-import pandas as pd
 
 try: from context import hotspin
 except ModuleNotFoundError: import hotspin
@@ -34,7 +32,7 @@ class SweepKQ_RC_ASI(hotspin.experiments.Sweep):
         super().__init__(groups=groups, **kwargs)
 
     def create_experiment(self, params: dict) -> hotspin.experiments.KernelQualityExperiment:
-        mm = getattr(hotspin.ASI, params["ASI_type"])(params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
+        mm = getattr(hotspin.ASI, params["ASI_type"])(params["a"], params["nx"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
             pattern='uniform', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()),
             params=hotspin.SimParams(UPDATE_SCHEME='Néel', SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF=0)) # Need Néel for inputter
         datastream = hotspin.io.RandomBinaryDatastream()
@@ -87,7 +85,7 @@ def process_single(vars: dict, experiment: hotspin.experiments.KernelQualityExpe
     data_i = hotspin.utils.Data(df_i, metadata=metadata, constants=constants)
     if save:
         saved_path = data_i.save(dir=outdir, name=savename, timestamp=True)
-        hotspin.utils.log(f"Saved iteration #{args.iteration} to {saved_path}")
+        hotspin.utils.log(f"Saved iteration #{args.iteration} to {saved_path}", style='success')
 
 
 if __name__ == "__main__":

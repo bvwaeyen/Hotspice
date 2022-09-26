@@ -15,7 +15,7 @@ class SweepTAExperiment(hotspin.experiments.Sweep): # Example of a fully impleme
         super().__init__(groups=groups, **kwargs)
 
     def create_experiment(self, params: dict) -> hotspin.experiments.TaskAgnosticExperiment:
-        mm = params["ASI_type"](params["nx"], params["a"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
+        mm = params["ASI_type"](params["a"], params["nx"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
             pattern='random', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()), params=hotspin.SimParams(UPDATE_SCHEME='Néel'))
         datastream = hotspin.io.RandomBinaryDatastream()
         inputter = hotspin.io.FieldInputterBinary(datastream, magnitudes=(params["H_min"], params["H_max"]), angle=params["H_angle"], n=2, sine=params["sine"])
@@ -62,7 +62,7 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
     vars: dict
     experiment: hotspin.experiments.TaskAgnosticExperiment
     for i, (vars, experiment) in enumerate(sweep):
-        if verbose: hotspin.utils.log("Variables in this iteration:", vars, "\nConstants:", sweep.constants)
+        if verbose: hotspin.utils.log(f"Variables in this iteration: {vars}\nConstants: {sweep.constants}")
         experiment.run(N=iterations, verbose=verbose)
 
         # Preliminary save of the data in this iteration, just in case an error would occur later on 

@@ -1,3 +1,5 @@
+import colorama
+colorama.init()
 import getpass
 import inspect
 import io
@@ -233,9 +235,11 @@ def GPUparallel(sweepscript_path, outdir=None, _GPUparallel_py_path=None):
     except subprocess.CalledProcessError:
         warnings.warn(f"The command '{' '.join(command)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
 
-def log(message, device_id=0):
+def log(message, device_id=0, style=None, show_gpu=True):
     ''' Can print <message> to console from subprocesses running on GPU <device_id>.
-        The device id is printed in front of the message.
+        The <device_id> (currently used GPU) is printed in front of the message, if <show_gpu> is True.
+        <style> specifies the color of the message (default None=white), and can be any of:
+            'issue' (red), 'success' (green), 'header' (blue).
     '''
     try:
         devices = [int(i) for i in os.environ["CUDA_VISIBLE_DEVICES"].split(",")]
@@ -243,9 +247,16 @@ def log(message, device_id=0):
         devices = list(range(cp.cuda.runtime.getDeviceCount()))
     device = devices[device_id]
 
-    _rlock = threading.RLock() 
+    color = {
+        'issue': colorama.Fore.LIGHTRED_EX,
+        'success': colorama.Fore.LIGHTGREEN_EX,
+        'header': colorama.Fore.LIGHTBLUE_EX
+    }.get(style, colorama.Style.RESET_ALL)
+
+    _rlock = threading.RLock()
     with _rlock: # Fix print to work with asynchronous queues on different GPUs, though this might not be entirely necessary
-        print(f"[GPU{device}] {message}")
+        GPU_text = f"{colorama.Fore.GREEN}[GPU{device}] " if show_gpu else ""
+        print(GPU_text + f"{color}{message}{colorama.Style.RESET_ALL}")
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPIN EXAMPLES
