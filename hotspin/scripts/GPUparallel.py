@@ -11,6 +11,7 @@ import argparse
 import importlib.util
 import multiprocessing
 import os
+import psutil
 import subprocess
 import sys
 import warnings
@@ -55,9 +56,9 @@ except AttributeError:
 ## Create queue
 multiprocessing.set_start_method('spawn')
 N_GPU = getDeviceCount()
-q = multiprocessing.Queue(maxsize=N_GPU)
-for device in range(N_GPU): q.put(device)
-
+N_JOBS = N_GPU if hotspin.config.USE_GPU else psutil.cpu_count(logical=False)
+q = multiprocessing.Queue(maxsize=N_JOBS)
+for device in range(N_JOBS): q.put(device)
 
 ## Create some global variables for the entire sweep
 num_jobs = len(sweep)
@@ -68,8 +69,9 @@ def runner(i):
     # Select an available gpu
     q_num = q.get()
     gpu = q_num % N_GPU
+    text_core_num = f"GPU{gpu}" if hotspin.config.USE_GPU else f"CPU{q_num}"
     # Run a shell command that runs the relevant python script
-    hotspin.utils.log(f"Attempting to run job #{i} of {num_jobs} on GPU{gpu}...", style='header')
+    hotspin.utils.log(f"Attempting to run job #{i} of {num_jobs} on {text_core_num}...", style='header')
     cmd = f"python {args.script_path} -o {outdir} {i}"
     try:
         env = os.environ.copy()
@@ -85,10 +87,11 @@ def runner(i):
 
 
 ## Run the jobs
-hotspin.utils.log(f"Running {num_jobs} jobs on {N_GPU} GPU{'s' if N_GPU > 1 else ''}...", style='header', show_gpu=False)
-Parallel(n_jobs=N_GPU, backend="threading")(delayed(runner)(i) for i in range(num_jobs))
+cores_text = f"{N_JOBS} {'G' if hotspin.config.USE_GPU else 'C'}PU{'s' if N_JOBS > 1 else ''}"
+hotspin.utils.log(f"Running {num_jobs} jobs on {cores_text}...", style='header', show_device=False)
+Parallel(n_jobs=N_JOBS, backend="threading")(delayed(runner)(i) for i in range(num_jobs))
 
 if len(failed):
-    hotspin.utils.log(f"Failed sweep iterations (zero-indexed): {failed}", style='issue', show_gpu=False)
+    hotspin.utils.log(f"Failed sweep iterations (zero-indexed): {failed}", style='issue', show_device=False)
 else:
-    hotspin.utils.log(f"Sweep successfully finished.", style='success', show_gpu=False)
+    hotspin.utils.log(f"Sweep successfully finished.", style='success', show_device=False)

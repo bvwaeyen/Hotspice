@@ -235,17 +235,21 @@ def GPUparallel(sweepscript_path, outdir=None, _GPUparallel_py_path=None):
     except subprocess.CalledProcessError:
         warnings.warn(f"The command '{' '.join(command)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
 
-def log(message, device_id=0, style=None, show_gpu=True):
-    ''' Can print <message> to console from subprocesses running on GPU <device_id>.
-        The <device_id> (currently used GPU) is printed in front of the message, if <show_gpu> is True.
+def log(message, device_id=0, style=None, show_device=True):
+    ''' Can print <message> to console from subprocesses running on a specific GPU or thread.
+        The <device_id> (currently used GPU/CPU core) is printed in front of the message, if <show_device> is True.
         <style> specifies the color of the message (default None=white), and can be any of:
             'issue' (red), 'success' (green), 'header' (blue).
     '''
-    try:
-        devices = [int(i) for i in os.environ["CUDA_VISIBLE_DEVICES"].split(",")]
-    except KeyError: # So CUDA_VISIBLE_DEVICES was not defined manually, that probably means they are all available
-        devices = list(range(cp.cuda.runtime.getDeviceCount()))
-    device = devices[device_id]
+    if show_device:
+        if config.USE_GPU:
+            try:
+                device = [int(i) for i in os.environ["CUDA_VISIBLE_DEVICES"].split(",")][device_id]
+            except KeyError: # So CUDA_VISIBLE_DEVICES was not defined manually, that probably means they are all available
+                device = device_id if device_id < cp.cuda.runtime.getDeviceCount() else np.nan
+            text_device = f"{colorama.Fore.GREEN}[GPU{device}] "
+        else: text_device = f"{colorama.Fore.GREEN}[CPU] " # TODO: see if we can get some sort of thread/core ID?
+    else: text_device = ""
 
     color = {
         'issue': colorama.Fore.LIGHTRED_EX,
@@ -253,10 +257,10 @@ def log(message, device_id=0, style=None, show_gpu=True):
         'header': colorama.Fore.LIGHTBLUE_EX
     }.get(style, colorama.Style.RESET_ALL)
 
+    text = text_device + f"{color}{message}{colorama.Style.RESET_ALL}"
     _rlock = threading.RLock()
     with _rlock: # Fix print to work with asynchronous queues on different GPUs, though this might not be entirely necessary
-        GPU_text = f"{colorama.Fore.GREEN}[GPU{device}] " if show_gpu else ""
-        print(GPU_text + f"{color}{message}{colorama.Style.RESET_ALL}")
+        print(text)
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPIN EXAMPLES
