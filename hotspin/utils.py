@@ -13,7 +13,6 @@ import sys
 import threading
 import warnings
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 
@@ -24,9 +23,11 @@ from typing import Callable, Iterable, TypeVar
 
 from . import config
 if config.USE_GPU:
+    import cupy as cp # Only ever try to import cupy if USE_GPU, otherwise we get premature ImportErrors on non-CUDA devices
     import cupy as xp
     import cupy.lib.stride_tricks as striding
 else:
+    import numpy as cp # We need cp to be defined, so use numpy to be that placeholder as it is the closest module
     import numpy as xp
     import numpy.lib.stride_tricks as striding
 
@@ -160,7 +161,7 @@ def shell():
 
 
 ## CONVERSION
-Field = TypeVar("Field", int, float, list, np.ndarray, cp.ndarray) # Every type that can be parsed by as_2D_array()
+Field = TypeVar("Field", int, float, list, np.ndarray, xp.ndarray) # Every type that can be parsed by as_2D_array()
 def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
     ''' Converts <value> to a 2D array of shape <shape>. If <value> is scalar, the returned
         array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
@@ -173,7 +174,7 @@ def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
             value = xp.asarray(value, dtype=float)
         except ValueError:
             raise ValueError("List of lists could not be converted to rectangular float64 array.")
-    if isinstance(value, (np.ndarray, cp.ndarray)):
+    if isinstance(value, (np.ndarray, xp.ndarray)):
         if value.size != 1: is_scalar = False
 
     if is_scalar: # ... and act accordingly
@@ -185,7 +186,9 @@ def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
 
 def asnumpy(array: xp.ndarray) -> np.ndarray:
     ''' Converts the CuPy/NumPy <array> to a NumPy array, which is necessary for e.g. matplotlib. '''
-    if isinstance(array, cp.ndarray):
+    if not config.USE_GPU: # Not very clean if-else statement but oh well
+        return np.asarray(array) # Then CuPy doesn't exist, so no other options than to try np.asarray
+    elif isinstance(array, cp.ndarray):
         return array.get()
     else:
         return np.asarray(array)
@@ -515,7 +518,7 @@ class _CompactJSONEncoder(json.JSONEncoder):
 
     def encode(self, o):
         """ Encode JSON object <o> with respect to single line lists. """
-        if isinstance(o, (np.ndarray, cp.ndarray)):
+        if isinstance(o, (np.ndarray, xp.ndarray)):
             o = o.tolist()
         if isinstance(o, (list, tuple)):
             if self._is_single_line_list(o):
