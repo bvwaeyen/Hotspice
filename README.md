@@ -72,10 +72,10 @@ The `hotspin.experiments` module contains classes to bundle many input/output ru
 
 ### Performing a parameter sweep on multiple GPUs
 
-The `hotspin/scripts/GPUparallel.py` script can be used to run a `hotspin.experiments.Sweep` on multiple GPUs. This sweep should be defined in a file that follows a structure similar to `examples/SweepKQ_RC_ASI.py`. Running `GPUparallel.py` can be done
+The `hotspin/scripts/ParallelJobs.py` script can be used to run a `hotspin.experiments.Sweep` on multiple GPUs. This sweep should be defined in a file that follows a structure similar to `examples/SweepKQ_RC_ASI.py`. Running `ParallelJobs.py` can be done
 
-- either from the command line by calling `python GPUparallel.py <sweep_file>`,
-- or from an interactive python shell by calling `hotspin.utils.GPUparallel(<sweep_file>)`.
+- either from the command line by calling `python ParallelJobs.py <sweep_file>`,
+- or from an interactive python shell by calling `hotspin.utils.ParallelJobs(<sweep_file>)`.
 
 ### Choosing between GPU or CPU
 

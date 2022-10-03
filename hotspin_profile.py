@@ -48,7 +48,7 @@ if args[0] == "-m":
     outfile = os.path.abspath(f"{outdir}/cProfile_{args[1]}_{timestamp}.txt")
     run(["python", "-m", "cProfile", "-s", "tottime", "-m"] + args[1:] + [">", outfile])
 elif args[0] == "-l":
-    print(f"{colorama.Fore.LIGHTBLUE_EX}!!! Do not forget to add the @profile decorator to the funtion(s) of interest, otherwise the output of this profiling will be empty.{colorama.Style.RESET_ALL}")
+    print(f"{colorama.Fore.LIGHTBLUE_EX}!!! Do not forget to add the @profile decorator to the function(s) of interest, otherwise the output of this profiling will be empty.{colorama.Style.RESET_ALL}")
     tempfile = os.path.abspath(f"{outdir}/kernprof_{os.path.basename(args[1])}_{timestamp}.lprof")
     outfile = os.path.abspath(f"{outdir}/kernprof_{os.path.basename(args[1])}_{timestamp}.txt")
     run(["kernprof", "-l", "-o", tempfile, "-v"] + args[1:])

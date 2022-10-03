@@ -23,7 +23,7 @@ try: import hotspin
 except ModuleNotFoundError: from context import hotspin
 
 
-if __name__ != "__main__": raise RuntimeError("GPUparallel.py should only be run as a script, never as a module.")
+if __name__ != "__main__": raise RuntimeError("ParallelJobs.py should only be run as a script, never as a module.")
 
 
 ## Define, parse and clean command-line arguments

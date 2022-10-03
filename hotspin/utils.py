@@ -225,11 +225,13 @@ def timestamp():
 
 
 ## MULTI-GPU UTILITIES
-def GPUparallel(sweepscript_path, outdir=None, _GPUparallel_py_path=None):
-    ''' Just runs the GPUparallel.py script using a python function instead of from the command line. '''
-    if _GPUparallel_py_path is None:
-        _GPUparallel_py_path = pathlib.Path(__file__).parent / 'scripts/GPUparallel.py'
-    command = ["python", str(_GPUparallel_py_path), sweepscript_path]
+def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_py_path=None):
+    ''' Just runs the ParallelJobs.py script using a python function instead of from the command line. '''
+    if _ParallelJobs_py_path is None:
+        _ParallelJobs_py_path = pathlib.Path(__file__).parent / 'scripts/ParallelJobs.py'
+    if not os.path.exists(_ParallelJobs_py_path):
+        raise FileNotFoundError(f"The ParallelJobs-script was not found at {_ParallelJobs_py_path}.")
+    command = ["python", str(_ParallelJobs_py_path), sweepscript_path]
     if outdir is not None:
         command[2:2] = ['-o', outdir] # Slicing inserts this list at index 2 of <command>
 

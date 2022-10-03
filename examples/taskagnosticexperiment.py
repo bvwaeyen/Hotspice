@@ -48,13 +48,13 @@ class SweepTA_RC_ASI(hotspin.experiments.Sweep):
 
 def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, save=True):
     ''' Performs a parameter sweep of a TaskAgnosticExperiment.
-        (!ON A SINGLE GPU! To run on multiple GPU, use hotspin/scripts/GPUparallel.py and an approprate secondary script like examples/SweepKQ_RC_ASI.py)
+        (!ON A SINGLE GPU! To run on multiple GPU, use hotspin/scripts/ParallelJobs.py and an approprate secondary script like examples/SweepKQ_RC_ASI.py)
         @param sweep [hotspin.experiments.Sweep]: a Sweep instance that generates TaskAgnosticExperiment instances.
         @param iterations [int] (1000): the number of input bits applied for each value of parameters.
         @param save [bool|str] (True): if truthy, the sweep data is saved in "results/TaskAgnosticExperiment/Sweep.temp<timestamp>/".
             If specified as a string, the base name of all saved files in this directory is this string.
         @return [str]: absolute path to the directory where all iterations of this sweep are stored.
-    ''' # TODO: this function seems to have become obsolete since the creation of GPUparallel.py
+    ''' # TODO: this function seems to have become obsolete since the creation of ParallelJobs.py
     if save: savename = save if isinstance(save, str) else str(sweep.groups).replace('"', '').replace("'", "")
     else: savename = ''
     temp_time = hotspin.utils.timestamp()
