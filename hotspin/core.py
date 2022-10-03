@@ -510,11 +510,11 @@ class Magnets(ABC):
         ''' Performs a single magnetization switch, if the switch would occur sooner than <t_max> seconds. '''
         # TODO: we might be able to multi-switch here as well, by taking into account the double-switch time
         barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
-        minBarrier = xp.min(barrier)
+        minBarrier = xp.nanmin(barrier)
         barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
             taus = self.rng.random(size=barrier.shape)*xp.exp(barrier/self.kBT) # Draw random relative times from an exponential distribution
-            indexmin2D = divmod(xp.argmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
+            indexmin2D = divmod(xp.nanargmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
             time = taus[indexmin2D]*xp.exp(minBarrier/self.kBT[indexmin2D])/attempt_freq # This can become infinite quite quickly if T is small
             self.attempted_switches += 1
             if time > t_max:
