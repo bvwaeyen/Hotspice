@@ -1,6 +1,9 @@
 import os
 import sys
 
+# Must always be disabled for Ian's poor laptop
+os.environ['HOTSPIN_USE_GPU'] = 'False'
+
 if '--hotspin-use-cpu' in sys.argv: # Perhaps a bit weird to have 'use-cpu' here, and 'USE_GPU' in the env?
     os.environ['HOTSPIN_USE_GPU'] = 'False'
 
