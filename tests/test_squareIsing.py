@@ -68,7 +68,7 @@ class test_squareIsing:
 
         N_range = [1000, 2000, 4000]
         for N in N_range:
-            local_data = self.test_magnetization(*args, N=N, plot=False, **kwargs)
+            local_data = self.test_magnetization(*args, N=N, plot=False, save=False, **kwargs)
             local_df = local_data.df
             local_df["N"] = N
             df = pd.concat([df, local_df])
@@ -106,7 +106,7 @@ class test_squareIsing:
         if show: plt.show()
 
     @staticmethod
-    def test_N_influence_plot(df: pd.DataFrame, save=False):
+    def test_N_influence_plot(df: pd.DataFrame, save=False, show=True):
         ''' If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. '''
         T_lim = [df["T"].min(), df["T"].max()]
 
@@ -127,7 +127,7 @@ class test_squareIsing:
                 reverse = '' if df["T"].iloc[0] < df["T"].iloc[-1] else 'reverse'
                 save = f"results/test_squareIsing/Tsweep{df['T'].nunique()}{reverse}_Nsweep{df['N'].nunique()}.pdf"
             hotspin.plottools.save_plot(save, ext='.pdf')
-        plt.show()
+        if show: plt.show()
 
     @staticmethod
     def get_m_theory(T_min, T_max):

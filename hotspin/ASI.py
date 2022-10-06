@@ -188,6 +188,59 @@ class IP_Pinwheel(IP_Square):
         return 'uniform' if self.PBC else 'vortex'
 
 
+class IP_SquareDiamond(IP_ASI):
+    def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
+        ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares.
+            The entire domain does not, however, form a square, but rather a 'diamond'.
+        '''
+        self.a = a # [m] The side length of the squares
+        if nx is None or ny is None:
+            if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
+        self.nx, self.ny = nx or n, ny or n
+        self.dx, self.dy = kwargs.pop('dx', a/math.sqrt(2)), kwargs.pop('dy', a/math.sqrt(2))
+        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
+
+    def _set_m(self, pattern: str):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = (self.iyy % 2)*2 - 1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_angles(self):
+        angles = -xp.ones_like(self.xx)*math.pi/4
+        angles[(self.iyy + self.ixx) % 2 == 1] = math.pi/4
+        return angles
+
+    def _get_occupation(self):
+        return xp.ones_like(self.xx)
+
+    def _get_appropriate_avg(self):
+        return 'cross'
+
+    def _get_AFMmask(self):
+        return xp.array([[0, 1, 0], [-1, 0, -1], [0, 1, 0]], dtype='float')/4
+
+    def _get_nearest_neighbors(self):
+        return xp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
+
+    def _get_groundstate(self):
+        return 'afm'
+
+
+class IP_PinwheelDiamond(IP_SquareDiamond):
+    def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
+        ''' In-plane ASI similar to IP_SquareDiamond, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
+        kwargs['angle'] = kwargs.get('angle', 0) - math.pi/4
+        super().__init__(a, n=n, nx=nx, ny=ny, **kwargs)
+
+    def _get_groundstate(self):
+        return 'uniform' if self.PBC else 'vortex'
+    
+    def _get_appropriate_avg(self):
+        return 'square'
+
+
 class IP_Kagome(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         ''' In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. '''
