@@ -216,7 +216,7 @@ class IP_SquareDiamond(IP_ASI):
         return xp.ones_like(self.xx)
 
     def _get_appropriate_avg(self):
-        return 'cross'
+        return 'squarefour'
 
     def _get_AFMmask(self):
         return xp.array([[0, 1, 0], [-1, 0, -1], [0, 1, 0]], dtype='float')/4
@@ -238,7 +238,7 @@ class IP_PinwheelDiamond(IP_SquareDiamond):
         return 'uniform' if self.PBC else 'vortex'
     
     def _get_appropriate_avg(self):
-        return 'square'
+        return 'crossfour'
 
 
 class IP_Kagome(IP_ASI):

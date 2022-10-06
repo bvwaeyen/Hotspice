@@ -42,6 +42,9 @@ class Average(Enum):
     SQUARE = [[1, 1, 1], # Often not very useful, just the same as CROSS in most cases
               [1, 0, 1],
               [1, 1, 1]]
+    CROSSFOUR = [[0, 1, 0], # For PinwheelDiamond and SquareDiamond ASI
+                 [1, 4, 1],
+                 [0, 1, 0]]
     SQUAREFOUR = [[1, 1, 1], # Because nearly all ASIs have cells with 4 neighbors, this can come in handy
                   [1, 4, 1],
                   [1, 1, 1]]
@@ -154,6 +157,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
             ny, nx = magnitudes.shape
             shape = max_mean_magnitude.shape
             max_mean_magnitude = max_mean_magnitude[(shape[0]-ny)//2:(shape[0]-ny)//2+ny, (shape[1]-nx)//2:(shape[1]-nx)//2+nx]
+            magnitudes[xp.where(max_mean_magnitude == 0)] = xp.nan # Prevent RuntimeWarning invalid value
             magnitudes = magnitudes/max_mean_magnitude*.9999 # times .9999 to prevent rounding errors yielding values larger than 1
     assert angles is not None and magnitudes is not None, "Angles and/or magnitudes could not be resolved."
     if angles.shape != magnitudes.shape: raise ValueError(f"Angle and/or magnitude arrays have different shape: {angles.shape} and {magnitudes.shape}.")
@@ -439,7 +443,10 @@ def init_fonts(backend=True, small=10, medium=11, large=12):
         try:
             matplotlib.use("TkAgg") # tkinter backend is preferred by Hotspin
         except ImportError:
-            warnings.warn(f"Could not activate 'TkAgg' backend for Hotspin (using {matplotlib.get_backend()} instead).", stacklevel=2)
+            try:
+                matplotlib.use("QtAgg") # Otherwise use Qt but this might give some issues in some places
+            except ImportError:
+                warnings.warn(f"Could not activate 'TkAgg' or 'QtAgg' backend for Hotspin (using {matplotlib.get_backend()} instead).", stacklevel=2)
     
     # Call this function before instantiating subplots!
     plt.rc('font', size=small)          # controls default text sizes
