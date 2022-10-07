@@ -96,5 +96,5 @@ if len(failed):
 else:
     hotspin.utils.log(f"Sweep successfully finished.", style='success', show_device=False)
 
-with open(os.path.join(outdir, 'README.txt')) as readme:
+with open(os.path.abspath(os.path.join(outdir, "README.txt")), 'w') as readme:
     readme.write(f"Failed iterations (flat-index): {failed}")
