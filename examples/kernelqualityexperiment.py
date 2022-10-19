@@ -6,7 +6,8 @@ import numpy as np
 
 from matplotlib import cm
 
-from context import hotspin
+try: from context import hotspin
+except ModuleNotFoundError: import hotspin
 
 
 def plot2Dsweep(summary_file, save=True, plot=True, title=None,
@@ -49,24 +50,27 @@ def plot2Dsweep(summary_file, save=True, plot=True, title=None,
     ax1.set_xlabel(name_x)
     ax1.set_ylabel(name_y)
     ax1.set_title("K")
-    im1 = ax1.pcolormesh(X, Y, K, vmin=1.01, vmax=max(2, np.max(K)), cmap=cmap)
-    plt.colorbar(im1, extend='min')
+    im1 = ax1.pcolormesh(X, Y, K, vmin=1, vmax=max(2, np.max(K)), cmap=cmap)
+    c1 = plt.colorbar(im1, extend='min')
+    c1.ax.yaxis.get_major_locator().set_params(integer=True) # only integer colorbar labels
 
     # PLOT 2: G
     ax2 = fig.add_subplot(1, 3, 2)
     ax2.set_xlabel(name_x)
     ax2.set_ylabel(name_y)
     ax2.set_title("G")
-    im2 = ax2.pcolormesh(X, Y, G, vmin=1.01, vmax=max(2, np.max(G)), cmap=cmap)
-    plt.colorbar(im2, extend='min')
+    im2 = ax2.pcolormesh(X, Y, G, vmin=1, vmax=max(2, np.max(G)), cmap=cmap)
+    c2 = plt.colorbar(im2, extend='min')
+    c2.ax.yaxis.get_major_locator().set_params(integer=True)
 
     # PLOT 3: Q
     ax3 = fig.add_subplot(1, 3, 3)
     ax3.set_xlabel(name_x)
     ax3.set_ylabel(name_y)
     ax3.set_title("Q")
-    im3 = ax3.pcolormesh(X, Y, Q, vmin=1.01, vmax=max(2, np.max(Q)), cmap=cmap)
-    plt.colorbar(im3, extend='min')
+    im3 = ax3.pcolormesh(X, Y, Q, vmin=0, vmax=max(2, np.max(Q)), cmap=cmap)
+    c3 = plt.colorbar(im3, extend='min')
+    c3.ax.yaxis.get_major_locator().set_params(integer=True)
 
     plt.suptitle(f'K, G and Q sweep' if title is None else title)
     plt.gcf().tight_layout()

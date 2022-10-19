@@ -6,7 +6,8 @@ import pandas as pd
 
 from matplotlib.lines import Line2D
 
-from context import hotspin
+try: from context import hotspin
+except ModuleNotFoundError: import hotspin
 
 
 def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbose=True):
