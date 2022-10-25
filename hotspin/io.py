@@ -94,6 +94,16 @@ class RandomUniformDatastream(Datastream):
         return (self.high - self.low)*self.rng.random(size=(n,)) + self.low
 
 
+class ConstantDatastream(Datastream):
+    def __init__(self, value=1):
+        '''Always returns the same <value=1>'''
+        self.value = value
+        super().__init__()
+
+    def get_next(self, n=1) -> xp.ndarray:
+        return xp.full((n,), self.value)
+
+
 class FieldInputter(Inputter):
     def __init__(self, datastream: Datastream, magnitude=1, angle=0, n=2, sine=False, frequency=1, half_period=True):
         ''' Applies an external field at <angle> rad, whose magnitude is <magnitude>*<datastream.get_next()>.
