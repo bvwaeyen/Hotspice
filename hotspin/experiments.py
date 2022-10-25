@@ -9,13 +9,14 @@ import statsmodels.api as sm
 
 from abc import ABC, abstractmethod
 from scipy.spatial import distance
+from textwrap import dedent
 from typing import Any, Iterable
 
 from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, show_m
-from .utils import asnumpy, Data, filter_kwargs, human_sort, is_significant, log, R_squared, strided
+from .utils import asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -99,6 +100,17 @@ class Sweep(ABC):
         return np.prod(self.n_per_group)
 
     @property
+    def info(self):
+        ''' Some information about a specific sweep, e.g. what the input/output protocol is etc.
+            This should simply be set using self.info = ...
+        '''
+        return self._info if hasattr(self, '_info') else "No specific information provided for this sweep."
+    
+    @info.setter
+    def info(self, value):
+        self._info = dedent(value).strip()
+
+    @property
     def sweeper(self):
         for index, _ in np.ndenumerate(np.zeros(self.n_per_group)): # Return an iterable of sorts for sweeping the hypercube of variables
             yield {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
@@ -124,6 +136,15 @@ class Sweep(ABC):
     def create_experiment(self, params: dict) -> Experiment:
         ''' Subclasses should create an Experiment here according to <params> and return it. '''
         pass
+
+    def as_metadata_dict(self):
+        return {
+            "type": full_obj_name(self),
+            "info": self.info,
+            "variables": self.variables,
+            "parameters": self.parameters,
+            "groups": self.groups
+        }
 
     def load_results(self, dir: str, save=True, verbose=True):
         ''' Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,

@@ -71,12 +71,7 @@ def TAsweep(sweep: hotspin.experiments.Sweep, iterations=1000, verbose=False, sa
             df_i.insert(loc=i, column=varname, value=(value,)*len(df_i))
         metadata = {
             "description": r"Contains the input values <u> and state vectors <y> as can be used for calculating task agnostic metrics of the system as proposed in `Task Agnostic Metrics for Reservoir Computing` by Love et al.",
-            "sweep": {
-                "type": hotspin.utils.full_obj_name(sweep),
-                "variables": sweep.variables,
-                "parameters": sweep.parameters,
-                "groups": sweep.groups
-            }
+            "sweep": sweep.as_metadata_dict()
         }
         constants = {"inputter": hotspin.utils.full_obj_name(experiment.inputter), "outputreader": hotspin.utils.full_obj_name(experiment.outputreader), "datastream": hotspin.utils.full_obj_name(experiment.inputter.datastream),
             "ASI_type": hotspin.utils.full_obj_name(experiment.mm)} | sweep.constants

@@ -73,12 +73,7 @@ def process_single(vars: dict, experiment: hotspin.experiments.KernelQualityExpe
         df_i.insert(loc=i, column=varname, value=(value,)*len(df_i))
     metadata = {
         "description": r"Contains the states (and input bit sequences) used to calculate kernel-quality and generalization-capability as in `Reservoir Computing in Artificial Spin Ice` by J. H. Jensen and G. Tufte.",
-        "sweep": {
-            "type": hotspin.utils.full_obj_name(sweep),
-            "variables": sweep.variables,
-            "parameters": sweep.parameters,
-            "groups": sweep.groups
-        }
+        "sweep": sweep.as_metadata_dict()
     }
     constants = {"inputter": hotspin.utils.full_obj_name(experiment.inputter), "outputreader": hotspin.utils.full_obj_name(experiment.outputreader), "datastream": hotspin.utils.full_obj_name(experiment.inputter.datastream),
         "ASI_type": hotspin.utils.full_obj_name(experiment.mm)} | sweep.constants
