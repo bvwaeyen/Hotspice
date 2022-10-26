@@ -9,13 +9,14 @@ import statsmodels.api as sm
 
 from abc import ABC, abstractmethod
 from scipy.spatial import distance
+from textwrap import dedent
 from typing import Any, Iterable
 
 from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
 from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, show_m
-from .utils import asnumpy, Data, filter_kwargs, human_sort, is_significant, log, R_squared, strided
+from .utils import asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -99,6 +100,17 @@ class Sweep(ABC):
         return np.prod(self.n_per_group)
 
     @property
+    def info(self):
+        ''' Some information about a specific sweep, e.g. what the input/output protocol is etc.
+            This should simply be set using self.info = ...
+        '''
+        return self._info if hasattr(self, '_info') else "No specific information provided for this sweep."
+    
+    @info.setter
+    def info(self, value):
+        self._info = dedent(value).strip()
+
+    @property
     def sweeper(self):
         for index, _ in np.ndenumerate(np.zeros(self.n_per_group)): # Return an iterable of sorts for sweeping the hypercube of variables
             yield {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
@@ -124,6 +136,15 @@ class Sweep(ABC):
     def create_experiment(self, params: dict) -> Experiment:
         ''' Subclasses should create an Experiment here according to <params> and return it. '''
         pass
+
+    def as_metadata_dict(self):
+        return {
+            "type": full_obj_name(self),
+            "info": self.info,
+            "variables": self.variables,
+            "parameters": self.parameters,
+            "groups": self.groups
+        }
 
     def load_results(self, dir: str, save=True, verbose=True):
         ''' Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,
@@ -178,21 +199,21 @@ class KernelQualityExperiment(Experiment):
         self.n_out = self.outputreader.n
         self.results = {'K': None, 'G': None, 'k': None, 'g': None} # Kernel-quality and Generalization-capability, and their normalized counterparts
 
-    def run(self, input_length: int = 100, constant_fraction: float = 0.6, verbose=False):
+    def run(self, input_length: int = 100, constant_fraction: float = 0.6, pattern=None, verbose=False):
         ''' @param input_length [int]: the number of times inputter.input_single() is called,
                 before every recording of the output state.
         '''
         if verbose: log("Calculating kernel-quality K.")
-        self.run_K(input_length=input_length, verbose=verbose)
+        self.run_K(input_length=input_length, verbose=verbose, pattern=pattern)
         if verbose: log("Calculating generalization-capability G.")
-        self.run_G(input_length=input_length, constant_fraction=constant_fraction, verbose=verbose)
+        self.run_G(input_length=input_length, constant_fraction=constant_fraction, verbose=verbose, pattern=pattern)
 
-    def run_K(self, input_length: int = 100, verbose=False):
+    def run_K(self, input_length: int = 100, pattern=None, verbose=False):
         self.all_states_K = xp.zeros((self.n_out,)*2)
         self.all_inputs_K = ["" for _ in range(self.n_out)]
 
         for i in range(self.n_out): # To get a square matrix, record the state as many times as there are output values
-            self.mm.initialize_m('uniform', angle=0)
+            self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
             for j in range(input_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
                     log(f'Row {i+1}/{self.n_out}, value {j+1}/{input_length}...')
@@ -202,7 +223,7 @@ class KernelQualityExperiment(Experiment):
             state = self.outputreader.read_state()
             self.all_states_K[i,:] = state.reshape(-1)
 
-    def run_G(self, input_length: int = 100, constant_fraction=0.6, verbose=False):
+    def run_G(self, input_length: int = 100, constant_fraction=0.6, pattern=None, verbose=False):
         ''' @param constant_fraction [float] (0.6): the last <constant_fraction>*<input_length> bits will
                 be equal for all <self.n_out> bit sequences.
         '''
@@ -213,7 +234,7 @@ class KernelQualityExperiment(Experiment):
         random_length = input_length - constant_length
 
         for i in range(self.n_out): # To get a square matrix, record the state as many times as there are output values
-            self.mm.initialize_m('uniform', angle=0)
+            self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
             for j in range(random_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
                     log(f'Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...')
