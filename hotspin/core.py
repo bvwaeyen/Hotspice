@@ -690,22 +690,21 @@ class Magnets(ABC):
         match str(pattern).strip().lower():
             case 'uniform':
                 self.m = self._get_m_uniform()
-            case 'vortex':
+            case 'vortex': # This is not perfect, but probably the best I can do without manually specifying the center of the vortex
                 # When using 'angle' property of Magnets.initialize_m:
                 #   <angle> near 0 or math.pi: clockwise/anticlockwise vortex, respectively
                 #   <angle> near math.pi/2 or -math.pi/2: bowtie configuration (top region: up/down, respectively)
                 self.m = xp.ones_like(self.xx)
-                distSq = ((self.ixx - (self.nx-1)/2)**2 + (self.iyy - (self.ny-1)/2)**2) # Try to put the vortex close to the center of the simulation
-                distSq[xp.where(self.occupation == 1)] = xp.nan # We don't want to place the vortex center at an occupied cell
-                middle_y, middle_x = divmod(xp.argmax(distSq == xp.min(distSq[~xp.isnan(distSq)])), self.nx) # The non-occupied cell closest to the center
-                N = xp.where((self.ixx - middle_x < self.iyy - middle_y) & (self.ixx + self.iyy >= middle_x + middle_y))
-                E = xp.where((self.ixx - middle_x >= self.iyy - middle_y) & (self.ixx + self.iyy > middle_x + middle_y))
-                S = xp.where((self.ixx - middle_x > self.iyy - middle_y) & (self.ixx + self.iyy <= middle_x + middle_y))
-                W = xp.where((self.ixx - middle_x <= self.iyy - middle_y) & (self.ixx + self.iyy < middle_x + middle_y))
-                self.m[N] = self._get_m_uniform(0         )[N]
-                self.m[E] = self._get_m_uniform(-math.pi/2)[E]
-                self.m[S] = self._get_m_uniform(math.pi   )[S]
-                self.m[W] = self._get_m_uniform(math.pi/2 )[W]
+                middle = (self.dx*(self.nx-1)/2, self.dy*(self.ny-1)/2)
+                diff_x = self.xx - middle[0]
+                diff_y = self.yy - middle[1]
+                diff_complex = diff_x + 1j*diff_y
+                angle_desired = diff_complex*(-1j+1e-6) # Small offset from 90° to avoid weird boundaries in highly symmetric systems
+                dotprod = angle_desired.real*self.orientation[:,:,0] + angle_desired.imag*self.orientation[:,:,1]
+                dotprod[dotprod == 0] = 1
+                sign = xp.sign(dotprod)
+                occupied = xp.where(self.occupation == 1)
+                self.m[occupied] = sign[occupied]
             case str(unknown_pattern):
                 self.m = self.rng.integers(0, 2, size=self.xx.shape)*2 - 1
                 if unknown_pattern != 'random': warnings.warn(f'Pattern "{unknown_pattern}" not recognized, defaulting to "random".', stacklevel=2)
