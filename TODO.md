@@ -8,8 +8,6 @@
 
 2. Medium priority
     - [ ] Make unit tests
-    - [x] Allow choosing between CPU and GPU computing (i.e. CuPy or NumPy)
-        - [ ] Somehow make this possible for each ASI object separately?
     - [ ] If kernel is cut off, recalculate it after a certain amount of steps
     - [ ] Implement commonly used metrics to compare with theory/experiment (average magnetization and dimensionless amplitude ratio  $\langle m^2 \rangle^2/\langle m^4 \rangle$, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction or by looking at the dot/cross(?) product between vectors, susceptibility, width of domains (related to correlation probably)...)
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state (e.g. Néel vector?)
@@ -49,6 +47,6 @@
 - [ ] Improve relaxation algorithm for `Magnets.relax()`
 - [ ] Improve `plottools.py`
   - [ ] Organize plotting functions better
-  - [ ] Improve the Average class to make it more versatile and consistent between different ASIs
+  - [ ] Improve the Average class to make it more versatile and consistent between different ASIs, for example by actually calculating the field of the neighbors at each cell (but this might be quite computationally expensive, which is not an issue for normal plots but for animations this might not be ideal).
   - [ ] Function to plot field direction at every cell by taking into account Zeeman and dipolar field from all magnets
 - [ ] Linear transformations (e.g. skewing or squeezing) can be implemented by acting on `xx` and `yy`, but this might not be so easy with the unit cells etc. (for plots: [plt imshow](https://matplotlib.org/stable/gallery/images_contours_and_fields/affine_image.html "Affine transform of an image for skewed geometries"))
