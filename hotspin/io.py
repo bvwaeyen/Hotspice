@@ -277,8 +277,8 @@ class RegionalOutputReader(OutputReader):
         if mm is not None: self.configure_for(mm) # If mm not specified, we suppose configure_for() already happened
         if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
         if self.mm.in_plane:
-            m_x = m*self.mm.orientation[:,:,0]*self.mm.moment/self.normalization_factor
-            m_y = m*self.mm.orientation[:,:,1]*self.mm.moment/self.normalization_factor
+            m_x = m*self.mm.orientation[:,:,0]*self.mm.moment
+            m_y = m*self.mm.orientation[:,:,1]*self.mm.moment
 
         # TODO: make self.state a 1D array, which can certainly be good for sparse simulations
         for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
@@ -288,6 +288,12 @@ class RegionalOutputReader(OutputReader):
                 self.state[i[0], i[1], 1] = xp.sum(m_y[here]) # Average m_y
             else:
                 self.state[i[0], i[1]] = xp.sum(m[here])
+
+        if self.mm.in_plane:
+            self.state[:,:,0] /= self.normalization_factor
+            self.state[:,:,1] /= self.normalization_factor
+        else:
+            self.state /= self.normalization_factor
 
         return self.state # [Am²]
 
