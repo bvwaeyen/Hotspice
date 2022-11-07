@@ -143,7 +143,7 @@ class Magnets(ABC):
             self._set_m(pattern)
         else: # Then pattern is a Field-like object
             try:
-                self.m = as_2D_array(pattern, self.m.shape)
+                self.m = as_2D_array(pattern, self.shape)
             except (ValueError, TypeError):
                 raise ValueError(f"Argument <pattern> could not be parsed as a valid array for <self.m>.")
 
@@ -237,7 +237,7 @@ class Magnets(ABC):
 
     @T.setter
     def T(self, value: Field):
-        self._T = as_2D_array(value, self.xx.shape)
+        self._T = as_2D_array(value, self.shape)
 
     @property
     def E_B(self) -> xp.ndarray:
@@ -245,7 +245,7 @@ class Magnets(ABC):
 
     @E_B.setter
     def E_B(self, value: Field):
-        self._E_B = as_2D_array(value, self.xx.shape)
+        self._E_B = as_2D_array(value, self.shape)
 
     @property
     def moment(self) -> xp.ndarray:
@@ -253,8 +253,12 @@ class Magnets(ABC):
 
     @moment.setter
     def moment(self, value: Field):
-        self._moment = as_2D_array(value, self.xx.shape)
+        self._moment = as_2D_array(value, self.shape)
         self._momentSq = self._moment*self._moment
+
+    @property
+    def shape(self):
+        return self.m.shape
 
     @property
     def PBC(self):
@@ -801,32 +805,29 @@ class ZeemanEnergy(Energy):
             @param magnitude [float] (0): The magnitude of the external field.
             @param angle [float] (0): The angle (in radians) of the external field.
         '''
-        self._magnitude, self._angle = magnitude, angle # [T], [rad]
+        # NOTE: self._magnitude and self._angle are not cleaned, and can be int, float, array...
+        #       self.magnitude and self.angle, on the other hand, are always cast as_2D_array() upon calling.
+        self._magnitude = magnitude # [T]
+        self._angle = angle # [rad]
 
     def initialize(self, mm: Magnets):
         self.mm = mm
-        self.set_field()
+        self.set_field(magnitude=self._magnitude, angle=self._angle)
 
     def set_field(self, magnitude=None, angle=None):
         if magnitude is not None: self._magnitude = magnitude
         if angle is not None: self._angle = angle
+
         if self.mm.in_plane:
-            if self.magnitude < 0:
-                self.magnitude *= -1
-                self.angle = (self.angle + math.pi) % math.tau
-            self.B_ext = self.magnitude*xp.array([math.cos(self.angle), math.sin(self.angle)]) # [T]
+            B_ext = (self.magnitude*xp.cos(self.angle), self.magnitude*xp.sin(self.angle)) # [T] tuple(2) of 2D xp.ndarray
+            self.E_factor = -self.mm.moment*(B_ext[0]*self.mm.orientation[:,:,0] + B_ext[1]*self.mm.orientation[:,:,1])
         else:
-            self.B_ext = xp.array(self.magnitude) # [T]
-            if self.angle != 0:
-                self.angle = 0
-                warnings.warn(f'You tried to set the angle of an out-of-plane field in ZeemanEnergy.set_field(), but this is not supported.', stacklevel=2)
-        self.update()
+            B_ext = xp.copy(self.magnitude) # [T] 2D xp.ndarray to allow spatially varying external field
+            self.E_factor = -self.mm.moment*B_ext
+        self.update() # Fields were (probably) changed, so recalculate the energy
 
     def update(self):
-        if self.mm.in_plane:
-            self.E = -self.mm.moment*xp.multiply(self.mm.m, self.B_ext[0]*self.mm.orientation[:,:,0] + self.B_ext[1]*self.mm.orientation[:,:,1])
-        else:
-            self.E = -self.mm.moment*self.mm.m*self.B_ext
+        self.E = self.mm.m*self.E_factor
 
     def energy_switch(self, indices2D=None):
         return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]
@@ -842,14 +843,14 @@ class ZeemanEnergy(Energy):
         return xp.sum(self.E)
 
     @property
-    def magnitude(self): return self._magnitude
-
+    def magnitude(self): return as_2D_array(self._magnitude, self.mm.shape)
     @magnitude.setter
-    def magnitude(self, value):
-        self.set_field(value, self._angle)
+    def magnitude(self, value): self.set_field(magnitude=value)
 
     @property
-    def angle(self): return self._angle
+    def angle(self): return as_2D_array(self._angle, self.mm.shape)
+    @angle.setter
+    def angle(self, value): self.set_field(angle=value)
 
     @angle.setter
     def angle(self, value):
