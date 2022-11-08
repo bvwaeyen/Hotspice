@@ -203,11 +203,13 @@ class PerpFieldInputter(FieldInputter):
             # log(f'Performed {mm.MCsteps - MCsteps0} MC steps.')
         else:
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < .5 - 1e-6:
-                mm.update(t_max=0.5/self.frequency)
+                if self.frequency != 0: mm.update(t_max=0.5/self.frequency)
+                else: mm.update()
                 # log('updated forward')
             e.set_field(magnitude=-self.magnitude, angle=angle)
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6:
-                mm.update(t_max=0.5/self.frequency)
+                if self.frequency != 0: mm.update(t_max=0.5/self.frequency)
+                else: mm.update()
                 # log('updated reverse')
 
         return value
