@@ -91,10 +91,12 @@ cores_text = f"{N_JOBS} {'G' if hotspin.config.USE_GPU else 'C'}PU{'s' if N_JOBS
 hotspin.utils.log(f"Running {num_jobs} jobs on {cores_text}...", style='header', show_device=False)
 Parallel(n_jobs=N_JOBS, backend="threading")(delayed(runner)(i) for i in range(num_jobs))
 
+with open(os.path.abspath(os.path.join(outdir, "README.txt")), 'w') as readme:
+    readme.write(f"Failed iterations (flat-index): {failed}")
+
 if len(failed):
     hotspin.utils.log(f"Failed sweep iterations (zero-indexed): {failed}", style='issue', show_device=False)
 else:
-    hotspin.utils.log(f"Sweep successfully finished.", style='success', show_device=False)
+    hotspin.utils.log(f"Sweep successfully finished. Summarizing results...", style='success', show_device=False)
+    subprocess.run(["python", args.script_path, '-o', outdir], check=True) # To summarize the sweep if all went well
 
-with open(os.path.abspath(os.path.join(outdir, "README.txt")), 'w') as readme:
-    readme.write(f"Failed iterations (flat-index): {failed}")

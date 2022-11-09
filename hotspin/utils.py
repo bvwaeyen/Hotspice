@@ -225,20 +225,30 @@ def timestamp():
 
 
 ## MULTI-GPU UTILITIES
-def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_py_path=None):
-    ''' Just runs the ParallelJobs.py script using a python function instead of from the command line. '''
-    if _ParallelJobs_py_path is None:
-        _ParallelJobs_py_path = pathlib.Path(__file__).parent / 'scripts/ParallelJobs.py'
-    if not os.path.exists(_ParallelJobs_py_path):
-        raise FileNotFoundError(f"The ParallelJobs-script was not found at {_ParallelJobs_py_path}.")
-    command = ["python", str(_ParallelJobs_py_path), sweepscript_path]
-    if outdir is not None:
-        command[2:2] = ['-o', outdir] # Slicing inserts this list at index 2 of <command>
-
+def run_script(script_name, args=None):
+    ''' Runs the script <script_name> located in the hotspin/scripts directory.
+        Any arguments for the script can be passed as a list to <args>.
+    '''
+    script_name = script_name.strip()
+    if not os.path.splitext(script_name)[1]: script_name += '.py'
+    path = pathlib.Path(__file__).parent / 'scripts' / script_name
+    if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
+    command = ["python", str(path)] + list(args)
     try:
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError:
-        warnings.warn(f"The command '{' '.join(command)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
+        warnings.warn(dedent(f"""
+            The script {script_name} with arguments {args} could not be run successfully.
+            See a possible error message above for more info. The full command used was:
+            {' '.join(command)}
+        """), stacklevel=2)
+
+def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_script_name='ParallelJobs'):
+    ''' Convenient wrapper around run_script() for the ParallelJobs.py script in particular. '''
+    args = [sweepscript_path]
+    if outdir is not None:
+        args = ['-o', outdir] + args
+    run_script(_ParallelJobs_script_name, args=args)
 
 def log(message, device_id=0, style=None, show_device=True):
     ''' Can print <message> to console from subprocesses running on a specific GPU or thread.
