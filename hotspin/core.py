@@ -852,10 +852,6 @@ class ZeemanEnergy(Energy):
     @angle.setter
     def angle(self, value): self.set_field(angle=value)
 
-    @angle.setter
-    def angle(self, value):
-        self.set_field(self._magnitude, value)
-
 
 class DipolarEnergy(Energy):
     def __init__(self, prefactor=1):

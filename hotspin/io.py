@@ -1,9 +1,11 @@
 import math
+import warnings
 
 import numpy as np
 
 from abc import ABC, abstractmethod
 
+from .ASI import OOP_Square
 from .core import Magnets
 from .plottools import show_m
 from .utils import log
@@ -337,7 +339,7 @@ class OOPSquareChessOutputReader(OutputReader):
             @param mm [hotspin.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
                 Otherwise, the user will have to call configure_for() separately after initializing the class instance.
         '''
-        self.nx, self.ny, self.n = nx, ny, nx*ny
+        self.nx, self.ny, self._n = nx, ny, nx*ny
         if mm is not None: self.configure_for(mm)
 
     def configure_for(self, mm: Magnets):
@@ -368,3 +370,7 @@ class OOPSquareChessOutputReader(OutputReader):
             self.state[regionindex] = xp.sum(masked_m[self.region == regionindex])
         self.state /= self.normalization_factor # To get in range [-1, 1]
         return self.state # [unitless]
+    
+    @property
+    def n(self):
+        return self._n
