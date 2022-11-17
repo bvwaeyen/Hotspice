@@ -1,11 +1,11 @@
 ''' There are two available modes for debugging:
-    1) python hotspin_profile.py <script>.py
+    1) python hotspice_profile.py <script>.py
        OR
-       python hotspin_profile.py -m <package.module>
+       python hotspice_profile.py -m <package.module>
         Uses cProfile to profile the python file <script>.py, or the module <package.module> if
         the script is a non-executable part of a package. This follows the same naming convention
         as used when importing said package through 'import <package.module>'.
-    2) python hotspin_profile.py -l <script>.py
+    2) python hotspice_profile.py -l <script>.py
         Line-by-line profiling of one or multiple functions used by <script>.py.
         Can also use 'kernprof -l -v <script>.py, but this does not save the output to a file.
         NOTE: the function(s) to be profiled have to be decorated with @profile! <script>.py does
@@ -14,8 +14,8 @@
         NOTE: requires kernprof to be installed. Use 'pip install line_profiler' to do so.
 
     Usage examples for each of these 3 cases:
-        python profile.py hotspin/core.py
-        python profile.py -m hotspin.plottools
+        python profile.py hotspice/core.py
+        python profile.py -m hotspice.plottools
         python profile.py -l examples/ASI_IP_Pinwheel.py
     Note that any additional cmd arguments are passed directly to <script>.py.
     

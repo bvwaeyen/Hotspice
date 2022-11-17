@@ -431,9 +431,9 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
 
 
 def init_fonts(backend=True, small=10, medium=11, large=12):
-    ''' Sets various parameters for consistent plotting across all Hotspin scripts.
+    ''' Sets various parameters for consistent plotting across all Hotspice scripts.
         This should be called before instantiating any subplots.
-        This should not be called directly by any function in hotspin.plottools itself,
+        This should not be called directly by any function in hotspice.plottools itself,
         only by higher-level scripts (e.g. examples, analyses, tests...) which can
         then decide for themselves whether or not to use these standardized settings.
         @param backend [bool] (True): if True, the tkinter backend is activated. This
@@ -441,12 +441,12 @@ def init_fonts(backend=True, small=10, medium=11, large=12):
     '''
     if backend:
         try:
-            matplotlib.use("TkAgg") # tkinter backend is preferred by Hotspin
+            matplotlib.use("TkAgg") # tkinter backend is preferred by Hotspice
         except ImportError:
             try:
                 matplotlib.use("QtAgg") # Otherwise use Qt but this might give some issues in some places
             except ImportError:
-                warnings.warn(f"Could not activate 'TkAgg' or 'QtAgg' backend for Hotspin (using {matplotlib.get_backend()} instead).", stacklevel=2)
+                warnings.warn(f"Could not activate 'TkAgg' or 'QtAgg' backend for Hotspice (using {matplotlib.get_backend()} instead).", stacklevel=2)
     
     # Call this function before instantiating subplots!
     plt.rc('font', size=small)          # controls default text sizes
@@ -464,7 +464,7 @@ def init_interactive():
 
 def update_interactive(figure=None):
     ''' Update all the visuals of the most recent figure so it is up-to-date. '''
-    # Interactive functions in hotspin.plottools probably already call this function by themselves.
+    # Interactive functions in hotspice.plottools probably already call this function by themselves.
     fig = plt.gcf() if figure is None else figure
     fig.canvas.draw_idle()
     fig.canvas.flush_events()

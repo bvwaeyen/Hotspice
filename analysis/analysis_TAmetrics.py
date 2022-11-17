@@ -6,8 +6,8 @@ import pandas as pd
 
 from matplotlib.lines import Line2D
 
-try: from context import hotspin
-except ModuleNotFoundError: import hotspin
+try: from context import hotspice
+except ModuleNotFoundError: import hotspice
 
 
 def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbose=True):
@@ -16,7 +16,7 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
         This will allow to determine an optimum value of N before performing any sort of
         parameter sweep on an HPC cluster such that we do not use too much time.
     '''
-    data_in = hotspin.utils.Data.load(filename)
+    data_in = hotspice.utils.Data.load(filename)
     df_in = data_in.df
     k_range = np.asarray(k_range).reshape(-1) # Turn into 1D range
 
@@ -26,7 +26,7 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
     k_range = k_range[np.where((k_range <= (df_in.shape[0] - 2)))] # than the number of samples in the dataframe
     N_grid, k_grid = np.meshgrid(N_range, k_range)
     NL, MC, CP = np.zeros_like(N_grid)*np.nan, np.zeros_like(N_grid)*np.nan, np.zeros_like(N_grid)*np.nan
-    experiment = hotspin.experiments.TaskAgnosticExperiment.dummy()
+    experiment = hotspice.experiments.TaskAgnosticExperiment.dummy()
     for index, _ in np.ndenumerate(N_grid):
         k = k_grid[index]
         N = N_grid[index]
@@ -46,7 +46,7 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
         "original_filename": filename
     }
     constants = data_in.constants
-    data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
+    data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
     if save: save = data.save(dir=os.path.dirname(filename), name=f"{os.path.splitext(os.path.basename(filename))[0]}_metrics", timestamp=False)
     if plot or save: analysis_TAmetrics_Nk_plot(df, save=save, show=plot)
     return data
@@ -59,7 +59,7 @@ def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
     MC_grid = df["MC"].values.reshape(-1, k_vals)
     CP_grid = df["CP"].values.reshape(-1, k_vals)
 
-    hotspin.plottools.init_fonts()
+    hotspice.plottools.init_fonts()
     fig = plt.figure(figsize=(5, 5))
     if k_vals > 1: # use surface plot in 3D
         ax = fig.add_subplot(111, projection='3d')
@@ -85,7 +85,7 @@ def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
     if save:
         if not isinstance(save, str):
             save = f"results/analysis_TAmetrics/NL-MC-CP_N{df['N'].min()}-{df['N'].max()}_k{df['k'].min()}-{df['k'].max()}.pdf"
-        hotspin.plottools.save_plot(save, ext='.pdf')
+        hotspice.plottools.save_plot(save, ext='.pdf')
     if show: plt.show()
 
 if __name__ == "__main__":

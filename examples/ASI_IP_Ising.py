@@ -6,8 +6,8 @@ import numpy as np
 from matplotlib import animation
 
 import examplefunctions as ef
-from context import hotspin
-if hotspin.config.USE_GPU:
+from context import hotspice
+if hotspice.config.USE_GPU:
     import cupy as xp
     from cupyx.scipy import signal
 else:
@@ -22,13 +22,13 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.IP_Ising(1e-6, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspice.ASI.IP_Ising(1e-6, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspice.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
-# mm.add_energy(hotspin.ExchangeEnergy(J=hotspin.utils.eV_to_J(0.0258/7)))
+# mm.add_energy(hotspice.ExchangeEnergy(J=hotspice.utils.eV_to_J(0.0258/7)))
 # mm.remove_energy('dipolar')
 
 
-def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_max=800):
+def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T_max=800):
     ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -44,9 +44,9 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    mask = hotspin.utils.asnumpy(hotspin.plottools.Average.resolve(mm._get_appropriate_avg()).mask)
+    mask = hotspice.utils.asnumpy(hotspice.plottools.Average.resolve(mm._get_appropriate_avg()).mask)
     image = signal.convolve2d(mm.m, xp.asarray(mask), mode='valid', boundary='wrap' if mm.PBC else 'fill')
-    h = ax1.imshow(hotspin.utils.asnumpy(image), cmap='gray', origin='lower',
+    h = ax1.imshow(hotspice.utils.asnumpy(image), cmap='gray', origin='lower',
                    vmin=-np.sum(mask), vmax=np.sum(mask), interpolation_stage='rgba', interpolation='antialiased')
     ax1.set_title(r'Averaged magnetization')
     c1 = plt.colorbar(h)
@@ -65,9 +65,9 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
             mm.T = j*T_step
             mm.update()
             mm.history_save()
-            AFM_ness.append(hotspin.plottools.get_AFMness(mm))
+            AFM_ness.append(hotspice.plottools.get_AFMness(mm))
         p.set_data(mm.history.T, AFM_ness)
-        h.set_array(hotspin.utils.asnumpy(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill')))
+        h.set_array(hotspice.utils.asnumpy(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill')))
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 
@@ -87,4 +87,4 @@ if __name__ == "__main__":
     # autocorrelation_temp_dependence(mm, T_min=150, T_max=200)
 
     #### Commands which do some specific thing which yields nice saved figures or videos
-    # hotspin.plottools.show_lattice(mm, 7, 7, save=True, fall_off=2)
+    # hotspice.plottools.show_lattice(mm, 7, 7, save=True, fall_off=2)

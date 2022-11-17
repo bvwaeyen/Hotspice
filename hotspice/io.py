@@ -236,7 +236,7 @@ class RegionalOutputReader(OutputReader):
         ''' Reads the current state of the ASI with a certain level of detail.
             @param nx [int]: number of averaging bins in the x-direction.
             @param ny [int]: number of averaging bins in the y-direction.
-            @param mm [hotspin.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+            @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
         '''
         self.nx, self.ny = nx, ny
         self.grid = np.zeros((self.nx, self.ny)) # We use this to ndenumerate, but CuPy does not have this, so use NumPy
@@ -336,7 +336,7 @@ class OOPSquareChessOutputReader(OutputReader):
             using an AFM mask, such that they can be distinguished and domain walls can be identified.
             @param nx [int]: number of averaging bins in the x-direction.
             @param ny [int]: number of averaging bins in the y-direction.
-            @param mm [hotspin.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+            @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
                 Otherwise, the user will have to call configure_for() separately after initializing the class instance.
         '''
         self.nx, self.ny, self._n = nx, ny, nx*ny

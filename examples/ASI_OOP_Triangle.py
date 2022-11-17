@@ -1,7 +1,7 @@
 import time
 
 import examplefunctions as ef
-from context import hotspin
+from context import hotspice
 
 
 ## Parameters
@@ -11,7 +11,7 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.OOP_Triangle(800e-9, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspice.ASI.OOP_Triangle(800e-9, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspice.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
@@ -25,6 +25,6 @@ if __name__ == "__main__":
     # autocorrelation_temp_dependence(mm, T_min=150, T_max=200)
 
     #### Commands which do some specific thing which yields nice saved figures or videos
-    # hotspin.plottools.show_lattice(mm, 10, 10, save=True, fall_off=2, scale=.7)
+    # hotspice.plottools.show_lattice(mm, 10, 10, save=True, fall_off=2, scale=.7)
     # factor = 1 # Approximately how many switches occur per mm.update()
     # ef.animate_quenching(mm, pattern='uniform', T_low=0.01, T_high=4, animate=3, speed=50//factor, n_sweep=80000//factor, avg='square', fill=True, save=2) # Optimized for nx = ny = 100

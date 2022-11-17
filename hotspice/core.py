@@ -413,7 +413,7 @@ class Magnets(ABC):
         occupation_supercell = self.occupation[dy:dy+Ry, dx:dx+Rx] # occupation of a single supercell to choose only relevant cells
         occupation_nonzero = occupation_supercell.nonzero() # tuple: (array(x_indices), array(y_indices))
         # TODO: is it faster to use np.random.choice here?
-        random_nonzero_indices = xp.random.choice(occupation_nonzero[0].size, n) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
+        random_nonzero_indices = xp.random.choice(occupation_nonzero[0].size, n) # CUPYUPDATE: use hotspice.rng once cp.random.Generator supports choice() method
         idx_x = supercells_x*Rx + occupation_nonzero[1][random_nonzero_indices]
         idx_y = supercells_y*Ry + occupation_nonzero[0][random_nonzero_indices]
 

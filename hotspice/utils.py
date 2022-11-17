@@ -99,7 +99,7 @@ def strided(a: xp.ndarray, W: int):
 
 ## EASE-OF-USE UTILITIES (e.g. for printing)
 def human_sort(text):
-    ''' To sort a <list> of strings in human order, use <list>.sort(key=hotspin.utils.human_sort).
+    ''' To sort a <list> of strings in human order, use <list>.sort(key=hotspice.utils.human_sort).
         Human order means that if there are numbers in the strings, they are treated as numbers,
         such that e.g. 10 will come after 2, which is not the case with a naive sort.
     '''
@@ -226,7 +226,7 @@ def timestamp():
 
 ## MULTI-GPU UTILITIES
 def run_script(script_name, args=None):
-    ''' Runs the script <script_name> located in the hotspin/scripts directory.
+    ''' Runs the script <script_name> located in the hotspice/scripts directory.
         Any arguments for the script can be passed as a list to <args>.
     '''
     script_name = script_name.strip()
@@ -278,7 +278,7 @@ def log(message, device_id=0, style=None, show_device=True):
         print(text)
 
 
-## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPIN EXAMPLES
+## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
 class Data:
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
         ''' Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
@@ -323,7 +323,7 @@ class Data:
             - 'description': a (small) description of what the data represents
             - 'GPU': a list of dicts representing the NVIDIA GPUs used for the simulation. Each dict contains
                 keys 'name', 'compute_cap', 'driver_version', 'memory.total [MiB]', 'timestamp', 'uuid'.
-            - 'simulator': "Hotspin", just for clarity. Can include version number when applicable.
+            - 'simulator': "Hotspice", just for clarity. Can include version number when applicable.
         '''
         if value is None: value = {}
         if not isinstance(value, dict): raise ValueError('Metadata must be provided as a dictionary.')
@@ -332,12 +332,12 @@ class Data:
         value.setdefault('author', getpass.getuser())
         try:
             creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
-            if 'hotspin' in creator_info:
-                creator_info = '...\\' + creator_info[len(creator_info.split('hotspin')[0]):]
+            if 'hotspice' in creator_info:
+                creator_info = '...\\' + creator_info[len(creator_info.split('hotspice')[0]):]
         except Exception:
             creator_info = ''
         value.setdefault('creator', creator_info)
-        value.setdefault('simulator', "Hotspin")
+        value.setdefault('simulator', "Hotspice")
         value.setdefault('description', "No custom description available.")
         try:
             gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
@@ -347,7 +347,7 @@ class Data:
         except Exception:
             gpu_info = []
         value.setdefault('GPU', gpu_info)
-        value.setdefault('hotspin_config', config.get_dict())
+        value.setdefault('hotspice_config', config.get_dict())
 
         self._metadata = value
         assert isinstance(self._metadata, dict)
@@ -394,15 +394,15 @@ class Data:
             The JSON file contains three top-level objects: "metadata", "constants" and "data",
             where "data" stores a JSON 'table' representation of the Pandas DataFrame <self.df>.
 
-            @param dir [str] ('hotspin_results'): the directory to create the .json file in.
-            @param name [str] ('hotspin_simulation'): this text is used as the start of the filename.
+            @param dir [str] ('hotspice_results'): the directory to create the .json file in.
+            @param name [str] ('hotspice_simulation'): this text is used as the start of the filename.
                 This should not include an extension or timestamp, as these are generated automatically.
             @param timestamp [bool|str] (True): if true, a timestamp is added to the filename. A string
                 can be passed to override the auto-generated timestamp. If False, no timestamp is added.
             @return (str): the absolute path of the saved JSON file.
         '''
-        if dir is None: dir = 'hotspin_results'
-        if name is None: name = 'hotspin_simulation'
+        if dir is None: dir = 'hotspice_results'
+        if name is None: name = 'hotspice_simulation'
 
         total_dict = {
             'metadata': self.metadata,
@@ -423,7 +423,7 @@ class Data:
 
     @staticmethod
     def load(JSON):
-        """ Reads a JSON-parseable object containing previously generated Hotspin data, and returns its
+        """ Reads a JSON-parseable object containing previously generated Hotspice data, and returns its
             contents as Data object.
             @param JSON: a parseable object resembling JSON data, can be any of: 
                 Data() object, valid dict(), JSON string, file-like object, string representing a file path.
@@ -548,8 +548,8 @@ class _CompactJSONEncoder(json.JSONEncoder):
                 return "{\n" + ",\n".join(output) + "\n" + self.indent_str + "}"
             else:
                 return "{ }"
-        elif (name := full_obj_name(o)).startswith('hotspin'): # Then it is some hotspin-defined class, so ...
-            return json.dumps(name) # use full obj name (e.g. hotspin.ASI.IP_Pinwheel etc.)
+        elif (name := full_obj_name(o)).startswith('hotspice'): # Then it is some Hotspice-defined class, so ...
+            return json.dumps(name) # use full obj name (e.g. hotspice.ASI.IP_Pinwheel etc.)
         else:
             try: return json.dumps(o)
             except Exception: return json.dumps(str(o)) # Otherwise just use string representation of whatever kind of object this might be

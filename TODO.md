@@ -45,7 +45,7 @@ At this moment, running a sweep (on multiple GPUs/CPUs) requires several command
 
 2. Medium priority
     - [ ] How many MC steps do we need to reach a statistically stable state?
-    - Test physical accuracy of Hotspin
+    - Test physical accuracy of Hotspice
         - [ ] Domain size of square and pinwheel? As a function of time? (is there a maximum size or do they keep growing)
         - [ ] 2D ferromagnet (Arrott-Belov? Curie-Weiss? Susceptibility/magnetization?)
         - [x] 2D Ising with long-range dipolar interactions ("Aging in a Two-Dimensional Ising Model with Dipolar Interactions")
@@ -55,7 +55,7 @@ At this moment, running a sweep (on multiple GPUs/CPUs) requires several command
         - [ ] Are certain nicely factorable grid sizes preferable? (all I notice now is that there is a dependence on whether or not the unitcells fit perfectly in the simulation area, but this is likely due to PBC)
 
 3. Low priority
-    - Test physical accuracy of Hotspin
+    - Test physical accuracy of Hotspice
         - [ ] Angle between 0° and 45° between IP_Square and IP_Pinwheel where AFM alignment changes to uniform and vice versa? Can be useful to compare to experiment
 
 ## Various smaller things that I will probably never come around to doing
