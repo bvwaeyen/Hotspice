@@ -248,18 +248,18 @@ class RegionalOutputReader(OutputReader):
 
     def configure_for(self, mm: Magnets):
         self.mm = mm
-        self.region_x = xp.floor(xp.linspace(0, self.nx, mm.nx)).astype(int)
-        self.region_y = xp.floor(xp.linspace(0, self.ny, mm.ny)).astype(int)
+        self.region_x = np.linspace(0, self.nx, mm.nx, dtype=int)
+        self.region_y = np.linspace(0, self.ny, mm.ny, dtype=int)
         self.region_x[-1] = self.nx - 1
         self.region_y[-1] = self.ny - 1
         self.region_x = np.tile(self.region_x, (mm.ny, 1))
         self.region_y = np.tile(self.region_y, (mm.nx, 1)).T
 
-        n = xp.zeros_like(self.grid)
+        n = xp.zeros_like(self.grid, dtype=int) # Number of magnets in each region
         # Determine the number of magnets in each region
         for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
             here = (self.region_x == i[0]) & (self.region_y == i[1])
-            n[i] = xp.sum(mm.occupation[here])
+            n[i] = xp.sum(mm.occupation[here]) # TODO: <here> is np, <occupation> is xp, is this ok?
         self.normalization_factor = float(xp.max(self.mm.moment))*n
 
         if mm.in_plane:
@@ -319,8 +319,8 @@ class OOPSquareChessFieldInputter(Inputter):
         if value is None: value = self.datastream.get_next()
 
         MCsteps0, t0 = mm.MCsteps, mm.t
-        AFM_mask = ((mm.ixx + mm.iyy) % 2)*2 - 1 # simple checkerboard pattern of 1 and -1
-        mm.get_energy('Zeeman').set_field(magnitude=AFM_mask*value*self.magnitude)
+        AFM_mask = (((mm.ixx + mm.iyy) % 2)*2 - 1).astype(float) # simple checkerboard pattern of 1 and -1
+        mm.get_energy('Zeeman').set_field(magnitude=AFM_mask*(2*value-1)*self.magnitude)
         while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1:
             if self.frequency:
                 mm.update(t_max=min(1-progress, 1)/self.frequency)

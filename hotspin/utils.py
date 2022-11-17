@@ -238,9 +238,9 @@ def run_script(script_name, args=None):
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError:
         warnings.warn(dedent(f"""
-            The script {script_name} with arguments {args} could not be run successfully.
+            {colorama.Fore.LIGHTRED_EX}The script {script_name} with arguments {args} could not be run successfully.
             See a possible error message above for more info. The full command used was:
-            {' '.join(command)}
+            {colorama.Fore.LIGHTYELLOW_EX}{' '.join(command)}{colorama.Style.RESET_ALL}
         """), stacklevel=2)
 
 def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_script_name='ParallelJobs'):
@@ -387,7 +387,7 @@ class Data:
             for key in self.metadata.keys():
                 if not isinstance(key, str): raise KeyError("Data.metadata keys must be of type string.")
 
-    def save(self, dir: str = None, name: str = None, *, timestamp=True):
+    def save(self, dir: str = None, name: str = None, *, timestamp=True): # TODO: DO THE CONVERSION OF COLUMNS TO CONSTANTS ETC. HERE AND ONLY HERE. EXPAND THEM UPON OPENING SUCH FILES. THIS MEMORY-EFFICIENCY-IMPROVEMENT IS CAUSING TOO MUCH TROUBLE EVERYWHERE IF WE DO IT ON-THE-FLY IN THE PROPERTIES
         ''' Saves the currently stored data (<self.df>, <self.constants> and <self.metadata>)
             to a JSON file, with path "<dir>/<name>_<yyyymmddHHMMSS>.json". The automatically
             added timestamp in the filename can be disabled by passing <timestamp=False>.
