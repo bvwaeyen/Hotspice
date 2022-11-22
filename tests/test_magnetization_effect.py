@@ -133,7 +133,6 @@ if __name__ == "__main__":
 
     filename = "HTm Glauber"
 
-    """
     mm = hotspice.ASI.IP_PinwheelDiamond(a, n, PBC=PBC, pattern="random", energies=(hotspice.DipolarEnergy(), hotspice.ZeemanEnergy()))
     mm.params.UPDATE_SCHEME = update_scheme
     datastream = hotspice.io.ConstantDatastream()  # constantly returns 1
@@ -142,9 +141,10 @@ if __name__ == "__main__":
     data = sweep_HTorder(mm, inputter, H_array, T_array, MaxMCsteps)
     data.save(name=filename)
     plot_HTorder(data, ncols=ncols, outer=outer)
-    """
 
+    """
     data = hotspice.utils.Data(pd.DataFrame({"test":["test"]}))
     data = data.load("hotspice_results/HTm Glauber _20221110135158.json")
     data.df = data.df.loc[data.df["TimeLike"] <= 12]
     plot_HTorder(data, ncols=int(np.sqrt(len(H_array))), outer="H")
+    """

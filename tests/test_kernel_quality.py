@@ -2,14 +2,14 @@
 # Created 26/10/2022
 import pandas as pd
 
-print("Importing...")
+if __name__ == "__main__": print("Importing...")
 import math
 import numpy as np
 import time
 import matplotlib.pyplot as plt
 
 import hotspice
-print("Everything imported")
+if __name__ == "__main__": print("Everything imported")
 
 
 def sweep_HTQ(experiment: hotspice.experiments.KernelQualityExperiment, H_array, T_array, verbose=False, experiment_dir: str = None):
@@ -78,9 +78,9 @@ if __name__ == "__main__":
 
     MCS = 4  # seems to (barely) saturate around here from HTm plots
     frequency = 0  # Hz
-    H_array = np.arange(5, 8.1, 1) * 1e-4  # seemed to be semi interesting from Néel experiments
-    T_array = [1, 3000, 5000]  # cold, start of phase transition, at phase transition?
-    filename = "Glauber KQ 300 nm"
+    H_array = np.arange(7, 11.1, 0.2) * 1e-4  # Around 0.8 mT because of previous test
+    T_array = [5000]  # Most interesting temperature from previous test
+    filename = "KQ 5000K around 0p8mT"
     experiment_dir = filename
     verbose = True
     relax = False
