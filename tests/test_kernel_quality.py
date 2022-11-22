@@ -8,11 +8,19 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 
-import hotspin
+import hotspice
 print("Everything imported")
 
 
-def sweep_HTQ(experiment: hotspin.experiments.KernelQualityExperiment, H_array, T_array):
+def sweep_HTQ(experiment: hotspice.experiments.KernelQualityExperiment, H_array, T_array, verbose=False, experiment_dir: str = None):
+    """
+    @param experiment: KernelQualityExperiment to run for different H and T
+    @param H_array: list of magnetic fields to sweep
+    @param T_array: list of temperatures to sweep
+    @param verbose: verbosity of experiment
+    @param experiment_dir: If not None, saves the individual experiments in this directory.
+    @return: Data from full sweep
+    """
 
     mm = experiment.mm
 
@@ -30,9 +38,14 @@ def sweep_HTQ(experiment: hotspin.experiments.KernelQualityExperiment, H_array, 
 
             print(f"Running H = {H}, T = {T}")
             start_time = time.time()
-            experiment.run(pattern="uniform")               # Run experiment
+            experiment.run(pattern="uniform", verbose=verbose)  # Run experiment
             experiment.calculate_all()                      # Calculate results
             end_time = time.time()
+
+            if experiment_dir is not None:
+                exp_df = experiment.to_dataframe()
+                exp_data = hotspice.utils.Data(exp_df)
+                exp_data.save(dir=experiment_dir, name=f"KernelQualityExperiment H={H} T={T} ")
 
             results = experiment.results
             K, G, Q, k, g, q = results["K"], results["G"], results["K"] - results["G"], results["k"], results["g"], results["k"] - results["g"]
@@ -47,43 +60,39 @@ def sweep_HTQ(experiment: hotspin.experiments.KernelQualityExperiment, H_array, 
             data_dict["ComputationTime[s]"][index] = ComputationTime
 
     df = pd.DataFrame(data=data_dict)
-    data = hotspin.utils.Data(df, constants)
+    data = hotspice.utils.Data(df, constants)
 
     return data
 
 
 #-----------------------------------------------------------------------------------------------------------------------
 
-a = 1e-06
-n = 25
-PBC=False
-angle = (180)*math.pi/180  # angle of magnetic field, 45° for Diamond geometry
 
-n_perceptron = 5
-# H_array = np.arange(2, 12, 2) * 1e-6
-H_array = [1e-6, 1e-5, 1e-4]
-T_array = np.arange(200, 750, 50)
+if __name__ == "__main__":
+    a = 300e-09
+    n = 10
+    PBC=False
+    angle = (45+7)*math.pi/180  # angle of magnetic field, 45° for Diamond geometry
 
-T = 200
-H = 4e-6
-MCS = 2  # Monte Carlo Steps per input single
+    n_output = 5
 
-filename = "Kernel Quality Rough Test "
+    MCS = 4  # seems to (barely) saturate around here from HTm plots
+    frequency = 0  # Hz
+    H_array = np.arange(5, 8.1, 1) * 1e-4  # seemed to be semi interesting from Néel experiments
+    T_array = [1, 3000, 5000]  # cold, start of phase transition, at phase transition?
+    filename = "Glauber KQ 300 nm"
+    experiment_dir = filename
+    verbose = True
+    relax = False
 
-mm = hotspin.ASI.IP_PinwheelDiamond(a, n, PBC=PBC, energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()))
-datastream = hotspin.io.RandomBinaryDatastream()
-inputter = hotspin.io.PerpFieldInputter(datastream, angle=angle, n=MCS, frequency=0)
-outputreader = hotspin.io.RegionalOutputReader(n_perceptron, n_perceptron, mm)
-experiment = hotspin.experiments.KernelQualityExperiment(inputter, outputreader, mm)
+    mm = hotspice.ASI.IP_PinwheelDiamond(a, n, PBC=PBC)
+    mm.add_energy(hotspice.ZeemanEnergy())
+    mm.params.UPDATE_SCHEME = "Glauber"
 
-#data = sweep_HTQ(experiment, H_array, T_array)
-#data.save(name=filename)
+    datastream = hotspice.io.RandomBinaryDatastream()
+    inputter = hotspice.io.PerpFieldInputter(datastream, angle=angle, n=MCS, frequency=frequency, relax=relax)
+    outputreader = hotspice.io.RegionalOutputReader(n_output, n_output, mm)
+    experiment = hotspice.experiments.KernelQualityExperiment(inputter, outputreader, mm)
 
-
-# debug code
-experiment.inputter.magnitude = 2e-6
-experiment.run()
-experiment.calculate_all()
-
-df = experiment.to_dataframe()
-print(experiment.results)
+    data = sweep_HTQ(experiment, H_array, T_array, verbose=verbose, experiment_dir=experiment_dir)
+    data.save(name=filename, dir=experiment_dir)

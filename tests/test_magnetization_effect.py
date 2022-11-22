@@ -7,85 +7,101 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from textwrap import wrap
 
-import hotspin
+import pandas as pd
+
+import hotspice
 
 
-def sweep_HTorder(mm: hotspin.core.Magnets, inputter: hotspin.io.FieldInputter, filename: str, H_array, T_array, MaxMCsteps):
+def sweep_HTorder(mm: hotspice.core.Magnets, inputter: hotspice.io.FieldInputter, H_array, T_array, MaxTimelike=0):
+    """
+    Sweep order parameter in time for different H and T combinations.
+    @param mm:
+    @param inputter: Made for inputter with ConstantDatastream. Every saved timestep is one input_single()
+    @param H_array: list of H values to sweep
+    @param T_array: list of T values to sweep
+    @param MaxTimelike: the maximum timelike. Maximum mm.MCSteps for Glauber, mm.t for Néel.
+    @return: Data
+    """
 
-    if not filename.endswith(".txt"):
-        filename += ".txt"
-
-    file = open(filename, "w")
-
-    # header
-    print(f"# {mm.nx}x{mm.ny} {type(mm).__name__} {'with' if mm.PBC else 'without'} PBC, a={mm.a}, angle={inputter.angle/math.pi*180:.0f}°", file=file)
-    print("# H, T, MCS, m", file=file)
+    constants = {"Grid": f"{mm.nx}x{mm.ny}", "Geometry": type(mm).__name__, "a": mm.a, "PBC": mm.PBC,
+                 "UPDATE_SCHEME": mm.params.UPDATE_SCHEME, "MaxTimelike": MaxTimelike, "angle": f"{inputter.angle/math.pi*180:.0f}°"}
+    data_dict = {"H": [], "T": [], "TimeLike": [], "m_avg": []}
 
     for H in H_array:
         inputter.magnitude = H                          # set magnetic field H
         for T in T_array:
             mm.T = T                                    # set temperature T
             mm.initialize_m(pattern="random")
-            MCsteps0 = mm.MCsteps
 
             print(f"Running H = {H}, T = {T}")
-
-            MCstepsDone = 0
-            while MCstepsDone < MaxMCsteps:
+            TimeLikeStart = mm.MCsteps if mm.params.UPDATE_SCHEME == "Glauber" else mm.t
+            TimeLike = TimeLikeStart
+            while TimeLike - TimeLikeStart < MaxTimelike:
                 inputter.input_single(mm)               # update mm
-                m = mm.m_avg                            # get order parameter avg_m
-                MCstepsDone = mm.MCsteps - MCsteps0
-                print(H, T, MCstepsDone, m, file=file)
+                m_avg = mm.m_avg                        # get order parameter avg_m
+                TimeLike = mm.MCsteps if mm.params.UPDATE_SCHEME == "Glauber" else mm.t
+                # save data
+                data_dict["H"].append(H); data_dict["T"].append(T);
+                data_dict["TimeLike"].append(TimeLike-TimeLikeStart); data_dict["m_avg"].append(m_avg)
 
-    file.close()
+    df = pd.DataFrame(data=data_dict)
+    data = hotspice.utils.Data(df, constants)
+
+    return data
 
 
-def plot_HTorder(filename: str, ncols=1):
-
-    if not filename.endswith(".txt"):
-        filename += ".txt"
-
-    file = open(filename, "r")
-    header = file.readline()[2:]  # skip '# '
-    output = np.loadtxt(filename)
-    file.close()
+def plot_HTorder(data: hotspice.utils.Data, ncols=1, outer="H"):
+    """
+    Plots m_avg for different H and T. outer can be "H" or "T". Subplots will be split in
+    @param data: Data object containing information like from HTorder.
+    @param ncols: number of colums for subplots
+    @param outer: Can be "H" or "T". This decides the way plots are organized.
+    @return: fig, ax
+    """
 
     # Unpack data
     print("Unpacking data...")
-    data_dict = {}
-    for H, T, MCS, m in output:
-        if H not in data_dict:
-            data_dict[H] = {T: ([MCS], [m])}
-        else:
-            T_dict = data_dict[H]
-            if T not in T_dict:
-                T_dict[T] = ([MCS], [m])
-            else:
-                T_dict[T][0].append(MCS)
-                T_dict[T][1].append(m)
+    H_array, T_array, TimeLike_array, m_avg_array = data.get("H"), data.get("T"), data.get("TimeLike"), data.get("m_avg")
+    H_unique, T_unique = np.unique(H_array), np.unique(T_array)
+    data_dict = {"H": H_array, "T": T_array, "TimeLike": TimeLike_array, "m_avg": m_avg_array}
+    df = pd.DataFrame(data_dict)
 
     # PLot data
     print("Plotting data")
-    nrows = math.ceil(len(data_dict)/ncols)
+
+    if outer == "H":
+        outer_unique = H_unique
+        inner_unique = T_unique
+        inner = "T"
+        cmap = cm.get_cmap('inferno')
+    else:
+        outer_unique = T_unique
+        inner_unique = H_unique
+        inner = "H"
+        cmap = cm.get_cmap('viridis')
+
+    nrows = math.ceil(len(outer_unique)/ncols)
     fig, axs = plt.subplots(nrows=nrows, ncols=ncols, sharex=True, sharey=True)
-    flat_axs = axs.flatten()
-    suptitle = "Order parameter m evolution for various magnetic field strengths H at different temperatures T\n" + header
+    if nrows*ncols > 1:
+        flat_axs = axs.flatten()
+    else:
+        flat_axs = [axs]
+    cte = data.constants
+    suptitle = f"Order parameter m {cte['UPDATE_SCHEME']} evolution for various magnetic field strengths H at different temperatures T\n" + \
+               f"{cte['Grid']} {cte['Geometry']} {'with' if cte['PBC'] else 'without'} PBC, a={cte['a']}, angle={cte['angle']}"
     fig.suptitle(suptitle)
 
-    cmap = cm.get_cmap('inferno')
-    rgba = cmap(0.5)
-
-    for i, (H, T_dict) in enumerate(data_dict.items()):
+    for i, outer_value in enumerate(outer_unique):
         ax = flat_axs[i]
-        T_min, T_max = min(T_dict.keys()), max(T_dict.keys())
+        ax.set_title(f"{outer} = {outer_value:.5g}")
+        inner_min, inner_max = min(inner_unique), max(inner_unique)
 
-        for T, (MCS_list, m_list) in T_dict.items():
-            color = cmap((T - T_min)/(T_max-T_min))
-            ax.plot(MCS_list, m_list, label=f"T = {T}K", color=color)
+        for inner_value in inner_unique:
+            color = cmap((inner_value - inner_min) / (inner_max - inner_min))
+            single_df = df.loc[(df[outer] == outer_value) & (df[inner] == inner_value)]
+            ax.plot(single_df["TimeLike"], single_df["m_avg"], label=f"{inner} = {inner_value:.5g}", color=color)
 
-        ax.set_title(f"H = {H:.2e}T")
-
-    fig.text(0.5, 0.04, "Monte Carlo Steps (time)", ha='center')  # Common xlabel
+    fig.text(0.5, 0.04, "Time", ha='center')  # Common xlabel
     fig.text(0.04, 0.5, "Average magnetization m", va='center', rotation='vertical')  # Common ylabel
 
     handles, labels = flat_axs[0].get_legend_handles_labels()  # all the same legend anyway
@@ -96,22 +112,39 @@ def plot_HTorder(filename: str, ncols=1):
 
 #-----------------------------------------------------------------------------------------------------------------------
 
-a = 1e-06
-n = 25
-PBC=False
 
-angle = math.pi/4  # angle of magnetic field
-MCS = 0.1  # Monte Carlo steps per input_single
+if __name__ == "__main__":
+    a = 300e-9
+    n = 10
+    PBC=False
 
-H_array = np.arange(1.25, 4.25, 0.25) * 1e-5
-T_array = np.arange(250, 750, 75)
-MaxMCsteps = 5
+    angle = math.pi/4  # angle of magnetic field
+    H_array = np.arange(1, 10.5, 0.5) * 1e-4
+    T_array = np.arange(0, 10001, 1000)
+    T_array[0] = 1  # no 0K
+    MaxMCsteps = 15
+    MCS = 0.05  # Monte Carlo steps per input_single
+    #MaxTime = 0.0001
+    #frequency = 100/MaxTime  # frequency of input singles
+    update_scheme = "Glauber"
 
-filename = "even even more HTm"
+    outer="T"
+    ncols = 3
 
-mm = hotspin.ASI.IP_PinwheelDiamond(a, n, PBC=PBC, pattern="random", energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()))
-datastream = hotspin.io.ConstantDatastream()  # constantly returns 1
-inputter = hotspin.io.FieldInputter(datastream, angle=angle, n=MCS, frequency=0)
+    filename = "HTm Glauber"
 
-# sweep_HTorder(mm, inputter, filename, H_array, T_array, MaxMCsteps)
-plot_HTorder(filename, ncols=4)
+    """
+    mm = hotspice.ASI.IP_PinwheelDiamond(a, n, PBC=PBC, pattern="random", energies=(hotspice.DipolarEnergy(), hotspice.ZeemanEnergy()))
+    mm.params.UPDATE_SCHEME = update_scheme
+    datastream = hotspice.io.ConstantDatastream()  # constantly returns 1
+    inputter = hotspice.io.FieldInputter(datastream, angle=angle, n=MCS, frequency=0)
+
+    data = sweep_HTorder(mm, inputter, H_array, T_array, MaxMCsteps)
+    data.save(name=filename)
+    plot_HTorder(data, ncols=ncols, outer=outer)
+    """
+
+    data = hotspice.utils.Data(pd.DataFrame({"test":["test"]}))
+    data = data.load("hotspice_results/HTm Glauber _20221110135158.json")
+    data.df = data.df.loc[data.df["TimeLike"] <= 12]
+    plot_HTorder(data, ncols=int(np.sqrt(len(H_array))), outer="H")

@@ -1,27 +1,40 @@
 # A program to roughly determine the order parameter m_avg in function of temperature T of multiple geometries.
 # Created 20/10/2022
 
+if __name__ == "__main__": print("Importing...")
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from textwrap import wrap
+import time as time
 
-import hotspin
-from hotspin.ASI import *
+import hotspice
+from hotspice.ASI import *
+if __name__ == "__main__": print("Everything imported")
 
-def get_mag_stats(mm: hotspin.core.Magnets, T, MCS: int, nsamples: int = 1):
-    """Starts from a uniform grid at temperature T, it updates MCS*number_of_spins times and returns order parameter m_avg.
+def get_mag_stats(mm: hotspice.core.Magnets, T, MaxTimeLike, nsamples: int = 1):
+    """Starts from a uniform grid at temperature T, it updates for some amount of timelike and returns order parameter m_avg.
     If nsamples is more than 1, it will do this multiple times and return the statistical mean and standard deviation."""
 
     mm.T = T
-    unique, counts = np.unique(mm.occupation, return_counts=True)
-    number_of_spins = dict(zip(unique, counts))[1]  # counts the ammount of used spins in system
     m_array = np.zeros(nsamples)
 
     for sample in range(nsamples):
         mm.initialize_m(pattern="uniform")
 
-        for step in range(int(number_of_spins * MCS)):  # on average every spin gets 1 update per MCS
-            mm.update()
+        if mm.params.UPDATE_SCHEME == "Glauber":
+            TimeLikeStart = mm.MCsteps
+            TimeLike = TimeLikeStart
+            while TimeLike - TimeLikeStart < MaxTimeLike:
+                mm.update()
+                TimeLike = mm.MCsteps
+
+        elif mm.params.UPDATE_SCHEME == "Néel":
+            TimeLikeStart = mm.t
+            TimeLike = TimeLikeStart
+            while TimeLike - TimeLikeStart < MaxTimeLike:
+                mm.update(t_max=(MaxTimeLike-TimeLike))
+                TimeLike = mm.t
 
         m_array[sample] = mm.m_avg
 
@@ -30,71 +43,102 @@ def get_mag_stats(mm: hotspin.core.Magnets, T, MCS: int, nsamples: int = 1):
 
     return np.mean(m_array), np.std(m_array)
 
-def sweep_order_temperature(filename: str, mm: hotspin.core.Magnets, T_array, MCS: int, nsamples: int = 1):
-    """Sweeps over range of temperature and dumps order parameter statistics in file."""
+def sweep_order_temperature(mm: hotspice.core.Magnets, T_array, MaxTimeLike, nsamples: int = 1, verbose=False):
+    """Sweeps over range of temperature and returns data."""
+    l = len(T_array)
+    data_dict = {"T": T_array, "ComputationTime[s]": [0] * l}
+    if samples == 1:
+        data_dict["m_avg"] = [0] * l
+    else:
+        data_dict["m_mean"], data_dict["m_std"] = [0] * l, [0] * l
 
-    if not filename.endswith(".txt"):
-        filename += ".txt"
+    constants = {"Grid": f"{mm.nx}x{mm.ny}", "Geometry": type(mm).__name__, "a": mm.a, "PBC": mm.PBC,
+                 "UPDATE_SCHEME": mm.params.UPDATE_SCHEME, "nsamples": nsamples, "MaxTimeLike": MaxTimeLike}
 
-    file = open(filename, "w")
-
-    # header
-    print(f"# {mm.nx}x{mm.ny} {type(mm).__name__} {'with' if mm.PBC else 'without'} PBC, a={mm.a}, " +
-          f"{MCS} MC steps to relax{f' with {nsamples} samples per T' if nsamples>1 else ''}.", file=file)
-    print(f"# T {'m_avg' if nsamples==1 else 'm_mean m_std'}", file=file)
-
-    for T in T_array:
-        output = get_mag_stats(mm, T, MCS, nsamples)  # the actual test
+    for i, T in enumerate(T_array):
+        # the actual test
+        if verbose and hotspice.utils.is_significant(i, l): hotspice.utils.log(f"Starting {i+1} of {l}: {100*(i+1)/l:.2f}%")
+        start_time = time.time()
+        output = get_mag_stats(mm, T, MaxTimeLike, nsamples=nsamples)  # Computing for specific T
+        end_time = time.time()
+        data_dict["ComputationTime[s]"][i] = end_time - start_time
 
         if nsamples==1:
-            print(T, output, file=file)
+            data_dict["m_avg"][i] = output
         else:
-            print(T, output[0], output[1], file=file)
+            data_dict["m_mean"][i], data_dict["m_std"][i] = output[0], output[1]
 
-    file.close()
+    df = pd.DataFrame(data=data_dict)
+    data = hotspice.utils.Data(df, constants)
 
-def plot_order_T(filename):
-    """Plots data from file, shows plot and returns (fig, ax)"""
+    return data
 
-    if not filename.endswith(".txt"):
-        filename += ".txt"
+def plot_order_T(data: hotspice.utils.Data):
+    """Plots data, shows plot and returns (fig, ax)"""
 
-    file = open(filename, "r")
-    header = file.readline()[2:]  # skip '# '
-    output = np.loadtxt(filename, unpack=True)
-    file.close()
+    # Elaborate title construction
+    cte = data.constants
+    title = f"Order parameter of {cte['Grid']} {cte['Geometry']} {'with' if cte['PBC'] else 'without'} PBC, a={cte['a']}"
+    if cte["UPDATE_SCHEME"] == "Glauber":
+        title += f", {cte['MaxTimeLike']}  MC steps to relax"
+    elif cte["UPDATE_SCHEME"] == "Néel":
+        title += f", {cte['MaxTimeLike']:.4f} sec to relax"
+    if cte["nsamples"] > 1:
+        title += f" with {cte['nsamples']} samples per T"
+    title += "."
+    title = "\n".join(wrap(title, 60))  # long title can wrap around
 
-    T, m = output[0], output[1]  # arrays of data
-
+    # Actual plotting of data
     fig, ax = plt.subplots()
-    ax.plot(T, m, label="Average magnetization")
-    if len(output) == 3: ax.plot(T, output[2], label="Standard deviation")  # standard deviation included
+
+    T = data.get("T")
+    if cte["nsamples"] > 1:
+        m_mean, m_std = data.get("m_mean"), data.get("m_std")
+        ax.plot(T, m_mean, label="Mean of average magnetization")
+        ax.plot(T, m_std, label="Standard deviation")
+    else:
+        m_avg = data.get("m_avg")
+        ax.plot(T, m_avg, label="Average magnetization")
+
     ax.legend()
-    ax.set_title("\n".join(wrap("Order parameter of " + header, 60)))     # long title can wrap around
+    ax.set_title(title)
     ax.set_xlabel("T[K]")
 
     return fig, ax
 
 #-----------------------------------------------------------------------------------------------------------------------
 
-a = 1e-06
-n = 20
-PBC=True
-MCS = 5
-samples = 5
 
-T_array = np.arange(0, 1001, 10)
-T_array[0] = 1  # don't do 0K
+if __name__ == "__main__":
+    a = 300e-9
+    n = 10
+    PBC=False
+    MaxTimeLike = 100
+    samples = 5
+    update_scheme = "Glauber"
+    verbose = True
 
-# List of ASI to do
-mm_list = [IP_Ising(a, n, PBC=PBC), IP_SquareDiamond(a, n, PBC=PBC), IP_PinwheelDiamond(a, n, PBC=PBC),
-           IP_Kagome(a, int(8/3 * n) - int(8/3 * 20)%4, PBC=PBC), IP_Triangle(a, int(8/3 * n) - int(8/3 * 20)%4, PBC=PBC)]
+    filename = "Longer relax time"  # gets extended later on
+    directory = "Glauber 10x10 PinwheelDiamond no PBC"
 
-for mm in mm_list:
-    filename = f"Rough {type(mm).__name__} order parameter sweep"
-    print("Currently doing", filename)
-    sweep_order_temperature(filename, mm, T_array, MCS, nsamples=samples)  # produce the data
-    fig, ax = plot_order_T(filename)  # plot the data
-    fig.savefig(filename+".png")  # save the plot
+    T_array = np.arange(3000, 15050, 50)
+    # T_array[0] = 1  # Don't start at 0K
 
-plt.show()
+    # List of ASI to do
+    mm_list = [IP_PinwheelDiamond(a, n, PBC=PBC)]
+    """
+    mm_list = [IP_Ising(a, n, PBC=PBC), IP_Square (a, int(np.sqrt(2)*n), PBC=PBC), IP_SquareDiamond(a, n, PBC=PBC),
+               IP_Pinwheel(a, int(np.sqrt(2)*n), PBC=PBC), IP_PinwheelDiamond(a, n, PBC=PBC),
+               IP_Kagome(a, int(np.sqrt(8/3) * n) - int(np.sqrt(8/3) * 20)%4, PBC=PBC)]
+    """
+
+    for mm in mm_list:
+        mm.params.UPDATE_SCHEME = update_scheme
+        filename += f"{update_scheme} {type(mm).__name__} order parameter sweep"
+        print("Currently doing", filename)
+        data = sweep_order_temperature(mm, T_array, MaxTimeLike=MaxTimeLike, nsamples=samples, verbose=verbose)  # produce the data
+        data.save(name=filename, dir=directory)  # save the data
+        fig, ax = plot_order_T(data)  # plot the data
+        fig.savefig(filename+".png")  # save the plot
+
+    plt.show()
