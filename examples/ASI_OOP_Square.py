@@ -6,8 +6,8 @@ import numpy as np
 from matplotlib import animation
 
 import examplefunctions as ef
-from context import hotspin
-if hotspin.config.USE_GPU:
+from context import hotspice
+if hotspice.config.USE_GPU:
     import cupy as xp
     from cupyx.scipy import signal
 else:
@@ -22,11 +22,11 @@ n = 100
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.OOP_Square(1e-6, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspice.ASI.OOP_Square(1e-6, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspice.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
-def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_max=800):
+def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T_max=800):
     ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -42,9 +42,9 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    mask = hotspin.utils.asnumpy(hotspin.plottools.Average.resolve(mm._get_appropriate_avg()).mask)
+    mask = hotspice.utils.asnumpy(hotspice.plottools.Average.resolve(mm._get_appropriate_avg()).mask)
     image = signal.convolve2d(mm.m, xp.asarray(mask), mode='valid', boundary='wrap' if mm.PBC else 'fill')
-    h = ax1.imshow(hotspin.utils.asnumpy(image), cmap='gray', origin='lower',
+    h = ax1.imshow(hotspice.utils.asnumpy(image), cmap='gray', origin='lower',
                    vmin=-np.sum(mask), vmax=np.sum(mask), interpolation_stage='rgba', interpolation='antialiased')
     ax1.set_title(r'Averaged magnetization')
     c1 = plt.colorbar(h)
@@ -63,9 +63,9 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
             mm.T = j*T_step
             mm.update()
             mm.history_save()
-            AFM_ness.append(hotspin.plottools.get_AFMness(mm))
+            AFM_ness.append(hotspice.plottools.get_AFMness(mm))
         p.set_data(mm.history.T, AFM_ness)
-        h.set_array(hotspin.utils.asnumpy(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill')))
+        h.set_array(hotspice.utils.asnumpy(signal.convolve2d(mm.m, mask, mode='valid', boundary='fill')))
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 
@@ -73,7 +73,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
                                     blit=False, repeat=False, init_func=lambda:0) # Provide empty init_func: otherwise the update func is used as init and is thus called twice for the 0th frame
     plt.show()
 
-def test(mm: hotspin.Magnets, T_low=200, T_high=400, T_steps=100, N=1e2, verbose=False):
+def test(mm: hotspice.Magnets, T_low=200, T_high=400, T_steps=100, N=1e2, verbose=False):
     ''' This function tests the time per step as a function of the # of switches per iteration. 
         Hence, this function serves to verify if the value mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF is well-chosen.
         Ideally, the plot rises to the left of the black line, and instantly becomes constant to the right of it.
@@ -104,11 +104,11 @@ def test(mm: hotspin.Magnets, T_low=200, T_high=400, T_steps=100, N=1e2, verbose
     plt.show()
 
 def testWolff():
-    mm = hotspin.ASI.OOP_Square(1, 400, energies=[hotspin.ExchangeEnergy(J=hotspin.kB*300)], PBC=True, pattern='uniform', T=481)
+    mm = hotspice.ASI.OOP_Square(1, 400, energies=[hotspice.ExchangeEnergy(J=hotspice.kB*300)], PBC=True, pattern='uniform', T=481)
     fig = None
     while True: 
         mm._update_Wolff()
-        fig = hotspin.plottools.show_m(mm, fill=False, figure=fig)
+        fig = hotspice.plottools.show_m(mm, fill=False, figure=fig)
 
 
 if __name__ == "__main__":
@@ -124,6 +124,6 @@ if __name__ == "__main__":
     # autocorrelation_temp_dependence(mm, T_min=150, T_max=200)
 
     #### Commands which do some specific thing which yields nice saved figures or videos
-    # hotspin.plottools.show_lattice(mm, 10, 10, save=True, fall_off=2, scale=.7)
+    # hotspice.plottools.show_lattice(mm, 10, 10, save=True, fall_off=2, scale=.7)
     # factor = 1 # Approximately how many switches occur per mm.update()
     # ef.animate_quenching(mm, pattern='uniform', T_low=0.01, T_high=4, animate=3, speed=50//factor, n_sweep=80000//factor, avg='square', fill=True, save=2) # Optimized for nx = ny = 100

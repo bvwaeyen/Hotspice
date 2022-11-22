@@ -1,22 +1,22 @@
-# Hotspin
+# Hotspice
 <!-- markdownlint-disable MD033 -->
 
-Hotspin is a tool for simulating thermally active artificial spin ices, using an Ising-like approximation: the axis and position of each spin is fixed, only their binary state can switch.
+Hotspice is a tool for simulating thermally active artificial spin ices, using an Ising-like approximation: the axis and position of each spin is fixed, only their binary state can switch.
 The time evolution can either follow the Néel-Arrhenius law of switching over an energy barrier in a chronological manner, or use Glauber dynamics to model the statistical behavior while making abstraction of the time variable.
 
 ## Dependencies
 
-To create a new conda environment which only includes the necessary modules for hotspin, one can use the [`environment.yml`](environment.yml) file through the command
+To create a new conda environment which only includes the necessary modules for hotspice, one can use the [`environment.yml`](environment.yml) file through the command
 
 ```shell
-conda env create -n hotspin310 -f environment.yml
+conda env create -n hotspice310 -f environment.yml
 ```
 
-where `hotspin310` is the name of the new environment (because it uses Python 3.10).
+where `hotspice310` is the name of the new environment (because it uses Python 3.10).
 
 ### CuPy
 
-Hotspin relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
+Hotspice relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
 
 To [install CuPy](https://docs.cupy.dev/en/stable/install.html) separately, the easiest method is likely to use the following `conda` command, as this automatically installs the appropriate version of the CUDA toolkit:
 
@@ -26,17 +26,17 @@ conda install -c conda-forge cupy
 
 ## Getting started
 
-Hotspin is designed as a Python module, and can therefore simply be imported through `import hotspin`.
+Hotspice is designed as a Python module, and can therefore simply be imported through `import hotspice`.
 Several submodules provide various components, most of which are optional.
-All of the strictly crucial classes and functions are provided in the default `hotspin` namespace, but other modules like `hotspin.ASI` provide wrappers and examples for ease of use.
+All of the strictly crucial classes and functions are provided in the default `hotspice` namespace, but other modules like `hotspice.ASI` provide wrappers and examples for ease of use.
 
 ### Creating a simple spin ice
 
-To create a simulation, the first thing one has to do is to create a spin ice. This can be done by instantiating any of the ASI subclasses from the `hotspin.ASI` submodule, for example a 'diamond' pinwheel geometry:
+To create a simulation, the first thing one has to do is to create a spin ice. This can be done by instantiating any of the ASI subclasses from the `hotspice.ASI` submodule, for example a 'diamond' pinwheel geometry:
 
 ```python
-import hotspin
-mm = hotspin.ASI.IP_Pinwheel(1e-6, 100)
+import hotspice
+mm = hotspice.ASI.IP_Pinwheel(1e-6, 100)
 ```
 
 The meaning of the values `1e-6` and `100` requires a small introduction on how the spin ices are stored in memory.
@@ -50,7 +50,7 @@ The geometry is then defined by leaving some spots on this grid empty, while fil
 Hence, the spin ice in the example above will have 10000 available grid-points to put a magnet.
 However, this 'diamond' pinwheel geometry can only be represented on a grid by leaving half of the available cells empty, so the simulation above actually contains 5000 magnets (see `mm.n`).
 
-- Additional parameters can be used, for which we currently refer to the docstring of `hotspin.Magnets()`. In particular, the `params` parameter accepts a `hotspin.SimParams` instance which can set technical details for the spin ice, e.g. the update/sampling scheme to use, whether to use a reduced kernel...
+- Additional parameters can be used, for which we currently refer to the docstring of `hotspice.Magnets()`. In particular, the `params` parameter accepts a `hotspice.SimParams` instance which can set technical details for the spin ice, e.g. the update/sampling scheme to use, whether to use a reduced kernel...
 
 For details on the grid representation and exact meaning of the 'typical distance' for each of the standard spin ices, see [Available spin ices](#available-spin-ices) or refer to the docstrings.
 
@@ -64,43 +64,43 @@ To relax the magnetization to a (meta)stable state, call `mm.relax()` or `mm.min
 
 ### Applying input and reading output
 
-More complex input-output simulations can be performed using the `hotspin.io` and `hotspin.experiments` modules, but these are still under construction.
+More complex input-output simulations can be performed using the `hotspice.io` and `hotspice.experiments` modules, but these are still under construction.
 
-The `hotspin.io` module contains classes that apply external stimuli to the spin ice, or read the state of the spin ice in some manner.
+The `hotspice.io` module contains classes that apply external stimuli to the spin ice, or read the state of the spin ice in some manner.
 
-The `hotspin.experiments` module contains classes to bundle many input/output runs and calculate relevant metrics from them, as well as classes to perform parameter sweeps.
+The `hotspice.experiments` module contains classes to bundle many input/output runs and calculate relevant metrics from them, as well as classes to perform parameter sweeps.
 
 ### Performing a parameter sweep on multiple GPUs
 
-The `hotspin/scripts/ParallelJobs.py` script can be used to run a `hotspin.experiments.Sweep` on multiple GPUs. This sweep should be defined in a file that follows a structure similar to `examples/SweepKQ_RC_ASI.py`. Running `ParallelJobs.py` can be done
+The `hotspice/scripts/ParallelJobs.py` script can be used to run a `hotspice.experiments.Sweep` on multiple GPUs. This sweep should be defined in a file that follows a structure similar to `examples/SweepKQ_RC_ASI.py`. Running `ParallelJobs.py` can be done
 
 - either from the command line by calling `python ParallelJobs.py <sweep_file>`,
-- or from an interactive python shell by calling `hotspin.utils.ParallelJobs(<sweep_file>)`.
+- or from an interactive python shell by calling `hotspice.utils.ParallelJobs(<sweep_file>)`.
 
 ### Choosing between GPU or CPU
 
-*By default, hotspin runs on the GPU.* One can also choose to run hotspin on the CPU instead, e.g. for small simulations with only several tens of magnets, where the parallelism of GPU computing is not quite beneficial.
+*By default, hotspice runs on the GPU.* One can also choose to run hotspice on the CPU instead, e.g. for small simulations with only several tens of magnets, where the parallelism of GPU computing is not quite beneficial.
 
-At the moment when hotspin is imported through `import hotspin`, it
+At the moment when hotspice is imported through `import hotspice`, it
 
-1) checks if the command-line argument `--hotspin-use-cpu` is present. If it is, the CPU is used. Otherwise,
-2) the environment variable `'HOTSPIN_USE_GPU'` (default: `'True'`) is checked instead, and either the GPU or CPU is used based on this value.
+1) checks if the command-line argument `--hotspice-use-cpu` is present. If it is, the CPU is used. Otherwise,
+2) the environment variable `'HOTSPICE_USE_GPU'` (default: `'True'`) is checked instead, and either the GPU or CPU is used based on this value.
 
 *When invoking a script* from the command line, the cmd argument can be used. *Inside a python script*, however, it is discouraged to meddle with `sys.argv`. In that case, it is better to set the environment variable as follows:
 
 ```python
 import os
-os.environ['HOTSPIN_USE_GPU'] = 'False' # Must be type 'str'
-import hotspin # Only import AFTER setting HOTSPIN_USE_GPU!
+os.environ['HOTSPICE_USE_GPU'] = 'False' # Must be type 'str'
+import hotspice # Only import AFTER setting HOTSPICE_USE_GPU!
 ```
 
-*Note that the CPU/GPU choice must be made **BEFORE** the `import hotspin` statement* (and can thus be made only once)! <sub><sup>This is because behind-the-scenes, this choice determines which modules are imported by hotspin (either NumPy or CuPy), and it is not possible to re-assign these without significant runtime issues.</sup></sub>
+*Note that the CPU/GPU choice must be made **BEFORE** the `import hotspice` statement* (and can thus be made only once)! <sub><sup>This is because behind-the-scenes, this choice determines which modules are imported by hotspice (either NumPy or CuPy), and it is not possible to re-assign these without significant runtime issues.</sup></sub>
 
 ## Available spin ices
 
-Several predefined geometries are available in hotspin.
+Several predefined geometries are available in hotspice.
 They are listed below with a small description of their peculiarities.
-They all follow the pattern `hotspin.ASI.<class>(a, n, nx=None, ny=None, **kwargs)`, where `n` is only required if either `nx` or `ny` is not specified.
+They all follow the pattern `hotspice.ASI.<class>(a, n, nx=None, ny=None, **kwargs)`, where `n` is only required if either `nx` or `ny` is not specified.
 
 ### In-plane
 

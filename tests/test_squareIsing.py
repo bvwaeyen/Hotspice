@@ -9,12 +9,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from context import hotspin
+from context import hotspice
 
 
 class test_squareIsing:
     def __init__(self, **kwargs):
-        self.J = hotspin.kB*300 # This does not matter much, just dont take it too large to prevent float errors
+        self.J = hotspice.kB*300 # This does not matter much, just dont take it too large to prevent float errors
         self.T_lim = [0.9, 1.1] # Relative to T_c
         self.a = 1 # Lattice spacing, chosen large to get many simultaneous switches, it doesn't matter for exchange energy anyway
         self.size = kwargs.get('size', 800) # Large to get the most statistically ok behavior
@@ -24,15 +24,15 @@ class test_squareIsing:
 
     @property
     def T_c(self):
-        return 2*self.J/hotspin.kB/math.log(1+math.sqrt(2))
+        return 2*self.J/hotspice.kB/math.log(1+math.sqrt(2))
 
-    def test_magnetization(self, T_steps=21, N=1000, verbose=False, plot=True, save=False, reverse=False) -> hotspin.utils.Data:
+    def test_magnetization(self, T_steps=21, N=1000, verbose=False, plot=True, save=False, reverse=False) -> hotspice.utils.Data:
         ''' Performs a sweep of the temperature in <T_steps> steps. At each step, <N> Magnets.update() calls are performed.
             The final half of these <N> update calls are recorded, from which and their average/stdev of m_avg calculated.
             @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.
         '''
-        simparams = hotspin.SimParams(UPDATE_SCHEME="Glauber")
-        self.mm = hotspin.ASI.OOP_Square(self.a, self.size, energies=[hotspin.ExchangeEnergy(J=self.J)], PBC=True, pattern=('random' if reverse else 'uniform'), params=simparams)
+        simparams = hotspice.SimParams(UPDATE_SCHEME="Glauber")
+        self.mm = hotspice.ASI.OOP_Square(self.a, self.size, energies=[hotspice.ExchangeEnergy(J=self.J)], PBC=True, pattern=('random' if reverse else 'uniform'), params=simparams)
 
         T_range = np.linspace(self.T_lim[0], self.T_lim[1], T_steps)
         if reverse: T_range = np.flip(T_range)
@@ -51,7 +51,7 @@ class test_squareIsing:
         df = pd.DataFrame({"T": T_range, "m_avg": m_avg, "m_std": m_std})
         metadata = {"description": r"Magnetization of 2D exchange-coupled Ising model near critical temperature."}
         constants = {"nx": self.mm.nx, "ny": self.mm.ny, "N": N, "UPDATE_SCHEME": self.mm.params.UPDATE_SCHEME, "Tsweep_reverse": reverse}
-        data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
+        data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
         if save:
             Tsweep_direction = 'reverse' if reverse else ''
             savepath = data.save(dir="results/test_squareIsing", name=f"Tsweep{df['T'].nunique()}{Tsweep_direction}_N{N}_{self.mm.params.UPDATE_SCHEME}_{self.mm.nx}x{self.mm.ny}")
@@ -75,7 +75,7 @@ class test_squareIsing:
 
         metadata = {"description": r"Magnetization of 2D exchange-coupled Ising model near critical temperature, for different N (the number of update steps for each data point)."}
         constants = local_data.constants
-        data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
+        data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
         if save:
             Tsweep_direction = 'reverse' if constants['Tsweep_reverse'] else ''
             save = data.save(dir="results/test_squareIsing", name=f"Tsweep{df['T'].nunique()}{Tsweep_direction}_Nsweep{df['N'].nunique()}_{constants['UPDATE_SCHEME']}_{constants['nx']}x{constants['ny']}")
@@ -87,10 +87,10 @@ class test_squareIsing:
         ''' If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. '''
         T_lim = [df["T"].min(), df["T"].max()]
 
-        hotspin.plottools.init_fonts()
+        hotspice.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.errorbar(df["T"], df["m_avg"], yerr=df["m_std"], fmt='o', label='Hotspin')
+        ax.errorbar(df["T"], df["m_avg"], yerr=df["m_std"], fmt='o', label='Hotspice')
         ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label='Theory')
         ax.legend()
         ax.set_xlabel('Temperature $T/T_c$')
@@ -102,7 +102,7 @@ class test_squareIsing:
             if not isinstance(save, str):
                 reverse = '' if df["T"].iloc[0] < df["T"].iloc[-1] else 'reverse'
                 save = f"results/test_squareIsing/Tsweep{df['T'].nunique()}{reverse}.pdf"
-            hotspin.plottools.save_plot(save, ext='.pdf')
+            hotspice.plottools.save_plot(save, ext='.pdf')
         if show: plt.show()
 
     @staticmethod
@@ -110,7 +110,7 @@ class test_squareIsing:
         ''' If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. '''
         T_lim = [df["T"].min(), df["T"].max()]
 
-        hotspin.plottools.init_fonts()
+        hotspice.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
         for N, local_df in df.groupby("N"):
@@ -126,14 +126,14 @@ class test_squareIsing:
             if not isinstance(save, str):
                 reverse = '' if df["T"].iloc[0] < df["T"].iloc[-1] else 'reverse'
                 save = f"results/test_squareIsing/Tsweep{df['T'].nunique()}{reverse}_Nsweep{df['N'].nunique()}.pdf"
-            hotspin.plottools.save_plot(save, ext='.pdf')
+            hotspice.plottools.save_plot(save, ext='.pdf')
         if show: plt.show()
 
     @staticmethod
     def get_m_theory(T_min, T_max):
         m_theory_range = np.linspace(T_min, T_max, 1000)
         with np.errstate(invalid='ignore'):
-            m_theory = (1-np.sinh(2*(1/2*hotspin.kB*math.log(1+math.sqrt(2)))/hotspin.kB/m_theory_range)**-4)**.125 # J. M. D. Coey, Magnetism and Magnetic Materials (6.33)
+            m_theory = (1-np.sinh(2*(1/2*hotspice.kB*math.log(1+math.sqrt(2)))/hotspice.kB/m_theory_range)**-4)**.125 # J. M. D. Coey, Magnetism and Magnetic Materials (6.33)
         m_theory[np.isnan(m_theory)] = 0
         return m_theory_range, m_theory
 

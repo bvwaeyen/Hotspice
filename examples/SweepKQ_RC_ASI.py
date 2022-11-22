@@ -3,8 +3,8 @@ import math
 
 import numpy as np
 
-try: from context import hotspin
-except ModuleNotFoundError: import hotspin
+try: from context import hotspice
+except ModuleNotFoundError: import hotspice
 
 
 ## Define, parse and clean command-line arguments
@@ -19,26 +19,26 @@ if __name__ == "__main__": # Need this because, when imported as a module, the a
 
 
 ## Create custom Sweep class to generate the relevant type of experiments
-class SweepKQ_RC_ASI(hotspin.experiments.Sweep):
+class SweepKQ_RC_ASI(hotspice.experiments.Sweep):
     def __init__(self, groups=None, **kwargs): # If unsure, provide a kwarg as a tuple directly
         ''' Performs a sweep as in `Reservoir Computing in Artificial Spin Ice` by J. H. Jensen and G. Tufte.
             i.e. with binary input and RegionalOutputReader of variable resolution, with PerpFieldInputter.
         '''
         kwargs = { # TODO: issue with ASI_type is that user can't define ASI types themselves for this like this
-            "ASI_type": "IP_Pinwheel", "a": 300e-9, "nx": 21, "ny": 21, "T": 300, "E_B": hotspin.utils.eV_to_J(90),
+            "ASI_type": "IP_Pinwheel", "a": 300e-9, "nx": 21, "ny": 21, "T": 300, "E_B": hotspice.utils.eV_to_J(90),
             "PBC": False, "moment": 860e3*220e-9*80e-9*20e-9,
             "ext_field": 0.07, "ext_angle": 7*math.pi/180, "res_x": 5, "res_y": 5
             } | kwargs # Dict with all parameter values as tuples of length 1 or greater
         super().__init__(groups=groups, **kwargs)
 
-    def create_experiment(self, params: dict) -> hotspin.experiments.KernelQualityExperiment:
-        mm = getattr(hotspin.ASI, params["ASI_type"])(params["a"], params["nx"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
-            pattern='uniform', energies=(hotspin.DipolarEnergy(), hotspin.ZeemanEnergy()),
-            params=hotspin.SimParams(UPDATE_SCHEME='Néel', SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF=0)) # Need Néel for inputter
-        datastream = hotspin.io.RandomBinaryDatastream()
-        inputter = hotspin.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=True, frequency=1, half_period=False) # Frequency does not matter as long as it is nonzero and reasonable
-        outputreader = hotspin.io.RegionalOutputReader(params["res_x"], params["res_y"], mm) # TODO: update this!!1!1!!I!
-        experiment = hotspin.experiments.KernelQualityExperiment(inputter, outputreader, mm)
+    def create_experiment(self, params: dict) -> hotspice.experiments.KernelQualityExperiment:
+        mm = getattr(hotspice.ASI, params["ASI_type"])(params["a"], params["nx"], ny=params["ny"], T=params["T"], E_B=params["E_B"], moment=params["moment"], PBC=params["PBC"],
+            pattern='uniform', energies=(hotspice.DipolarEnergy(), hotspice.ZeemanEnergy()),
+            params=hotspice.SimParams(UPDATE_SCHEME='Néel', SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF=0)) # Need Néel for inputter
+        datastream = hotspice.io.RandomBinaryDatastream()
+        inputter = hotspice.io.PerpFieldInputter(datastream, magnitude=params["ext_field"], angle=params["ext_angle"], n=2, sine=True, frequency=1, half_period=False) # Frequency does not matter as long as it is nonzero and reasonable
+        outputreader = hotspice.io.RegionalOutputReader(params["res_x"], params["res_y"], mm) # TODO: update this!!1!1!!I!
+        experiment = hotspice.experiments.KernelQualityExperiment(inputter, outputreader, mm)
         return experiment
 
 
@@ -57,11 +57,11 @@ sweep = SweepKQ_RC_ASI(groups=[("res_x", "res_y")],
     ext_field=field_range,
     a=dist_range,
     moment=3e-16, # As derived from flatspin alpha parameter
-    E_B=(hotspin.utils.eV_to_J(110)*np.ones((nx, ny))*np.random.normal(1, 0.05, size=(nx, ny)),) # Random 'coercivity'
+    E_B=(hotspice.utils.eV_to_J(110)*np.ones((nx, ny))*np.random.normal(1, 0.05, size=(nx, ny)),) # Random 'coercivity'
 )
 
 
-def process_single(vars: dict, experiment: hotspin.experiments.KernelQualityExperiment, save=True, **kwargs):
+def process_single(vars: dict, experiment: hotspice.experiments.KernelQualityExperiment, save=True, **kwargs):
     #! This is a pretty generic function that won't change much even for different Sweep or Experiment subclasses
     #! except for some arguments to the experiment.run() call and details in the (meta)data.
     experiment_kwargs = {k: kwargs[k] for k in ("input_length", "verbose") if k in kwargs}
@@ -75,12 +75,12 @@ def process_single(vars: dict, experiment: hotspin.experiments.KernelQualityExpe
         "description": r"Contains the states (and input bit sequences) used to calculate kernel-quality and generalization-capability as in `Reservoir Computing in Artificial Spin Ice` by J. H. Jensen and G. Tufte.",
         "sweep": sweep.as_metadata_dict()
     }
-    constants = {"inputter": hotspin.utils.full_obj_name(experiment.inputter), "outputreader": hotspin.utils.full_obj_name(experiment.outputreader), "datastream": hotspin.utils.full_obj_name(experiment.inputter.datastream),
-        "ASI_type": hotspin.utils.full_obj_name(experiment.mm)} | sweep.constants
-    data_i = hotspin.utils.Data(df_i, metadata=metadata, constants=constants)
+    constants = {"inputter": hotspice.utils.full_obj_name(experiment.inputter), "outputreader": hotspice.utils.full_obj_name(experiment.outputreader), "datastream": hotspice.utils.full_obj_name(experiment.inputter.datastream),
+        "ASI_type": hotspice.utils.full_obj_name(experiment.mm)} | sweep.constants
+    data_i = hotspice.utils.Data(df_i, metadata=metadata, constants=constants)
     if save:
         saved_path = data_i.save(dir=outdir, name=savename, timestamp=True)
-        hotspin.utils.log(f"Saved iteration #{args.iteration} to {saved_path}", style='success')
+        hotspice.utils.log(f"Saved iteration #{args.iteration} to {saved_path}", style='success')
 
 
 if __name__ == "__main__":

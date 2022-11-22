@@ -413,7 +413,7 @@ class Magnets(ABC):
         occupation_supercell = self.occupation[dy:dy+Ry, dx:dx+Rx] # occupation of a single supercell to choose only relevant cells
         occupation_nonzero = occupation_supercell.nonzero() # tuple: (array(x_indices), array(y_indices))
         # TODO: is it faster to use np.random.choice here?
-        random_nonzero_indices = xp.random.choice(occupation_nonzero[0].size, n) # CUPYUPDATE: use hotspin.rng once cp.random.Generator supports choice() method
+        random_nonzero_indices = xp.random.choice(occupation_nonzero[0].size, n) # CUPYUPDATE: use hotspice.rng once cp.random.Generator supports choice() method
         idx_x = supercells_x*Rx + occupation_nonzero[1][random_nonzero_indices]
         idx_y = supercells_y*Ry + occupation_nonzero[0][random_nonzero_indices]
 
@@ -513,6 +513,8 @@ class Magnets(ABC):
     def _update_Néel(self, t_max=1, attempt_freq=1e10):
         ''' Performs a single magnetization switch, if the switch would occur sooner than <t_max> seconds. '''
         # TODO: we might be able to multi-switch here as well, by taking into account the double-switch time
+        # delta_E = self.switch_energy()
+        # barrier = xp.where(delta_E > -2*self.E_B, xp.maximum(delta_E, self.E_B + delta_E/2), delta_E)/self.occupation
         barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
         minBarrier = xp.nanmin(barrier)
         barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
@@ -851,10 +853,6 @@ class ZeemanEnergy(Energy):
     def angle(self): return as_2D_array(self._angle, self.mm.shape)
     @angle.setter
     def angle(self, value): self.set_field(angle=value)
-
-    @angle.setter
-    def angle(self, value):
-        self.set_field(self._magnitude, value)
 
 
 class DipolarEnergy(Energy):

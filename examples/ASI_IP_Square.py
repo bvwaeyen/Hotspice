@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 
 import examplefunctions as ef
-from context import hotspin
+from context import hotspice
 
 
 ## Parameters
@@ -16,11 +16,11 @@ n = 200
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.IP_Square(2e-6, n, T=T, E_B=E_B, pattern='AFM', energies=[hotspin.DipolarEnergy()], PBC=True)
+mm = hotspice.ASI.IP_Square(2e-6, n, T=T, E_B=E_B, pattern='AFM', energies=[hotspice.DipolarEnergy()], PBC=True)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
-def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_max=600):
+def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T_max=600):
     ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
@@ -36,7 +36,7 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=True), cmap='hsv', origin='lower', vmin=0, vmax=math.tau, interpolation_stage='rgba', interpolation='antialiased')
+    h = ax1.imshow(hotspice.plottools.get_rgb(mm, fill=True), cmap='hsv', origin='lower', vmin=0, vmax=math.tau, interpolation_stage='rgba', interpolation='antialiased')
     ax1.set_title(r'Averaged magnetization angle [rad]')
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
@@ -54,9 +54,9 @@ def animate_temp_rise(mm: hotspin.Magnets, animate=1, speed=100, T_step=0.05, T_
             mm.T = j*T_step
             mm.update()
             mm.history_save()
-            AFM_ness.append(hotspin.plottools.get_AFMness(mm))
+            AFM_ness.append(hotspice.plottools.get_AFMness(mm))
         p.set_data(mm.history.T, AFM_ness)
-        h.set_array(hotspin.plottools.get_rgb(mm, fill=True))
+        h.set_array(hotspice.plottools.get_rgb(mm, fill=True))
         return h, p
 
     anim = animation.FuncAnimation(fig, animate_temp_rise_update, 
@@ -78,6 +78,6 @@ if __name__ == "__main__":
     # autocorrelation_temp_dependence(mm, T_min=20, T_max=200)
 
     #### Commands which do some specific thing which yields nice saved figures or videos
-    # hotspin.plottools.show_lattice(mm, 5, 5, save=True)
+    # hotspice.plottools.show_lattice(mm, 5, 5, save=True)
     # factor = 10 # Approximately how many switches occur per mm.update()
     # ef.animate_quenching(mm, pattern='uniform', T_low=20, T_high=400, animate=3, speed=50//factor, n_sweep=80000//factor, fill=True, save=2) # Optimized for nx = ny = 200

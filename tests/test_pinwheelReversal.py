@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from context import hotspin
+from context import hotspice
 
 
 class Threshold:
@@ -51,7 +51,7 @@ class test_pinwheelReversal:
         self.T = kwargs.get('T', 300) # [K] Room temperature
         self.H_max = kwargs.get('H_max', .1) # [T] extremal magnitude of external field
         self.V = kwargs.get('V', 470e-9*170e-9*10e-9) # [m³] volume of a single magnet (default from flatspin paper)
-        self.E_B = kwargs.get('E_B', hotspin.utils.eV_to_J(71)) # [J] energy barrier between stable states (realistic for islands in flatspin paper)
+        self.E_B = kwargs.get('E_B', hotspice.utils.eV_to_J(71)) # [J] energy barrier between stable states (realistic for islands in flatspin paper)
         self.scheme = kwargs.get('scheme', 'Néel')
 
     def test(self, *args, **kwargs):
@@ -63,9 +63,9 @@ class test_pinwheelReversal:
         '''
         if verbose: print(f'External field angle is {round(angle*180/math.pi):d} degrees.')
         if not (-math.pi/4 < angle < math.pi/4): warnings.warn(f"Field angle {angle} is outside the nominal -pi/4 < angle < pi/4 range. Undesired behavior might occur.", stacklevel=2)
-        self.mm = hotspin.ASI.IP_Pinwheel(self.a, self.size, E_B=self.E_B, T=self.T, PBC=False, Msat=860e3, V=self.V, params=hotspin.SimParams(UPDATE_SCHEME=self.scheme))
+        self.mm = hotspice.ASI.IP_Pinwheel(self.a, self.size, E_B=self.E_B, T=self.T, PBC=False, Msat=860e3, V=self.V, params=hotspice.SimParams(UPDATE_SCHEME=self.scheme))
         self.mm.initialize_m(pattern='uniform', angle=0)
-        self.mm.add_energy(hotspin.ZeemanEnergy(magnitude=self.H_max, angle=angle))
+        self.mm.add_energy(hotspice.ZeemanEnergy(magnitude=self.H_max, angle=angle))
         thresholds = Threshold([.7, .35, 0, -.35, -.7], start_value=self.mm.m_avg_x) # If the average magnetization crosses this, a plot is shown.
         H_range = np.linspace(self.H_max, -self.H_max, N) # One sweep from low to high H (N steps)
         H_range = np.append(H_range, np.flip(H_range)) # Sweep down and up (2*N steps)
@@ -73,7 +73,7 @@ class test_pinwheelReversal:
         # H_range = H_range[:H_range.size//4] # (optional) Only go from zero to H_max (N/2 steps)
         m_avg_H = np.zeros_like(H_range)
         for i, H in enumerate(H_range):
-            if verbose and hotspin.utils.is_significant(i, N):
+            if verbose and hotspice.utils.is_significant(i, N):
                 print(f"[{i+1}/{H_range.size}] H = {H:.2e} T, m_x={self.mm.m_avg_x:.2f}")
             if self.scheme == 'Glauber':
                 self.mm.update(r=1e-7)
@@ -84,12 +84,12 @@ class test_pinwheelReversal:
             m_avg_H[i] = self.mm.m_avg_x*math.cos(angle) + self.mm.m_avg_y*math.sin(angle) # Along the directon of the ext field
             if thresholds.pass_check(self.mm.m_avg_x):
                 if verbose: print(f"[{i+1}/{H_range.size}] H = {H:.2e} T, m_x={self.mm.m_avg_x:.2f} (threshold passed{', plotting magnetization...' if show_intermediate else ''})")
-                if show_intermediate: hotspin.plottools.show_m(self.mm)
+                if show_intermediate: hotspice.plottools.show_m(self.mm)
 
         df = pd.DataFrame({"H": H_range, "m_avg": m_avg_H})
         metadata = {"description": r"Pinwheel reversal test as described in pp. 8-10 of `flatspin: A Large-Scale Artificial Spin Ice Simulator` by Jensen et al."}
         constants = {"H_angle": angle, "T": self.T, "E_B": self.E_B, "nx": self.mm.nx, "ny": self.mm.ny}
-        data = hotspin.utils.Data(df, metadata=metadata, constants=constants)
+        data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
         if save: save = data.save(dir=f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}", name=f"N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}")
         if plot or save: test_pinwheelReversal.test_reversal_plot(df, save=save, show=plot)
         return data
@@ -103,7 +103,7 @@ class test_pinwheelReversal:
         if reduce: df = df.iloc[::math.ceil(N/reduce)]
         M_sat_parallel = df["m_avg"].abs().max() # Assuming that the saturation is achieved somewhere (normally at initialization, so this should be ok)
 
-        hotspin.plottools.init_fonts()
+        hotspice.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
         ax.plot(df["H"]*1e3, df["m_avg"]/M_sat_parallel, linewidth=1, color='black', zorder=-1)
@@ -116,7 +116,7 @@ class test_pinwheelReversal:
         if save:
             if not isinstance(save, str):
                 save = f"results/test_squareIsing/N={N:.0f}_H={df['H'].max():.2e}_Eb={df['E_B']:.2e}_{round(df['H_angle'].iloc[0]*180/math.pi):.0f}deg_T={df['T'].mean():.0f}.pdf"
-            hotspin.plottools.save_plot(save, ext='.pdf')
+            hotspice.plottools.save_plot(save, ext='.pdf')
         if show: plt.show()
 
 
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     verbose = True
     # Observation: the external field here is MUCH smaller than in the flatspin paper, even though self.V is the same and self.a is reasonable
     # For Néel this is kind of ok:
-    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_B=hotspin.utils.eV_to_J(71), scheme='Néel').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
+    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_B=hotspice.utils.eV_to_J(71), scheme='Néel').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
     # For Glauber this is the best I could get without and with E_B:
     # test_pinwheelReversal(T=300, size=50, H_max=1e-4, E_B=0, scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
-    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_B=hotspin.utils.eV_to_J(71), scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)
+    test_pinwheelReversal(T=300, size=50, H_max=0.1, E_B=hotspice.utils.eV_to_J(71), scheme='Glauber').test(angle=30*math.pi/180, N=20000, verbose=verbose, save=save, show_intermediate=show_intermediate)

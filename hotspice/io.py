@@ -1,9 +1,11 @@
 import math
+import warnings
 
 import numpy as np
 
 from abc import ABC, abstractmethod
 
+from .ASI import OOP_Square
 from .core import Magnets
 from .plottools import show_m
 from .utils import log
@@ -244,7 +246,7 @@ class RegionalOutputReader(OutputReader):
         ''' Reads the current state of the ASI with a certain level of detail.
             @param nx [int]: number of averaging bins in the x-direction.
             @param ny [int]: number of averaging bins in the y-direction.
-            @param mm [hotspin.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+            @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
         '''
         self.nx, self.ny = nx, ny
         self.grid = np.zeros((self.nx, self.ny)) # We use this to ndenumerate, but CuPy does not have this, so use NumPy
@@ -256,18 +258,18 @@ class RegionalOutputReader(OutputReader):
 
     def configure_for(self, mm: Magnets):
         self.mm = mm
-        self.region_x = xp.floor(xp.linspace(0, self.nx, mm.nx)).astype(int)
-        self.region_y = xp.floor(xp.linspace(0, self.ny, mm.ny)).astype(int)
+        self.region_x = np.linspace(0, self.nx, mm.nx, dtype=int)
+        self.region_y = np.linspace(0, self.ny, mm.ny, dtype=int)
         self.region_x[-1] = self.nx - 1
         self.region_y[-1] = self.ny - 1
         self.region_x = np.tile(self.region_x, (mm.ny, 1))
         self.region_y = np.tile(self.region_y, (mm.nx, 1)).T
 
-        n = xp.zeros_like(self.grid)
+        n = xp.zeros_like(self.grid, dtype=int) # Number of magnets in each region
         # Determine the number of magnets in each region
         for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
             here = (self.region_x == i[0]) & (self.region_y == i[1])
-            n[i] = xp.sum(mm.occupation[here])
+            n[i] = xp.sum(mm.occupation[here]) # TODO: <here> is np, <occupation> is xp, is this ok?
         self.normalization_factor = float(xp.max(self.mm.moment))*n
 
         if mm.in_plane:
@@ -308,3 +310,77 @@ class RegionalOutputReader(OutputReader):
             return arr.reshape(self.nx, self.ny, 2)
         else:
             return arr.reshape(self.nx, self.ny)
+
+
+class OOPSquareChessFieldInputter(Inputter):
+    def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
+        ''' Applies an external stimulus in a checkerboard pattern. This is modelled as an external
+            field for each magnet, with magnitude <magnitude>*<datastream.get_next()>.
+            A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
+            <frequency> specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
+            At most <n> Monte Carlo steps will be performed for a single input bit.
+        '''
+        super().__init__(datastream)
+        self.magnitude = magnitude
+        self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
+        self.frequency = frequency
+
+    def input_single(self, mm: Magnets, value=None):
+        if value is None: value = self.datastream.get_next()
+
+        MCsteps0, t0 = mm.MCsteps, mm.t
+        AFM_mask = (((mm.ixx + mm.iyy) % 2)*2 - 1).astype(float) # simple checkerboard pattern of 1 and -1
+        mm.get_energy('Zeeman').set_field(magnitude=AFM_mask*(2*value-1)*self.magnitude)
+        while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1:
+            if self.frequency:
+                mm.update(t_max=min(1-progress, 1)/self.frequency)
+            else:
+                mm.update() # No time
+        return value
+
+
+class OOPSquareChessOutputReader(OutputReader):
+    def __init__(self, nx, ny, mm=None):
+        ''' This is a RegionalOutputReader optimized for OOP_Square ASI.
+            Since OOP_Square has two degenerate AFM ground states, the averaging takes place
+            using an AFM mask, such that they can be distinguished and domain walls can be identified.
+            @param nx [int]: number of averaging bins in the x-direction.
+            @param ny [int]: number of averaging bins in the y-direction.
+            @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+                Otherwise, the user will have to call configure_for() separately after initializing the class instance.
+        '''
+        self.nx, self.ny, self._n = nx, ny, nx*ny
+        if mm is not None: self.configure_for(mm)
+
+    def configure_for(self, mm: Magnets):
+        if not isinstance(mm, (expected_type := OOP_Square)):
+            if mm.in_plane:
+                raise TypeError(f"{type(self).__name__} only works on out-of-plane ASI, but received {type(mm).__name__}.")
+            warnings.warn(f"{type(self).__name__} expects {expected_type.__name__} ASI, but received {type(mm).__name__}.", stacklevel=2)
+        self.mm = mm
+        region_x = xp.tile(xp.linspace(0, self.nx*(1-1e-15), mm.nx, dtype=int), (mm.ny, 1)) # -1e-15 to have self.nx-1 as final value instead of self.nx
+        region_y = xp.tile(xp.linspace(0, self.ny*(1-1e-15), mm.ny, dtype=int), (mm.nx, 1)).T # same as x but transposed and ny <-> nx
+        self.region = region_x + self.nx*region_y # 2D (mm.nx x mm.ny) array representing which (1D-indexed) region each magnet belongs to
+
+        self.normalization_factor = xp.zeros(self.n, dtype=int) # Number of magnets in each region
+        # Determine the number of magnets in each region
+        for regionindex in range(self.n):
+            self.normalization_factor[regionindex] = xp.sum(mm.occupation[self.region == regionindex])
+        self.AFM_mask = ((self.mm.ixx + self.mm.iyy) % 2)*2 - 1 # simple checkerboard pattern of 1 and -1
+        self.state = xp.zeros(self.n, dtype=float)
+    
+    def read_state(self, mm: Magnets = None, m=None) -> xp.ndarray:
+        ''' Returns a 1D array representing the AFM state of the spin ice. '''
+        if mm is not None: self.configure_for(mm) # If mm is not specified, we suppose configure_for() already happened
+        if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
+
+        # TODO: I suspect that this for loop is quite slow if self.n is big; should profile this and possibly vectorize.
+        masked_m = m*self.AFM_mask
+        for regionindex in range(self.n):
+            self.state[regionindex] = xp.sum(masked_m[self.region == regionindex])
+        self.state /= self.normalization_factor # To get in range [-1, 1]
+        return self.state # [unitless]
+    
+    @property
+    def n(self):
+        return self._n

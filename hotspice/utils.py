@@ -99,7 +99,7 @@ def strided(a: xp.ndarray, W: int):
 
 ## EASE-OF-USE UTILITIES (e.g. for printing)
 def human_sort(text):
-    ''' To sort a <list> of strings in human order, use <list>.sort(key=hotspin.utils.human_sort).
+    ''' To sort a <list> of strings in human order, use <list>.sort(key=hotspice.utils.human_sort).
         Human order means that if there are numbers in the strings, they are treated as numbers,
         such that e.g. 10 will come after 2, which is not the case with a naive sort.
     '''
@@ -225,20 +225,30 @@ def timestamp():
 
 
 ## MULTI-GPU UTILITIES
-def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_py_path=None):
-    ''' Just runs the ParallelJobs.py script using a python function instead of from the command line. '''
-    if _ParallelJobs_py_path is None:
-        _ParallelJobs_py_path = pathlib.Path(__file__).parent / 'scripts/ParallelJobs.py'
-    if not os.path.exists(_ParallelJobs_py_path):
-        raise FileNotFoundError(f"The ParallelJobs-script was not found at {_ParallelJobs_py_path}.")
-    command = ["python", str(_ParallelJobs_py_path), sweepscript_path]
-    if outdir is not None:
-        command[2:2] = ['-o', outdir] # Slicing inserts this list at index 2 of <command>
-
+def run_script(script_name, args=None):
+    ''' Runs the script <script_name> located in the hotspice/scripts directory.
+        Any arguments for the script can be passed as a list to <args>.
+    '''
+    script_name = script_name.strip()
+    if not os.path.splitext(script_name)[1]: script_name += '.py'
+    path = pathlib.Path(__file__).parent / 'scripts' / script_name
+    if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
+    command = ["python", str(path)] + list(args)
     try:
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError:
-        warnings.warn(f"The command '{' '.join(command)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
+        warnings.warn(dedent(f"""
+            {colorama.Fore.LIGHTRED_EX}The script {script_name} with arguments {args} could not be run successfully.
+            See a possible error message above for more info. The full command used was:
+            {colorama.Fore.LIGHTYELLOW_EX}{' '.join(command)}{colorama.Style.RESET_ALL}
+        """), stacklevel=2)
+
+def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_script_name='ParallelJobs'):
+    ''' Convenient wrapper around run_script() for the ParallelJobs.py script in particular. '''
+    args = [sweepscript_path]
+    if outdir is not None:
+        args = ['-o', outdir] + args
+    run_script(_ParallelJobs_script_name, args=args)
 
 def log(message, device_id=0, style=None, show_device=True):
     ''' Can print <message> to console from subprocesses running on a specific GPU or thread.
@@ -268,7 +278,7 @@ def log(message, device_id=0, style=None, show_device=True):
         print(text)
 
 
-## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPIN EXAMPLES
+## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
 class Data:
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
         ''' Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
@@ -313,7 +323,7 @@ class Data:
             - 'description': a (small) description of what the data represents
             - 'GPU': a list of dicts representing the NVIDIA GPUs used for the simulation. Each dict contains
                 keys 'name', 'compute_cap', 'driver_version', 'memory.total [MiB]', 'timestamp', 'uuid'.
-            - 'simulator': "Hotspin", just for clarity. Can include version number when applicable.
+            - 'simulator': "Hotspice", just for clarity. Can include version number when applicable.
         '''
         if value is None: value = {}
         if not isinstance(value, dict): raise ValueError('Metadata must be provided as a dictionary.')
@@ -322,12 +332,12 @@ class Data:
         value.setdefault('author', getpass.getuser())
         try:
             creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
-            if 'hotspin' in creator_info:
-                creator_info = '...\\' + creator_info[len(creator_info.split('hotspin')[0]):]
+            if 'hotspice' in creator_info:
+                creator_info = '...\\' + creator_info[len(creator_info.split('hotspice')[0]):]
         except Exception:
             creator_info = ''
         value.setdefault('creator', creator_info)
-        value.setdefault('simulator', "Hotspin")
+        value.setdefault('simulator', "Hotspice")
         value.setdefault('description', "No custom description available.")
         try:
             gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
@@ -337,7 +347,7 @@ class Data:
         except Exception:
             gpu_info = []
         value.setdefault('GPU', gpu_info)
-        value.setdefault('hotspin_config', config.get_dict())
+        value.setdefault('hotspice_config', config.get_dict())
 
         self._metadata = value
         assert isinstance(self._metadata, dict)
@@ -377,22 +387,22 @@ class Data:
             for key in self.metadata.keys():
                 if not isinstance(key, str): raise KeyError("Data.metadata keys must be of type string.")
 
-    def save(self, dir: str = None, name: str = None, *, timestamp=True):
+    def save(self, dir: str = None, name: str = None, *, timestamp=True): # TODO: DO THE CONVERSION OF COLUMNS TO CONSTANTS ETC. HERE AND ONLY HERE. EXPAND THEM UPON OPENING SUCH FILES. THIS MEMORY-EFFICIENCY-IMPROVEMENT IS CAUSING TOO MUCH TROUBLE EVERYWHERE IF WE DO IT ON-THE-FLY IN THE PROPERTIES
         ''' Saves the currently stored data (<self.df>, <self.constants> and <self.metadata>)
             to a JSON file, with path "<dir>/<name>_<yyyymmddHHMMSS>.json". The automatically
             added timestamp in the filename can be disabled by passing <timestamp=False>.
             The JSON file contains three top-level objects: "metadata", "constants" and "data",
             where "data" stores a JSON 'table' representation of the Pandas DataFrame <self.df>.
 
-            @param dir [str] ('hotspin_results'): the directory to create the .json file in.
-            @param name [str] ('hotspin_simulation'): this text is used as the start of the filename.
+            @param dir [str] ('hotspice_results'): the directory to create the .json file in.
+            @param name [str] ('hotspice_simulation'): this text is used as the start of the filename.
                 This should not include an extension or timestamp, as these are generated automatically.
             @param timestamp [bool|str] (True): if true, a timestamp is added to the filename. A string
                 can be passed to override the auto-generated timestamp. If False, no timestamp is added.
             @return (str): the absolute path of the saved JSON file.
         '''
-        if dir is None: dir = 'hotspin_results'
-        if name is None: name = 'hotspin_simulation'
+        if dir is None: dir = 'hotspice_results'
+        if name is None: name = 'hotspice_simulation'
 
         total_dict = {
             'metadata': self.metadata,
@@ -413,7 +423,7 @@ class Data:
 
     @staticmethod
     def load(JSON):
-        """ Reads a JSON-parseable object containing previously generated Hotspin data, and returns its
+        """ Reads a JSON-parseable object containing previously generated Hotspice data, and returns its
             contents as Data object.
             @param JSON: a parseable object resembling JSON data, can be any of: 
                 Data() object, valid dict(), JSON string, file-like object, string representing a file path.
@@ -538,8 +548,8 @@ class _CompactJSONEncoder(json.JSONEncoder):
                 return "{\n" + ",\n".join(output) + "\n" + self.indent_str + "}"
             else:
                 return "{ }"
-        elif (name := full_obj_name(o)).startswith('hotspin'): # Then it is some hotspin-defined class, so ...
-            return json.dumps(name) # use full obj name (e.g. hotspin.ASI.IP_Pinwheel etc.)
+        elif (name := full_obj_name(o)).startswith('hotspice'): # Then it is some Hotspice-defined class, so ...
+            return json.dumps(name) # use full obj name (e.g. hotspice.ASI.IP_Pinwheel etc.)
         else:
             try: return json.dumps(o)
             except Exception: return json.dumps(str(o)) # Otherwise just use string representation of whatever kind of object this might be

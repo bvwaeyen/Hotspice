@@ -1,7 +1,7 @@
 import time
 
 import examplefunctions as ef
-from context import hotspin
+from context import hotspice
 
 
 ## Parameters
@@ -11,7 +11,7 @@ nx = 25 *4+1 # Multiple of 4 + 1
 
 ## Initialize main Magnets object
 t = time.perf_counter()
-mm = hotspin.ASI.IP_Kagome(4e-6, nx, T=T, E_B=E_B, pattern='uniform', energies=[hotspin.DipolarEnergy()], PBC=False)
+mm = hotspice.ASI.IP_Kagome(4e-6, nx, T=T, E_B=E_B, pattern='uniform', energies=[hotspice.DipolarEnergy()], PBC=False)
 print(f'Initialization time: {time.perf_counter() - t} seconds.')
 
 
@@ -24,4 +24,4 @@ if __name__ == "__main__":
     # autocorrelation_temp_dependence(mm, T_min=20, T_max=60) # Since kagome is quite sparse behind-the-scenes, it is doubtable whether the autocorrelation has a significant meaning
     
     #### Commands which do some specific thing which yields nice saved figures or videos
-    # hotspin.plottools.show_lattice(mm, 5, 3, save=True, fall_off=.5)
+    # hotspice.plottools.show_lattice(mm, 5, 3, save=True, fall_off=.5)

@@ -7,11 +7,11 @@ import matplotlib.pyplot as plt
 
 from matplotlib import animation, cm, colors
 
-try: from context import hotspin
-except ModuleNotFoundError: import hotspin
+try: from context import hotspice
+except ModuleNotFoundError: import hotspice
 
 
-def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, verbose=False, show_m=True, **kwargs):
+def run_a_bit(mm: hotspice.Magnets, N=50e3, T=None, save_history=1, verbose=False, show_m=True, **kwargs):
     ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
         This end plot can be disabled by setting <show_m> to False.
         @param N [int] (50000): the number of update steps to run.
@@ -36,11 +36,11 @@ def run_a_bit(mm: hotspin.Magnets, N=50e3, T=None, save_history=1, verbose=False
         print(f"Simulated {mm.switches - n_start:.0f} switches ({N:.0f} steps on {mm.m.shape[0]:.0f}x{mm.m.shape[1]:.0f} grid) in {dt:.3f} seconds.")
         print(f'Energy: {mm.E_tot} J')
     if show_m:
-        hotspin.plottools.show_m(mm, **kwargs)
+        hotspice.plottools.show_m(mm, **kwargs)
     return dt
 
 
-def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=200):
+def curieTemperature(mm: hotspice.Magnets, N=5000, T_min=0, T_max=200):
     ''' A naive attempt at determining the Curie temperature, by looking at the average magnetization.
         @param N [int] (5000): The number of simulated switches at each individual temperature
     '''
@@ -58,10 +58,10 @@ def curieTemperature(mm: hotspin.Magnets, N=5000, T_min=0, T_max=200):
         m_avg_x = np.mean(np.multiply(total_m, mm.orientation[:,:,0]))
         m_avg_y = np.mean(np.multiply(total_m, mm.orientation[:,:,1]))
         mm.history_save(E_tot=total_energy/N, m_avg=(m_avg_x**2 + m_avg_y**2)**(1/2))
-    hotspin.plottools.show_history(mm)
+    hotspice.plottools.show_history(mm)
 
 
-def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=200):
+def neelTemperature(mm: hotspice.Magnets, N=200000, T_min=0, T_max=200):
     ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
         @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.
     '''
@@ -72,12 +72,12 @@ def neelTemperature(mm: hotspin.Magnets, N=200000, T_min=0, T_max=200):
     for T in np.linspace(T_min, T_max, N+1):
         mm.T = T
         mm.update()
-        AFM_ness.append(hotspin.plottools.get_AFMness(mm))
+        AFM_ness.append(hotspice.plottools.get_AFMness(mm))
         mm.history_save()
-    hotspin.plottools.show_history(mm, y_quantity=AFM_ness, y_label=r'AFM-ness')
+    hotspice.plottools.show_history(mm, y_quantity=AFM_ness, y_label=r'AFM-ness')
 
 
-def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T_low=2, T_high=1000, save=False, fill=False, avg=True, pattern=None):
+def animate_quenching(mm: hotspice.Magnets, animate=1, speed=20, n_sweep=40000, T_low=2, T_high=1000, save=False, fill=False, avg=True, pattern=None):
     """ Shows an animation of repeatedly sweeping the simulation between quite low and high temperatures,
         WITH a smooth temperature transition in between (exponential between T_low and T_high).
         @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
@@ -92,7 +92,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     """
     if T_low <= 0: raise ValueError("T_low must be strictly positive for exponential quenching.")
     if T_high < T_low: raise ValueError("T_high must be larger than or equal to T_low.")
-    avg = hotspin.plottools.Average.resolve(avg, mm)
+    avg = hotspice.plottools.Average.resolve(avg, mm)
     if pattern:
         mm.initialize_m(pattern)
     n_sweep2 = n_sweep/2
@@ -102,8 +102,8 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     ax1 = fig.add_subplot(111)
     cmap = cm.get_cmap('hsv')
     if mm.in_plane:
-        h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=fill, avg=avg),
-                       cmap=cmap, origin='lower', vmin=0, vmax=math.tau, extent=hotspin.plottools._get_averaged_extent(mm, avg))
+        h = ax1.imshow(hotspice.plottools.get_rgb(mm, fill=fill, avg=avg),
+                       cmap=cmap, origin='lower', vmin=0, vmax=math.tau, extent=hotspice.plottools._get_averaged_extent(mm, avg))
         c1 = plt.colorbar(h)
         c1.ax.get_yaxis().labelpad = 30
         c1.ax.set_ylabel(f"Averaged magnetization angle [rad]\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
@@ -120,8 +120,8 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
                    [0.5,  0.0, 0.0],
                    [1.0,  b1, b1]]}
         newcmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
-        h = ax1.imshow(hotspin.plottools.get_rgb(mm, fill=fill, avg=avg),
-                       cmap=newcmap, origin='lower', vmin=-1, vmax=1, extent=hotspin.plottools._get_averaged_extent(mm, avg))
+        h = ax1.imshow(hotspice.plottools.get_rgb(mm, fill=fill, avg=avg),
+                       cmap=newcmap, origin='lower', vmin=-1, vmax=1, extent=hotspice.plottools._get_averaged_extent(mm, avg))
         c1 = plt.colorbar(h)
         c1.ax.get_yaxis().labelpad = 30
         c1.ax.set_ylabel(f"Averaged magnetization\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
@@ -139,7 +139,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
             else: # Then cool down
                 mm.T = T_low*np.exp(exponent*(((n_sweep - j) % n_sweep2)/n_sweep2))
             mm.update()
-        h.set_array(hotspin.plottools.get_rgb(mm, fill=fill, avg=avg))
+        h.set_array(hotspice.plottools.get_rgb(mm, fill=fill, avg=avg))
         fig.suptitle(f'Temperature {mm.T.mean():.3f}\u2009K')
         return h, # This has to be an iterable!
 
@@ -158,7 +158,7 @@ def animate_quenching(mm: hotspin.Magnets, animate=1, speed=20, n_sweep=40000, T
     print(f"Performed {mm.switches} switches in {time.perf_counter() - t:.3f} seconds.")
 
 
-def autocorrelation_dist_dependence(mm: hotspin.Magnets):
+def autocorrelation_dist_dependence(mm: hotspice.Magnets):
     ''' Shows the full 2D autocorrelation, as well as the binned autocorrelation
         as a function of distance. '''
     correlation = mm.autocorrelation()
@@ -172,14 +172,14 @@ def autocorrelation_dist_dependence(mm: hotspin.Magnets):
     ax1.set_xlabel(r'Distance [a.u.]')
     ax1.set_ylabel(r'Autocorrelation')
     ax2 = fig.add_subplot(122)
-    h1 = ax2.imshow(hotspin.utils.asnumpy(correlation), origin='lower', cmap='bone')
+    h1 = ax2.imshow(hotspice.utils.asnumpy(correlation), origin='lower', cmap='bone')
     c2 = plt.colorbar(h1)
     c2.set_label(r'Correlation', rotation=270, labelpad=15)
     plt.gcf().tight_layout()
     plt.show()
 
 
-def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_min=0, T_max=400):
+def autocorrelation_temp_dependence(mm: hotspice.Magnets, N=41, M=50, L=500, T_min=0, T_max=400):
     ''' Shows how the correlation distance depends on the temperature. 
         @param N [int] (31): Number of temperature steps between <T_min> and <T_max>.
         @param M [int] (50): How many times to do <L> switches at each temperature,
@@ -226,6 +226,6 @@ def autocorrelation_temp_dependence(mm: hotspin.Magnets, N=41, M=50, L=500, T_mi
 
 
 if __name__ == "__main__":
-    mm = hotspin.ASI.IP_Square(2e-6, 29, T=40, pattern='uniform', energies=[hotspin.DipolarEnergy()])
+    mm = hotspice.ASI.IP_Square(2e-6, 29, T=40, pattern='uniform', energies=[hotspice.DipolarEnergy()])
     autocorrelation_dist_dependence(mm)
     autocorrelation_temp_dependence(mm, N=41, T_min=10, T_max=90, L=100)
