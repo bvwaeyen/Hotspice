@@ -15,6 +15,7 @@ At this moment, running a sweep (on multiple GPUs/CPUs) requires several command
 ## Core functionality
 
 1. High priority
+    - [ ] Allow `T=0` for Néel (and Wolff?), though this will require a different `E_B` calculation which has previously led to problems. One option would be to use the alternative calculation only if `T=0`.
     - [ ] Improve the `RegionalOutputReader` etc.
         - [ ] Make the state a 1D array, because the 2D-ness is quite restrictive and for some ASIs causes unnecessary constant zeroes which can simply be removed in a 1D array.
         - [x] Make a custom `OutputReader` for the OOP system which applies an AFM mask to distinguish between the two degenerate ground states
