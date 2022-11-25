@@ -56,10 +56,9 @@ except AttributeError:
 
 ## Create queue
 multiprocessing.set_start_method('spawn')
-N_GPU = getDeviceCount()
-N_JOBS = N_GPU if hotspice.config.USE_GPU else psutil.cpu_count(logical=False)
+N_JOBS = getDeviceCount() if hotspice.config.USE_GPU else psutil.cpu_count(logical=False)
 q = multiprocessing.Queue(maxsize=N_JOBS)
-for device in range(N_JOBS): q.put(device)
+for i in range(N_JOBS): q.put(i)
 
 ## Copy input file to prevent changes during runtime
 outdir = os.path.abspath(args.outdir) + (timestamp := hotspice.utils.timestamp())
@@ -71,24 +70,25 @@ shutil.copy(args.script_path, copied_script_path)
 num_jobs = len(sweep)
 failed = []
 def runner(i):
-    # Select an available gpu
-    q_num = q.get()
-    gpu = q_num % N_GPU
-    text_core_num = f"GPU{gpu}" if hotspice.config.USE_GPU else f"CPU{q_num}"
+    device_id = q.get() # ID of GPU or CPU core to be used
+    text_core_num = f"GPU{device_id}" if hotspice.config.USE_GPU else f"CPU{device_id}"
     # Run a shell command that runs the relevant python script
     hotspice.utils.log(f"Attempting to run job #{i} of {num_jobs} on {text_core_num}...", style='header')
     cmd = ["python", copied_script_path, '-o', outdir, str(i)]
     try:
         env = os.environ.copy()
-        env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  #! These os.environ statements must be done before running any CuPy statement (importing is fine),
-        env["CUDA_VISIBLE_DEVICES"] = f"{gpu:d}" #! but since CuPy is imported separately in the subprocess python script this is not an issue.
+        #! These os.environ statements must be done before running any CuPy statement (importing is fine),
+        #! but since CuPy is imported separately in the subprocess python script this is not an issue.
+        env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        env["CUDA_VISIBLE_DEVICES"] = f"{device_id:d}"
+        env["HOTSPICE_DEVICE_ID"] = f"{device_id:d}" # To allow detection of used CPU core without advanced sorcery
         subprocess.run(cmd, check=True, env=env)
     except subprocess.CalledProcessError: # This error type is expected due to check=True
         failed.append(i)
         warnings.warn(f"The command '{' '.join(cmd)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
 
     # Return gpu id to queue
-    q.put(q_num)
+    q.put(device_id)
 
 
 ## Run the jobs

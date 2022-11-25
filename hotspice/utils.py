@@ -250,12 +250,14 @@ def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_script_name='Paral
         args = ['-o', outdir] + args
     run_script(_ParallelJobs_script_name, args=args)
 
-def log(message, device_id=0, style=None, show_device=True):
+def log(message, device_id=None, style=None, show_device=True):
     ''' Can print <message> to console from subprocesses running on a specific GPU or thread.
         The <device_id> (currently used GPU/CPU core) is printed in front of the message, if <show_device> is True.
         <style> specifies the color of the message (default None=white), and can be any of:
             'issue' (red), 'success' (green), 'header' (blue).
     '''
+    if device_id is None:
+        device_id = 0 if config.USE_GPU else config.DEVICE_ID
     if show_device:
         if config.USE_GPU:
             try:
@@ -263,7 +265,9 @@ def log(message, device_id=0, style=None, show_device=True):
             except KeyError: # So CUDA_VISIBLE_DEVICES was not defined manually, that probably means they are all available
                 device = device_id if device_id < cp.cuda.runtime.getDeviceCount() else np.nan
             text_device = f"{colorama.Fore.GREEN}[GPU{device}] "
-        else: text_device = f"{colorama.Fore.GREEN}[CPU] " # TODO: see if we can get some sort of thread/core ID?
+        else:
+            device = str(device_id) if device_id is not None else ''
+            text_device = f"{colorama.Fore.GREEN}[CPU{device}] "
     else: text_device = ""
 
     color = {
