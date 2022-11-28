@@ -18,7 +18,7 @@ At this moment, running a sweep (on multiple GPUs/CPUs) requires several command
     - [ ] Allow `T=0` for Néel (and Wolff?), though this will require a different `E_B` calculation which has previously led to problems. One option would be to use the alternative calculation only if `T=0`.
     - [ ] Improve the `RegionalOutputReader` etc.
         - [ ] Make the state a 1D array, because the 2D-ness is quite restrictive and for some ASIs causes unnecessary constant zeroes which can simply be removed in a 1D array.
-        - [x] Make a custom `OutputReader` for the OOP system which applies an AFM mask to distinguish between the two degenerate ground states
+        - [ ] Find a good way to perform 'squinting' sweeps of `OutputReader`s, either by running once for full visibility and recalculating for squinting afterwards, or by saving all kinds of resolutions during the simulation itself.
     - [ ] Implement parallel Poisson-disc sampling
     - [ ] Improve accuracy of $E_b$ calculation by using a four-state approach. For OOP ASI this might not be relevant yet, but can become so if we would use input methods with an in-plane component on OOP ASIs.
 
