@@ -476,7 +476,8 @@ class Magnets(ABC):
         return xp.asarray(xp.where(cluster == 1))
 
     def update(self, *args, **kwargs):
-        if xp.any(self.T == 0):
+        can_handle_zero_temperature = ['Glauber']
+        if xp.any(self.T == 0) and (self.params.UPDATE_SCHEME not in can_handle_zero_temperature):
             warnings.warn('Temperature is zero somewhere, so no switch will be simulated to prevent DIV/0 errors.', stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
         match self.params.UPDATE_SCHEME:
@@ -499,8 +500,9 @@ class Magnets(ABC):
         # exponential = xp.clip(xp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # OPTION 2: AD-HOC ADJUSTED GLAUBER, where we assume that the 'other state' is at the top of the energy barrier
         # TODO: more accurate energy barrier using 4-state approach? (might not be worth the computational cost)
-        barrier = xp.maximum((delta_E := self.switch_energy(idx)), self.E_B[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
-        exponential = xp.clip(xp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
+        with np.errstate(divide='ignore'): # To allow T=0 without warnings or errors
+            barrier = xp.maximum((delta_E := self.switch_energy(idx)), self.E_B[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
+            exponential = xp.clip(xp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
         idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
         # idx = idx[:,xp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, unsure if this satisfied detailed balance
@@ -553,6 +555,7 @@ class Magnets(ABC):
                 switching probabilities is to be less than <Q>.
         '''
         r = (8e-7*self._momentSq/(Q*self.kBT))**(1/3)
+        r = xp.clip(r, 0, self.nx*self.dx + self.ny*self.dy) # If T=0, we clip the infinite r back to a high value nx*dx+ny*dy which is slightly larger than the simulation
         return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 

@@ -12,6 +12,7 @@ import importlib.util
 import multiprocessing
 import os
 import psutil
+import shutil
 import subprocess
 import sys
 import warnings
@@ -55,35 +56,39 @@ except AttributeError:
 
 ## Create queue
 multiprocessing.set_start_method('spawn')
-N_GPU = getDeviceCount()
-N_JOBS = N_GPU if hotspice.config.USE_GPU else psutil.cpu_count(logical=False)
+N_JOBS = getDeviceCount() if hotspice.config.USE_GPU else psutil.cpu_count(logical=False)
 q = multiprocessing.Queue(maxsize=N_JOBS)
-for device in range(N_JOBS): q.put(device)
+for i in range(N_JOBS): q.put(i)
 
-## Create some global variables for the entire sweep
+## Copy input file to prevent changes during runtime
+outdir = os.path.abspath(args.outdir) + (timestamp := hotspice.utils.timestamp())
+copied_script_path = os.path.join(outdir, f"{os.path.splitext(os.path.basename(args.script_path))[0]}_{timestamp}.py")
+if not os.path.exists(outdir): os.makedirs(outdir, exist_ok=True)
+shutil.copy(args.script_path, copied_script_path)
+
+## Create some global variables/functions for the entire sweep
 num_jobs = len(sweep)
 failed = []
-outdir = args.outdir + (timestamp := hotspice.utils.timestamp())
-
 def runner(i):
-    # Select an available gpu
-    q_num = q.get()
-    gpu = q_num % N_GPU
-    text_core_num = f"GPU{gpu}" if hotspice.config.USE_GPU else f"CPU{q_num}"
+    device_id = q.get() # ID of GPU or CPU core to be used
+    text_core_num = f"GPU{device_id}" if hotspice.config.USE_GPU else f"CPU{device_id}"
     # Run a shell command that runs the relevant python script
     hotspice.utils.log(f"Attempting to run job #{i} of {num_jobs} on {text_core_num}...", style='header')
-    cmd = f"python {args.script_path} -o {outdir} {i}"
+    cmd = ["python", copied_script_path, '-o', outdir, str(i)]
     try:
         env = os.environ.copy()
-        env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  #! These os.environ statements must be done before running any CuPy statement (importing is fine),
-        env["CUDA_VISIBLE_DEVICES"] = f"{gpu:d}" #! but since CuPy is imported separately in the subprocess python script this is not an issue.
-        subprocess.run(["python", args.script_path, '-o', outdir, str(i)], check=True, env=env)
+        #! These os.environ statements must be done before running any CuPy statement (importing is fine),
+        #! but since CuPy is imported separately in the subprocess python script this is not an issue.
+        env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        env["CUDA_VISIBLE_DEVICES"] = f"{device_id:d}"
+        env["HOTSPICE_DEVICE_ID"] = f"{device_id:d}" # To allow detection of used CPU core without advanced sorcery
+        subprocess.run(cmd, check=True, env=env)
     except subprocess.CalledProcessError: # This error type is expected due to check=True
         failed.append(i)
-        warnings.warn(f"The command '{cmd}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
+        warnings.warn(f"The command '{' '.join(cmd)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
 
     # Return gpu id to queue
-    q.put(q_num)
+    q.put(device_id)
 
 
 ## Run the jobs
@@ -98,5 +103,5 @@ if len(failed):
     hotspice.utils.log(f"Failed sweep iterations (zero-indexed): {failed}", style='issue', show_device=False)
 else:
     hotspice.utils.log(f"Sweep successfully finished. Summarizing results...", style='success', show_device=False)
-    subprocess.run(["python", args.script_path, '-o', outdir], check=True) # To summarize the sweep if all went well
+    subprocess.run(["python", copied_script_path, '-o', outdir], check=True) # To summarize the sweep if all went well
 
