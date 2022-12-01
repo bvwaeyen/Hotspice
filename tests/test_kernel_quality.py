@@ -1,12 +1,12 @@
 # A program to determine the kernel quality for various temperatures.
 # Created 26/10/2022
-import pandas as pd
 
 if __name__ == "__main__": print("Importing...")
 import math
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+import pandas as pd
 
 import hotspice
 if __name__ == "__main__": print("Everything imported")
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     angle = (45+7)*math.pi/180  # angle of magnetic field, 45° for Diamond geometry
     n_output = 5
 
-    MCS = 4  # 4 seemed to be too long. Maybe 1 is okay? Or should it be less?
+    MCS = 1  # 4 seemed to be too long. Maybe 1 is okay? Or should it be less?
     frequency = 0  # Hz
     # H_array = np.arange(7, 11.1, 0.2) * 1e-4  # Around 0.8 mT because of previous test
     # T_array = [5000]  # Most interesting temperature from previous test
@@ -185,7 +185,7 @@ if __name__ == "__main__":
 
     q_list = []
     for result in result_list:
-        q = result["q"]
+        q = result["k"] - result["g"]
         q_list.append(q)
         print(f"q: {q}")
 

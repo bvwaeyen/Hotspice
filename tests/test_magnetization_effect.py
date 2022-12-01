@@ -115,28 +115,32 @@ def plot_HTorder(data: hotspice.utils.Data, ncols=1, outer="H"):
 
 if __name__ == "__main__":
     a = 300e-9
-    n = 10
+    n = 21
     PBC=False
 
-    angle = math.pi/4  # angle of magnetic field
-    H_array = np.arange(1, 10.5, 0.5) * 1e-4
-    T_array = np.arange(0, 10001, 1000)
-    T_array[0] = 1  # no 0K
-    MaxMCsteps = 15
+    angle = 7 * math.pi/180  # angle of magnetic field
+    H_array = np.arange(10, 100, 5) * 1e-3
+    T_array = [0]
+    MaxMCsteps = 6
     MCS = 0.05  # Monte Carlo steps per input_single
     #MaxTime = 0.0001
-    #frequency = 100/MaxTime  # frequency of input singles
+    frequency = 0  # frequency of input singles, 0 because Glauber
     update_scheme = "Glauber"
 
+    Msat = 800e3  # magnetisation saturation, default value of Magnets
+    V = 2e-22  # nucleation volume, seems large?
+    H_coercive = 55e-3  # Coercive field. In paper this is 200mT, but they use Stoner-Wohlfarth model to update
+    E_B = 0.5 * H_coercive * Msat * V  # needs an extra factor 1/2 according to Jonathan Maes
+
     outer="T"
-    ncols = 3
+    ncols = 1
+    filename = "Paper Magnetization Effect"
 
-    filename = "HTm Glauber"
-
-    mm = hotspice.ASI.IP_PinwheelDiamond(a, n, PBC=PBC, pattern="random", energies=(hotspice.DipolarEnergy(), hotspice.ZeemanEnergy()))
+    mm = hotspice.ASI.IP_PinwheelDiamond(a, n, PBC=PBC, pattern="random", Msat=Msat, V=V, E_B=E_B)
+    mm.add_energy(hotspice.ZeemanEnergy())
     mm.params.UPDATE_SCHEME = update_scheme
     datastream = hotspice.io.ConstantDatastream()  # constantly returns 1
-    inputter = hotspice.io.FieldInputter(datastream, angle=angle, n=MCS, frequency=0)
+    inputter = hotspice.io.FieldInputter(datastream, angle=angle, n=MCS, frequency=frequency)
 
     data = sweep_HTorder(mm, inputter, H_array, T_array, MaxMCsteps)
     data.save(name=filename)
