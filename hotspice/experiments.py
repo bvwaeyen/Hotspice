@@ -661,3 +661,77 @@ class TaskAgnosticExperiment(Experiment):
             "CP": lambda df: df["CP"],
             "S":  lambda df: df["S"]
         }
+
+
+class DeterminismExperiment(Experiment):
+    """
+    An experiment to test the deterministic nature of the ASI and inputter. It will input the exact same signal some
+    amount of times, and calculates via matrix rank how many different outputs are read.
+    """
+
+    def __init__(self, inputter, outputreader, mm):
+        super().__init__(inputter, outputreader, mm)
+        self.results = {"D": None, "d": None}
+
+    def run(self, input_number: int = 10, input_sequence=None, input_length: int = 100, pattern=None, verbose=False):
+        """
+        @param input_number: amount of times the input should be tested.
+        @param input_sequence: array of inputs. If None, will generate a random sequence of input_length
+        @param input_length: number of bits of one signal. Won't be used if a sequence is given.
+        @param pattern: pattern of mm.initialize_m()
+        @param verbose: verbosity of the experiment
+        """
+        self.input_number = input_number
+
+        if input_sequence is None:
+            self.input_sequence = self.inputter.datastream.get_next(n=input_length)
+        else:
+            self.input_sequence = input_sequence
+
+        if input_number > self.outputreader.n:
+            raise (Exception("input_number should not be larger than outputreader.n"))
+
+        self.all_states = xp.zeros((self.outputreader.n,) * 2)
+
+        for i in range(self.input_number):
+
+            if verbose and is_significant(i, input_number, order=0.5):
+                log(f"Inputting signal {i + 1}/{input_number}")
+
+            state = self.run_signal(self.input_sequence, pattern=pattern)
+            self.all_states[i, :] = state.reshape(-1)
+
+
+    def run_signal(self, input_sequence, pattern=None):
+        """
+        One complete signal input.
+        @param input_sequence: the signal to be inputted.
+        @param pattern: pattern of mm.initialize_m()
+        @return: state of the output
+        """
+        self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
+        for value in input_sequence:
+            self.inputter.input_single(self.mm, value=float(value))
+        state = self.outputreader.read_state(self.mm)
+        return state
+
+
+    def calculate_all(self, ignore_errors=True, **kwargs):
+        ''' Recalculates K, G, k and g if possible. '''
+        try:
+            self.results["D"] = int(xp.linalg.matrix_rank(self.all_states))
+            self.results["d"] = self.results["D"] / self.input_number
+        except AttributeError:
+            if not ignore_errors: raise
+
+    @staticmethod
+    def to_dataframe(self):
+        return None
+
+    @staticmethod
+    def load_dataframe(self):
+        return None
+
+    @staticmethod
+    def get_plot_metrics(self):
+        return None
