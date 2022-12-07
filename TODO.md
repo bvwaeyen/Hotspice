@@ -15,6 +15,7 @@ At this moment, running a sweep (on multiple GPUs/CPUs) requires several command
 ## Core functionality
 
 1. High priority
+    - [ ] Remove the endless `'y0', 'y1', ... 'y<n>'` and replace this with an `output` column where each entry is a list. The list can then be `n` elements long and we do not need to do weird things with regex etc. This will remove a lot of headaches. If I am not missing anything, it is even possible to put 2D list-of-lists in the dataframe. The question, however, is why I did not do this in the first place: was there some complication with this that I have forgotten since?
     - [ ] Allow `T=0` for Néel (and Wolff?), though this will require a different `E_B` calculation which has previously led to problems. One option would be to use the alternative calculation only if `T=0`.
     - [ ] Improve the `RegionalOutputReader` etc.
         - [ ] Make the state a 1D array, because the 2D-ness is quite restrictive and for some ASIs causes unnecessary constant zeroes which can simply be removed in a 1D array.

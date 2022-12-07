@@ -205,7 +205,11 @@ class Sweep(ABC):
             # TODO: revisit save=True, plot=True, title=None...
             # TODO: is there a way to somehow detect the units of the axes without explicitly passing them to name_x and name_y?
         '''
-        if isinstance(summary_files, str): summary_files = [summary_files] # We use an iterable of strings, just in case they need to be averaged.
+        if isinstance(summary_files, str):
+            if os.path.isfile(summary_files):
+                summary_files = [summary_files] # We use an iterable of strings, just in case they need to be averaged.
+            else: # is dir
+                summary_files = [file for file in os.listdir(summary_files) if (os.path.isfile(file) and file.endswith('.json'))]
 
         ## Default arguments
         colnames = [group[0] for group in self.groups] # For each group, just take the first parameter to show values/name
@@ -277,7 +281,7 @@ class Sweep(ABC):
                 ax.set_xlabel(label_x)
                 ax.set_ylabel(label_y)
                 ax.set_title(name)
-                im = ax.pcolormesh(X, Y, np.transpose(metrics[i]), cmap=cmap) # OPT: can use vmin and vmax, but not without a Metric() class, which I think would lead us a bit too far once again
+                im = ax.pcolormesh(X, Y, np.transpose(all_metrics[i]), cmap=cmap) # OPT: can use vmin and vmax, but not without a Metric() class, which I think would lead us a bit too far once again
                 c = plt.colorbar(im) # OPT: can use extend='min' for nice triangle at the bottom if range is known
                 # c.ax.yaxis.get_major_locator().set_params(integer=True) # only integer colorbar labels
         else:
@@ -285,7 +289,7 @@ class Sweep(ABC):
             for i, name in enumerate(metrics_dict.keys()):
                 ax.set_xlabel(label_x)
                 ax.set_ylabel("Reservoir metric")
-                ax.plot(x_vals, metrics[i], label=name)
+                ax.plot(x_vals, all_metrics[i], label=name)
 
         if title is not None: plt.suptitle(title)
         multi = widgets.MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
@@ -453,7 +457,7 @@ class TaskAgnosticExperiment(Experiment):
         outputreader = RegionalOutputReader(2, 2, mm)
         return cls(inputter, outputreader, mm)
 
-    def run(self, N=1000, add=False, verbose=False):
+    def run(self, N=1000, add=False, pattern=None, verbose=False):
         ''' @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
             @param add [bool]: If True, the newly calculated iterations are appended to the
                 current <self.u> and <self.y> arrays, and <self.final_state> is updated.
@@ -461,6 +465,7 @@ class TaskAgnosticExperiment(Experiment):
                 If 1, significant iterations are printed to console.
                 If 2, the magnetization profile is plotted after every input bit in addition to printing.
         '''
+        self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
         if verbose:
             if verbose > 1:
                 init_fonts()
@@ -637,7 +642,8 @@ class TaskAgnosticExperiment(Experiment):
         if u is None: u = xp.asarray(df["u"])
         if y is None:
             pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
-            y_cols = [colname for colname in df if pattern.match(colname)].sort(key=human_sort)
+            y_cols = [colname for colname in df if pattern.match(colname)]
+            y_cols.sort(key=human_sort)
             y = xp.asarray(df[y_cols])
 
         self.u = xp.asarray(u).reshape(-1)
