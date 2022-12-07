@@ -8,34 +8,33 @@ import hotspice
 
 # PARAMETERS
 n = 21  # 220 actual spins
-T = 0  # deterministic
-# relax = True  # deterministic and very fast, although actually not deterministic because partly random
+T = 1e-5  # almost deterministic
 relax = False  # minimize does not work
-frequency = 0
-MCS = 2
-input_length = 20  # amount of bits of one signal
+frequency = 1  # 1 Hz
+MCS = 2  # only important for Glauber
+input_length = 100  # amount of bits of one signal
+update_scheme = "Néel"  # better for low temperatures
 
 # default values from Magnets
-Msat = 800e3  # magnetisation saturation, default value of Magnets
-V = 2e-22  # nucleation volume, seems large?
-H_coercive = 55e-3  # Coercive field. In paper this is 200mT, but they use Stoner-Wohlfarth model to update
-E_B = 0.5 * H_coercive * Msat * V  # needs an extra factor 1/2 according to Jonathan Maes
+moment = 3e-16  # from Jonathan Maes, comes from ratio of flatspin alpha and hotspice a
+# H_coercive = 55e-3  # Coercive field. In paper this is 200mT, but they use Stoner-Wohlfarth model to update
+# E_B = 0.5 * H_coercive * moment  # needs an extra factor 1/2 according to Jonathan Maes
+E_B = hotspice.utils.eV_to_J(110)  # from Jonathan Maes
+# E_B = E_B * np.ones((n, n))*np.random.normal(1, 0.05, size=(n, n))  # for randomness
 
 angle = 7*math.pi/180  # used to be almost symmetric
 n_output = 5  # ~~full~~ best resolution
-verbose = True
+verbose = False
 
 # a_array = np.arange(20, 1020, 20) * 1e-9  # 20nm to 1000nm, paper has ~215nm to 1000nm
-H_array = np.arange(46, 55, 1) * 1e-3  # 50mT to 100mT
-# nsamples = 5  # paper has 30 samples, is a bit much maybe, so 5?
-# H_array = np.arange(75, 80, 2) * 1e-3
-a_array = [300e-9]
-# H_array = np.arange(38, 52, 2) * 1e-3  # seemed interesting from magnetization effect test
+# H_array = np.arange(46.61, 46.65, 0.05) * 1e-3
+H_array = np.arange(90, 110, 10) * 1e-3  # at 90mT no effect, at 100mT last bit completely saturates everything
 
-nsamples = 3
+nsamples = 1  # paper has 30 samples, is a bit much maybe, so 5?
+a_array = [300e-9]
 
 # files
-directory = "paper/"
+directory = "PaperNéel/"
 if not os.path.exists(directory):
     os.makedirs(directory)
 file = open(directory + "long_summary.txt", "w")
@@ -52,7 +51,8 @@ for a in a_array:  # lattice parameters
         average_results = {"K": 0, "G": 0, "k": 0, "g": 0}
 
         # Preparing experiment
-        mm = hotspice.ASI.IP_Pinwheel(a, n, T=T, E_B=E_B, Msat=Msat, V=V)  # recreate mm to change a
+        mm = hotspice.ASI.IP_Pinwheel(a, n, T=T, E_B=E_B, moment=moment)  # recreate mm to change a
+        mm.params.UPDATE_SCHEME = update_scheme
         mm.add_energy(hotspice.ZeemanEnergy())
 
         datastream = hotspice.io.RandomBinaryDatastream()
