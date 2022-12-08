@@ -499,15 +499,6 @@ class Data:
         big_df = pd.concat(dataframes, ignore_index=True) # Concatenate all rows of dataframes
         return Data(big_df, constants=constants, metadata=metadata)
     
-    def get(self, param_name):
-        """ Returns the full column of <param_name>, even if it is actually a constant. """
-        if param_name in self.df:
-            return self.df[param_name]
-        elif param_name in self.constants:
-            return pd.Series([self.constants[param_name]]*len(self.df))
-        else:
-            raise ValueError(f"Unknown parameter name '{param_name}'.")
-    
     def __str__(self):
         c = '\n'.join([f'{k} = {v}' for k, v in self.constants.items()])
         return dedent(
@@ -524,6 +515,14 @@ class Data:
             {'='*32}
             """
         )
+
+    def __getitem__(self, item: str):
+        """ Returns the full column of <param_name>, even if it is in self.constants. Usage: data[item]. """
+        if item in self.df:
+            return self.df[item]
+        if item in self.constants:
+            return pd.Series([self.constants[item]]*len(self.df))
+        raise ValueError(f"Unknown parameter name '{item}'.")
 
 
 class _CompactJSONEncoder(json.JSONEncoder):
