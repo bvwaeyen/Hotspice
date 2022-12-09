@@ -35,40 +35,40 @@ class Experiment(ABC):
     
     @abstractmethod
     def run(self):
-        ''' Runs the entire experiment and records all the useful data. '''
+        """ Runs the entire experiment and records all the useful data. """
     
     @abstractmethod
     def calculate_all(self):
-        ''' (Re)calculates all the metrics in the self.results dict. '''
+        """ (Re)calculates all the metrics in the self.results dict. """
     
     @abstractmethod
     def to_dataframe(self):
-        ''' Creates a Pandas dataframe from the saved results of self.run(). '''
+        """ Creates a Pandas dataframe from the saved results of self.run(). """
     
     @abstractmethod
     def load_dataframe(self):
-        ''' Loads the data from self.to_dataframe() to the current object. '''
+        """ Loads the data from self.to_dataframe() to the current object. """
     
     @staticmethod
     @abstractmethod
     def get_plot_metrics(self):
-        ''' Returns a dictionary with as many elements as there should be 2D or 1D plots
+        """ Returns a dictionary with as many elements as there should be 2D or 1D plots
             in Sweep().plot(). Keys are names of these metrics, values are functions that
             take one argument which is a pd.DataFrame, and returns either a simple column
             or a mathematical combination of several columns.
-        '''
+        """
 
 
 class Sweep(ABC):
     def __init__(self, groups: Iterable[tuple[str]] = None, **kwargs): # kwargs can be anything to specify the sweeping variables and their values.
-        ''' Sweep quacks like a generator yielding <Experiment>-like objects.
+        """ Sweep quacks like a generator yielding <Experiment>-like objects.
             The purpose of a Sweep is to reliably generate a sequence of <Experiment>s in a consistent order.
             @param groups [iterable[tuple[str]]] (None): a tuple of tuples of strings. Each tuple represents a group:
                 groups are sweeped together. The strings inside those tuples represent the names of the
                 variables that are being swept together. By sweeping together, it is meant that those
                 variables move through their sweeping values simultaneously, instead of forming a
                 hypercube through their values in which each pair is visited. We only visit the diagonal.
-                Example: groups=(("nx", "ny"), ("res_x", "res_y")) will cause the variables <nx> and <ny>
+                Example: groups=(('nx', 'ny'), ('res_x', 'res_y')) will cause the variables <nx> and <ny>
                     to sweep through their values together, i.e. e.g. when <nx> is at its fourth value, also
                     <ny> will be at its fourth value.
             The additional arguments (kwargs) passed to this are interpreted as follows:
@@ -81,7 +81,7 @@ class Sweep(ABC):
                 even if this tuple only has length 1.
             @attr variables [dict[str, tuple]]: stores the sweeped variables and their values in a tuple.
             @attr constants [dict[str, Any]]: stores the non-sweeped variables and their only value.
-        '''
+        """
         self.parameters: dict[str, tuple] = {k: Sweep.variable(v) for k, v in kwargs.items()}
         self.variables = {k: v for k, v in self.parameters.items() if len(v) > 1}
         self.constants = {k: v[0] for k, v in self.parameters.items() if len(v) == 1}
@@ -102,7 +102,7 @@ class Sweep(ABC):
 
     @staticmethod
     def variable(iterable):
-        ''' Converts <iterable> into a tuple, or a length-1 tuple if <iterable> is not iterable.'''
+        """ Converts <iterable> into a tuple, or a length-1 tuple if <iterable> is not iterable."""
         if isinstance(iterable, str): return (iterable,) # We don't want to parse strings character by character
         try: return tuple(iterable)
         except TypeError: return (iterable,)
@@ -112,9 +112,9 @@ class Sweep(ABC):
 
     @property
     def info(self):
-        ''' Some information about a specific sweep, e.g. what the input/output protocol is etc.
+        """ Some information about a specific sweep, e.g. what the input/output protocol is etc.
             This should simply be set using self.info = ...
-        '''
+        """
         return self._info if hasattr(self, '_info') else "No specific information provided for this sweep."
     
     @info.setter
@@ -127,16 +127,16 @@ class Sweep(ABC):
             yield {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
 
     def __iter__(self):
-        ''' A generator to conveniently iterate over self.sweeper. Yields a tuple containing
+        """ A generator to conveniently iterate over self.sweeper. Yields a tuple containing
             the variables with their values in this iteration, as well as the experiment object.
-        '''
+        """
         for vars in self.sweeper:
             params = vars | self.constants
             experiment = self.create_experiment(params)
             yield (vars, experiment)
 
     def get_iteration(self, i: int):
-        ''' Basically returns one iteration of the self.__iter__() generator, the <i>th that would normally be generated. '''
+        """ Basically returns one iteration of the self.__iter__() generator, the <i>th that would normally be generated. """
         index = np.unravel_index(i, self.n_per_group)
         vars = {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group} # TODO: double code, how to unify?
         params = vars | self.constants
@@ -145,26 +145,26 @@ class Sweep(ABC):
 
     @abstractmethod
     def create_experiment(self, params: dict) -> Experiment:
-        ''' Subclasses should create an Experiment here according to <params> and return it. '''
+        """ Subclasses should create an Experiment here according to <params> and return it. """
         pass
 
     def as_metadata_dict(self):
         return {
-            "type": full_obj_name(self),
-            "info": self.info,
-            "variables": self.variables,
-            "parameters": self.parameters,
-            "groups": self.groups
+            'type': full_obj_name(self),
+            'info': self.info,
+            'variables': self.variables,
+            'parameters': self.parameters,
+            'groups': self.groups
         }
 
     def load_results(self, dir: str, save=True, verbose=True, return_savepath=False):
-        ''' Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,
+        """ Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,
             calculates the relevant results with Experiment().calculate_all() and saves these all to a single file.
             @param dir [str]: the path to the directory where all the sweep data was stored.
             @param sweep [Sweep]: the sweep that generated all the data in <dir>.
             @param save [bool|str] (True): if truthy, the results are saved to a file.
                 If specified as a string, the base name of this saved file is this string.
-        '''
+        """
         dir = os.path.normpath(dir)
         savedir = os.path.dirname(dir)
         savename = os.path.basename(dir)
@@ -175,7 +175,7 @@ class Sweep(ABC):
         vars: dict
         experiment: Experiment
         for i, (vars, experiment) in enumerate(self):
-            if verbose and is_significant(i, len(self)): print(f'Calculating results of experiment {i+1} of {len(self)}...')
+            if verbose and is_significant(i, len(self)): print(f"Calculating results of experiment {i+1} of {len(self)}...")
             # 1) Select the part with <vars> in <data>
             df_i = data.df.copy()
             for varname, value in vars.items():
@@ -193,7 +193,7 @@ class Sweep(ABC):
         return save if (return_savepath and save) else data
     
     def plot(self, summary_files, param_x=None, param_y=None, unit_x=None, unit_y=None, transform_x=None, transform_y=None, name_x=None, name_y=None, title=None, save=True, plot=True, metrics_dict=None):
-        ''' Generic function to plot the results of a sweep in a general way.
+        """ Generic function to plot the results of a sweep in a general way.
             @param summary_file [list(str)]: list of path()s to file(s) as generated by Sweep.load_results().
                 If more than one such file is passed on, multiple sweeps' metrics are averaged. This is for example
                 useful when there is a random energy barrier that needs to be sampled many times for a correct distribution.
@@ -204,7 +204,7 @@ class Sweep(ABC):
             # TODO: do something about transform_x and transform_y, they feel out-of-place right now
             # TODO: revisit save=True, plot=True, title=None...
             # TODO: is there a way to somehow detect the units of the axes without explicitly passing them to name_x and name_y?
-        '''
+        """
         if isinstance(summary_files, str):
             if os.path.isfile(summary_files):
                 summary_files = [summary_files] # We use an iterable of strings, just in case they need to be averaged.
@@ -307,10 +307,10 @@ class Sweep(ABC):
 
 class KernelQualityExperiment(Experiment):
     def __init__(self, inputter, outputreader, mm):
-        ''' Follows the paper
+        """ Follows the paper
                 Johannes H. Jensen and Gunnar Tufte. Reservoir Computing in Artificial Spin Ice. ALIFE 2020.
             to implement a similar simulation to determine the kernel-quality K and generalization-capability G.
-        '''
+        """
         super().__init__(inputter, outputreader, mm)
         if not self.inputter.datastream.is_binary: # This is necessary for the (admittedly very bad) way that the inputs are recorded into a dataframe now
             raise AttributeError("KernelQualityExperiment should be performed with a binary datastream only.")
@@ -318,9 +318,9 @@ class KernelQualityExperiment(Experiment):
         self.results = {'K': None, 'G': None, 'k': None, 'g': None} # Kernel-quality and Generalization-capability, and their normalized counterparts
 
     def run(self, input_length: int = 100, constant_fraction: float = 0.6, pattern=None, verbose=False):
-        ''' @param input_length [int]: the number of times inputter.input_single() is called,
+        """ @param input_length [int]: the number of times inputter.input_single() is called,
                 before every recording of the output state.
-        '''
+        """
         if verbose: log("Calculating kernel-quality K.")
         self.run_K(input_length=input_length, verbose=verbose, pattern=pattern)
         if verbose: log("Calculating generalization-capability G.")
@@ -334,7 +334,7 @@ class KernelQualityExperiment(Experiment):
             self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
             for j in range(input_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
-                    log(f'Row {i+1}/{self.n_out}, value {j+1}/{input_length}...')
+                    log(f"Row {i+1}/{self.n_out}, value {j+1}/{input_length}...")
                 val = self.inputter.input_single(self.mm)
                 self.all_inputs_K[i] += str(int(val))
 
@@ -342,9 +342,9 @@ class KernelQualityExperiment(Experiment):
             self.all_states_K[i,:] = state.reshape(-1)
 
     def run_G(self, input_length: int = 100, constant_fraction=0.6, pattern=None, verbose=False):
-        ''' @param constant_fraction [float] (0.6): the last <constant_fraction>*<input_length> bits will
+        """ @param constant_fraction [float] (0.6): the last <constant_fraction>*<input_length> bits will
                 be equal for all <self.n_out> bit sequences.
-        '''
+        """
         self.all_states_G = xp.zeros((self.n_out,)*2)
         self.all_inputs_G = ["" for _ in range(self.n_out)]
         constant_length = int(input_length*constant_fraction)
@@ -355,12 +355,12 @@ class KernelQualityExperiment(Experiment):
             self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
             for j in range(random_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
-                    log(f'Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...')
+                    log(f"Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...")
                 val = self.inputter.input_single(self.mm)
                 self.all_inputs_G[i] += str(int(val))
             for j, value in enumerate(constant_sequence):
                 if verbose and is_significant(i*input_length + j + random_length, input_length*self.n_out, order=1):
-                    log(f'Row {i+1}/{self.n_out}, constant value {j+1}/{constant_length}...')
+                    log(f"Row {i+1}/{self.n_out}, constant value {j+1}/{constant_length}...")
                 constant = self.inputter.input_single(self.mm, value=float(value))
                 self.all_inputs_G[i] += str(int(constant))
 
@@ -368,7 +368,7 @@ class KernelQualityExperiment(Experiment):
             self.all_states_G[i,:] = state.reshape(-1)
 
     def calculate_all(self, ignore_errors=True, **kwargs):
-        ''' Recalculates K, G, k and g if possible. '''
+        """ Recalculates K, G, k and g if possible. """
         try:
             self.results['K'] = int(xp.linalg.matrix_rank(self.all_states_K))
             self.results['k'] = self.results['K']/self.n_out if self.n_out != 0 else 0
@@ -383,61 +383,61 @@ class KernelQualityExperiment(Experiment):
 
 
     def to_dataframe(self):
-        ''' DF has columns "metric" and "y0", "y1", ... "y<self.n_out - 1>".
-            When "metric" == 'K', the row corresponds to a state from self.run_K(), and vice versa for 'G'.
-        '''
+        """ DF has columns 'metric' and 'y0', 'y1', ... 'y<self.n_out - 1>'.
+            When 'metric' == "K", the row corresponds to a state from self.run_K(), and vice versa for 'G'.
+        """
         u = self.all_inputs_K + self.all_inputs_G # Both are lists so we can concatenate them like this
         yK = asnumpy(self.all_states_K) # Need as NumPy array for pd
         yG = asnumpy(self.all_states_G) # Need as NumPy array for pd
-        metric = np.array(['K']*yK.shape[0] + ['G']*yG.shape[0])
+        metric = np.array(["K"]*yK.shape[0] + ["G"]*yG.shape[0])
         if yK.shape[1] != yG.shape[1]: raise ValueError(f'K and G were not simulated with an equal amount of readout nodes.')
 
-        df_front = pd.DataFrame({"metric": metric, "inputs": u})
-        df_yK = pd.DataFrame({f"y{i}": yK[:,i] for i in range(yK.shape[1])})
-        df_yG = pd.DataFrame({f"y{i}": yG[:,i] for i in range(yG.shape[1])})
+        df_front = pd.DataFrame({'metric': metric, 'inputs': u})
+        df_yK = pd.DataFrame({f'y{i}': yK[:,i] for i in range(yK.shape[1])})
+        df_yG = pd.DataFrame({f'y{i}': yG[:,i] for i in range(yG.shape[1])})
         df = pd.concat([df_yK, df_yG], axis=0, ignore_index=True) # Put K and G readouts below each other
         df = pd.concat([df_front, df], axis=1, ignore_index=False) # Add the 'metric' column in front
         return df
 
     def load_dataframe(self, df: pd.DataFrame):
-        ''' Loads the arrays <all_states_K> and <all_states_G> stored in the dataframe <df>
+        """ Loads the arrays <all_states_K> and <all_states_G> stored in the dataframe <df>
             into the <self.all_states_K> and <self.all_states_G> attributes, and returns both.
-        '''
-        df_K = df[df["metric"] == 'K']
-        df_G = df[df["metric"] == 'G']
+        """
+        df_K = df[df['metric'] == "K"]
+        df_G = df[df['metric'] == "G"]
 
         if df_K.empty or df_G.empty:
-            raise ValueError('Dataframe is empty, so could not be loaded to KernelQualityExperiment.')
+            raise ValueError("Dataframe is empty, so could not be loaded to KernelQualityExperiment.")
 
         # Select the y{i} columns
-        pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
+        pattern = re.compile(r'\Ay[0-9]+\Z') # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
         y_cols = [colname for colname in df if pattern.match(colname)]
         y_cols.sort(key=human_sort) # Usually of the format 'y0', 'y1', 'y2', ..., 'y10', where human_sort makes sure e.g. 10 comes after 2
         n_cols = len(y_cols)
 
         self.all_states_K = xp.asarray(df_K[y_cols]) if n_cols != 0 else xp.array([[1]]*len(df_K)) # n_cols can be 0 if all constant
         self.all_states_G = xp.asarray(df_G[y_cols]) if n_cols != 0 else xp.array([[1]]*len(df_G))
-        self.all_inputs_K = list(df_K["inputs"])
-        self.all_inputs_G = list(df_G["inputs"])
+        self.all_inputs_K = list(df_K['inputs'])
+        self.all_inputs_G = list(df_G['inputs'])
 
         return self.all_states_K, self.all_states_G
     
     @staticmethod
     def get_plot_metrics():
         return {
-            "K": lambda df: df["K"],
-            "G": lambda df: df["G"],
-            "Q": lambda df: np.maximum(0, df["K"] - df["G"])
+            'K': lambda df: df['K'],
+            'G': lambda df: df['G'],
+            'Q': lambda df: np.maximum(0, df['K'] - df['G'])
         }
 
 
 class TaskAgnosticExperiment(Experiment):
     def __init__(self, inputter, outputreader, mm):
-        ''' Follows the paper
+        """ Follows the paper
                 J. Love, J. Mulkers, G. Bourianoff, J. Leliaert, and K. Everschor-Sitte. Task agnostic
                 metrics for reservoir computing. arXiv preprint arXiv:2108.01512, 2021.
             to implement task-agnostic metrics for reservoir computing using a single random input signal.
-        '''
+        """
         super().__init__(inputter, outputreader, mm)
         if self.inputter.datastream.is_binary:
             warnings.warn("A TaskAgnosticExperiment might not work properly for a binary datastream.", stacklevel=2)
@@ -447,10 +447,10 @@ class TaskAgnosticExperiment(Experiment):
 
     @classmethod
     def dummy(cls, mm: Magnets = None):
-        ''' Creates a minimalistic working TaskAgnosticExperiment instance.
+        """ Creates a minimalistic working TaskAgnosticExperiment instance.
             @param mm [hotspice.Magnets] (None): if specified, this is used as Magnets()
                 object. Otherwise, a minimalistic hotspice.ASI.OOP_Square() instance is used.
-        '''
+        """
         if mm is None: mm = OOP_Square(1, 10, energies=(DipolarEnergy(), ZeemanEnergy()))
         datastream = RandomUniformDatastream(low=-1, high=1)
         inputter = FieldInputter(datastream)
@@ -458,20 +458,20 @@ class TaskAgnosticExperiment(Experiment):
         return cls(inputter, outputreader, mm)
 
     def run(self, N=1000, add=False, pattern=None, verbose=False):
-        ''' @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
+        """ @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
             @param add [bool]: If True, the newly calculated iterations are appended to the
                 current <self.u> and <self.y> arrays, and <self.final_state> is updated.
             @param verbose [int]: If 0, nothing is printed or plotted.
                 If 1, significant iterations are printed to console.
                 If 2, the magnetization profile is plotted after every input bit in addition to printing.
-        '''
+        """
         self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
         if verbose:
             if verbose > 1:
                 init_fonts()
                 init_interactive()
                 fig = None
-            log(f'[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...')
+            log(f"[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...")
 
         if not add: 
             self.mm.relax()
@@ -485,7 +485,7 @@ class TaskAgnosticExperiment(Experiment):
             if verbose:
                 if verbose > 1: fig = show_m(self.mm, figure=fig)
                 if is_significant(i, N):
-                    log(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
+                    log(f"[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).")
         self.mm.relax()
         self.final_state = self.outputreader.read_state().reshape(-1)
 
@@ -496,22 +496,22 @@ class TaskAgnosticExperiment(Experiment):
         # Still need to call self.calculate_all() manually after this method.
 
     def calculate_all(self, ignore_errors=False, **kwargs):
-        ''' Recalculates NL, MC, CP and S. Arguments passed to calculate_all()
+        """ Recalculates NL, MC, CP and S. Arguments passed to calculate_all()
             are directly passed through to the appropriate self.<metric> functions.
             @param ignore_errors [bool] (False): if True, exceptions raised by the
                 self.<metric> functions are ignored (use with caution).
-        '''
-        for metric, method in {"NL": self.NL, "MC": self.MC, "CP": self.CP, "S": self.S}.items():
+        """
+        for metric, method in {'NL': self.NL, 'MC': self.MC, 'CP': self.CP, 'S': self.S}.items():
             try:
                 self.results[metric] = method(**filter_kwargs(kwargs, method))
             except Exception:
                 if not ignore_errors: raise
 
     def NL(self, k: int = 10, local: bool = False, test_fraction: float = 1/4, verbose: bool = False): # Non-linearity
-        ''' Returns a float (local=False) or an array (local=True) representing the nonlinearity,
+        """ Returns a float (local=False) or an array (local=True) representing the nonlinearity,
             either globally or locally depending on <local>. For this, an estimator for the current readout state is
             trained which for any time instant has access to the <k> most recent inputs (including the present one).
-        '''
+        """
         if verbose: log(f"Calculating NL (local={local})...")
         
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
@@ -540,10 +540,10 @@ class TaskAgnosticExperiment(Experiment):
             return float(1 - xp.mean(Rsq))
     
     def MC(self, k=10, local=False, test_fraction=1/4, verbose=False): # Memory capacity
-        ''' Returns a float (local=False) or an array (local=True) representing the memory capacity,
+        """ Returns a float (local=False) or an array (local=True) representing the memory capacity,
             either globally or locally depending on <local>. For this, an estimator is trained which
             for any time instant attempts to predict the previous <k> inputs based on the current readout state.
-        '''
+        """
         if verbose: log(f"Calculating MC (local={local})...")
 
         train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
@@ -572,13 +572,13 @@ class TaskAgnosticExperiment(Experiment):
             return float(xp.sum(Rsq))
 
     def CP(self, transposed=False): # Complexity
-        ''' Calculates the complexity: i.e. the effective rank of the kernel matrix as used in KernelQualityExperiment.
+        """ Calculates the complexity: i.e. the effective rank of the kernel matrix as used in KernelQualityExperiment.
             The default method used here is to simply average the complexity of recent observations over time.
             @param transposed [bool] (False): If True, CP is the rank of <self.y> multiplied with <self.y.T>.
                 If False, it is the average of all consecutive square matrices in <self.y> along the time axis.
                 Usually, transposed=True gives (slightly) higher values than for transposed=False.
                 NOTE: never compare results from transposed=True with those for transposed=False.
-        '''
+        """
         if self.y.shape[0] < self.y.shape[1]: # Less rows than columns, so rank can at most be the number of rows
             warnings.warn(f"Not enough recorded iterations to reliably calculate complexity ({self.y.shape[0]} samples < {self.y.shape[1]} features)" , stacklevel=2)
         
@@ -592,11 +592,11 @@ class TaskAgnosticExperiment(Experiment):
         return float(rank)/self.y.shape[1]
     
     def S(self, relax=False): # Stability
-        ''' Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
+        """ Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
             NOTE: It can be advantageous to define a different metric for stability if the entire magnetization profile
                   is known, since this function only has access to the readout nodes, not the whole self.m array.
             @param relax [bool] (False): if True, the final state is determined by relaxing the current state of <self.mm>.
-        '''
+        """
         if relax:
             self.mm.relax()
             final_readout = self.outputreader.read_state().reshape(-1)
@@ -614,13 +614,13 @@ class TaskAgnosticExperiment(Experiment):
 
 
     def to_dataframe(self, u: xp.ndarray = None, y: xp.ndarray = None):
-        ''' If <u> and <y> are not explicitly provided, the saved <self.u> and <self.y>
+        """ If <u> and <y> are not explicitly provided, the saved <self.u> and <self.y>
             arrays are used. When providing <u> and <y> directly,
                 <u> should be a 1D array of length N, and
                 <y> a <NxL> array, where L is the number of output nodes.
-            The resulting dataframe has columns "u", "y0", "y1", ... "y<L-1>".
-        '''
-        if (u is None) != (y is None): raise ValueError('Either none or both of <u> and <y> arguments must be provided.')
+            The resulting dataframe has columns 'u', 'y0', 'y1', ... 'y<L-1>'.
+        """
+        if (u is None) != (y is None): raise ValueError("Either none or both of <u> and <y> arguments must be provided.")
         if u is None:
             u = xp.concatenate((xp.asarray([xp.nan]), self.u, xp.asarray([xp.nan]))) # self.u with NaN input as 0th index
         if y is None:
@@ -628,20 +628,20 @@ class TaskAgnosticExperiment(Experiment):
         
         u = asnumpy(u) # Need as NumPy array for pd
         y = asnumpy(y) # Need as NumPy array for pd
-        if u.shape[0] != y.shape[0]: raise ValueError(f'Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.')
+        if u.shape[0] != y.shape[0]: raise ValueError(f"Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.")
 
-        df_u = pd.DataFrame({"u": u})
-        df_y = pd.DataFrame({f"y{i}": y[:,i] for i in range(y.shape[1])})
+        df_u = pd.DataFrame({'u': u})
+        df_y = pd.DataFrame({f'y{i}': y[:,i] for i in range(y.shape[1])})
         df = pd.concat([df_u, df_y], axis=1)
         return df
 
     def load_dataframe(self, df: pd.DataFrame, u: xp.ndarray = None, y: xp.ndarray = None):
-        ''' Loads the arrays <u> and <y> stored in the dataframe <df>
+        """ Loads the arrays <u> and <y> stored in the dataframe <df>
             into the <self.u> and <self.y> attributes, and returns both.
-        '''
-        if u is None: u = xp.asarray(df["u"])
+        """
+        if u is None: u = xp.asarray(df['u'])
         if y is None:
-            pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
+            pattern = re.compile(r'\Ay[0-9]+\Z') # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
             y_cols = [colname for colname in df if pattern.match(colname)]
             y_cols.sort(key=human_sort)
             y = xp.asarray(df[y_cols])
@@ -662,8 +662,8 @@ class TaskAgnosticExperiment(Experiment):
     @staticmethod
     def get_plot_metrics():
         return {
-            "NL": lambda df: df["NL"],
-            "MC": lambda df: df["MC"],
-            "CP": lambda df: df["CP"],
-            "S":  lambda df: df["S"]
+            'NL': lambda df: df['NL'],
+            'MC': lambda df: df['MC'],
+            'CP': lambda df: df['CP'],
+            'S':  lambda df: df['S']
         }

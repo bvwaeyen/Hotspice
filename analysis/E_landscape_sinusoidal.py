@@ -37,8 +37,8 @@ def plot(E_B, ext_field, angle, verbose=True):
 def show():
     plt.xlim([0, np.pi*2])
     plt.ylim(0, plt.ylim()[1])
-    # plt.xticks([i*np.pi/2 for i in range(5)], ['0', 'π/2', 'π', '3π/2', '2π'])
-    plt.xticks([i*np.pi/2 for i in range(5)], ['0°', '90°', '180°', '270°', '360°'])
+    # plt.xticks([i*np.pi/2 for i in range(5)], ["0", "π/2", "π", "3π/2", "2π"])
+    plt.xticks([i*np.pi/2 for i in range(5)], ["0°", "90°", "180°", "270°", "360°"])
     for x in [i*np.pi/2 for i in range(5)]: plt.axvline(x, color='#CCC', linestyle=':')
     plt.xlabel("Magnetization angle [°]")
     plt.ylabel("Energy [a.u.]")

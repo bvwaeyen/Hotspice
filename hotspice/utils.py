@@ -34,11 +34,11 @@ else:
 
 ## ARRAY MANIPULATIONS/OPERATIONS
 def check_repetition(arr, nx: int, ny: int):
-    ''' Checks if <arr> is periodic with period <nx> along axis=1 and period <ny> along axis=0.
+    """ Checks if <arr> is periodic with period <nx> along axis=1 and period <ny> along axis=0.
         If there are any further axes (axis=2, axis=3 etc.), the array is simply seen as a
         collection of 2D arrays (along axes 0 and 1), and the total result is only True if all
         of these are periodic with period <nx> and <ny>
-    '''
+    """
     extra_dims = [1] * (len(arr.shape) - 2)
     max_y, max_x = arr.shape[:2]
     i, current_checking = 0, arr[:ny, :nx, ...]
@@ -60,10 +60,10 @@ def check_repetition(arr, nx: int, ny: int):
     return True
 
 def mirror4(arr, /, *, negativex=False, negativey=False):
-    ''' Mirrors the 2D array <arr> along some of the edges, in such a manner that the
+    """ Mirrors the 2D array <arr> along some of the edges, in such a manner that the
         original element at [0,0] ends up in the middle of the returned array.
         Hence, if <arr> has shape (a, b), the returned array has shape (2*a - 1, 2*b - 1).
-    '''
+    """
     ny, nx = arr.shape
     arr4 = xp.zeros((2*ny-1, 2*nx-1))
     x_sign = -1 if negativex else 1
@@ -75,15 +75,15 @@ def mirror4(arr, /, *, negativex=False, negativey=False):
     return arr4
 
 def R_squared(a, b):
-    ''' Returns the R² metric between two 1D arrays <a> and <b> as defined in
+    """ Returns the R² metric between two 1D arrays <a> and <b> as defined in
         "Task Agnostic Metrics for Reservoir Computing" by Love et al.
-    '''
+    """
     a, b = xp.asarray(a), xp.asarray(b)
     cov = xp.mean((a - xp.mean(a))*(b - xp.mean(b)))
     return cov**2/xp.var(a)/xp.var(b) # Same as xp.corrcoef(a, b)[0,1]**2, but faster
 
 def strided(a: xp.ndarray, W: int):
-    ''' <a> is a 1D array, which gets expanded into 2D shape (a.size, W) where every row
+    """ <a> is a 1D array, which gets expanded into 2D shape (a.size, W) where every row
         is a successively shifted version of the original <a>:
         the first row is [a[0], NaN, NaN, ...] with total length <W>.
         The second row is [a[1], a[0], NaN, ...], and this continues until <a> is exhausted.
@@ -91,7 +91,7 @@ def strided(a: xp.ndarray, W: int):
         NOTE: the returned array is only a view, hence it is quite fast but care has to be
                 taken when editing the array; e.g. editing one element directly changes the
                 corresponding value in <a>, resulting in a whole diagonal being changed at once.
-    '''
+    """
     a_ext = xp.concatenate((xp.full(W - 1, xp.nan), a))
     n = a_ext.strides[0]
     return striding.as_strided(a_ext[W - 1:], shape=(a.size, W), strides=(n, -n))
@@ -99,15 +99,15 @@ def strided(a: xp.ndarray, W: int):
 
 ## EASE-OF-USE UTILITIES (e.g. for printing)
 def human_sort(text):
-    ''' To sort a <list> of strings in human order, use <list>.sort(key=hotspice.utils.human_sort).
+    """ To sort a <list> of strings in human order, use <list>.sort(key=hotspice.utils.human_sort).
         Human order means that if there are numbers in the strings, they are treated as numbers,
         such that e.g. 10 will come after 2, which is not the case with a naive sort.
-    '''
+    """
     def atoi(text): return int(text) if text.isdigit() else text
     return [atoi(c) for c in re.split(r'(\d+)', text)]
 
 def is_significant(i: int, N: int, order: float=1) -> bool:
-    ''' Returns True if <i> iterations is an 'important' milestone if there are <N> in total.
+    """ Returns True if <i> iterations is an 'important' milestone if there are <N> in total.
         Useful for verbose print statements in long simulations.
         @param i [int]: the index of the current iteration (starting at 0)
         @param N [int]: the total number of iterations
@@ -117,7 +117,7 @@ def is_significant(i: int, N: int, order: float=1) -> bool:
                 If N=1000 and order=0, True will be returned if i = 0 or 999,
                 while for order=1 any of i = 0, 99, 199, 299, ..., 999 yield True.
                 A float example: for order=0.6 only i = 0, 251, 502, 753, 999 yield True.
-    '''
+    """
     if (i + 1) % 10**(math.floor(math.log10(N))-order) < 1:
         return True
     if i == 0 or i == N - 1:
@@ -125,7 +125,7 @@ def is_significant(i: int, N: int, order: float=1) -> bool:
     return False
 
 def readable_bytes(N: int):
-    if not isinstance(N, int): raise ValueError('Number of bytes must be an integer.')
+    if not isinstance(N, int): raise ValueError("Number of bytes must be an integer.")
     if N < 1024: return f"{N:.0f} B"
     i = int(math.floor(math.log(N, 1024)))
     number = N/(1024**i)
@@ -138,20 +138,20 @@ def unit_prefix_to_mul(unit):
     return d[unit]
 
 def shell():
-    ''' Pauses the program and opens an interactive shell where the user
+    """ Pauses the program and opens an interactive shell where the user
         can enter statements or expressions to inspect the scope in which
         shell() was called. Write "exit()" to terminate this shell.
         Using Ctrl+C will stop the entire program, not just this function
         (this is due to a bug in the scipy library).
-    '''
+    """
     try:
         caller = inspect.getframeinfo(inspect.stack()[1][0])
 
-        print('-'*80)
-        print(f'Opening an interactive shell in the current scope')
-        print(f'(i.e. {caller.filename}:{caller.lineno}-{caller.function}).')
-        print(f'Call "exit" to stop this interactive shell.')
-        print(f'Warning: Ctrl+C will stop the program entirely, not just this shell, so take care which commands you run.')
+        print("-"*80)
+        print(f"Opening an interactive shell in the current scope")
+        print(f"(i.e. {caller.filename}:{caller.lineno}-{caller.function}).")
+        print(f"Call 'exit' to stop this interactive shell.")
+        print(f"Warning: Ctrl+C will stop the program entirely, not just this shell, so take care which commands you run.")
     except Exception:
         pass # Just to make sure we don't break when logging
     try:
@@ -163,11 +163,11 @@ def shell():
 ## CONVERSION
 Field = TypeVar("Field", int, float, list, np.ndarray, xp.ndarray) # Every type that can be parsed by as_2D_array()
 def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
-    ''' Converts <value> to a 2D array of shape <shape>. If <value> is scalar, the returned
+    """ Converts <value> to a 2D array of shape <shape>. If <value> is scalar, the returned
         array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
         as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.
         Either a CuPy or NumPy array is returned, depending on config.USE_GPU.
-    '''
+    """
     is_scalar = True # Determine if <value> is scalar-like...
     if isinstance(value, list):
         try:
@@ -185,7 +185,7 @@ def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
         return xp.asarray(value).reshape(shape)
 
 def asnumpy(array: xp.ndarray) -> np.ndarray:
-    ''' Converts the CuPy/NumPy <array> to a NumPy array, which is necessary for e.g. matplotlib. '''
+    """ Converts the CuPy/NumPy <array> to a NumPy array, which is necessary for e.g. matplotlib. """
     if not config.USE_GPU: # Not very clean if-else statement but oh well
         return np.asarray(array) # Then CuPy doesn't exist, so no other options than to try np.asarray
     elif isinstance(array, cp.ndarray):
@@ -207,31 +207,31 @@ def full_obj_name(obj):
     klass = type(obj)
     if hasattr(klass, "__module__"):
         if klass.__module__ != "__main__":
-            return f'{klass.__module__}.{klass.__qualname__}'
+            return f"{klass.__module__}.{klass.__qualname__}"
     return klass.__qualname__
 
 def free_gpu_memory():
-    ''' Garbage-collects unused memory on the currently active CUDA device. '''
+    """ Garbage-collects unused memory on the currently active CUDA device. """
     cp.get_default_memory_pool().free_all_blocks()
 
 def get_gpu_memory():
-    ''' @return [dict]: keys "free" and "total" memory (in bytes) of the currently active CUDA device. '''
+    """ @return [dict]: keys 'free' and 'total' memory (in bytes) of the currently active CUDA device. """
     free, total = cp.cuda.Device().mem_info # mem_info is a tuple: (free, total) memory in bytes
-    return {"free": readable_bytes(free), "total": readable_bytes(total)}
+    return {'free': readable_bytes(free), 'total': readable_bytes(total)}
 
 def timestamp():
-    ''' @return [str]: the current time, in YYYYMMDDhhmmss format. '''
+    """ @return [str]: the current time, in YYYYMMDDhhmmss format. """
     return datetime.utcnow().strftime(r"%Y%m%d%H%M%S")
 
 
 ## MULTI-GPU UTILITIES
 def run_script(script_name, args=None):
-    ''' Runs the script <script_name> located in the hotspice/scripts directory.
+    """ Runs the script <script_name> located in the hotspice/scripts directory.
         Any arguments for the script can be passed as a list to <args>.
-    '''
+    """
     script_name = script_name.strip()
     if not os.path.splitext(script_name)[1]: script_name += '.py'
-    path = pathlib.Path(__file__).parent / 'scripts' / script_name
+    path = pathlib.Path(__file__).parent / "scripts" / script_name
     if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
     command = ["python", str(path)] + list(args)
     try:
@@ -243,19 +243,19 @@ def run_script(script_name, args=None):
             {colorama.Fore.LIGHTYELLOW_EX}{' '.join(command)}{colorama.Style.RESET_ALL}
         """), stacklevel=2)
 
-def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_script_name='ParallelJobs'):
-    ''' Convenient wrapper around run_script() for the ParallelJobs.py script in particular. '''
+def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_script_name="ParallelJobs"):
+    """ Convenient wrapper around run_script() for the ParallelJobs.py script in particular. """
     args = [sweepscript_path]
     if outdir is not None:
         args = ['-o', outdir] + args
     run_script(_ParallelJobs_script_name, args=args)
 
 def log(message, device_id=None, style=None, show_device=True):
-    ''' Can print <message> to console from subprocesses running on a specific GPU or thread.
+    """ Can print <message> to console from subprocesses running on a specific GPU or thread.
         The <device_id> (currently used GPU/CPU core) is printed in front of the message, if <show_device> is True.
         <style> specifies the color of the message (default None=white), and can be any of:
             'issue' (red), 'success' (green), 'header' (blue).
-    '''
+    """
     if device_id is None:
         device_id = 0 if config.USE_GPU else config.DEVICE_ID
     if show_device:
@@ -283,9 +283,9 @@ def log(message, device_id=None, style=None, show_device=True):
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
-class Data:
+class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
-        ''' Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
+        """ Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
             Constant columns in <df> are automatically moved to <constants>, and keys present
             in <constants> that are also columns in <df> are removed from <constants>.
             @param df [pandas.DataFrame]: the dataframe to be stored.
@@ -296,7 +296,7 @@ class Data:
                 simulation, e.g. description, author, time... Some fields are automatically
                 generated if they are not present in the dictionary passed to <metadata>.
                 For more details, see the <self.metadata> docstring.
-        '''
+        """
         self.df = df
         self.metadata = metadata
         self.constants = constants
@@ -305,12 +305,12 @@ class Data:
     def df(self): return self._df
     @df.setter
     def df(self, value: pd.DataFrame):
-        ''' The Pandas DataFrame containing the bulk of the data. '''
+        """ The Pandas DataFrame containing the bulk of the data. """
         if not isinstance(value, pd.DataFrame):
             try: # Then assume <value> is a JSON-parseable object
                 value = pd.read_json(json.dumps(value), orient='split') 
             except Exception: # So no DataFrame, and not JSON-parseable? Just stop this madness.
-                raise ValueError('Could not parse DataFrame-like object correctly.')
+                raise ValueError("Could not parse DataFrame-like object correctly.")
         self._df = value
         self._check_consistency()
         assert isinstance(self._df, pd.DataFrame)
@@ -319,7 +319,7 @@ class Data:
     def metadata(self): return self._metadata
     @metadata.setter
     def metadata(self, value: dict):
-        ''' All keys in <value> are stored without modification, and the following keys are
+        """ All keys in <value> are stored without modification, and the following keys are
             automatically added if they are not provided in <value>:
             - 'author': name of the author (default: login name of user on the computer)
             - 'creator': main file responsible for creating the data (default: path of the __main__ module in the session)
@@ -328,16 +328,16 @@ class Data:
             - 'GPU': a list of dicts representing the NVIDIA GPUs used for the simulation. Each dict contains
                 keys 'name', 'compute_cap', 'driver_version', 'memory.total [MiB]', 'timestamp', 'uuid'.
             - 'simulator': "Hotspice", just for clarity. Can include version number when applicable.
-        '''
+        """
         if value is None: value = {}
-        if not isinstance(value, dict): raise ValueError('Metadata must be provided as a dictionary.')
+        if not isinstance(value, dict): raise ValueError("Metadata must be provided as a dictionary.")
 
         value.setdefault('datetime', timestamp())
         value.setdefault('author', getpass.getuser())
         try:
             creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
             if 'hotspice' in creator_info:
-                creator_info = '...\\' + creator_info[len(creator_info.split('hotspice')[0]):]
+                creator_info = "...\\" + creator_info[len(creator_info.split('hotspice')[0]):]
         except Exception:
             creator_info = ''
         value.setdefault('creator', creator_info)
@@ -360,7 +360,7 @@ class Data:
     def constants(self): return self._constants
     @constants.setter
     def constants(self, value: dict):
-        ''' Names and values of parameters which are constant throughout all entries in <self.df>. '''
+        """ Names and values of parameters which are constant throughout all entries in <self.df>. """
         if value is None: value = {}
         if not isinstance(value, dict): raise ValueError("Constants must be provided as a dictionary.")
         self._constants = value
@@ -368,10 +368,10 @@ class Data:
         assert isinstance(self._constants, dict)
 
     def _check_consistency(self):
-        ''' Moves constant columns in <self.df> to <self.constants>, and removes keys
+        """ Moves constant columns in <self.df> to <self.constants>, and removes keys
             from <self.constants> that are also columns in <self.df>, to prevent ambiguous duplicates.
             Checks if all keys in <self.constants> and <self.metadata> are strings;
-        '''
+        """
         if hasattr(self, 'constants') and hasattr(self, 'df'):
             # Move all constant columns in self.df to self.constants
             is_column_constant = ~(self.df != self.df.iloc[0]).any()
@@ -392,11 +392,12 @@ class Data:
                 if not isinstance(key, str): raise KeyError("Data.metadata keys must be of type string.")
 
     def save(self, dir: str = None, name: str = None, *, timestamp=True): # TODO: DO THE CONVERSION OF COLUMNS TO CONSTANTS ETC. HERE AND ONLY HERE. EXPAND THEM UPON OPENING SUCH FILES. THIS MEMORY-EFFICIENCY-IMPROVEMENT IS CAUSING TOO MUCH TROUBLE EVERYWHERE IF WE DO IT ON-THE-FLY IN THE PROPERTIES
-        ''' Saves the currently stored data (<self.df>, <self.constants> and <self.metadata>)
+        # TODO: do we even need this conversion at all? It has only caused more headaches than it has saved memory/storage
+        """ Saves the currently stored data (<self.df>, <self.constants> and <self.metadata>)
             to a JSON file, with path "<dir>/<name>_<yyyymmddHHMMSS>.json". The automatically
             added timestamp in the filename can be disabled by passing <timestamp=False>.
-            The JSON file contains three top-level objects: "metadata", "constants" and "data",
-            where "data" stores a JSON 'table' representation of the Pandas DataFrame <self.df>.
+            The JSON file contains three top-level objects: 'metadata', 'constants' and 'data',
+            where 'data' stores a JSON 'table' representation of the Pandas DataFrame <self.df>.
 
             @param dir [str] ('hotspice_results'): the directory to create the .json file in.
             @param name [str] ('hotspice_simulation'): this text is used as the start of the filename.
@@ -404,9 +405,9 @@ class Data:
             @param timestamp [bool|str] (True): if true, a timestamp is added to the filename. A string
                 can be passed to override the auto-generated timestamp. If False, no timestamp is added.
             @return (str): the absolute path of the saved JSON file.
-        '''
-        if dir is None: dir = 'hotspice_results'
-        if name is None: name = 'hotspice_simulation'
+        """
+        if dir is None: dir = "hotspice_results"
+        if name is None: name = "hotspice_simulation"
 
         total_dict = {
             'metadata': self.metadata,
@@ -457,19 +458,19 @@ class Data:
 
     @staticmethod
     def load_collection(collection: str|Iterable):
-        ''' Combines all the JSON data in <collection>, which can either be a:
+        """ Combines all the JSON data in <collection>, which can either be a:
             - string representing a directory path, containing many similar .json files
             - iterable containing many Data objects, each representing a bunch of similar data
             The idea is that these different chunks of data have a certain overlap, e.g. that
             most of their constants/columns are the same, with only a few varying between them.
             NOTE: arrays as constants are ignored in the comparison.
-        '''
+        """
         if isinstance(collection, str): # Then it is a path to a directory containing several .json files
             collection = [Data.load(os.path.join(collection, path)) for path in os.listdir(collection) if path.endswith('.json')]
         elif all(isinstance(i, Data) for i in collection): # Then it is an iterable containing many Data objects already
             collection = collection
         else:
-            raise ValueError('Could not recognize <collection> as a bunch of data.')
+            raise ValueError("Could not recognize <collection> as a bunch of data.")
 
         nonconstants, constants, metadata = set(), dict(), dict()
         # 1st sweep: to possibly find constants which are not constant throughout <collection>
@@ -500,7 +501,7 @@ class Data:
         return Data(big_df, constants=constants, metadata=metadata)
     
     def __str__(self):
-        c = '\n'.join([f'{k} = {v}' for k, v in self.constants.items()])
+        c = "\n".join([f"{k} = {v}" for k, v in self.constants.items()])
         return dedent(
             f"""
             {'='*32}
@@ -575,8 +576,8 @@ class _CompactJSONEncoder(json.JSONEncoder):
 
 if __name__ == "__main__":
     def test_save():
-        full_json = Data(pd.DataFrame({"H_range": np.arange(15), "m": np.arange(15)**2}))
-        fullpath = full_json.save(name='This is just a test. Do not panic.')
+        full_json = Data(pd.DataFrame({'H_range': np.arange(15), 'm': np.arange(15)**2}))
+        fullpath = full_json.save(name="This is just a test. Do not panic.")
         print(Data.load(fullpath))
     test_save()
 

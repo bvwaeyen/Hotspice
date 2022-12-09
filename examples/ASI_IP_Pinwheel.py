@@ -17,11 +17,11 @@ n = 400
 ## Initialize main Magnets object
 t = time.perf_counter()
 mm = hotspice.ASI.IP_Pinwheel(2e-6, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspice.DipolarEnergy()], PBC=True)
-print(f'Initialization time: {time.perf_counter() - t} seconds.')
+print(f"Initialization time: {time.perf_counter() - t} seconds.")
 
 
 def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T_max=160):
-    ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
+    """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Curie temperature. Caution has to be taken, however, since the graph shows
         the average magnetization, which above the Curie temperature is expected to approach 0, but this
         can also happen well below the Curie temperature if the spins settle in a vortex-like geometry,
@@ -32,7 +32,7 @@ def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T
         @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
-    '''
+    """
     mm.initialize_m('uniform')
     mm.history_clear()
 
@@ -40,14 +40,14 @@ def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
     h = ax1.imshow(hotspice.plottools.get_rgb(mm, fill=True), cmap='hsv', origin='lower', vmin=0, vmax=math.tau, interpolation_stage='rgba', interpolation='antialiased')
-    ax1.set_title(r'Averaged magnetization angle [rad]')
+    ax1.set_title("Averaged magnetization angle [rad]")
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
     p,  = ax2.plot(mm.history.T, mm.history.m)
     ax2.set_xlim(0, T_max)
     ax2.set_ylim(0, 0.4)
-    ax2.set_xlabel('Temperature')
-    ax2.set_ylabel('Average magnetization')
+    ax2.set_xlabel("Temperature")
+    ax2.set_ylabel("Average magnetization")
 
     # This is the function that gets called each frame
     def animate_temp_rise_update(i):
@@ -67,7 +67,7 @@ def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T
 
 
 if __name__ == "__main__":
-    print('Initialization energy:', mm.E_tot)
+    print("Initialization energy:", mm.E_tot)
 
     # ef.run_a_bit(mm, N=5000, T=60, verbose=True, fill=True)
     # ef.curieTemperature(mm)

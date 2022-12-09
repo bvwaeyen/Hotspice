@@ -1,7 +1,7 @@
-''' This file tests the correspondence between theory and simulation for a
+""" This file tests the correspondence between theory and simulation for a
     two-dimensional square Ising model, with only exchange interactions,
     by observing the average magnetization as a function of temperature.
-'''
+"""
 
 import math
 
@@ -27,11 +27,11 @@ class test_squareIsing:
         return 2*self.J/hotspice.kB/math.log(1+math.sqrt(2))
 
     def test_magnetization(self, T_steps=21, N=1000, verbose=False, plot=True, save=False, reverse=False) -> hotspice.utils.Data:
-        ''' Performs a sweep of the temperature in <T_steps> steps. At each step, <N> Magnets.update() calls are performed.
+        """ Performs a sweep of the temperature in <T_steps> steps. At each step, <N> Magnets.update() calls are performed.
             The final half of these <N> update calls are recorded, from which and their average/stdev of m_avg calculated.
             @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.
-        '''
-        simparams = hotspice.SimParams(UPDATE_SCHEME="Glauber")
+        """
+        simparams = hotspice.SimParams(UPDATE_SCHEME='Glauber')
         self.mm = hotspice.ASI.OOP_Square(self.a, self.size, energies=[hotspice.ExchangeEnergy(J=self.J)], PBC=True, pattern=('random' if reverse else 'uniform'), params=simparams)
 
         T_range = np.linspace(self.T_lim[0], self.T_lim[1], T_steps)
@@ -48,9 +48,9 @@ class test_squareIsing:
             m_avg[i] = np.mean(averages)
             m_std[i] = np.std(averages)
 
-        df = pd.DataFrame({"T": T_range, "m_avg": m_avg, "m_std": m_std})
-        metadata = {"description": r"Magnetization of 2D exchange-coupled Ising model near critical temperature."}
-        constants = {"nx": self.mm.nx, "ny": self.mm.ny, "N": N, "UPDATE_SCHEME": self.mm.params.UPDATE_SCHEME, "Tsweep_reverse": reverse}
+        df = pd.DataFrame({'T': T_range, 'm_avg': m_avg, 'm_std': m_std})
+        metadata = {'description': r"Magnetization of 2D exchange-coupled Ising model near critical temperature."}
+        constants = {'nx': self.mm.nx, 'ny': self.mm.ny, 'N': N, 'UPDATE_SCHEME': self.mm.params.UPDATE_SCHEME, 'Tsweep_reverse': reverse}
         data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
         if save:
             Tsweep_direction = 'reverse' if reverse else ''
@@ -61,19 +61,19 @@ class test_squareIsing:
         return data
     
     def test_N_influence(self, *args, plot=True, save=True, **kwargs):
-        ''' Tests the influence of <N> (the number of iterations per value of T) on m_avg.
+        """ Tests the influence of <N> (the number of iterations per value of T) on m_avg.
             Any arguments (not 'N') passed to this function are passed through to test_magnetization().
-        '''
+        """
         df = pd.DataFrame()
 
         N_range = [1000, 2000, 4000]
         for N in N_range:
             local_data = self.test_magnetization(*args, N=N, plot=False, save=False, **kwargs)
             local_df = local_data.df
-            local_df["N"] = N
+            local_df['N'] = N
             df = pd.concat([df, local_df])
 
-        metadata = {"description": r"Magnetization of 2D exchange-coupled Ising model near critical temperature, for different N (the number of update steps for each data point)."}
+        metadata = {'description': r"Magnetization of 2D exchange-coupled Ising model near critical temperature, for different N (the number of update steps for each data point)."}
         constants = local_data.constants
         data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
         if save:
@@ -84,47 +84,47 @@ class test_squareIsing:
 
     @staticmethod
     def test_magnetization_plot(df: pd.DataFrame, save=False, show=True):
-        ''' If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. '''
-        T_lim = [df["T"].min(), df["T"].max()]
+        """ If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. """
+        T_lim = [df['T'].min(), df['T'].max()]
 
         hotspice.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.errorbar(df["T"], df["m_avg"], yerr=df["m_std"], fmt='o', label='Hotspice')
-        ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label='Theory')
+        ax.errorbar(df['T'], df['m_avg'], yerr=df['m_std'], fmt='o', label="Hotspice")
+        ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label="Theory")
         ax.legend()
-        ax.set_xlabel('Temperature $T/T_c$')
-        ax.set_ylabel('Magnetization $\\langle M\\rangle /M_0$')
+        ax.set_xlabel("Temperature $T/T_c$")
+        ax.set_ylabel(r"Magnetization $\langle M \rangle /M_0$")
         ax.set_xlim([T_lim[0]-.005, T_lim[1]+.005])
         ax.set_ylim([-0.01, 1])
         plt.gcf().tight_layout()
         if save:
             if not isinstance(save, str):
-                reverse = '' if df["T"].iloc[0] < df["T"].iloc[-1] else 'reverse'
+                reverse = "" if df['T'].iloc[0] < df['T'].iloc[-1] else "reverse"
                 save = f"results/test_squareIsing/Tsweep{df['T'].nunique()}{reverse}.pdf"
             hotspice.plottools.save_plot(save, ext='.pdf')
         if show: plt.show()
 
     @staticmethod
     def test_N_influence_plot(df: pd.DataFrame, save=False, show=True):
-        ''' If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. '''
-        T_lim = [df["T"].min(), df["T"].max()]
+        """ If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. """
+        T_lim = [df['T'].min(), df['T'].max()]
 
         hotspice.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        for N, local_df in df.groupby("N"):
-            ax.errorbar(local_df["T"], local_df["m_avg"], yerr=local_df["m_std"], fmt='o', label=f'N={N}')
-        ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label='Theory')
+        for N, local_df in df.groupby('N'):
+            ax.errorbar(local_df['T'], local_df['m_avg'], yerr=local_df['m_std'], fmt='o', label=f"N={N}")
+        ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label="Theory")
         ax.legend()
-        ax.set_xlabel('Temperature $T/T_c$')
-        ax.set_ylabel('Magnetization $\\langle M\\rangle /M_0$')
+        ax.set_xlabel("Temperature $T/T_c$")
+        ax.set_ylabel("Magnetization $\\langle M\\rangle /M_0$")
         ax.set_xlim([T_lim[0]-.005, T_lim[1]+.005])
         ax.set_ylim([-0.01, 1])
         plt.gcf().tight_layout()
         if save:
             if not isinstance(save, str):
-                reverse = '' if df["T"].iloc[0] < df["T"].iloc[-1] else 'reverse'
+                reverse = "" if df['T'].iloc[0] < df['T'].iloc[-1] else "reverse"
                 save = f"results/test_squareIsing/Tsweep{df['T'].nunique()}{reverse}_Nsweep{df['N'].nunique()}.pdf"
             hotspice.plottools.save_plot(save, ext='.pdf')
         if show: plt.show()

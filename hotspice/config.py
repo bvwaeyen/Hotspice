@@ -13,7 +13,7 @@ DEVICE_ID = os.environ.get('HOTSPICE_DEVICE_ID', None)
 DEVICE_ID = int(DEVICE_ID.split(',')[0]) if isinstance(DEVICE_ID, str) else None
 
 def get_dict():
-    ''' Returns a dictionary containing all the configuration parameters and their values at the moment. '''
+    """ Returns a dictionary containing all the configuration parameters and their values at the moment. """
     return {
             'USE_GPU': USE_GPU,
             'DEVICE_ID': DEVICE_ID

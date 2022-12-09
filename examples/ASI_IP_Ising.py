@@ -23,20 +23,20 @@ n = 100
 ## Initialize main Magnets object
 t = time.perf_counter()
 mm = hotspice.ASI.IP_Ising(1e-6, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspice.DipolarEnergy()], PBC=True)
-print(f'Initialization time: {time.perf_counter() - t} seconds.')
+print(f"Initialization time: {time.perf_counter() - t} seconds.")
 # mm.add_energy(hotspice.ExchangeEnergy(J=hotspice.utils.eV_to_J(0.0258/7)))
 # mm.remove_energy('dipolar')
 
 
 def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T_max=800):
-    ''' Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
+    """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
         line indicates the AFM-ness of a perfectly random state.
         @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
             time between two frames.
         @param speed [int] (1000): How many switches are simulated between each frame.
-    '''
+    """
     mm.initialize_m('AFM')
     mm.history_clear()
     AFM_ness = []
@@ -48,15 +48,15 @@ def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T
     image = signal.convolve2d(mm.m, xp.asarray(mask), mode='valid', boundary='wrap' if mm.PBC else 'fill')
     h = ax1.imshow(hotspice.utils.asnumpy(image), cmap='gray', origin='lower',
                    vmin=-np.sum(mask), vmax=np.sum(mask), interpolation_stage='rgba', interpolation='antialiased')
-    ax1.set_title(r'Averaged magnetization')
+    ax1.set_title("Averaged magnetization")
     c1 = plt.colorbar(h)
     ax2 = fig.add_subplot(212)
     p,  = ax2.plot(mm.history.T, mm.history.m)
     ax2.axhline(3/8, linestyle=':', linewidth=1, color='grey')
     ax2.set_xlim(0, T_max)
     ax2.set_ylim(0, 1)
-    ax2.set_xlabel('Temperature')
-    ax2.set_ylabel('Average AFM-ness')
+    ax2.set_xlabel("Temperature")
+    ax2.set_ylabel("Average AFM-ness")
 
     # This is the function that gets called each frame
     def animate_temp_rise_update(i):
@@ -77,7 +77,7 @@ def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T
 
 
 if __name__ == "__main__":
-    print('Initialization energy:', mm.E_tot)
+    print("Initialization energy:", mm.E_tot)
 
     # ef.run_a_bit(mm, N=10e3, T=300)
     # ef.neelTemperature(mm, T_max=400)

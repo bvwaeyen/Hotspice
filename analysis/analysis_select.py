@@ -14,7 +14,7 @@ else:
 
 
 def calculate_any_neighbors(pos, shape, center: int = 0):
-    ''' @param pos [xp.array(2xN)]: the array of indices (row 0: y, row 1: x)
+    """ @param pos [xp.array(2xN)]: the array of indices (row 0: y, row 1: x)
         @param shape [tuple(2)]: the maximum indices (+1) in y- and x- direction
         @param center [int]: if 0, then the full neighbor array is returned. If nonzero, only the 
             middle region (of at most <center> cells away from the middle) is returned.
@@ -22,7 +22,7 @@ def calculate_any_neighbors(pos, shape, center: int = 0):
             other sample. To this end, each sample is placed in the middle of the array, and all
             positions where another sample exists are incremented by 1. As such, the array is
             point-symmetric about its middle.
-    '''
+    """
     # Note that this function can entirely be replaced by
     # signal.convolve2d(arr, arr, mode='full')
     # but this is very slow for large, sparse arrays like we are dealing with here.
@@ -43,7 +43,7 @@ def calculate_any_neighbors(pos, shape, center: int = 0):
 
 
 def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r:float=16, plot:bool=True, save:bool=False, PBC:bool=True, params:hotspice.SimParams=None, ASI_type:type[hotspice.Magnets]=None):
-    ''' In this analysis, the multiple-magnet-selection algorithm of hotspice.Magnets.select() is analyzed.
+    """ In this analysis, the multiple-magnet-selection algorithm of hotspice.Magnets.select() is analyzed.
         The spatial distribution is calculated by performing <n> runs of the select() method.
         Also the probability distribution of the distance between two samples is calculated,
         as well as the probablity distrbution of their relative positions.
@@ -51,7 +51,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
         @param n [int] (10000): the number of times the select() method is executed.
         @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify <L> for square domain.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
-    '''
+    """
     if Ly is None: Ly = L
     if Lx is None: Lx = L
     if ASI_type is None: ASI_type = hotspice.ASI.OOP_Square
@@ -111,10 +111,10 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     field_local[r*scale, r*scale] = 0 # set center value to zero
     t = time.perf_counter() - t
     
-    print(f'Time required for {n} runs of this analysis: {t:.3f}s.')
-    print(f'--- ANALYSIS RESULTS ---')
-    print(f'Total number of samples: {total}')
-    print(f'Empirical minimal distance between two samples in a single selection: {min_dist:.2f} (r={r})')
+    print(f"Time required for {n} runs of this analysis: {t:.3f}s.")
+    print(f"--- ANALYSIS RESULTS ---")
+    print(f"Total number of samples: {total}")
+    print(f"Empirical minimal distance between two samples in a single selection: {min_dist:.2f} (r={r})")
     
     cmap = cm.get_cmap('viridis').copy()
     cmap.set_under(color='black')
@@ -125,15 +125,15 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     ax1 = fig.add_subplot(2, 2, 1)
     if ONLY_SMALLEST_DISTANCE:
         color_left = 'C1'
-        ax1.set_xlabel('Distance to nearest neighbor (binned)')
+        ax1.set_xlabel("Distance to nearest neighbor (binned)")
         data1_left = hotspice.utils.asnumpy(distances_binned/xp.sum(distances_binned))/(bin_width/r)
         ax1.fill_between(distance_bins, data1_left, step='post', edgecolor=color_left, facecolor=color_left, alpha=0.7)
-        ax1.set_ylabel('Probability density [$r^{-1}$]', color=color_left)
+        ax1.set_ylabel("Probability density [$r^{-1}$]", color=color_left)
         ax1.tick_params(axis='y', labelcolor=color_left)
 
         ax1_right = ax1.twinx() # instantiate a second axes that shares the same x-axis
         color_right = 'C0'
-        ax1_right.set_ylabel('Cumulative probability', color=color_right)
+        ax1_right.set_ylabel("Cumulative probability", color=color_right)
         data1_right = hotspice.utils.asnumpy(xp.cumsum(distances_binned/xp.sum(distances_binned)))
         ax1_right.bar(distance_bins, data1_right, align='edge', width=bin_width, color=color_right)
         ax1_right.tick_params(axis='y', labelcolor=color_right)
@@ -144,19 +144,19 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
         ax1_right.set_ylim([0, ax1_right.get_ylim()[1]]) # might want to set this to [0, 1]
     else:
         ax1.bar(distance_bins, hotspice.utils.asnumpy(distances_binned), align='edge', width=bin_width)
-        ax1.set_xlabel('Distance to any other sample (binned)')
-        ax1.set_title('Inter-sample distances')
-        ax1.set_ylabel('# occurences')
+        ax1.set_xlabel("Distance to any other sample (binned)")
+        ax1.set_title("Inter-sample distances")
+        ax1.set_ylabel("# occurences")
     ax1.set_xlim([0, max_dist_bin])
     ax1.set_xticks([r*n for n in range(scale+1)])
-    ax1.set_xticklabels(['0', 'r'] + [f'{n}r' for n in range(2, scale+1)])
+    ax1.set_xticklabels(["0", "r"] + [f"{n}r" for n in range(2, scale+1)])
     ax1.axvline(r, color='black', linestyle=':', linewidth=1, label=None)
 
     # PLOT 2: PROBABILITY DENSITY OF NEIGHBORS AROUND ANY SAMPLE
     ax2 = fig.add_subplot(2, 2, 2)
     data2 = hotspice.utils.asnumpy(field_local)/total
     im2 = ax2.imshow(data2, vmin=1e-10, vmax=max(2e-10, np.max(data2)), extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='nearest', cmap=cmap)
-    ax2.set_title(f'Prob. dens. of neighbors\naround any sample')
+    ax2.set_title("Prob. dens. of neighbors\naround any sample")
     ax2.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
     ax2.add_patch(patches.Ellipse((0, 0), 2*r/mm.dx, 2*r/mm.dy, linewidth=1, fill=False, color='white', linestyle=':'))
     plt.colorbar(im2, extend='min')
@@ -165,7 +165,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     ax3 = fig.add_subplot(2, 2, 3) # TODO: add x and y histograms to the sides of this
     data3 = hotspice.utils.asnumpy(field)
     im3 = ax3.imshow(data3, vmin=1e-10, origin='lower', interpolation_stage='rgba', interpolation='none', cmap=cmap)
-    ax3.set_title(f"# choices for each cell")
+    ax3.set_title("# choices for each cell")
     plt.colorbar(im3, extend='min')
 
     # PLOT 4: PERIODOGRAM
@@ -173,12 +173,12 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     freq = hotspice.utils.asnumpy(xp.fft.fftshift(xp.fft.fftfreq(mm.nx, d=1))) # use fftshift to get ascending frequency order
     data4 = hotspice.utils.asnumpy(spectrum)/total
     im4 = ax4.imshow(data4, extent=[-.5+freq[0], .5+freq[-1], -.5+freq[0], .5+freq[-1]], interpolation_stage='rgba', interpolation='none', cmap='gray')
-    ax4.set_title(f'Periodogram')
+    ax4.set_title("Periodogram")
     plt.colorbar(im4)
     
     # TODO: show histogram of how many samples are generated for each call of select()
     # TODO: show one representative (or the worst i.e. least samples maybe? or lowest distance?) call of select() spatially for visual inspection (might not be necessary since we have the other plots already)
-    plt.suptitle(f'{Lx}x{Ly} grid, r={r} cells: {n} runs ({total} samples)\nPBC {"en" if mm.PBC else "dis"}abled')
+    plt.suptitle(f"{Lx}x{Ly} grid, r={r} cells: {n} runs ({total} samples)\nPBC {'en' if mm.PBC else 'dis'}abled")
     plt.gcf().tight_layout()
     if save:
         save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{mm.params.MULTISAMPLING_SCHEME}_{Lx}x{Ly}_r={r}{'_PBC' if mm.PBC else ''}"
@@ -188,18 +188,18 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
 
 
 def analysis_select_speed(n: int=10000, L:int=400, r=16, PBC:bool=True, params:hotspice.SimParams=None):
-    ''' Tests the speed of selecting magnets without any other analysis-related calculations in between.
+    """ Tests the speed of selecting magnets without any other analysis-related calculations in between.
         @param n [int] (10000): the number of times the select() method is executed.
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
-    '''
+    """
     mm = hotspice.ASI.OOP_Square(1, L, PBC=PBC, params=params)
     samples = 0
     t = time.perf_counter()
     for _ in range(n):
         samples += mm.select(r=r).shape[1]
     t = time.perf_counter() - t
-    print(f'Time required for {n} runs of hotspice.Magnets.select() on {L}x{L} grid: {t:.3f}s ({samples} samples).')
+    print(f"Time required for {n} runs of hotspice.Magnets.select() on {L}x{L} grid: {t:.3f}s ({samples} samples).")
 
 # TODO: write function to analyze sampling performance (analysis_select_speed/num_samples) as a function of parameters between different samplers
 # e.g. occupation sparsity, nx & ny for constant r or vice versa (or maybe 2D imshow changing nx=ny and r?)

@@ -1,4 +1,4 @@
-''' Run this file using the command
+""" Run this file using the command
         python <this_file.py> <script_path.py>
     to run the python script located at path <script_path.py> on all available GPUs.
     It is assumed that <script_path.py> contains a global variable named 'sweep', which should support __len__().
@@ -7,7 +7,7 @@
         python <script_path.py> [-h] [-o [OUTDIR]] [N]
     where N specifies the index of the iteration of the sweep that the script should actually execute when called, and
     where OUTDIR is the directory path where the output file of that iteration (or, if N is not specified, all iterations) should be stored.
-'''
+"""
 
 import argparse
 import importlib.util
@@ -37,7 +37,7 @@ parser.add_argument('script_path', type=str, nargs='?',
                     default=os.path.join(os.path.dirname(__file__), "../../examples/SweepKQ_RC_ASI.py"), #! hardcoded paths :(
                     help="The path of the script file containing the parameter sweep to be performed.")
 parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?',
-                    default='results/Sweeps/Sweep',
+                    default="results/Sweeps/Sweep",
                     help="The output directory, relative to the current working directory.")
 args, _ = parser.parse_known_args()
 args.script_path = os.path.abspath(args.script_path) # Make sure the path is ok
@@ -46,9 +46,9 @@ if not os.path.exists(args.script_path):
 
 
 ## Load script_path as module to access sweep
-spec = importlib.util.spec_from_file_location("sweepscript", args.script_path)
+spec = importlib.util.spec_from_file_location('sweepscript', args.script_path)
 foo = importlib.util.module_from_spec(spec)
-sys.modules["sweepscript"] = foo
+sys.modules['sweepscript'] = foo
 spec.loader.exec_module(foo)
 try:
     sweep = foo.sweep
@@ -81,9 +81,9 @@ def runner(i):
         env = os.environ.copy()
         #! These os.environ statements must be done before running any CuPy statement (importing is fine),
         #! but since CuPy is imported separately in the subprocess python script this is not an issue.
-        env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-        env["CUDA_VISIBLE_DEVICES"] = f"{device_id:d}"
-        env["HOTSPICE_DEVICE_ID"] = f"{device_id:d}" # To allow detection of used CPU core without advanced sorcery
+        env['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+        env['CUDA_VISIBLE_DEVICES'] = f'{device_id:d}'
+        env['HOTSPICE_DEVICE_ID'] = f'{device_id:d}' # To allow detection of used CPU core without advanced sorcery
         subprocess.run(cmd, check=True, env=env)
     except subprocess.CalledProcessError: # This error type is expected due to check=True
         failed.append(i)
@@ -96,7 +96,7 @@ def runner(i):
 ## Run the jobs
 cores_text = f"{N_PARALLEL_JOBS} {'G' if hotspice.config.USE_GPU else 'C'}PU{'s' if N_PARALLEL_JOBS > 1 else ''}"
 hotspice.utils.log(f"Running {num_jobs} jobs on {cores_text}...", style='header', show_device=False)
-Parallel(n_jobs=N_PARALLEL_JOBS, backend="threading")(delayed(runner)(i) for i in range(num_jobs))
+Parallel(n_jobs=N_PARALLEL_JOBS, backend='threading')(delayed(runner)(i) for i in range(num_jobs))
 
 with open(os.path.abspath(os.path.join(outdir, "README.txt")), 'w') as readme:
     readme.write(f"Failed iterations (flat-index): {failed}")

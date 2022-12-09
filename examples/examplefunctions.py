@@ -12,7 +12,7 @@ except ModuleNotFoundError: import hotspice
 
 
 def run_a_bit(mm: hotspice.Magnets, N=50e3, T=None, save_history=1, verbose=False, show_m=True, **kwargs):
-    ''' Simulates <N> consecutive switches at temperature <T> and plots the end result.
+    """ Simulates <N> consecutive switches at temperature <T> and plots the end result.
         This end plot can be disabled by setting <show_m> to False.
         @param N [int] (50000): the number of update steps to run.
         @param T [float] (mm.T): the temperature at which to run the <N> steps.
@@ -21,7 +21,7 @@ def run_a_bit(mm: hotspice.Magnets, N=50e3, T=None, save_history=1, verbose=Fals
             If 0, no history is recorded.
         @param verbose [bool] (False): whether or not to print supporting information about the run.
         @param show_m [bool] (True): whether or not to plot the magnetization profile after the <N> switches.
-    '''
+    """
     if T is not None: mm.T = T
 
     t = time.perf_counter()
@@ -34,16 +34,16 @@ def run_a_bit(mm: hotspice.Magnets, N=50e3, T=None, save_history=1, verbose=Fals
     dt = time.perf_counter() - t
     if verbose:
         print(f"Simulated {mm.switches - n_start:.0f} switches ({N:.0f} steps on {mm.m.shape[0]:.0f}x{mm.m.shape[1]:.0f} grid) in {dt:.3f} seconds.")
-        print(f'Energy: {mm.E_tot} J')
+        print(f"Energy: {mm.E_tot} J")
     if show_m:
         hotspice.plottools.show_m(mm, **kwargs)
     return dt
 
 
 def curieTemperature(mm: hotspice.Magnets, N=5000, T_min=0, T_max=200):
-    ''' A naive attempt at determining the Curie temperature, by looking at the average magnetization.
+    """ A naive attempt at determining the Curie temperature, by looking at the average magnetization.
         @param N [int] (5000): The number of simulated switches at each individual temperature
-    '''
+    """
     mm.history_clear()
     mm.initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_avg
     for T in np.linspace(T_min, T_max, 101):
@@ -62,9 +62,9 @@ def curieTemperature(mm: hotspice.Magnets, N=5000, T_min=0, T_max=200):
 
 
 def neelTemperature(mm: hotspice.Magnets, N=200000, T_min=0, T_max=200):
-    ''' A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
+    """ A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
         @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.
-    '''
+    """
     mm.history_clear()
     mm.initialize_m('AFM')
     AFM_ness = []
@@ -74,7 +74,7 @@ def neelTemperature(mm: hotspice.Magnets, N=200000, T_min=0, T_max=200):
         mm.update()
         AFM_ness.append(hotspice.plottools.get_AFMness(mm))
         mm.history_save()
-    hotspice.plottools.show_history(mm, y_quantity=AFM_ness, y_label=r'AFM-ness')
+    hotspice.plottools.show_history(mm, y_quantity=AFM_ness, y_label="AFM-ness")
 
 
 def animate_quenching(mm: hotspice.Magnets, animate=1, speed=20, n_sweep=40000, T_low=2, T_high=1000, save=False, fill=False, avg=True, pattern=None):
@@ -125,9 +125,9 @@ def animate_quenching(mm: hotspice.Magnets, animate=1, speed=20, n_sweep=40000, 
         c1 = plt.colorbar(h)
         c1.ax.get_yaxis().labelpad = 30
         c1.ax.set_ylabel(f"Averaged magnetization\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})", rotation=270, fontsize=12)
-    ax1.set_xlabel('x [m]')
-    ax1.set_ylabel('y [m]')
-    fig.suptitle(f'Temperature {mm.T.mean():.3f}\u2009K') # \u2009 is a small space similar to \, in LaTeX
+    ax1.set_xlabel("x [m]")
+    ax1.set_ylabel("y [m]")
+    fig.suptitle(f"Temperature {mm.T.mean():.3f}\u2009K") # \u2009 is a small space similar to \, in LaTeX
 
     # This is the function that gets called each frame
     def animate_quenching_update(i):
@@ -140,7 +140,7 @@ def animate_quenching(mm: hotspice.Magnets, animate=1, speed=20, n_sweep=40000, 
                 mm.T = T_low*np.exp(exponent*(((n_sweep - j) % n_sweep2)/n_sweep2))
             mm.update()
         h.set_array(hotspice.plottools.get_rgb(mm, fill=fill, avg=avg))
-        fig.suptitle(f'Temperature {mm.T.mean():.3f}\u2009K')
+        fig.suptitle(f"Temperature {mm.T.mean():.3f}\u2009K")
         return h, # This has to be an iterable!
 
     # Assign the animation to a variable, to prevent it from getting garbage-collected
@@ -150,8 +150,8 @@ def animate_quenching(mm: hotspice.Magnets, animate=1, speed=20, n_sweep=40000, 
                                     blit=False, repeat=True)
     if save:
         mywriter = animation.FFMpegWriter(fps=30)
-        if not os.path.exists('videos'): os.makedirs('videos')
-        anim.save(f'videos/{type(mm).__name__}_{mm.nx}x{mm.ny}_T{T_low}-{T_high}_N{n_sweep}x{save}.mp4', writer=mywriter, dpi=300)
+        if not os.path.exists("videos"): os.makedirs("videos")
+        anim.save(f"videos/{type(mm).__name__}_{mm.nx}x{mm.ny}_T{T_low}-{T_high}_N{n_sweep}x{save}.mp4", writer=mywriter, dpi=300)
         print(f"Performed {mm.switches} switches in {time.perf_counter() - t:.3f} seconds.")
 
     plt.show()
@@ -159,34 +159,35 @@ def animate_quenching(mm: hotspice.Magnets, animate=1, speed=20, n_sweep=40000, 
 
 
 def autocorrelation_dist_dependence(mm: hotspice.Magnets):
-    ''' Shows the full 2D autocorrelation, as well as the binned autocorrelation
-        as a function of distance. '''
+    """ Shows the full 2D autocorrelation, as well as the binned autocorrelation
+        as a function of distance.
+    """
     correlation = mm.autocorrelation()
     corr_length = mm.correlation_length(correlation=correlation)
     print("Correlation length:", corr_length)
 
     fig = plt.figure(figsize=(10, 4))
-    fig.suptitle('T=%.2f\u2009K' % mm.T.mean(), font={"size":12})
+    fig.suptitle(f"T={mm.T.mean():.2f}\u2009K", font={'size':12})
     ax1 = fig.add_subplot(121)
     # ax1.plot(d, corr) # Let's leave this here for now, in case we calculate the distance dependence anyway later on
-    ax1.set_xlabel(r'Distance [a.u.]')
-    ax1.set_ylabel(r'Autocorrelation')
+    ax1.set_xlabel("Distance [a.u.]")
+    ax1.set_ylabel("Autocorrelation")
     ax2 = fig.add_subplot(122)
     h1 = ax2.imshow(hotspice.utils.asnumpy(correlation), origin='lower', cmap='bone')
     c2 = plt.colorbar(h1)
-    c2.set_label(r'Correlation', rotation=270, labelpad=15)
+    c2.set_label("Correlation", rotation=270, labelpad=15)
     plt.gcf().tight_layout()
     plt.show()
 
 
 def autocorrelation_temp_dependence(mm: hotspice.Magnets, N=41, M=50, L=500, T_min=0, T_max=400):
-    ''' Shows how the correlation distance depends on the temperature. 
+    """ Shows how the correlation distance depends on the temperature. 
         @param N [int] (31): Number of temperature steps between <T_min> and <T_max>.
         @param M [int] (50): How many times to do <L> switches at each temperature,
             which are then averaged to get the correlation length at each temperature.
         @param L [int] (500): Number of switches between each measurement of the
             correlation length.
-    '''
+    """
     # Initialize in the ground state
     mm.initialize_m(mm._get_groundstate())
 
@@ -197,7 +198,7 @@ def autocorrelation_temp_dependence(mm: hotspice.Magnets, N=41, M=50, L=500, T_m
     niter = np.ones(N, dtype=int)*10*L
     niter[0] = 40*L
     for j, T in enumerate(TT):
-        print(f'Temperature step {j+1:d}/{N:d} (T = {T:.2f} K) ...')
+        print(f"Temperature step {j+1:d}/{N:d} (T = {T:.2f} K) ...")
         mm.T = T
         for _ in range(niter[j]): # Update for a while to ensure that the different temperatures are not very correlated
             mm.update()
@@ -214,13 +215,13 @@ def autocorrelation_temp_dependence(mm: hotspice.Magnets, N=41, M=50, L=500, T_m
     extent = [-0.5, corr_length.shape[1]-0.5, T_min-T_step/2, T_max+T_step/2] # Adding all these halves to place the pixels correctly
     im1 = ax1.imshow(corr_length, origin='lower', interpolation='nearest', cmap='bone', extent=extent, aspect='auto')
     c1 = plt.colorbar(im1) 
-    c1.set_label(r'Correlation length [a.u.]', rotation=270, labelpad=15)
-    ax1.set_xlabel(f'Step (x{L:d})')
-    ax1.set_ylabel('Temperature [K]')
+    c1.set_label("Correlation length [a.u.]", rotation=270, labelpad=15)
+    ax1.set_xlabel(f"Step (x{L:d})")
+    ax1.set_ylabel("Temperature [K]")
     ax2 = fig.add_subplot(122)
     ax2.plot(TT, corr_ll)
-    ax2.set_xlabel('Temperature [K]')
-    ax2.set_ylabel(r'$\langle$Correlation length$\rangle$ [a.u.]')
+    ax2.set_xlabel("Temperature [K]")
+    ax2.set_ylabel(r"$\langle$Correlation length$\rangle$ [a.u.]")
     plt.gcf().tight_layout()
     plt.show()
 

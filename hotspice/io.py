@@ -69,7 +69,7 @@ class OutputReader(ABC):
     @property
     @abstractmethod
     def n(self):
-        ''' The number of output values when reading a given state. '''
+        """ The number of output values when reading a given state. """
 
 
 ######## Below are subclasses of the superclasses above
@@ -77,9 +77,9 @@ class OutputReader(ABC):
 # TODO: class SemiRepeatingDatastream(Datastream) which has first <n> random bits and then <m> bits which are the same for all runs
 class RandomBinaryDatastream(BinaryDatastream):
     def __init__(self, p0=.5):
-        ''' Generates random bits, with <p0> probability of getting 0, and 1-<p0> probability of getting 1.
+        """ Generates random bits, with <p0> probability of getting 0, and 1-<p0> probability of getting 1.
             @param p0 [float] (0.5): the probability of 0 when generating a random bit.
-        '''
+        """
         self.p0 = p0
         super().__init__()
 
@@ -88,7 +88,7 @@ class RandomBinaryDatastream(BinaryDatastream):
 
 class RandomUniformDatastream(Datastream):
     def __init__(self, low=0, high=1):
-        ''' Generates uniform random floats between <low=0> and <high=1>. '''
+        """ Generates uniform random floats between <low=0> and <high=1>. """
         self.low, self.high = low, high
         super().__init__()
 
@@ -98,12 +98,12 @@ class RandomUniformDatastream(Datastream):
 
 class FieldInputter(Inputter):
     def __init__(self, datastream: Datastream, magnitude=1, angle=0, n=2, sine=False, frequency=1, half_period=True):
-        ''' Applies an external field at <angle> rad, whose magnitude is <magnitude>*<datastream.get_next()>.
+        """ Applies an external field at <angle> rad, whose magnitude is <magnitude>*<datastream.get_next()>.
             <frequency> specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
             If <sine> is True, the field magnitude follows a full sinusoidal period for each input bit.
             If <half_period> is True, only the first half-period ⏜ of the sine is used, otherwise the full ∿ period.
             At most <n> Monte Carlo steps will be performed.
-        '''
+        """
         super().__init__(datastream)
         self.angle = angle
         self.magnitude = magnitude
@@ -149,13 +149,13 @@ class FieldInputter(Inputter):
 
 class FieldInputterBinary(FieldInputter):
     def __init__(self, datastream: Datastream, magnitudes: tuple = (.8, 1), **kwargs):
-        ''' Exactly the same as FieldInputter, but if <datastream> yields 0 then a field with
+        """ Exactly the same as FieldInputter, but if <datastream> yields 0 then a field with
             magnitude <magnitudes[0]> is applied, otherwise <magnitudes[1]>.
             Using <sine=<frequency[Hz]>> yields behavior as in "Computation in artificial spin ice" by Jensen et al.
             Differing attributes compared to FieldInputter:
                 <self.magnitude> is set to <magnitudes[1]>
                 <self.magnitude_ratio> is used to store the ratio <magnitudes[0]/magnitudes[1]>.
-        '''
+        """
         self.magnitude_ratio = magnitudes[0]/magnitudes[1]
         super().__init__(datastream, magnitude=magnitudes[1], half_period=False, **kwargs)
 
@@ -167,11 +167,11 @@ class FieldInputterBinary(FieldInputter):
 
 class PerpFieldInputter(FieldInputter):
     def __init__(self, datastream: BinaryDatastream, magnitude=1, angle=0, n=2, relax=True, frequency=1, **kwargs):
-        ''' Applies an external field, whose angle depends on the bit that is being applied:
+        """ Applies an external field, whose angle depends on the bit that is being applied:
             the bit '0' corresponds to an angle of <phi> radians, the bit '1' to <phi>+pi/2 radians.
             Also works for continuous numbers, resulting in intermediate angles, but this is not the intended use.
             For more information about the kwargs, see FieldInputter.
-        '''
+        """
         self.relax = relax
         super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, frequency=frequency)
 
@@ -192,17 +192,17 @@ class PerpFieldInputter(FieldInputter):
             for mag in [self.magnitude, -self.magnitude]:
                 e.set_field(magnitude=mag, angle=angle)
                 mm.minimize()
-            # log(f'Performed {mm.MCsteps - MCsteps0} MC steps.')
+            # log(f"Performed {mm.MCsteps - MCsteps0} MC steps.")
         else:
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < .5 - 1e-6:
                 if self.frequency != 0: mm.update(t_max=0.5/self.frequency)
                 else: mm.update()
-                # log('updated forward')
+                # log("updated forward")
             e.set_field(magnitude=-self.magnitude, angle=angle)
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6:
                 if self.frequency != 0: mm.update(t_max=0.5/self.frequency)
                 else: mm.update()
-                # log('updated reverse')
+                # log("updated reverse")
 
         return value
 
@@ -233,11 +233,11 @@ class PerpFieldInputter(FieldInputter):
 
 class RegionalOutputReader(OutputReader):
     def __init__(self, nx, ny, mm=None):
-        ''' Reads the current state of the ASI with a certain level of detail.
+        """ Reads the current state of the ASI with a certain level of detail.
             @param nx [int]: number of averaging bins in the x-direction.
             @param ny [int]: number of averaging bins in the y-direction.
             @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
-        '''
+        """
         self.nx, self.ny = nx, ny
         self.grid = np.zeros((self.nx, self.ny)) # We use this to ndenumerate, but CuPy does not have this, so use NumPy
         if mm is not None: self.configure_for(mm)
@@ -292,10 +292,10 @@ class RegionalOutputReader(OutputReader):
         return self.state # [Am²]
 
     def inflate_flat_array(self, arr: np.ndarray|xp.ndarray):
-        ''' Transforms a 1D array <arr> to have the same shape as <self.state>.
+        """ Transforms a 1D array <arr> to have the same shape as <self.state>.
             Basically the inverse transformation as done on <self.state> when calling <self.state.reshape(-1)>.
             @param arr [array]: an array of shape (<self.n>,).
-        '''
+        """
         if self.mm.in_plane:
             return arr.reshape(self.nx, self.ny, 2)
         else:
@@ -304,12 +304,12 @@ class RegionalOutputReader(OutputReader):
 
 class OOPSquareChessFieldInputter(Inputter):
     def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
-        ''' Applies an external stimulus in a checkerboard pattern. This is modelled as an external
+        """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external
             field for each magnet, with magnitude <magnitude>*<datastream.get_next()>.
             A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
             <frequency> specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
             At most <n> Monte Carlo steps will be performed for a single input bit.
-        '''
+        """
         super().__init__(datastream)
         self.magnitude = magnitude
         self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
@@ -331,14 +331,14 @@ class OOPSquareChessFieldInputter(Inputter):
 
 class OOPSquareChessOutputReader(OutputReader):
     def __init__(self, nx, ny, mm=None):
-        ''' This is a RegionalOutputReader optimized for OOP_Square ASI.
+        """ This is a RegionalOutputReader optimized for OOP_Square ASI.
             Since OOP_Square has two degenerate AFM ground states, the averaging takes place
             using an AFM mask, such that they can be distinguished and domain walls can be identified.
             @param nx [int]: number of averaging bins in the x-direction.
             @param ny [int]: number of averaging bins in the y-direction.
             @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
                 Otherwise, the user will have to call configure_for() separately after initializing the class instance.
-        '''
+        """
         self.nx, self.ny, self._n = nx, ny, nx*ny
         if mm is not None: self.configure_for(mm)
 
@@ -360,7 +360,7 @@ class OOPSquareChessOutputReader(OutputReader):
         self.state = xp.zeros(self.n, dtype=float)
     
     def read_state(self, mm: Magnets = None, m=None) -> xp.ndarray:
-        ''' Returns a 1D array representing the AFM state of the spin ice. '''
+        """ Returns a 1D array representing the AFM state of the spin ice. """
         if mm is not None: self.configure_for(mm) # If mm is not specified, we suppose configure_for() already happened
         if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
 

@@ -24,7 +24,7 @@ try: # TODO: maybe don't do this by default, only when some sort of display is u
     ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
 except Exception:
     pass
-matplotlib.rcParams["image.interpolation"] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
+matplotlib.rcParams['image.interpolation'] = 'none' # 'none' works best for large images scaled down, 'nearest' for the opposite
 
 
 class Average(Enum):
@@ -57,9 +57,9 @@ class Average(Enum):
 
     @classmethod
     def resolve(cls, avg, mm: Magnets=None):
-        ''' <avg> can be any of [str], [bool-like], or [Average]. This function will
+        """ <avg> can be any of [str], [bool-like], or [Average]. This function will
             then return the [Average] instance that is most appropriate.
-        '''
+        """
         match avg:
             case Average():
                 return avg
@@ -76,7 +76,7 @@ class Average(Enum):
 
 # Below here are some graphical functions (plot magnetization profile etc.)
 def _get_averaged_extent(mm: Magnets, avg):
-    ''' Returns the extent (in meters) that can be used in imshow when plotting an averaged quantity. '''
+    """ Returns the extent (in meters) that can be used in imshow when plotting an averaged quantity. """
     avg = Average.resolve(avg, mm)
     mask = avg.mask
     if mm.PBC:
@@ -86,7 +86,7 @@ def _get_averaged_extent(mm: Magnets, avg):
     return np.array([mm.x_min-mm.dx+movex,mm.x_max-movex+mm.dx,mm.y_min-mm.dy+movey,mm.y_max-movey+mm.dy]) # [m]
 
 def get_m_polar(mm: Magnets, m=None, avg=True):
-    '''
+    """
         Returns the magnetization angle and magnitude (can be averaged using the averaging method specified by <avg>).
         If the local average magnetization is zero, the corresponding angle is NaN.
         If there are no magnets to average around a given cell, then the angle and magnitude are both NaN.
@@ -102,7 +102,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
             angle and magnitude, respecively, for each relevant position in the simulation.
             Angles lay between 0 and 2*pi, magnitudes between 0 and mm.moment.
             !! This does not necessarily have the same shape as <m> !!
-    '''
+    """
     if m is None: m = mm.m
     avg = Average.resolve(avg, mm)
 
@@ -140,10 +140,10 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     return angles_avg, magnitudes_avg
 
 def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=False, autoscale=True):
-    ''' Returns the hsv values for the polar coordinates defined by angles [rad] and magnitudes [A/m]. 
+    """ Returns the hsv values for the polar coordinates defined by angles [rad] and magnitudes [A/m]. 
         TAKES CUPY/NUMPY ARRAYS AS INPUT, ONLY YIELDS NUMPY ARRAYS AS OUTPUT
         @param angles [2D xp.array()] (None): The averaged angles.
-    '''
+    """
     if angles is None or magnitudes is None:
         angles, magnitudes = get_m_polar(mm, m=m, avg=avg)
         if autoscale and mm.in_plane:
@@ -191,7 +191,7 @@ def get_rgb(*args, **kwargs):
     return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
 def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, unit='µ', figure=None, **figparams):
-    ''' Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
+    """ Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
         the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
         @param m [2D array] (mm.m): the direction (+1 or -1) of each spin on the geometry. Default is the current
@@ -209,7 +209,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         @param fontsize_colorbar [int] (10): the font size of the color bar description.
         @param fontsize_axes [int] (10): the font size of the axes labels and titles.
         @param text_averaging [bool] (True): if False, the averaging mask is not stated in the colorbar description.
-    '''
+    """
     avg = Average.resolve(avg, mm)
     figparams.setdefault('fontsize_colorbar', 10)
     figparams.setdefault('fontsize_axes', 10)
@@ -263,8 +263,8 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         text = "Averaged magnetization"
         if figparams['text_averaging']: text += f"\n('{avg.name.lower()}' average{', PBC' if mm.PBC else ''})"
         c1.ax.set_ylabel(text, rotation=270, fontsize=figparams['fontsize_colorbar'])
-    ax1.set_xlabel(f'x [{unit}m]')
-    ax1.set_ylabel(f'y [{unit}m]')
+    ax1.set_xlabel(f"x [{unit}m]")
+    ax1.set_ylabel(f"y [{unit}m]")
     axes.append(ax1)
     if show_quiver:
         if overlay_quiver:
@@ -272,9 +272,9 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         else:
             ax2 = fig.add_subplot(1, num_plots, 2, sharex=ax1, sharey=ax1)
             ax2.set_aspect('equal')
-            ax2.set_title(r'$m$')
-            ax2.set_xlabel(f'x [{unit}m]')
-            ax2.set_ylabel(f'y [{unit}m]')
+            ax2.set_title("$m$")
+            ax2.set_xlabel(f"x [{unit}m]")
+            ax2.set_ylabel(f"y [{unit}m]")
             axes.append(ax2)
         nonzero = mm.m.nonzero()
         mx, my = asnumpy(xp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(xp.multiply(m, mm.orientation[:,:,1])[nonzero])
@@ -290,9 +290,9 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         c3 = plt.colorbar(im3)
         c3.ax.get_yaxis().labelpad = 15
         c3.ax.set_ylabel("Local energy [J]", rotation=270, fontsize=figparams['fontsize_colorbar'])
-        ax3.set_title(r'$E_{int}$')
-        ax3.set_xlabel(f'x [{unit}m]')
-        ax3.set_ylabel(f'y [{unit}m]')
+        ax3.set_title(r"$E_{int}$")
+        ax3.set_xlabel(f"x [{unit}m]")
+        ax3.set_ylabel(f"y [{unit}m]")
         axes.append(ax3)
     multi = widgets.MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
     plt.gcf().tight_layout()
@@ -304,13 +304,13 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
     return fig
 
 def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, scale: float = .8, save: bool = False, save_ext: str = '.pdf'):
-    ''' Shows a minimalistic rendition of the lattice on which the spins are placed.
+    """ Shows a minimalistic rendition of the lattice on which the spins are placed.
         @param mm [Magnets]: an instance of the ASI class whose lattice should be plotted.
         @param nx, ny [int] (3): the number of unit cells that will be shown.
         @param fall_off [float] (1): how many unit cells it takes for the opacity to drop from 1 to 0 near the edge.
         @param scale [float] (.8): how long the shown ellipses are, as a multiple of the distance between nearest neighbors.
         @param save [bool] (False): if True, the figure is saved as "results/lattices/<ASI_name>_<nx>x<ny>.pdf
-    '''
+    """
     nx, ny = nx*mm.unitcell.x+1, ny*mm.unitcell.y+1
     if mm.nx < nx or mm.ny < ny:
         raise ValueError(f"Lattice of {type(mm).__name__} is too small: ({mm.nx}x{mm.ny})<({nx}x{ny}).")
@@ -345,22 +345,22 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
 
     plt.gcf().tight_layout()
     if save:
-        save_plot(f'results/lattices/{type(mm).__name__}_{nx//mm.unitcell.x:.0f}x{ny//mm.unitcell.y:.0f}', ext=save_ext)
+        save_plot(f"results/lattices/{type(mm).__name__}_{nx//mm.unitcell.x:.0f}x{ny//mm.unitcell.y:.0f}", ext=save_ext)
     plt.show()
 
-def show_history(mm: Magnets, *, y_quantity=None, y_label=r'Average magnetization'):
-    ''' Plots <y_quantity> (default: average magnetization (mm.history.m)) and total energy (mm.history.E)
+def show_history(mm: Magnets, *, y_quantity=None, y_label="Average magnetization"):
+    """ Plots <y_quantity> (default: average magnetization (mm.history.m)) and total energy (mm.history.E)
         as a function of either the time or the temperature: if the temperature (mm.history.T) is constant, 
         then the x-axis will represent the time (mm.history.t), otherwise it represents the temperature.
         @param y_quantity [1D array] (mm.m): The quantity to be plotted as a function of T or t.
-        @param y_label [str] (r'Average magnetization'): The y-axis label in the plot.
-    '''
+        @param y_label [str] ("Average magnetization"): The y-axis label in the plot.
+    """
     if y_quantity is None:
         y_quantity = mm.history.m
     if xp.all(xp.isclose(mm.history.T, mm.history.T[0])):
-        x_quantity, x_label = mm.history.t, 'Time [s]'
+        x_quantity, x_label = mm.history.t, "Time [s]"
     else:
-        x_quantity, x_label = mm.history.T, 'Temperature [K]'
+        x_quantity, x_label = mm.history.T, "Temperature [K]"
     if len(y_quantity) != len(x_quantity): raise ValueError(f"y_quantity has different length than history {x_label.split(' ')[0].lower()} array.")
 
     fig = plt.figure(figsize=(4, 6))
@@ -371,25 +371,25 @@ def show_history(mm: Magnets, *, y_quantity=None, y_label=r'Average magnetizatio
     ax2 = fig.add_subplot(212)
     ax2.plot(x_quantity, mm.history.E)
     ax2.set_xlabel(x_label)
-    ax2.set_ylabel('Total energy [J]')
+    ax2.set_ylabel("Total energy [J]")
     plt.gcf().tight_layout()
     plt.show()
 
 def get_AFMness(mm: Magnets, AFM_mask=None):
-    ''' Returns the average AFM-ness of mm.m at the current time step, normalized to 1.
+    """ Returns the average AFM-ness of mm.m at the current time step, normalized to 1.
         For a perfectly uniform configuration this is 0, while for random it is 0.375.
         Note that the boundaries are not taken into account for the normalization, so the
         AFM-ness will often be slightly lower than the ideal values mentioned above.
         @param AFM_mask [2D array] (None): The mask used to determine the AFM-ness. If not
             provided explicitly, it is determined automatically based on the type of ASI.
         @return [float]: The average normalized AFM-ness.
-    '''
+    """
     AFM_mask = mm._get_AFMmask() if AFM_mask is None else xp.asarray(AFM_mask)
     AFM_ness = xp.mean(xp.abs(signal.convolve2d(mm.m, AFM_mask, mode='same', boundary='wrap' if mm.PBC else 'fill')))
     return float(AFM_ness/xp.sum(xp.abs(AFM_mask))/xp.sum(mm.occupation)*mm.m.size)
 
 def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False): # TODO: this is quite messy because we are working with color here instead of angles/magnitudes
-    ''' THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
+    """ THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
         THIS FUNCTION OPERATES ON HSV VALUES, AND RETURNS HSV AS WELL!!! NOT RGB HERE!
         The 2D array <replaceable> is True at the positions of hsv which can be overwritten by this function.
         The 3D array <hsv> has the same first two dimensions as <replaceable>, with the third dimension having size 3 (h, s, v).
@@ -399,7 +399,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
         @param fillblack [bool] (False): If True, white pixels next to black pixels are colored black regardless of other neighbors.
         @param fillwhite [bool] (False): If True, white pixels are colored in using the Average.SQUAREFULL rule.
         @return [2D np.array]: The interpolated array.
-    '''
+    """
     if hsv.shape[0] < 2 or hsv.shape[1] < 2: return hsv
     hsv = asnumpy(hsv)
     replaceable = xp.asarray(replaceable, dtype='bool')
@@ -431,20 +431,20 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
 
 
 def init_fonts(backend=True, small=10, medium=11, large=12):
-    ''' Sets various parameters for consistent plotting across all Hotspice scripts.
+    """ Sets various parameters for consistent plotting across all Hotspice scripts.
         This should be called before instantiating any subplots.
         This should not be called directly by any function in hotspice.plottools itself,
         only by higher-level scripts (e.g. examples, analyses, tests...) which can
         then decide for themselves whether or not to use these standardized settings.
         @param backend [bool] (True): if True, the tkinter backend is activated. This
             backend is preferred since it allows consistent updating of interactive plots.
-    '''
+    """
     if backend:
         try:
-            matplotlib.use("TkAgg") # tkinter backend is preferred by Hotspice
+            matplotlib.use('TkAgg') # tkinter backend is preferred by Hotspice
         except ImportError:
             try:
-                matplotlib.use("QtAgg") # Otherwise use Qt but this might give some issues in some places
+                matplotlib.use('QtAgg') # Otherwise use Qt but this might give some issues in some places
             except ImportError:
                 warnings.warn(f"Could not activate 'TkAgg' or 'QtAgg' backend for Hotspice (using {matplotlib.get_backend()} instead).", stacklevel=2)
     
@@ -459,11 +459,11 @@ def init_fonts(backend=True, small=10, medium=11, large=12):
 
 
 def init_interactive():
-    ''' Call this once before starting to build an interactive (i.e. real-time updatable) plot. '''
+    """ Call this once before starting to build an interactive (i.e. real-time updatable) plot. """
     plt.ion()
 
 def update_interactive(figure=None):
-    ''' Update all the visuals of the most recent figure so it is up-to-date. '''
+    """ Update all the visuals of the most recent figure so it is up-to-date. """
     # Interactive functions in hotspice.plottools probably already call this function by themselves.
     fig = plt.gcf() if figure is None else figure
     fig.canvas.draw_idle()
@@ -477,20 +477,20 @@ def close_interactive(figure=None):
 
 
 def save_plot(save_path: str, ext=None):
-    ''' <save_path> is a full relative pathname, usually something like
+    """ <save_path> is a full relative pathname, usually something like
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
-    '''
+    """
     if ext is not None: # Then a specific extension was requested, to override the one in save_path
         original_ext = os.path.splitext(save_path)[1]
         if len(original_ext) > 0:
             if not original_ext[0].isdigit(): # Then probably the original 'extension' is actually real, not just the long part after a random decimal point in the string
                 save_path = os.path.splitext(save_path)[0]
-        save_path += '.' + ext.removeprefix('.') # This slightly convoluted way allows <ext> to be e.g. ".pdf" but also just "pdf"
+        save_path += '.' + ext.removeprefix('.') # This slightly convoluted way allows <ext> to be e.g. '.pdf' but also just 'pdf'
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     try:
         plt.savefig(save_path)
     except PermissionError:
-        warnings.warn(f'Could not save to {save_path}, probably because the file is opened somewhere else.', stacklevel=2)
+        warnings.warn(f"Could not save to {save_path}, probably because the file is opened somewhere else.", stacklevel=2)
 
 
 if __name__ == "__main__":
