@@ -37,10 +37,11 @@ parser.add_argument('script_path', type=str, nargs='?',
                     default=os.path.join(os.path.dirname(__file__), "../../examples/SweepKQ_RC_ASI.py"), #! hardcoded paths :(
                     help="The path of the script file containing the parameter sweep to be performed.")
 parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?',
-                    default="results/Sweeps/Sweep",
+                    default=None,
                     help="The output directory, relative to the current working directory.")
 args, _ = parser.parse_known_args()
 args.script_path = os.path.abspath(args.script_path) # Make sure the path is ok
+if args.outdir is None: args.outdir = os.path.splitext(args.script_path)[0] + '.out/Sweep' # TODO: check if this works
 if not os.path.exists(args.script_path):
     raise ValueError(f"Path '{args.script_path}' provided as cmd argument does not exist.")
 
