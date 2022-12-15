@@ -34,20 +34,22 @@ class Experiment(ABC):
         self.results = {} # General-purpose dict to store simulation results in
     
     @abstractmethod
-    def run(self):
+    def run(self) -> None:
         """ Runs the entire experiment and records all the useful data. """
     
     @abstractmethod
-    def calculate_all(self):
-        """ (Re)calculates all the metrics in the self.results dict. """
+    def calculate_all(self) -> None:
+        """ (Re)calculates all the metrics in the <self.results> dict. """
     
     @abstractmethod
-    def to_dataframe(self):
+    def to_dataframe(self) -> pd.DataFrame:
         """ Creates a Pandas dataframe from the saved results of self.run(). """
     
     @abstractmethod
-    def load_dataframe(self):
-        """ Loads the data from self.to_dataframe() to the current object. """
+    def load_dataframe(self, df: pd.DataFrame) -> None:
+        """ Loads the data from self.to_dataframe() to the current object.
+            Might return the most important columns of data, but this is not required.
+        """
     
     @staticmethod
     @abstractmethod
@@ -57,6 +59,7 @@ class Experiment(ABC):
             take one argument which is a pd.DataFrame, and returns either a simple column
             or a mathematical combination of several columns.
         """
+        return {}
 
 
 class Sweep(ABC):
@@ -434,14 +437,14 @@ class KernelQualityExperiment(Experiment):
 class TaskAgnosticExperiment(Experiment):
     def __init__(self, inputter, outputreader, mm):
         """ Follows the paper
-                J. Love, J. Mulkers, G. Bourianoff, J. Leliaert, and K. Everschor-Sitte. Task agnostic
-                metrics for reservoir computing. arXiv preprint arXiv:2108.01512, 2021.
+                J. Love, J. Mulkers, R. Msiska, G. Bourianoff, J. Leliaert, and K. Everschor-Sitte. 
+                Spatial Analysis of Physical Reservoir Computers. arXiv preprint arXiv:2108.01512, 2022.
             to implement task-agnostic metrics for reservoir computing using a single random input signal.
         """
         super().__init__(inputter, outputreader, mm)
         if self.inputter.datastream.is_binary:
             warnings.warn("A TaskAgnosticExperiment might not work properly for a binary datastream.", stacklevel=2)
-        self.results = {'NL': None, 'MC': None, 'CP': None, 'S': None}
+        self.results = {'NL': None, 'MC': None, 'S': None}
         self.initial_state = self.outputreader.read_state().reshape(-1)
         self.n_out = self.outputreader.n
 
@@ -664,6 +667,5 @@ class TaskAgnosticExperiment(Experiment):
         return {
             'NL': lambda df: df['NL'],
             'MC': lambda df: df['MC'],
-            'CP': lambda df: df['CP'],
             'S':  lambda df: df['S']
         }
