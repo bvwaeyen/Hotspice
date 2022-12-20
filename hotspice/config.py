@@ -1,8 +1,10 @@
 import os
 import sys
 
-if '--hotspice-use-cpu' in sys.argv: # Perhaps a bit weird to have 'use-cpu' here, and 'USE_GPU' in the env?
+if '--hotspice-use-cpu' in sys.argv:
     os.environ['HOTSPICE_USE_GPU'] = 'False'
+elif '--hotspice-use-gpu' in sys.argv:
+    os.environ['HOTSPICE_USE_GPU'] = 'True'
 
 # USE_GPU: True or False, determines whether to use CuPy or NumPy to store and manipulate arrays
 USE_GPU = os.environ.get('HOTSPICE_USE_GPU', 'True').lower() in ('true', 't', '1', 'y', 'yes', 'on')

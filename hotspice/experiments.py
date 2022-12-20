@@ -328,6 +328,7 @@ class KernelQualityExperiment(Experiment):
         self.run_K(input_length=input_length, verbose=verbose, pattern=pattern)
         if verbose: log("Calculating generalization-capability G.")
         self.run_G(input_length=input_length, constant_fraction=constant_fraction, verbose=verbose, pattern=pattern)
+        # Still need to call self.calculate_all() manually after this method.
 
     def run_K(self, input_length: int = 100, pattern=None, verbose=False):
         self.all_states_K = xp.zeros((self.n_out,)*2)

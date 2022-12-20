@@ -477,8 +477,11 @@ class Magnets(ABC):
 
     def update(self, *args, **kwargs):
         can_handle_zero_temperature = ['Glauber']
-        if xp.any(self.T == 0) and (self.params.UPDATE_SCHEME not in can_handle_zero_temperature):
-            warnings.warn("Temperature is zero somewhere, so no switch will be simulated to prevent DIV/0 errors.", stacklevel=2)
+        if xp.any(self.T == 0):
+            if self.params.UPDATE_SCHEME not in can_handle_zero_temperature:
+                warnings.warn("T=0 somewhere in the domain, so no switch will be simulated to prevent DIV/0 errors.", stacklevel=2)
+            else:
+                warnings.warn("T=0 somewhere in the domain, so ergodicity can not be guaranteed. Proceed with caution.", stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
         match self.params.UPDATE_SCHEME:
             case 'Néel':
@@ -517,7 +520,7 @@ class Magnets(ABC):
         # TODO: we might be able to multi-switch here as well, by taking into account the double-switch time
         # delta_E = self.switch_energy()
         # barrier = xp.where(delta_E > -2*self.E_B, xp.maximum(delta_E, self.E_B + delta_E/2), delta_E)/self.occupation
-        with np.errstate(invalid='ignore'): # Ignore the divide-by-zero warning that will follow, as it is intended
+        with np.errstate(invalid='ignore', divide='ignore'): # Ignore the divide-by-zero warning that will follow, as it is intended
             barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
         minBarrier = xp.nanmin(barrier)
         barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)

@@ -29,12 +29,18 @@ class Datastream(ABC):
     @property
     def is_binary(self): return False
 
+    @property
+    def dtype(self): return float
+
 class BinaryDatastream(Datastream):
     """ Just an alias for Datastream: a normal Datastream can contain floats, while this only yields 0 or 1. """
     pass
 
     @property
     def is_binary(self): return True
+
+    @property
+    def dtype(self): return bool
 
 
 class Inputter(ABC):
@@ -84,7 +90,7 @@ class RandomBinaryDatastream(BinaryDatastream):
         super().__init__()
 
     def get_next(self, n=1) -> xp.ndarray:
-        return xp.where(self.rng.random(size=(n,)) < self.p0, 0, 1)
+        return self.rng.random(size=(n,)) >= self.p0
 
 class RandomUniformDatastream(Datastream):
     def __init__(self, low=0, high=1):
