@@ -57,7 +57,8 @@ class Inputter(ABC):
 
 
 class OutputReader(ABC):
-    def __init__(self, mm=None):
+    def __init__(self, mm: Magnets = None):
+        self.mm = mm
         if mm is not None: self.configure_for(mm)
 
     @abstractmethod
@@ -74,8 +75,15 @@ class OutputReader(ABC):
 
     @property
     @abstractmethod
-    def n(self):
+    def n(self) -> int:
         """ The number of output values when reading a given state. """
+    
+    @property
+    @abstractmethod
+    def node_locations(self) -> tuple[xp.ndarray, xp.ndarray]: # Needed for Memory Capacity in TaskAgnosticExperiment
+        """ An Nx2 array, where each row contains representative coordinates for all output values
+            in self.read_state(). The first column contains x-coordinates, the second contains y.
+        """
 
 
 ######## Below are subclasses of the superclasses above
@@ -238,74 +246,58 @@ class PerpFieldInputter(FieldInputter):
 
 
 class RegionalOutputReader(OutputReader):
-    def __init__(self, nx, ny, mm=None):
+    def __init__(self, nx: int, ny: int, mm: Magnets = None):
         """ Reads the current state of the ASI with a certain level of detail.
             @param nx [int]: number of averaging bins in the x-direction.
             @param ny [int]: number of averaging bins in the y-direction.
             @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
         """
         self.nx, self.ny = nx, ny
-        self.grid = np.zeros((self.nx, self.ny)) # We use this to ndenumerate, but CuPy does not have this, so use NumPy
-        if mm is not None: self.configure_for(mm)
-
-    @property
-    def n(self):
-        return self.state.size
+        super().__init__(mm)
 
     def configure_for(self, mm: Magnets):
         self.mm = mm
-        self.region_x = np.linspace(0, self.nx, mm.nx, dtype=int)
-        self.region_y = np.linspace(0, self.ny, mm.ny, dtype=int)
-        self.region_x[-1] = self.nx - 1
-        self.region_y[-1] = self.ny - 1
-        self.region_x = np.tile(self.region_x, (mm.ny, 1))
-        self.region_y = np.tile(self.region_y, (mm.nx, 1)).T
+        self._n = self.nx*self.ny*(2 if self.mm.in_plane else 1)
+        region_x = xp.tile(xp.linspace(0, self.nx*(1-1e-15), mm.nx, dtype=int), (mm.ny, 1)) # -1e-15 to have self.nx-1 as final value instead of self.nx
+        region_y = xp.tile(xp.linspace(0, self.ny*(1-1e-15), mm.ny, dtype=int), (mm.nx, 1)).T # same as x but transposed and ny <-> nx
+        self.region = region_x + self.nx*region_y # 2D (mm.nx x mm.ny) array representing which (1D-indexed) region each magnet belongs to
 
-        n = xp.zeros_like(self.grid, dtype=int) # Number of magnets in each region
-        # Determine the number of magnets in each region
-        for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
-            here = (self.region_x == i[0]) & (self.region_y == i[1])
-            n[i] = xp.sum(mm.occupation[here]) # TODO: <here> is np, <occupation> is xp, is this ok?
-        self.normalization_factor = float(xp.max(self.mm.moment))*n
+        self.normalization_factor = xp.zeros(self.n) # Number of magnets in each region
+        self._node_locations = (xp.zeros_like(self.normalization_factor), xp.zeros_like(self.normalization_factor))
+        for regionindex in range(self.n): # Pre-calculate some quantities for each region
+            self.normalization_factor[regionindex] = xp.sum(mm.occupation[self.region == regionindex]*mm.moment[self.region == regionindex])
+            self._node_locations[0][regionindex] = xp.mean(mm.xx[self.region == regionindex])
+            self._node_locations[1][regionindex] = xp.mean(mm.yy[self.region == regionindex])
+        self._node_locations = xp.asarray(self._node_locations).T
 
-        if mm.in_plane:
-            self.state = xp.zeros((self.nx, self.ny, 2))
-        else:
-            self.state = xp.zeros((self.nx, self.ny))
+        self.state = xp.zeros(self.nx*self.ny*2) if mm.in_plane else xp.zeros(self.nx*self.ny)
 
     def read_state(self, mm: Magnets = None, m=None) -> xp.ndarray:
-        if mm is not None: self.configure_for(mm) # If mm not specified, we suppose configure_for() already happened
-        if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
-        if self.mm.in_plane:
-            m_x = m*self.mm.orientation[:,:,0]*self.mm.moment
-            m_y = m*self.mm.orientation[:,:,1]*self.mm.moment
+        """ Returns a 1D array representing the state of the spin ice. """
+        if (mm is not self.mm) and (mm is not None): self.configure_for(mm)
+        if self.mm is None: raise AttributeError("OutputReader has not yet been initialized with a Magnets object.")
+        m = (self.mm.m if m is None else m)*self.mm.moment # If m is specified, it takes precendence over mm.m
 
-        # TODO: make self.state a 1D array, which can certainly be good for sparse simulations
-        for i, _ in np.ndenumerate(self.grid): # CuPy has no ndenumerate, so use NumPy then
-            here = (self.region_x == i[0]) & (self.region_y == i[1])
+        if self.mm.in_plane:
+            m_x = m*self.mm.orientation[:,:,0]
+            m_y = m*self.mm.orientation[:,:,1]
+
+        for regionindex in range(self.n):
             if self.mm.in_plane:
-                self.state[i[0], i[1], 0] = xp.sum(m_x[here]) # Average m_x
-                self.state[i[0], i[1], 1] = xp.sum(m_y[here]) # Average m_y
+                self.state[regionindex] = xp.sum(m_x[self.region == regionindex])
+                self.state[regionindex + self.n] = xp.sum(m_y[self.region == regionindex])
             else:
-                self.state[i[0], i[1]] = xp.sum(m[here])
-
-        if self.mm.in_plane:
-            self.state[:,:,0] /= self.normalization_factor
-            self.state[:,:,1] /= self.normalization_factor
-        else:
-            self.state /= self.normalization_factor
-
+                self.state[regionindex] = xp.sum(m[self.region == regionindex])
+        self.state /= self.normalization_factor # To get in range [-1, 1]
         return self.state # [Am²]
 
-    def inflate_flat_array(self, arr: np.ndarray|xp.ndarray):
-        """ Transforms a 1D array <arr> to have the same shape as <self.state>.
-            Basically the inverse transformation as done on <self.state> when calling <self.state.reshape(-1)>.
-            @param arr [array]: an array of shape (<self.n>,).
-        """
-        if self.mm.in_plane:
-            return arr.reshape(self.nx, self.ny, 2)
-        else:
-            return arr.reshape(self.nx, self.ny)
+    @property
+    def n(self):
+        return self._n
+
+    @property
+    def node_locations(self):
+        return self._node_locations
 
 
 class OOPSquareChessFieldInputter(Inputter):
@@ -336,7 +328,7 @@ class OOPSquareChessFieldInputter(Inputter):
 
 
 class OOPSquareChessOutputReader(OutputReader):
-    def __init__(self, nx, ny, mm=None):
+    def __init__(self, nx: int, ny: int, mm: Magnets = None):
         """ This is a RegionalOutputReader optimized for OOP_Square ASI.
             Since OOP_Square has two degenerate AFM ground states, the averaging takes place
             using an AFM mask, such that they can be distinguished and domain walls can be identified.
@@ -346,7 +338,7 @@ class OOPSquareChessOutputReader(OutputReader):
                 Otherwise, the user will have to call configure_for() separately after initializing the class instance.
         """
         self.nx, self.ny, self._n = nx, ny, nx*ny
-        if mm is not None: self.configure_for(mm)
+        super().__init__(mm)
 
     def configure_for(self, mm: Magnets):
         if not isinstance(mm, (expected_type := OOP_Square)):
@@ -359,9 +351,13 @@ class OOPSquareChessOutputReader(OutputReader):
         self.region = region_x + self.nx*region_y # 2D (mm.nx x mm.ny) array representing which (1D-indexed) region each magnet belongs to
 
         self.normalization_factor = xp.zeros(self.n, dtype=int) # Number of magnets in each region
+        self._node_locations = (xp.zeros_like(self.normalization_factor), xp.zeros_like(self.normalization_factor))
         # Determine the number of magnets in each region
         for regionindex in range(self.n):
             self.normalization_factor[regionindex] = xp.sum(mm.occupation[self.region == regionindex])
+            self._node_locations[0][regionindex] = xp.mean(mm.xx[self.region == regionindex])
+            self._node_locations[1][regionindex] = xp.mean(mm.yy[self.region == regionindex])
+        self._node_locations = xp.asarray(self._node_locations).T
         self.AFM_mask = ((self.mm.ixx + self.mm.iyy) % 2)*2 - 1 # simple checkerboard pattern of 1 and -1
         self.state = xp.zeros(self.n, dtype=float)
     
@@ -380,3 +376,7 @@ class OOPSquareChessOutputReader(OutputReader):
     @property
     def n(self):
         return self._n
+    
+    @property
+    def node_locations(self):
+        return self._node_locations

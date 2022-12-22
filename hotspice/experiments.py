@@ -31,6 +31,7 @@ class Experiment(ABC):
         self.inputter = inputter
         self.outputreader = outputreader
         self.mm = mm
+        self.outputreader.configure_for(self.mm)
         self.results = {} # General-purpose dict to store simulation results in
     
     @abstractmethod
@@ -467,7 +468,7 @@ class TaskAgnosticExperiment(Experiment):
                 current <self.u> and <self.y> arrays, and <self.final_state> is updated.
             @param verbose [int]: If 0, nothing is printed or plotted.
                 If 1, significant iterations are printed to console.
-                If 2, the magnetization profile is plotted after every input bit in addition to printing.
+                If >1, the magnetization profile is plotted after every input bit in addition to printing.
         """
         self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
         if verbose:
@@ -575,26 +576,6 @@ class TaskAgnosticExperiment(Experiment):
         else:
             return float(xp.sum(Rsq))
 
-    def CP(self, transposed=False): # Complexity
-        """ Calculates the complexity: i.e. the effective rank of the kernel matrix as used in KernelQualityExperiment.
-            The default method used here is to simply average the complexity of recent observations over time.
-            @param transposed [bool] (False): If True, CP is the rank of <self.y> multiplied with <self.y.T>.
-                If False, it is the average of all consecutive square matrices in <self.y> along the time axis.
-                Usually, transposed=True gives (slightly) higher values than for transposed=False.
-                NOTE: never compare results from transposed=True with those for transposed=False.
-        """
-        if self.y.shape[0] < self.y.shape[1]: # Less rows than columns, so rank can at most be the number of rows
-            warnings.warn(f"Not enough recorded iterations to reliably calculate complexity ({self.y.shape[0]} samples < {self.y.shape[1]} features)" , stacklevel=2)
-        
-        if transposed:
-            # Multiply with transposed to get a square matrix of size <self.n_out> (suggested by J. Leliaert)
-            squarematrix = xp.matmul(self.y.T, self.y)
-            rank = xp.linalg.matrix_rank(squarematrix)
-        else:
-            ranks = xp.asarray([xp.linalg.matrix_rank(self.y[i:i+self.y.shape[1],:]) for i in range(max(1, self.y.shape[0]-self.y.shape[1]+1))])
-            rank = xp.mean(ranks)
-        return float(rank)/self.y.shape[1]
-    
     def S(self, relax=False): # Stability
         """ Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
             NOTE: It can be advantageous to define a different metric for stability if the entire magnetization profile
