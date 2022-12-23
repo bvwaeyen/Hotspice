@@ -20,6 +20,7 @@ else:
     import numpy as xp
     from scipy import signal
 
+
 try: # TODO: maybe don't do this by default, only when some sort of display is used? but how to detect this consistently...
     ctypes.windll.shcore.SetProcessDpiAwareness(2) # (For Windows 10/8/7) this makes the matplotlib plots smooth on high DPI screens
 except Exception:

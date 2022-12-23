@@ -80,7 +80,7 @@ class OutputReader(ABC):
     
     @property
     @abstractmethod
-    def node_locations(self) -> tuple[xp.ndarray, xp.ndarray]: # Needed for Memory Capacity in TaskAgnosticExperiment
+    def node_locations(self) -> xp.ndarray: # Needed for Memory Capacity in TaskAgnosticExperiment
         """ An Nx2 array, where each row contains representative coordinates for all output values
             in self.read_state(). The first column contains x-coordinates, the second contains y.
         """

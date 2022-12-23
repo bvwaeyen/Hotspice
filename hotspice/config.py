@@ -1,6 +1,7 @@
 import os
 import sys
 
+
 if '--hotspice-use-cpu' in sys.argv:
     os.environ['HOTSPICE_USE_GPU'] = 'False'
 elif '--hotspice-use-gpu' in sys.argv:

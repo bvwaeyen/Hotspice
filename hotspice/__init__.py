@@ -1,3 +1,12 @@
+"""
+This is the Hotspice package.
+"""
+
+
+__author__ = "Jonathan Maes"
+__version__ = None
+
+
 # The following explicit import allows accessing the things in 'core.py' through hotspice.<thing_in_core.py>
 from .core import *
 
@@ -8,3 +17,4 @@ from . import ASI
 from . import plottools
 from . import io
 from . import experiments
+# from . import poisson #! unfinished

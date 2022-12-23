@@ -5,7 +5,7 @@ channels:
   - defaults
 dependencies:
   - python=3.10.4
-  - conda-forge::cupy=10.6.0
+  - conda-forge::cupy=11.4.0
   - numpy=1.21.5
   - scipy=1.7.3
   - pandas=1.4.1
