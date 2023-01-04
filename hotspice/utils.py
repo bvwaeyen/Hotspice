@@ -374,8 +374,9 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         """
         if hasattr(self, 'constants') and hasattr(self, 'df'):
             # Move all constant columns in self.df to self.constants
-            is_column_constant = ~(self.df != self.df.iloc[0]).any()
-            for column, is_constant in is_column_constant.items():
+            for column in self.df:
+                if self.df[column].dtype == 'O': continue # We don't meddle with 'constant' objects of general type in the df.
+                is_constant = ~(self.df[column] != self.df[column].iloc[0]).any()
                 if is_constant:
                     self._constants[column] = self.df[column].iloc[0]
                     self._df = self._df.drop(columns=column)
@@ -425,6 +426,9 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         with open(fullpath, 'w') as outfile:
             json.dump(total_dict, outfile, indent="\t", cls=_CompactJSONEncoder)
         return fullpath
+
+    def mimic(self, df): # WARN: this could go wrong due to aliasing, but we will see
+        return Data(df, constants=self.constants, metadata=self.metadata)
 
     @staticmethod
     def load(JSON):
@@ -552,6 +556,8 @@ class _CompactJSONEncoder(json.JSONEncoder):
                 return "{\n" + ",\n".join(output) + "\n" + self.indent_str + "}"
             else:
                 return "{ }"
+        elif isinstance(o, (xp.int32, xp.int64)): # json.dumps can not handle numpy ints (floats are ok)
+            return f"{int(o)}"
         elif (name := full_obj_name(o)).startswith('hotspice'): # Then it is some Hotspice-defined class, so ...
             return json.dumps(name) # use full obj name (e.g. hotspice.ASI.IP_Pinwheel etc.)
         else:

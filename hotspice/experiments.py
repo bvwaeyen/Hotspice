@@ -57,8 +57,9 @@ class Experiment(ABC):
     def get_plot_metrics(self):
         """ Returns a dictionary with as many elements as there should be 2D or 1D plots
             in Sweep().plot(). Keys are names of these metrics, values are functions that
-            take one argument which is a pd.DataFrame, and returns either a simple column
-            or a mathematical combination of several columns.
+            take one argument (a hotspice.utils.Data object, which for this purpose is
+            equivalent to a pandas.DataFrame), and returns a pandas.Series which is either
+            a simple column from the Data, or a mathematical combination of several columns.
         """
         return {}
 
@@ -246,11 +247,13 @@ class Sweep(ABC):
                 metrics_i = [[] for _ in range(n)]
                 if is_2D:
                     for val_y, dfj in dfi.groupby(param_y):
+                        data_j = data.mimic(dfj)
                         for i, metric_func in enumerate(metrics_dict.values()):
-                            metrics_i[i].append(metric_func(dfj).iloc[0])
+                            metrics_i[i].append(metric_func(data_j).iloc[0])
                 else:
+                    data_i = data.mimic(dfi)
                     for i, metric_func in enumerate(metrics_dict.values()):
-                        metrics_i[i] = metric_func(dfi).iloc[0]
+                        metrics_i[i] = metric_func(data_i).iloc[0]
                 for i, _ in enumerate(metrics):
                     metrics[i].append(metrics_i[i])
             for i, metric in enumerate(metrics):
@@ -430,9 +433,9 @@ class KernelQualityExperiment(Experiment):
     @staticmethod
     def get_plot_metrics():
         return {
-            'K': lambda df: df['K'],
-            'G': lambda df: df['G'],
-            'Q': lambda df: np.maximum(0, df['K'] - df['G'])
+            'K': lambda data: data['K'],
+            'G': lambda data: data['G'],
+            'Q': lambda data: np.maximum(0, data['K'] - data['G'])
         }
 
 
@@ -647,7 +650,7 @@ class TaskAgnosticExperiment(Experiment):
     @staticmethod
     def get_plot_metrics():
         return {
-            'NL': lambda df: df['NL'],
-            'MC': lambda df: df['MC'],
-            'S':  lambda df: df['S']
+            'NL': lambda data: data['NL'],
+            'MC': lambda data: data['MC'],
+            'S':  lambda data: data['S']
         }
