@@ -88,7 +88,7 @@ def runner(i):
         subprocess.run(cmd, check=True, env=env)
     except subprocess.CalledProcessError: # This error type is expected due to check=True
         failed.append(i)
-        warnings.warn(f"The command '{' '.join(cmd)}' could not be run successfully. See a possible error message above for more info.", stacklevel=2)
+        hotspice.utils.log(f"The command '{' '.join(cmd)}' could not be run successfully. See a possible error message above for more info.", style='issue')
 
     # Return gpu id to queue
     q.put(device_id)

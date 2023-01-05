@@ -6,7 +6,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from .ASI import OOP_Square
-from .core import Magnets
+from .core import Magnets, ZeemanEnergy
 from .plottools import show_m
 from .utils import log
 from . import config
@@ -145,15 +145,19 @@ class FieldInputter(Inputter):
         if self.sine and mm.params.UPDATE_SCHEME != 'Néel':
             raise AttributeError("Can not use temporal sine=True if UPDATE_SCHEME != 'Néel'.")
         if value is None: value = self.datastream.get_next()
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None:
+            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.")
+            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
-        mm.get_energy('Zeeman').set_field(angle=(self.angle if mm.in_plane else None)) # set angle only once
+        Zeeman.set_field(angle=(self.angle if mm.in_plane else None)) # set angle only once
         MCsteps0, t0 = mm.MCsteps, mm.t
         if self.sine: # Change magnitude sinusoidally
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1:
-                mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value*math.sin(progress*math.pi*(2-self.half_period)))
+                Zeeman.set_field(magnitude=self.magnitude*value*math.sin(progress*math.pi*(2-self.half_period)))
                 mm.update(t_max=min(1-progress, 0.05)/self.frequency) # At least 20 (=1/0.05) steps per sine-period
         else: # Use constant magnitude
-            mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*value)
+            Zeeman.set_field(magnitude=self.magnitude*value)
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1:
                 if self.frequency:
                     mm.update(t_max=min(1-progress, 1)/self.frequency) # No sine, so no 20 steps per wavelength needed here
@@ -198,14 +202,18 @@ class PerpFieldInputter(FieldInputter):
             raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
         if value is None: value = self.datastream.get_next()
 
-        e = mm.get_energy('Zeeman')
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None:
+            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.")
+            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+
         angle = self.angle + value*math.pi/2
         MCsteps0, t0 = mm.MCsteps, mm.t
 
         # pos and neg field
         if self.relax:
             for mag in [self.magnitude, -self.magnitude]:
-                e.set_field(magnitude=mag, angle=angle)
+                Zeeman.set_field(magnitude=mag, angle=angle)
                 mm.minimize()
             # log(f"Performed {mm.MCsteps - MCsteps0} MC steps.")
         else:
@@ -213,7 +221,7 @@ class PerpFieldInputter(FieldInputter):
                 if self.frequency != 0: mm.update(t_max=0.5/self.frequency)
                 else: mm.update()
                 # log("updated forward")
-            e.set_field(magnitude=-self.magnitude, angle=angle)
+            Zeeman.set_field(magnitude=-self.magnitude, angle=angle)
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6:
                 if self.frequency != 0: mm.update(t_max=0.5/self.frequency)
                 else: mm.update()
@@ -229,14 +237,19 @@ class PerpFieldInputter(FieldInputter):
             raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
         if value is None: value = self.datastream.get_next()
 
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None:
+            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.")
+            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+
         angle = self.angle + value*math.pi/2
         MCsteps0, t0 = mm.MCsteps, mm.t
         if self.sine: # Change magnitude sinusoidally
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6: # t and MCsteps not exceeded, - 1e-6 to be sure
-                mm.get_energy('Zeeman').set_field(magnitude=self.magnitude*math.sin(progress*math.pi*(2-self.half_period)), angle=angle)
+                Zeeman.set_field(magnitude=self.magnitude*math.sin(progress*math.pi*(2-self.half_period)), angle=angle)
                 mm.update(t_max=min(1-progress, 0.125)/self.frequency) # At least 8 (=1/0.125) steps per sine-period
         else: # Use constant magnitude
-            mm.get_energy('Zeeman').set_field(magnitude=self.magnitude, angle=angle)
+            Zeeman.set_field(magnitude=self.magnitude, angle=angle)
             while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6:
                 if self.frequency:
                     mm.update(t_max=min(1-progress, 1)/self.frequency) # No sine, so no 20 steps per wavelength needed here
@@ -273,7 +286,7 @@ class RegionalOutputReader(OutputReader):
             self._node_coords[i,0] = xp.mean(mm.xx[self.region == regionindex])
             self._node_coords[i,1] = xp.mean(mm.yy[self.region == regionindex])
 
-    def read_state(self, mm: Magnets = None, m=None) -> xp.ndarray:
+    def read_state(self, mm: Magnets = None, m: xp.ndarray = None) -> xp.ndarray:
         """ Returns a 1D array representing the state of the spin ice. """
         super().read_state(mm)
         if self.mm is None: raise AttributeError("OutputReader has not yet been initialized with a Magnets object.")
@@ -308,10 +321,14 @@ class OOPSquareChessFieldInputter(Inputter):
 
     def input_single(self, mm: Magnets, value=None):
         if value is None: value = self.datastream.get_next()
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None:
+            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.")
+            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
         MCsteps0, t0 = mm.MCsteps, mm.t
         AFM_mask = (((mm.ixx + mm.iyy) % 2)*2 - 1).astype(float) # simple checkerboard pattern of 1 and -1
-        mm.get_energy('Zeeman').set_field(magnitude=AFM_mask*(2*value-1)*self.magnitude)
+        Zeeman.set_field(magnitude=AFM_mask*(2*value-1)*self.magnitude)
         while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1:
             if self.frequency:
                 mm.update(t_max=min(1-progress, 1)/self.frequency)
@@ -354,7 +371,7 @@ class OOPSquareChessOutputReader(OutputReader):
             self._node_coords[regionindex,0] = xp.mean(mm.xx[self.region == regionindex])
             self._node_coords[regionindex,1] = xp.mean(mm.yy[self.region == regionindex])
     
-    def read_state(self, mm: Magnets = None, m=None) -> xp.ndarray:
+    def read_state(self, mm: Magnets = None, m: xp.ndarray = None) -> xp.ndarray:
         """ Returns a 1D array representing the AFM state of the spin ice. """
         super().read_state(mm)
         masked_m = self.AFM_mask*(self.mm.m if m is None else m)
