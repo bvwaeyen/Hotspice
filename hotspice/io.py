@@ -61,29 +61,30 @@ class OutputReader(ABC):
         self.mm = mm
         if mm is not None: self.configure_for(mm)
 
-    @abstractmethod
-    def read_state(self, mm: Magnets) -> xp.ndarray:
-        """ Reads the current state of the <mm> simulation in some way. """
-        self.state = xp.arange(self.n)
-        return self.state
-
     def configure_for(self, mm: Magnets):
         """ Subclassing this method is optional. When called, some properties of this OutputReader object
             are initialized, which depend on the Magnets object <mm>.
         """
         self.mm = mm
 
-    @property
     @abstractmethod
+    def read_state(self, mm: Magnets = None) -> xp.ndarray:
+        """ Reads the current state of the <mm> simulation in some way.
+            Sets <self.state>, and returns <self.state>.
+        """
+        if (mm is not None) and (mm is not self.mm): self.configure_for(mm)
+
+    @property
     def n(self) -> int:
         """ The number of output values when reading a given state. """
+        return self.state.size
     
     @property
-    @abstractmethod
-    def node_locations(self) -> xp.ndarray: # Needed for Memory Capacity in TaskAgnosticExperiment
+    def node_coords(self) -> xp.ndarray: # Needed for Memory Capacity in TaskAgnosticExperiment, as well as squinting
         """ An Nx2 array, where each row contains representative coordinates for all output values
             in self.read_state(). The first column contains x-coordinates, the second contains y.
         """
+        return self._node_coords
 
 
 ######## Below are subclasses of the superclasses above
@@ -253,28 +254,28 @@ class RegionalOutputReader(OutputReader):
             @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
         """
         self.nx, self.ny = nx, ny
+        self.n_regions = self.nx*self.ny
         super().__init__(mm)
 
     def configure_for(self, mm: Magnets):
         self.mm = mm
-        self._n = self.nx*self.ny*(2 if self.mm.in_plane else 1)
+        self.state = xp.zeros(self.n_regions*2) if mm.in_plane else xp.zeros(self.n_regions)
+
         region_x = xp.tile(xp.linspace(0, self.nx*(1-1e-15), mm.nx, dtype=int), (mm.ny, 1)) # -1e-15 to have self.nx-1 as final value instead of self.nx
         region_y = xp.tile(xp.linspace(0, self.ny*(1-1e-15), mm.ny, dtype=int), (mm.nx, 1)).T # same as x but transposed and ny <-> nx
         self.region = region_x + self.nx*region_y # 2D (mm.nx x mm.ny) array representing which (1D-indexed) region each magnet belongs to
 
         self.normalization_factor = xp.zeros(self.n) # Number of magnets in each region
-        self._node_locations = (xp.zeros_like(self.normalization_factor), xp.zeros_like(self.normalization_factor))
-        for regionindex in range(self.n): # Pre-calculate some quantities for each region
-            self.normalization_factor[regionindex] = xp.sum(mm.occupation[self.region == regionindex]*mm.moment[self.region == regionindex])
-            self._node_locations[0][regionindex] = xp.mean(mm.xx[self.region == regionindex])
-            self._node_locations[1][regionindex] = xp.mean(mm.yy[self.region == regionindex])
-        self._node_locations = xp.asarray(self._node_locations).T
-
-        self.state = xp.zeros(self.nx*self.ny*2) if mm.in_plane else xp.zeros(self.nx*self.ny)
+        self._node_coords = xp.zeros((self.n, 2))
+        for i in range(self.n): # Pre-calculate some quantities for each region
+            regionindex = i % self.n_regions
+            self.normalization_factor[i] = xp.sum(mm.occupation[self.region == regionindex]*mm.moment[self.region == regionindex])
+            self._node_coords[i,0] = xp.mean(mm.xx[self.region == regionindex])
+            self._node_coords[i,1] = xp.mean(mm.yy[self.region == regionindex])
 
     def read_state(self, mm: Magnets = None, m=None) -> xp.ndarray:
         """ Returns a 1D array representing the state of the spin ice. """
-        if (mm is not self.mm) and (mm is not None): self.configure_for(mm)
+        super().read_state(mm)
         if self.mm is None: raise AttributeError("OutputReader has not yet been initialized with a Magnets object.")
         m = (self.mm.m if m is None else m)*self.mm.moment # If m is specified, it takes precendence over mm.m
 
@@ -282,22 +283,14 @@ class RegionalOutputReader(OutputReader):
             m_x = m*self.mm.orientation[:,:,0]
             m_y = m*self.mm.orientation[:,:,1]
 
-        for regionindex in range(self.n):
+        for regionindex in range(self.n_regions):
             if self.mm.in_plane:
                 self.state[regionindex] = xp.sum(m_x[self.region == regionindex])
-                self.state[regionindex + self.n] = xp.sum(m_y[self.region == regionindex])
+                self.state[regionindex + self.n_regions] = xp.sum(m_y[self.region == regionindex])
             else:
                 self.state[regionindex] = xp.sum(m[self.region == regionindex])
         self.state /= self.normalization_factor # To get in range [-1, 1]
         return self.state # [Am²]
-
-    @property
-    def n(self):
-        return self._n
-
-    @property
-    def node_locations(self):
-        return self._node_locations
 
 
 class OOPSquareChessFieldInputter(Inputter):
@@ -337,7 +330,7 @@ class OOPSquareChessOutputReader(OutputReader):
             @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
                 Otherwise, the user will have to call configure_for() separately after initializing the class instance.
         """
-        self.nx, self.ny, self._n = nx, ny, nx*ny
+        self.nx, self.ny = nx, ny
         super().__init__(mm)
 
     def configure_for(self, mm: Magnets):
@@ -346,37 +339,26 @@ class OOPSquareChessOutputReader(OutputReader):
                 raise TypeError(f"{type(self).__name__} only works on out-of-plane ASI, but received {type(mm).__name__}.")
             warnings.warn(f"{type(self).__name__} expects {expected_type.__name__} ASI, but received {type(mm).__name__}.", stacklevel=2)
         self.mm = mm
+        self.state = xp.zeros(self.nx*self.ny, dtype=float)
+        self.AFM_mask = ((self.mm.ixx + self.mm.iyy) % 2)*2 - 1 # simple checkerboard pattern of 1 and -1
+
         region_x = xp.tile(xp.linspace(0, self.nx*(1-1e-15), mm.nx, dtype=int), (mm.ny, 1)) # -1e-15 to have self.nx-1 as final value instead of self.nx
         region_y = xp.tile(xp.linspace(0, self.ny*(1-1e-15), mm.ny, dtype=int), (mm.nx, 1)).T # same as x but transposed and ny <-> nx
         self.region = region_x + self.nx*region_y # 2D (mm.nx x mm.ny) array representing which (1D-indexed) region each magnet belongs to
 
         self.normalization_factor = xp.zeros(self.n, dtype=int) # Number of magnets in each region
-        self._node_locations = (xp.zeros_like(self.normalization_factor), xp.zeros_like(self.normalization_factor))
+        self._node_coords = xp.zeros((self.n, 2))
         # Determine the number of magnets in each region
         for regionindex in range(self.n):
             self.normalization_factor[regionindex] = xp.sum(mm.occupation[self.region == regionindex])
-            self._node_locations[0][regionindex] = xp.mean(mm.xx[self.region == regionindex])
-            self._node_locations[1][regionindex] = xp.mean(mm.yy[self.region == regionindex])
-        self._node_locations = xp.asarray(self._node_locations).T
-        self.AFM_mask = ((self.mm.ixx + self.mm.iyy) % 2)*2 - 1 # simple checkerboard pattern of 1 and -1
-        self.state = xp.zeros(self.n, dtype=float)
+            self._node_coords[regionindex,0] = xp.mean(mm.xx[self.region == regionindex])
+            self._node_coords[regionindex,1] = xp.mean(mm.yy[self.region == regionindex])
     
     def read_state(self, mm: Magnets = None, m=None) -> xp.ndarray:
         """ Returns a 1D array representing the AFM state of the spin ice. """
-        if mm is not None: self.configure_for(mm) # If mm is not specified, we suppose configure_for() already happened
-        if m is None: m = self.mm.m # If m is specified, it takes precendence over mm regardless of whether mm was specified too
-
-        # TODO: I suspect that this for loop is quite slow if self.n is big; should profile this and possibly vectorize.
-        masked_m = m*self.AFM_mask
-        for regionindex in range(self.n):
+        super().read_state(mm)
+        masked_m = self.AFM_mask*(self.mm.m if m is None else m)
+        for regionindex in range(self.n): # TODO: I suspect that this for loop is quite slow if self.n is big; should profile this and possibly vectorize.
             self.state[regionindex] = xp.sum(masked_m[self.region == regionindex])
         self.state /= self.normalization_factor # To get in range [-1, 1]
         return self.state # [unitless]
-    
-    @property
-    def n(self):
-        return self._n
-    
-    @property
-    def node_locations(self):
-        return self._node_locations

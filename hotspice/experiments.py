@@ -5,6 +5,7 @@ import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.ma as ma
 import pandas as pd
 import statsmodels.api as sm
 
@@ -439,7 +440,7 @@ class KernelQualityExperiment(Experiment):
         }
 
 
-class TaskAgnosticExperiment(Experiment):
+class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this class that plots the spatial metrics, and leave the total (non-local) metrics exposed for the Sweep.plot().
     def __init__(self, inputter, outputreader, mm):
         """ Follows the paper
                 J. Love, J. Mulkers, R. Msiska, G. Bourianoff, J. Leliaert, and K. Everschor-Sitte. 
@@ -449,7 +450,7 @@ class TaskAgnosticExperiment(Experiment):
         super().__init__(inputter, outputreader, mm)
         if self.inputter.datastream.is_binary:
             warnings.warn("A TaskAgnosticExperiment might not work properly for a binary datastream.", stacklevel=2)
-        self.results = {'NL': None, 'MC': None, 'S': None}
+        self.results = {'NL': None, 'NL_local': None, 'MC': None, 'MC_local': None, 'S': None, 'S_local': None}
         self.initial_state = self.outputreader.read_state().reshape(-1)
         self.n_out = self.outputreader.n
 
@@ -465,14 +466,15 @@ class TaskAgnosticExperiment(Experiment):
         outputreader = RegionalOutputReader(2, 2, mm)
         return cls(inputter, outputreader, mm)
 
-    def run(self, N=1000, add=False, pattern=None, verbose=False):
+    def run(self, N=1000, pattern=None, verbose=False):
         """ @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
-            @param add [bool]: If True, the newly calculated iterations are appended to the
-                current <self.u> and <self.y> arrays, and <self.final_state> is updated.
-            @param verbose [int]: If 0, nothing is printed or plotted.
+            @param pattern [str] (None): The state that <self.mm> is initialized in. If not specified,
+                the ground state of the spin ice geometry is used.
+            @param verbose [int] (False): If 0, nothing is printed or plotted.
                 If 1, significant iterations are printed to console.
                 If >1, the magnetization profile is plotted after every input bit in addition to printing.
         """
+        # Ground state initialization, relax and store the initial state
         self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
         if verbose:
             if verbose > 1:
@@ -480,27 +482,24 @@ class TaskAgnosticExperiment(Experiment):
                 init_interactive()
                 fig = None
             log(f"[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...")
+        self.mm.relax()
+        self.initial_state = self.outputreader.read_state() # TODO: change to self.mm.m.copy()? (issue: plotting S_local might get harder then because we need the correct mm geometry then when recalling it after something had been saved)
 
-        if not add: 
-            self.mm.relax()
-            self.initial_state = self.outputreader.read_state().reshape(-1)
         # Run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
-        u = xp.zeros(N) # Inputs
-        y = xp.zeros((N, self.n_out)) # Outputs
+        self.u = xp.zeros(N) # Inputs
+        self.y = xp.zeros((N, self.n_out)) # Outputs
         for i in range(N):
-            u[i] = self.inputter.input_single(self.mm)
-            y[i,:] = self.outputreader.read_state().reshape(-1)
+            self.u[i] = self.inputter.input_single(self.mm)
+            self.y[i,:] = self.outputreader.read_state()
             if verbose:
                 if verbose > 1: fig = show_m(self.mm, figure=fig)
                 if is_significant(i, N):
                     log(f"[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).")
-        self.mm.relax()
-        self.final_state = self.outputreader.read_state().reshape(-1)
-
-        self.u = xp.concatenate([self.u, u], axis=0) if add else u
-        self.y = xp.concatenate([self.y, y], axis=0) if add else y
-
         if verbose > 1: close_interactive(fig) # Close the realtime figure as it is no longer needed
+
+        # Relax and store the final state
+        self.mm.relax()
+        self.final_state = self.outputreader.read_state()
         # Still need to call self.calculate_all() manually after this method.
 
     def calculate_all(self, ignore_errors=False, **kwargs):
@@ -509,97 +508,103 @@ class TaskAgnosticExperiment(Experiment):
             @param ignore_errors [bool] (False): if True, exceptions raised by the
                 self.<metric> functions are ignored (use with caution).
         """
-        for metric, method in {'NL': self.NL, 'MC': self.MC, 'CP': self.CP, 'S': self.S}.items():
+        kwargs.setdefault('use_stored', True)
+        for metric, method in {'NL_local': self.NL_local, 'NL': self.NL, 'MC_local': self.MC_local, 'MC': self.MC, 'S_local': self.S_local, 'S': self.S}.items():
             try:
-                self.results[metric] = method(**filter_kwargs(kwargs, method))
+                self.results[metric] = method(**kwargs)
             except Exception:
                 if not ignore_errors: raise
 
-    def NL(self, k: int = 10, local: bool = False, test_fraction: float = 1/4, verbose: bool = False): # Non-linearity
-        """ Returns a float (local=False) or an array (local=True) representing the nonlinearity,
-            either globally or locally depending on <local>. For this, an estimator for the current readout state is
-            trained which for any time instant has access to the <k> most recent inputs (including the present one).
+    def NL_local(self, k: int = 10, test_fraction: float = 1/4, verbose: bool = False, **kwargs) -> xp.ndarray:
+        """ Returns an array representing the nonlinearity of each output node. For this, a linear
+            estimator is trained which attempts to predict the current output (self.y) based on the
+            <k> most recent inputs (self.u) (including the current one).
+            @param k [int] (10): the number of previous inputs visible to the linear estimator to
+                estimate the output (this should be longer than the relaxation time of the reservoir).
+            @param test_fraction [float] (.25): this is the fraction of data points used in the test set
+                to evaluate the metrics. The remaining 1-<test_fraction> are used to train the estimators.
         """
-        if verbose: log(f"Calculating NL (local={local})...")
-        
-        train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
-        if train_test_cutoff < k: raise ValueError(f"NL: k={k} must be <={train_test_cutoff} for the available data.")
-        u_train_strided, u_test_strided = xp.split(strided(self.u, k), [train_test_cutoff])
-        y_train, y_test = xp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
-        
-        # u_train_strided, y_train = u_train_strided[k-1:], y_train[k-1:] # First <k-1> rows don't have <k> previous entries yet to use as 'samples'
-        Rsq = xp.empty(self.n_out) # R² correlation coefficient
-        for j in range(self.n_out): # Train an estimator for the j-th output feature
-            model = sm.OLS(asnumpy(y_train[:,j]), asnumpy(u_train_strided), missing='drop') # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
+        if verbose: log(f"Calculating NL_local...")
+
+        train_test_cutoff = math.ceil(self.u.size*(1 - test_fraction))
+        if train_test_cutoff < k: raise ValueError(f"Nonlinearity: size of training set ({train_test_cutoff}) must be >= k ({k}).")
+        u_train_strided, u_test_strided = xp.split(strided(self.u, k), [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
+        y_train, y_test = xp.split(self.y, [train_test_cutoff])
+
+        Rsq = xp.empty(self.n_out) # R² correlation coefficient for each output node
+        for j in range(self.n_out): # Train an estimator for the j-th output node
+            Y = asnumpy(y_train[:,j])
+            X = sm.add_constant(asnumpy(u_train_strided)) # Also add constant 'c' from formula 3 of paper
+            model = sm.OLS(Y, X, missing='drop') # missing='drop' ignores samples with NaN (here: the first k-1 samples)
             results = model.fit()
-            y_hat_test = results.predict(asnumpy(u_test_strided))
-            sigma_y_hat, sigma_y = np.var(y_hat_test), np.var(y_test[:,j])
-            if sigma_y_hat == 0: # (highly unlikely) predicting constant value, so R² depends on whether this constant is the average or not
+            y_hat_test = results.predict(sm.add_constant(asnumpy(u_test_strided)))
+            if np.var(y_hat_test) == 0: # Predicting constant value, so R² depends on whether this constant is the average or not
                 Rsq[j] = float(xp.mean(y_hat_test) == xp.mean(y_test[:,j]))
-            elif sigma_y == 0: # Constant readout, so NL should logically be 0, so Rsq = 1-NL = 1
+            elif np.var(y_test[:,j]) == 0: # Constant readout, so NL should be 0, so Rsq = 1-NL = 1
                 Rsq[j] = 1.
-            else: # Rsq is 1 for very predictable 
-                Rsq[j] = R_squared(y_hat_test, y_test[:,j]) # Same as np.corrcoef(y_hat_test, y_test[:,j])[0,1]**2
-
-        # Handle <local> True or False and return appropriately
-        if local:
-            return 1 - Rsq
-        else:
-            return float(1 - xp.mean(Rsq))
-    
-    def MC(self, k=10, local=False, test_fraction=1/4, verbose=False): # Memory capacity
-        """ Returns a float (local=False) or an array (local=True) representing the memory capacity,
-            either globally or locally depending on <local>. For this, an estimator is trained which
-            for any time instant attempts to predict the previous <k> inputs based on the current readout state.
-        """
-        if verbose: log(f"Calculating MC (local={local})...")
-
-        train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
-        if train_test_cutoff < k: raise ValueError(f"MC: k={k} must be <={train_test_cutoff} for the available data.")
-        u_train, u_test = xp.split(self.u, [train_test_cutoff])
-        y_train, y_test = xp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
-
-        Rsq = xp.empty(k) # R² correlation coefficient
-        if local: weights = xp.zeros((k, self.n_out))
-        for j in range(1, k+1): # Train an estimator for the input j iterations ago
-            # This one is a mess of indices, but at least we don't need striding like for non-linearity
-            results = sm.OLS(asnumpy(u_train[k-j:-j]), asnumpy(y_train[k:,:]), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
-            if local: weights[j-1,:] = xp.asarray(results.params) # TODO: this gives an error I think
-            u_hat_test = results.predict(asnumpy(y_test[j:,:])) # Start at y_test[j] to prevent leakage between train/test
-            Rsq[j-1] = R_squared(u_hat_test, u_test[:-j])
-        Rsq[xp.isnan(Rsq)] = 0 # If some std=0, then it is constant so R² actually gives 0
-
-        # Handle <local> True or False and return appropriately
-        if local:
-            # TODO: I think some normalization is wrong here (result is all near 0.5, not full range between 0 and 1 as in paper)
-            weights = weights - xp.min(weights, axis=1).reshape(-1, 1) # Minimum value becomes 0
-            weights = weights / xp.max(weights, axis=1).reshape(-1, 1) # Maximum value becomes 1
-            weights_avg = xp.mean(weights, axis=0) # Average across 'time'
-            return weights_avg
-        else:
-            return float(xp.sum(Rsq))
-
-    def S(self, relax=False): # Stability
-        """ Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
-            NOTE: It can be advantageous to define a different metric for stability if the entire magnetization profile
-                  is known, since this function only has access to the readout nodes, not the whole self.m array.
-            @param relax [bool] (False): if True, the final state is determined by relaxing the current state of <self.mm>.
-        """
-        if relax:
-            self.mm.relax()
-            final_readout = self.outputreader.read_state().reshape(-1)
-        elif not hasattr(self, 'final_state'):
-            if self.y.size > 0:
-                final_readout = self.y[-1,:]
             else:
-                final_readout = self.outputreader.read_state().reshape(-1)
+                Rsq[j] = R_squared(y_hat_test, y_test[:,j])
+        return 1 - Rsq
 
-        initial_readout = self.initial_state # Assuming this was relaxed first
-        final_readout = self.final_state # Assuming this was also relaxed first
-        return 1 - distance.cosine(asnumpy(initial_readout), asnumpy(final_readout))/2 # distance.cosine is in range [0., 2.]
-        # Another possibly interesting metric: Hamming distance 
-        # (is proportion of disagreeing elements, but would require full access to state mm.m to work properly (-1 or 1 binary state))
+    def NL(self, use_stored=False, **kwargs) -> float:
+        """ Returns the average nonlinearity throughout the system. """
+        NL = self.results["NL_local"] if use_stored else self.NL(**kwargs)
+        return float(xp.mean(NL))
 
+    def MC_local(self, k: int = 10, test_fraction: float = 1/4, threshold_dist: float = None, verbose: bool = False, **kwargs) -> xp.ndarray:
+        """ Returns an array representing the memory capacity of each output node. For this, a
+            linear estimator is trained to recall the history of inputs (self.u) based on the
+            output values (self.y) of the output nodes within a threshold distance of each node.
+            @param k [int] (10): the furthest amount of steps back in time that an estimator is
+                trained to recall (this should be longer than the relaxation time of the reservoir).
+            @param test_fraction [float] (.25): this is the fraction of data points used in the test set
+                to evaluate the metrics. The remaining 1-<test_fraction> are used to train the estimators.
+            @param threshold_dist [float] (2*NN_dist): to determine local MC, a neighborhood (all output
+                nodes at a distance of at most <threshold_dist>) around the output node is used to provide
+                data for the estimator.
+        """
+        if verbose: log(f"Calculating MC_local...")
+        train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
+        u_train, u_test = xp.split(self.u, [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
+        if u_train.size <= k: raise ValueError(f"Memory capacity: size of training set ({u_train.size}) must be > k ({k}).")
+        if u_test.size <= k: raise ValueError(f"Memory capacity: size of test set ({u_test.size}) must be > k ({k}).")
+
+        dist_matrix = xp.asarray(distance.cdist(asnumpy(self.outputreader.node_coords), asnumpy(self.outputreader.node_coords)))
+        if threshold_dist is None: # By default we take twice the minimum NN distance to get some averaging nearby
+            mx = ma.masked_array(dist_matrix, mask=(dist_matrix==0))
+            min_dist_for_each_cell = mx.min(axis=1).data
+            threshold_dist = 2*xp.max(min_dist_for_each_cell)
+
+        N = self.outputreader.n if threshold_dist != xp.inf else 1 # If distance is xp.inf, all nodes will give the same, so set N=1 for efficiency
+        MC_of_each_node = xp.zeros(self.outputreader.n)
+        for outputnode in range(N):
+            neighbors = xp.where(dist_matrix[outputnode,:] < threshold_dist)[0] # \gamma_n in paper
+            y_train, y_test = xp.split(self.y[:,neighbors], [train_test_cutoff])
+            Rsq = xp.empty(k) # R² correlation coefficient
+            for tau in range(1, k+1): # Train an estimator for the input j iterations ago
+                # This one is a mess of indices, but at least we don't need striding like for NL
+                results = sm.OLS(asnumpy(u_train[k-tau:-tau]), sm.add_constant(asnumpy(y_train[k:,:])), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
+                u_hat_test = results.predict(sm.add_constant(asnumpy(y_test[tau:,:]))) # Start at y_test[j] to prevent leakage between train/test
+                Rsq[tau-1] = R_squared(u_hat_test, u_test[:-tau])
+            MC_of_each_node[outputnode] = float(xp.sum(Rsq))
+        if N == 1: MC_of_each_node[:] = MC_of_each_node[0]
+        return MC_of_each_node
+
+    def MC(self, **kwargs) -> float:
+        """ Returns the memory capacity based on an estimator with access to all the output nodes. """
+        kwargs["threshold_dist"] = xp.inf # To remove locality
+        return float(xp.mean(self.MC_local(**kwargs)))
+
+    def S_local(self, **kwargs):
+        """ Returns an array representing the stability of each output node, which is a boolean
+            value that is True if the initial and final states are the same, otherwise False.
+        """
+        return (self.initial_state == self.final_state).astype(float) # (ideally these should be full mm.m states, not the output readout)
+        
+    def S(self, **kwargs):
+        """ Returns the stability of the complete system using a cosine distance metric. """
+        return 1 - distance.cosine(asnumpy(self.initial_state), asnumpy(self.final_state))/2 # distance.cosine is in range [0., 2.]
+        # Another possibly interesting metric: Hamming distance (would require access to full mm.m state to work properly)
 
     def to_dataframe(self, u: xp.ndarray = None, y: xp.ndarray = None):
         """ If <u> and <y> are not explicitly provided, the saved <self.u> and <self.y>

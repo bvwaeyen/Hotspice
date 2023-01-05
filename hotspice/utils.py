@@ -78,9 +78,9 @@ def R_squared(a, b):
     """ Returns the R² metric between two 1D arrays <a> and <b> as defined in
         "Task Agnostic Metrics for Reservoir Computing" by Love et al.
     """
-    a, b = xp.asarray(a), xp.asarray(b)
+    if (var_a := xp.var(a)) == 0 or (var_b := xp.var(b)) == 0: return 0
     cov = xp.mean((a - xp.mean(a))*(b - xp.mean(b)))
-    return cov**2/xp.var(a)/xp.var(b) # Same as xp.corrcoef(a, b)[0,1]**2, but faster
+    return cov**2/var_a/var_b # Same as xp.corrcoef(a, b)[0,1]**2, but faster
 
 def strided(a: xp.ndarray, W: int):
     """ <a> is a 1D array, which gets expanded into 2D shape (a.size, W) where every row
