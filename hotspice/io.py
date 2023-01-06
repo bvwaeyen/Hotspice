@@ -259,6 +259,28 @@ class PerpFieldInputter(FieldInputter):
         return value
 
 
+class FullOutputReader(OutputReader):
+    # TODO: add compression to this, so it can be used without storage-worry as default when storing in a dataframe (then afterwards we can re-load this into mm and read it with another kind of outputreader)
+    def __init__(self, mm: Magnets = None):
+        """ Reads the full state of the ASI. Ignores empty cells.
+            By reading the full state, we allow for squinting afterwards. How exactly to do this, is a # TODO point.
+            @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+        """
+        super().__init__(mm)
+    
+    def configure_for(self, mm: Magnets):
+        self.mm = mm
+        self.indices = xp.nonzero(self.mm.occupation)
+        self.state = self.mm.m[self.indices]
+        self._node_coords = xp.asarray([mm.xx[self.indices], mm.yy[self.indices]]).T
+    
+    def read_state(self, mm: Magnets, m: xp.ndarray = None) -> xp.ndarray:
+        super().read_state(mm)
+        if m is None: m = self.mm.m
+        self.state = m[self.indices]
+        return self.state
+
+
 class RegionalOutputReader(OutputReader):
     def __init__(self, nx: int, ny: int, mm: Magnets = None):
         """ Reads the current state of the ASI with a certain level of detail.
