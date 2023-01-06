@@ -392,7 +392,7 @@ class KernelQualityExperiment(Experiment):
 
 
     def to_dataframe(self):
-        """ DF has columns 'metric' and 'y0', 'y1', ... 'y<self.n_out - 1>'.
+        """ DF has columns 'metric' and 'y'.
             When 'metric' == "K", the row corresponds to a state from self.run_K(), and vice versa for 'G'.
         """
         u = self.all_inputs_K + self.all_inputs_G # Both are lists so we can concatenate them like this
@@ -401,12 +401,7 @@ class KernelQualityExperiment(Experiment):
         metric = np.array(["K"]*yK.shape[0] + ["G"]*yG.shape[0])
         if yK.shape[1] != yG.shape[1]: raise ValueError(f'K and G were not simulated with an equal amount of readout nodes.')
 
-        df_front = pd.DataFrame({'metric': metric, 'inputs': u})
-        df_yK = pd.DataFrame({f'y{i}': yK[:,i] for i in range(yK.shape[1])})
-        df_yG = pd.DataFrame({f'y{i}': yG[:,i] for i in range(yG.shape[1])})
-        df = pd.concat([df_yK, df_yG], axis=0, ignore_index=True) # Put K and G readouts below each other
-        df = pd.concat([df_front, df], axis=1, ignore_index=False) # Add the 'metric' column in front
-        return df
+        return pd.DataFrame({'metric': metric, 'inputs': u, 'y': list(yK) + list(yG)})
 
     def load_dataframe(self, df: pd.DataFrame):
         """ Loads the arrays <all_states_K> and <all_states_G> stored in the dataframe <df>
@@ -417,15 +412,12 @@ class KernelQualityExperiment(Experiment):
 
         if df_K.empty or df_G.empty:
             raise ValueError("Dataframe is empty, so could not be loaded to KernelQualityExperiment.")
-
-        # Select the y{i} columns
-        pattern = re.compile(r'\Ay[0-9]+\Z') # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
-        y_cols = [colname for colname in df if pattern.match(colname)]
-        y_cols.sort(key=human_sort) # Usually of the format 'y0', 'y1', 'y2', ..., 'y10', where human_sort makes sure e.g. 10 comes after 2
-        n_cols = len(y_cols)
-
-        self.all_states_K = xp.asarray(df_K[y_cols]) if n_cols != 0 else xp.array([[1]]*len(df_K)) # n_cols can be 0 if all constant
-        self.all_states_G = xp.asarray(df_G[y_cols]) if n_cols != 0 else xp.array([[1]]*len(df_G))
+        if 'y' not in df_K or 'y' not in df_G: # Then 'y' is not in the dataframe because it is constant (this should not happen anymore, but let's keep this to be sure)
+            self.all_states_K = xp.array([[1]]*len(df_K))
+            self.all_states_G = xp.array([[1]]*len(df_G))
+        else:
+            self.all_states_K = xp.asarray(df_K['y'])
+            self.all_states_G = xp.asarray(df_G['y'])
         self.all_inputs_K = list(df_K['inputs'])
         self.all_inputs_G = list(df_G['inputs'])
 
@@ -611,7 +603,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
             arrays are used. When providing <u> and <y> directly,
                 <u> should be a 1D array of length N, and
                 <y> a <NxL> array, where L is the number of output nodes.
-            The resulting dataframe has columns 'u', 'y0', 'y1', ... 'y<L-1>'.
+            The resulting dataframe has columns 'u' and 'y'.
         """
         if (u is None) != (y is None): raise ValueError("Either none or both of <u> and <y> arguments must be provided.")
         if u is None:
@@ -623,25 +615,18 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         y = asnumpy(y) # Need as NumPy array for pd
         if u.shape[0] != y.shape[0]: raise ValueError(f"Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.")
 
-        df_u = pd.DataFrame({'u': u})
-        df_y = pd.DataFrame({f'y{i}': y[:,i] for i in range(y.shape[1])})
-        df = pd.concat([df_u, df_y], axis=1)
-        return df
+        return pd.DataFrame({'u': u, 'y': list(y)})
 
     def load_dataframe(self, df: pd.DataFrame, u: xp.ndarray = None, y: xp.ndarray = None):
         """ Loads the arrays <u> and <y> stored in the dataframe <df>
             into the <self.u> and <self.y> attributes, and returns both.
         """
         if u is None: u = xp.asarray(df['u'])
-        if y is None:
-            pattern = re.compile(r'\Ay[0-9]+\Z') # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
-            y_cols = [colname for colname in df if pattern.match(colname)]
-            y_cols.sort(key=human_sort)
-            y = xp.asarray(df[y_cols])
+        if y is None: y = xp.asarray(df['y'])
 
         self.u = xp.asarray(u).reshape(-1)
-        self.y = xp.asarray(y, dtype=float).reshape(self.u.shape[0], -1)
-        self.n_out = y.shape[1]
+        self.y = xp.asarray([arr for arr in y], dtype=float).reshape(self.u.shape[0], -1)
+        self.n_out = self.y.shape[1]
         if math.isnan(self.u[0]):
             self.initial_state = self.y[0,:]
             self.u = self.u[1:]
