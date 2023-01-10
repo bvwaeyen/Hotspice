@@ -185,13 +185,15 @@ class Sweep(ABC):
             # 1) Select the part with <vars> in <data>
             df_i = data.df.copy()
             for varname, value in vars.items():
-                df_i = df_i.loc[np.isclose(df_i[varname], value)]
+                df_i = df_i.loc[np.isclose(df_i[varname], value, atol=0)]
             # 2) Re-initialize <experiment> with this data
             experiment.load_dataframe(df_i)
             # 3) Calculate relevant metrics
             experiment.calculate_all(ignore_errors=False)
             # 4) Save these <experiment.results> and <vars> to a dataframe that we are calculating on the fly
             all_info = vars | experiment.results
+            for key, value in all_info.items():
+                if isinstance(value, xp.ndarray): all_info[key] = [value] # Otherwise it is treated as an array
             df = pd.concat([df, pd.DataFrame(data=all_info, index=[0])], ignore_index=True)
 
         data = Data(df, constants=data.constants, metadata=data.metadata)
@@ -526,10 +528,10 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         Rsq = xp.empty(self.n_out) # R² correlation coefficient for each output node
         for j in range(self.n_out): # Train an estimator for the j-th output node
             Y = asnumpy(y_train[:,j])
-            X = sm.add_constant(asnumpy(u_train_strided)) # Also add constant 'c' from formula 3 of paper
+            X = sm.add_constant(asnumpy(u_train_strided), has_constant='add') # Also add constant 'c' from formula 3 of paper
             model = sm.OLS(Y, X, missing='drop') # missing='drop' ignores samples with NaN (here: the first k-1 samples)
             results = model.fit()
-            y_hat_test = results.predict(sm.add_constant(asnumpy(u_test_strided)))
+            y_hat_test = results.predict(sm.add_constant(asnumpy(u_test_strided), has_constant='add'))
             if np.var(y_hat_test) == 0: # Predicting constant value, so R² depends on whether this constant is the average or not
                 Rsq[j] = float(xp.mean(y_hat_test) == xp.mean(y_test[:,j]))
             elif np.var(y_test[:,j]) == 0: # Constant readout, so NL should be 0, so Rsq = 1-NL = 1
@@ -571,12 +573,12 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         MC_of_each_node = xp.zeros(self.outputreader.n)
         for outputnode in range(N):
             neighbors = xp.where(dist_matrix[outputnode,:] < threshold_dist)[0] # \gamma_n in paper
-            y_train, y_test = xp.split(self.y[:,neighbors], [train_test_cutoff])
+            y_train, y_test = xp.split(sm.add_constant(asnumpy(self.y[:,neighbors]), has_constant='add'), [train_test_cutoff])
             Rsq = xp.empty(k) # R² correlation coefficient
             for tau in range(1, k+1): # Train an estimator for the input j iterations ago
                 # This one is a mess of indices, but at least we don't need striding like for NL
-                results = sm.OLS(asnumpy(u_train[k-tau:-tau]), sm.add_constant(asnumpy(y_train[k:,:])), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
-                u_hat_test = results.predict(sm.add_constant(asnumpy(y_test[tau:,:]))) # Start at y_test[j] to prevent leakage between train/test
+                results = sm.OLS(asnumpy(u_train[k-tau:-tau]), y_train[k:,:], missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
+                u_hat_test = results.predict(y_test[tau:,:]) # Start at y_test[j] to prevent leakage between train/test
                 Rsq[tau-1] = R_squared(u_hat_test, u_test[:-tau])
             MC_of_each_node[outputnode] = float(xp.sum(Rsq))
         if N == 1: MC_of_each_node[:] = MC_of_each_node[0]
