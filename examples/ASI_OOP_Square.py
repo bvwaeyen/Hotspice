@@ -36,7 +36,7 @@ def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T
         @param speed [int] (1000): How many switches are simulated between each frame.
     """
     mm.initialize_m('AFM')
-    mm.history_clear()
+    mm.history.clear()
     AFM_ness = []
 
     # Set up the figure, the axis, and the plot element we want to animate

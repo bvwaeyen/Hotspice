@@ -19,7 +19,7 @@ import pandas as pd
 from datetime import datetime
 from IPython.terminal.embed import InteractiveShellEmbed
 from textwrap import dedent, indent
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, Literal, TypeVar
 
 from . import config
 if config.USE_GPU:
@@ -131,7 +131,7 @@ def readable_bytes(N: int):
     number = N/(1024**i)
     return f"{number:.2f} {('B', 'KiB', 'MiB', 'GiB', 'TiB')[i]}"
 
-def unit_prefix_to_mul(unit):
+def unit_prefix_to_mul(unit: Literal['p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']):
     d = {'p': 1e-12, 'n': 1e-9, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, 
      '': 1e0,
      'da': 1e1, 'h': 1e2, 'k': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12}
@@ -250,7 +250,7 @@ def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_script_name="Paral
         args = ['-o', outdir] + args
     run_script(_ParallelJobs_script_name, args=args)
 
-def log(message, device_id=None, style=None, show_device=True):
+def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = None, show_device=True):
     """ Can print <message> to console from subprocesses running on a specific GPU or thread.
         The <device_id> (currently used GPU/CPU core) is printed in front of the message, if <show_device> is True.
         <style> specifies the color of the message (default None=white), and can be any of:
@@ -461,7 +461,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         return Data(df, constants=JSONdict['constants'], metadata=JSONdict['metadata'])
 
     @staticmethod
-    def load_collection(collection: str|Iterable):
+    def load_collection(collection: str|Iterable, verbose=False):
         """ Combines all the JSON data in <collection>, which can either be a:
             - string representing a directory path, containing many similar .json files
             - iterable containing many Data objects, each representing a bunch of similar data
@@ -470,15 +470,20 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
             NOTE: arrays as constants are ignored in the comparison.
         """
         if isinstance(collection, str): # Then it is a path to a directory containing several .json files
-            collection = [Data.load(os.path.join(collection, path)) for path in os.listdir(collection) if path.endswith('.json')]
+            files = [os.path.join(collection, path) for path in os.listdir(collection) if path.endswith('.json')]
+            collection = []
+            for i, path in enumerate(files):
+                if verbose and is_significant(i, n := len(files)): print(f"Reading data from directory... (file {i+1}/{n})")
+                collection.append(Data.load(path))
         elif all(isinstance(i, Data) for i in collection): # Then it is an iterable containing many Data objects already
             collection = collection
         else:
             raise ValueError("Could not recognize <collection> as a bunch of data.")
 
+        if verbose: print(f"Collecting results into a single Data object...")
         nonconstants, constants, metadata = set(), dict(), dict()
         # 1st sweep: to possibly find constants which are not constant throughout <collection>
-        for data in collection:
+        for i, data in enumerate(collection):
             nonconstants = nonconstants.union(data.df.columns) # df columns are never considered to be constant
             for key in data.constants:
                 if key in constants: # Then this 'constant' was already encountered earlier
@@ -502,6 +507,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
 
         # And now combine everything into one big Data() object
         big_df = pd.concat(dataframes, ignore_index=True) # Concatenate all rows of dataframes
+        if verbose: print('Collected data into a single Data object.')
         return Data(big_df, constants=constants, metadata=metadata)
     
     def __str__(self):

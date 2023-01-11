@@ -175,7 +175,7 @@ class Sweep(ABC):
         savedir = os.path.dirname(dir)
         savename = os.path.basename(dir)
 
-        data = Data.load_collection(dir) # Load all the iterations' data into one large object
+        data = Data.load_collection(dir, verbose=verbose) # Load all the iterations' data into one large object
 
         df = pd.DataFrame()
         vars: dict
@@ -640,7 +640,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         return self.u, self.y
 
     @staticmethod
-    def get_plot_metrics():
+    def get_plot_metrics(): # TODO: Maybe this needs a better name to avoid confusion with self.plot() (array metric vs scalar metric)
         return {
             'NL': lambda data: data['NL'],
             'MC': lambda data: data['MC'],

@@ -150,10 +150,10 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
         if autoscale and mm.in_plane:
             s = xp.sign(mm.orientation[:,:,0])
             mask = Average.resolve(avg).mask
-            n = signal.convolve2d(mm.occupation, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
+            n = signal.convolve2d(mm.occupation, mask, mode='same', boundary=(boundary := 'wrap' if mm.PBC else 'fill'))
             n[xp.where(n == 0)] = xp.inf # Prevent 0/0 warning
-            max_mag_x = signal.convolve2d(mm.orientation[:,:,0]*s, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
-            max_mag_y = signal.convolve2d(mm.orientation[:,:,1]*s, mask, mode='same', boundary='wrap' if mm.PBC else 'fill')
+            max_mag_x = signal.convolve2d(mm.orientation[:,:,0]*s, mask, mode='same', boundary=boundary)
+            max_mag_y = signal.convolve2d(mm.orientation[:,:,1]*s, mask, mode='same', boundary=boundary)
             max_mean_magnitude = xp.sqrt(max_mag_x**2 + max_mag_y**2)/n
             ny, nx = magnitudes.shape
             shape = max_mean_magnitude.shape

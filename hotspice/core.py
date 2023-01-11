@@ -1,3 +1,5 @@
+__all__ = ['xp', 'kB', 'SimParams', 'Magnets', 'Energy', 'ZeemanEnergy', 'DipolarEnergy', 'ExchangeEnergy']
+
 import math
 import warnings
 
@@ -647,17 +649,11 @@ class Magnets(ABC):
         """ Records E_tot, t, T_avg and m_avg as they were last calculated. This default behavior can be overruled: if
             passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T_avg|m_avg> value(s).
         """
-        self.history_entry()
+        self.history.entry()
         if E_tot is not None: self.history.E[-1] = float(E_tot)
         if t is not None: self.history.t[-1] = float(t)
         if T_avg is not None: self.history.T[-1] = float(T_avg)
         if m_avg is not None: self.history.m[-1] = float(m_avg)
-
-    def history_entry(self):
-        self.history.entry(self)
-
-    def history_clear(self):
-        self.history.clear()
 
 
     def autocorrelation(self, *, normalize=True):
@@ -665,17 +661,18 @@ class Magnets(ABC):
             self.m matrix, while taking into account self.orientation for the in-plane case.
             Note that strictly speaking this assumes dx and dy to be the same for all cells.
         """
+        boundary = 'wrap' if self.PBC else 'fill'
         # Now, convolve self.m with its point-mirrored/180°-rotated counterpart
         if self.in_plane:
             mx, my = self.m*self.orientation[:,:,0], self.m*self.orientation[:,:,1]
-            corr_xx = signal.correlate2d(mx, mx, boundary='wrap' if self.PBC else 'fill')
-            corr_yy = signal.correlate2d(my, my, boundary='wrap' if self.PBC else 'fill')
+            corr_xx = signal.correlate2d(mx, mx, boundary=boundary)
+            corr_yy = signal.correlate2d(my, my, boundary=boundary)
             corr = corr_xx + corr_yy # Basically trace of autocorrelation matrix
         else:
-            corr = signal.correlate2d(self.m, self.m, boundary='wrap' if self.PBC else 'fill')
+            corr = signal.correlate2d(self.m, self.m, boundary=boundary)
 
         if normalize:
-            corr_norm = signal.correlate2d(xp.ones_like(self.m), xp.ones_like(self.m), boundary='wrap' if self.PBC else 'fill') # Is this necessary? (this is number of occurences of each cell in correlation sum)
+            corr_norm = signal.correlate2d(xp.ones_like(self.m), xp.ones_like(self.m), boundary=boundary) # Is this necessary? (this is number of occurences of each cell in correlation sum)
             corr = corr*self.m.size/self.n/corr_norm # Put between 0 and 1
         
         return corr[(self.ny-1):(2*self.ny-1),(self.nx-1):(2*self.nx-1)]**2

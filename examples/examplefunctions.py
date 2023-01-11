@@ -44,7 +44,7 @@ def curieTemperature(mm: hotspice.Magnets, N=5000, T_min=0, T_max=200):
     """ A naive attempt at determining the Curie temperature, by looking at the average magnetization.
         @param N [int] (5000): The number of simulated switches at each individual temperature
     """
-    mm.history_clear()
+    mm.history.clear()
     mm.initialize_m('uniform') # Re-initialize mm, because otherwise domains cancel out for m_avg
     for T in np.linspace(T_min, T_max, 101):
         total_m = np.zeros_like(mm.m)
@@ -65,7 +65,7 @@ def neelTemperature(mm: hotspice.Magnets, N=200000, T_min=0, T_max=200):
     """ A naive attempt at determining the Néel temperature, by looking at the antiferromagnetic-ness.
         @param N [int] (200000): The number of temperature steps (with 1 switch each) between T_min and T_max.
     """
-    mm.history_clear()
+    mm.history.clear()
     mm.initialize_m('AFM')
     AFM_ness = []
 

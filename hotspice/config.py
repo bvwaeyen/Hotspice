@@ -1,3 +1,10 @@
+"""
+Determines some environment variables or otherwise hard-to-obtain values, especially
+those that need to be determined before further initializing this package (e.g. USE_GPU).
+"""
+__all__ = ['USE_GPU', 'DEVICE_ID', 'get_dict']
+
+#! Don't put any Hotspice imports here, this must be a standalone script that just processes some values!
 import os
 import sys
 
