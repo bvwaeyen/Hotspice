@@ -328,7 +328,7 @@ class OOPSquareChessFieldInputter(Inputter):
         if value is None: value = self.datastream.get_next()
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
         if Zeeman is None:
-            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.")
+            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.", stacklevel=2)
             mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
         AFM_mask = (((mm.ixx + mm.iyy) % 2)*2 - 1).astype(float) # simple checkerboard pattern of 1 and -1
@@ -379,3 +379,39 @@ class OOPSquareChessOutputReader(OutputReader):
             self.state[regionindex] = xp.sum(masked_m[self.region == regionindex])
         self.state /= self.normalization_factor # To get in range [-1, 1]
         return self.state # [unitless]
+
+
+class OOPSquareClockwiseInputter(Inputter):
+    def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
+        """ Applies an external stimulus in a clockwise manner in 4 substeps.
+            In each substep, one quarter of all magnets is positively biased, while another quarter is negatively biased,
+            and the other half is not stimulated at all. TODO: complete this description
+            <frequency> specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
+            At most <n> Monte Carlo steps will be performed for a single input bit.
+            NOTE: This inputter will probalby work best with Néel update scheme.
+        """
+        super().__init__(datastream)
+        self.magnitude = magnitude
+        self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
+        self.frequency = frequency # The min. frequency the bits are applied at, if the time is known (i.e. Néel scheme is used)
+
+    def input_single(self, mm: Magnets, value=None):
+        """ Performs an input corresponding to <value> (generated using <self.datastream>)
+            into the <mm> simulation, and returns this <value>.
+        """
+        if value is None: value = self.datastream.get_next()
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None:
+            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.", stacklevel=2)
+            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+
+        combinations = [(0, 0), (1, 0), (1, 1), (0, 1)] # Determines which quarter of the magnets is stimulated at each substep
+        if not value: combinations.reverse() # This is (the only place) where <value> comes in
+
+        for offset_x, offset_y in combinations:
+            mask_positive = np.logical_and((mm.ixx % 2) == offset_x, (mm.iyy % 2) == offset_y).astype(float)
+            mask_negative = np.logical_and((mm.ixx % 2) != offset_x, (mm.iyy % 2) == offset_y).astype(float) # TODO: verify this position based on SOT physics
+            magnitude_local = self.magnitude*(mask_positive - mask_negative) # need astype float for good multiplication
+            Zeeman.set_field(magnitude=magnitude_local)
+            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n) # TODO: should we reduce this by 4 due to the 4-cycle? then frequency and MCsteps are for one whole clock cycle
+        return value

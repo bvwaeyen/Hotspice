@@ -9,14 +9,14 @@
         Line-by-line profiling of one or multiple functions used by <script>.py.
         Can also use 'kernprof -l -v <script>.py', but this does not save the output to a file.
         NOTE: the function(s) to be profiled have to be decorated with @profile! <script>.py does
-            not need to import this decorator explicitly; kernprof does this behind-the-scenes.
-            Thus, any warnings about 'profile' being undefined may be ignored.
+              not need to import this decorator explicitly; kernprof does this behind-the-scenes.
+              Thus, any warnings about 'profile' being undefined may be ignored.
         NOTE: requires kernprof to be installed. Use 'pip install line_profiler' to do so.
 
     Usage examples for each of these 3 cases:
-        python profile.py hotspice/core.py
-        python profile.py -m hotspice.plottools
-        python profile.py -l examples/ASI_IP_Pinwheel.py
+        python hotspice_profile.py hotspice/core.py
+        python hotspice_profile.py -m hotspice.plottools
+        python hotspice_profile.py -l examples/ASI_IP_Pinwheel.py
     Note that any additional cmd arguments are passed directly to <script>.py.
     
     The output is saved in the file
