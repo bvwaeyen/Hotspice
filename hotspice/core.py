@@ -12,7 +12,7 @@ from scipy.spatial import distance
 from textwrap import dedent
 
 from .poisson import PoissonGrid, SequentialPoissonDiskSampling, poisson_disc_samples
-from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, mirror4
+from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, lower_than, mirror4
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -226,6 +226,13 @@ class Magnets(ABC):
         return sum(energy.energy_switch(indices2D) for energy in self._energies)
 
     @property
+    def t(self): # Elapsed time
+        return float(self._t) # Need this as @property to guarantee that self.t is always a float
+    @t.setter
+    def t(self, value):
+        self._t = float(value)
+
+    @property
     def MCsteps(self): # Number of Monte Carlo steps
         return self.attempted_switches/self.n
 
@@ -236,7 +243,6 @@ class Magnets(ABC):
     @property
     def T(self) -> xp.ndarray:
         return self._T
-
     @T.setter
     def T(self, value: Field):
         self._T = as_2D_array(value, self.shape)
@@ -244,7 +250,6 @@ class Magnets(ABC):
     @property
     def E_B(self) -> xp.ndarray:
         return self._E_B
-
     @E_B.setter
     def E_B(self, value: Field):
         self._E_B = as_2D_array(value, self.shape)
@@ -252,7 +257,6 @@ class Magnets(ABC):
     @property
     def moment(self) -> xp.ndarray:
         return self._moment
-
     @moment.setter
     def moment(self, value: Field):
         self._moment = as_2D_array(value, self.shape)
@@ -265,7 +269,6 @@ class Magnets(ABC):
     @property
     def PBC(self):
         return self._PBC
-
     @PBC.setter
     def PBC(self, value: bool):
         if hasattr(self, 'unitcell'): # First check if PBC are even possible with the current nx, ny and unitcell
@@ -478,6 +481,7 @@ class Magnets(ABC):
         return xp.asarray(xp.where(cluster == 1))
 
     def update(self, *args, **kwargs):
+        """ Runs a single update step using the update scheme and magnet selection method in self.params. """
         can_handle_zero_temperature = ['Glauber']
         if xp.any(self.T == 0):
             if self.params.UPDATE_SCHEME not in can_handle_zero_temperature:
@@ -536,7 +540,7 @@ class Magnets(ABC):
                 return None # Just exit if switching would take ages and ages and ages
             self.m[indexmin2D] *= -1
             self.switches += 1
-            self.t += time
+            self.t += float(time)
         self.update_energy(index=xp.asarray(indexmin2D).reshape(2,-1))
         return indexmin2D
 
@@ -564,6 +568,22 @@ class Magnets(ABC):
         r = xp.clip(r, 0, self.nx*self.dx + self.ny*self.dy) # If T=0, we clip the infinite r back to a high value nx*dx+ny*dy which is slightly larger than the simulation
         return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
+
+    def progress(self, t_max: float = xp.inf, MCsteps_max: float = 4.):
+        """ Runs as many self.update steps as is required to progress a certain amount of
+            time or Monte Carlo steps (whichever is reached first) into the future.
+            @param time [float] (None): The maximum amount of time difference between start and end of this function.
+            @param MCsteps [float] (4.): The maximum amount of Monte Carlo steps performed during this function.
+            @return [tuple(2)]: the elapsed time and number of performed MC steps during the execution of this function.
+        """
+        t_0, MCsteps_0 = self.t, self.MCsteps
+        while lower_than(dt := self.t - t_0, t_max) and lower_than(dMCsteps := self.MCsteps - MCsteps_0, MCsteps_max):
+            # progress = max(dt/t_max, dMCsteps/MCsteps_max) # Always < 1
+            if self.params.UPDATE_SCHEME == 'Néel':
+                self.update(t_max=(t_max - dt)) # A max time can be specified
+            else:
+                self.update() # No time
+        return dt, dMCsteps
 
     def minimize(self):
         """ NOTE: this is basically the sequential version of self.relax().

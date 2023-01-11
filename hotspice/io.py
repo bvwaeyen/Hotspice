@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from .ASI import OOP_Square
 from .core import Magnets, ZeemanEnergy
 from .plottools import show_m
-from .utils import log
+from .utils import log, lower_than
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -153,16 +153,12 @@ class FieldInputter(Inputter):
         Zeeman.set_field(angle=(self.angle if mm.in_plane else None)) # set angle only once
         MCsteps0, t0 = mm.MCsteps, mm.t
         if self.sine: # Change magnitude sinusoidally
-            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1:
+            while lower_than(progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency), 1):
                 Zeeman.set_field(magnitude=self.magnitude*value*math.sin(progress*math.pi*(2-self.half_period)))
-                mm.update(t_max=min(1-progress, 0.05)/self.frequency) # At least 20 (=1/0.05) steps per sine-period
+                mm.update(t_max=min(1-progress, 0.05)/self.frequency) # At least 20 (=1/0.05) steps to sample the sine decently
         else: # Use constant magnitude
             Zeeman.set_field(magnitude=self.magnitude*value)
-            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1:
-                if self.frequency:
-                    mm.update(t_max=min(1-progress, 1)/self.frequency) # No sine, so no 20 steps per wavelength needed here
-                else:
-                    mm.update() # No time
+            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n) # No sine, so no 20 steps per wavelength needed here
         return value
 
 
@@ -208,8 +204,6 @@ class PerpFieldInputter(FieldInputter):
             mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
         angle = self.angle + value*math.pi/2
-        MCsteps0, t0 = mm.MCsteps, mm.t
-
         # pos and neg field
         if self.relax:
             for mag in [self.magnitude, -self.magnitude]:
@@ -217,16 +211,10 @@ class PerpFieldInputter(FieldInputter):
                 mm.minimize()
             # log(f"Performed {mm.MCsteps - MCsteps0} MC steps.")
         else:
-            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < .5 - 1e-6:
-                if self.frequency != 0: mm.update(t_max=0.5/self.frequency)
-                else: mm.update()
-                # log("updated forward")
+            Zeeman.set_field(magnitude=self.magnitude, angle=angle)
+            mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
             Zeeman.set_field(magnitude=-self.magnitude, angle=angle)
-            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6:
-                if self.frequency != 0: mm.update(t_max=0.5/self.frequency)
-                else: mm.update()
-                # log("updated reverse")
-
+            mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
         return value
 
 
@@ -245,17 +233,12 @@ class PerpFieldInputter(FieldInputter):
         angle = self.angle + value*math.pi/2
         MCsteps0, t0 = mm.MCsteps, mm.t
         if self.sine: # Change magnitude sinusoidally
-            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6: # t and MCsteps not exceeded, - 1e-6 to be sure
+            while lower_than(progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency), 1):
                 Zeeman.set_field(magnitude=self.magnitude*math.sin(progress*math.pi*(2-self.half_period)), angle=angle)
                 mm.update(t_max=min(1-progress, 0.125)/self.frequency) # At least 8 (=1/0.125) steps per sine-period
         else: # Use constant magnitude
             Zeeman.set_field(magnitude=self.magnitude, angle=angle)
-            while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1 - 1e-6:
-                if self.frequency:
-                    mm.update(t_max=min(1-progress, 1)/self.frequency) # No sine, so no 20 steps per wavelength needed here
-                else:
-                    mm.update() # No time
-
+            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
         return value
 
 
@@ -348,14 +331,9 @@ class OOPSquareChessFieldInputter(Inputter):
             warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.")
             mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
-        MCsteps0, t0 = mm.MCsteps, mm.t
         AFM_mask = (((mm.ixx + mm.iyy) % 2)*2 - 1).astype(float) # simple checkerboard pattern of 1 and -1
         Zeeman.set_field(magnitude=AFM_mask*(2*value-1)*self.magnitude)
-        while (progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency)) < 1:
-            if self.frequency:
-                mm.update(t_max=min(1-progress, 1)/self.frequency)
-            else:
-                mm.update() # No time
+        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
         return value
 
 

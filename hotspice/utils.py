@@ -96,6 +96,10 @@ def strided(a: xp.ndarray, W: int):
     n = a_ext.strides[0]
     return striding.as_strided(a_ext[W - 1:], shape=(a.size, W), strides=(n, -n))
 
+def lower_than(x, y, rtol=1e-10):
+    """ Returns False if <x> is very close (within relative tolerance <rtol>) or greater than <y>. """
+    return x < y and not xp.isclose(x, y, atol=0, rtol=rtol)
+
 
 ## EASE-OF-USE UTILITIES (e.g. for printing)
 def human_sort(text):
