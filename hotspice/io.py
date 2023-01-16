@@ -4,8 +4,9 @@ import warnings
 import numpy as np
 
 from abc import ABC, abstractmethod
+from typing import Literal
 
-from .ASI import OOP_Square
+from .ASI import IP_ASI, OOP_Square
 from .core import Magnets, ZeemanEnergy
 from .plottools import show_m
 from .utils import log, lower_than
@@ -25,6 +26,9 @@ class Datastream(ABC):
         """ Calling this method returns an array containing exactly <n> elements, containing the requested data.
             Depending on the specific subclass, these can be int or float.
         """
+    
+    def as_bits(self, integer: int, endianness: Literal['little', 'big'] = 'little'):
+        raise NotImplementedError("This datastream can not be converted to a binary stream.")
 
     @property
     def is_binary(self): return False
@@ -100,6 +104,25 @@ class RandomBinaryDatastream(BinaryDatastream):
 
     def get_next(self, n=1) -> xp.ndarray:
         return self.rng.random(size=(n,)) >= self.p0
+
+class RandomUniformByteDatastream(Datastream):
+    """ Generates random integers uniformly distributed from 0 up to and including 2**<num_bytes> - 1. """
+    def __init__(self, num_bits: int = 8):
+        if not isinstance(num_bits, int): raise ValueError("Number of bits per 'byte' in RandomUniformByteDatastream must be of type <int>.")
+        self.num_bits = num_bits
+        self._max = 2**self.num_bits
+        super().__init__()
+
+    def get_next(self, n=1) -> xp.ndarray:
+        return self.rng.integers(0, self._max, size=(n,))
+
+    def as_bits(self, integer: int, endianness: Literal['little', 'big'] = 'little') -> xp.ndarray:
+        """ For our RC purposes, little-endian is preferred, because nearby integers will have similar final bits.
+            This should allow for easier training for the estimators in TaskAgnosticExperiment.
+        """
+        bitstring = bin(integer)[2:].zfill(self.num_bits) # Slice from 2 to remove '0b', zfill to left-pad with zeros 
+        if endianness == 'little': bitstring = bitstring[::-1]
+        return xp.asarray([int(bit) for bit in bitstring])
 
 class RandomUniformDatastream(Datastream):
     def __init__(self, low=0, high=1):
@@ -191,7 +214,7 @@ class PerpFieldInputter(FieldInputter):
         super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, frequency=frequency)
 
 
-    def input_single(self, mm: Magnets, value=None):
+    def input_single(self, mm: IP_ASI, value=None):
         if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
             raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != 'Néel'.")
         if not mm.in_plane:
@@ -218,7 +241,7 @@ class PerpFieldInputter(FieldInputter):
         return value
 
 
-    def input_single_generalized(self, mm: Magnets, value=None):
+    def input_single_generalized(self, mm: IP_ASI, value=None):
         if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
             raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != 'Néel'.")
         if not mm.in_plane:
@@ -324,33 +347,36 @@ class OOPSquareChessFieldInputter(Inputter):
         self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
         self.frequency = frequency
 
-    def input_single(self, mm: Magnets, value=None):
-        if value is None: value = self.datastream.get_next()
+    def input_single(self, mm: OOP_Square, value=None):
+        if value is None: value = self.datastream.get_next(n=1)
+        input_sequence = xp.asarray(value) if self.datastream.is_binary else self.datastream.as_bits(int(value), endianness='little')
+        # TODO: is there a way to do this int-to-bits etc. cleaner? Because this kind of method will be used more often if this succeeds... Also, the type of 'value' is getting less well defined by the day...
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
         if Zeeman is None:
             warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.", stacklevel=2)
             mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
         AFM_mask = (((mm.ixx + mm.iyy) % 2)*2 - 1).astype(float) # simple checkerboard pattern of 1 and -1
-        Zeeman.set_field(magnitude=AFM_mask*(2*value-1)*self.magnitude)
-        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+        for inbit in input_sequence:
+            Zeeman.set_field(magnitude=AFM_mask*(2*inbit-1)*self.magnitude)
+            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
         return value
 
 
 class OOPSquareChessOutputReader(OutputReader):
-    def __init__(self, nx: int, ny: int, mm: Magnets = None):
+    def __init__(self, nx: int, ny: int, mm: OOP_Square = None):
         """ This is a RegionalOutputReader optimized for OOP_Square ASI.
             Since OOP_Square has two degenerate AFM ground states, the averaging takes place
             using an AFM mask, such that they can be distinguished and domain walls can be identified.
             @param nx [int]: number of averaging bins in the x-direction.
             @param ny [int]: number of averaging bins in the y-direction.
-            @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+            @param mm [hotspice.ASI.OOP_Square] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
                 Otherwise, the user will have to call configure_for() separately after initializing the class instance.
         """
         self.nx, self.ny = nx, ny
         super().__init__(mm)
 
-    def configure_for(self, mm: Magnets):
+    def configure_for(self, mm: OOP_Square):
         if not isinstance(mm, (expected_type := OOP_Square)):
             if mm.in_plane:
                 raise TypeError(f"{type(self).__name__} only works on out-of-plane ASI, but received {type(mm).__name__}.")
@@ -371,7 +397,7 @@ class OOPSquareChessOutputReader(OutputReader):
             self._node_coords[regionindex,0] = xp.mean(mm.xx[self.region == regionindex])
             self._node_coords[regionindex,1] = xp.mean(mm.yy[self.region == regionindex])
     
-    def read_state(self, mm: Magnets = None, m: xp.ndarray = None) -> xp.ndarray:
+    def read_state(self, mm: OOP_Square = None, m: xp.ndarray = None) -> xp.ndarray:
         """ Returns a 1D array representing the AFM state of the spin ice. """
         super().read_state(mm)
         masked_m = self.AFM_mask*(self.mm.m if m is None else m)
@@ -395,7 +421,7 @@ class OOPSquareClockwiseInputter(Inputter):
         self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
         self.frequency = frequency # The min. frequency the bits are applied at, if the time is known (i.e. Néel scheme is used)
 
-    def input_single(self, mm: Magnets, value=None):
+    def input_single(self, mm: OOP_Square, value=None):
         """ Performs an input corresponding to <value> (generated using <self.datastream>)
             into the <mm> simulation, and returns this <value>.
         """
