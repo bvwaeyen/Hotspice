@@ -169,9 +169,7 @@ class FieldInputter(Inputter):
             raise AttributeError("Can not use temporal sine=True if UPDATE_SCHEME != 'Néel'.")
         if value is None: value = self.datastream.get_next()
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
-        if Zeeman is None:
-            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.")
-            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
         Zeeman.set_field(angle=(self.angle if mm.in_plane else None)) # set angle only once
         MCsteps0, t0 = mm.MCsteps, mm.t
@@ -222,9 +220,7 @@ class PerpFieldInputter(FieldInputter):
         if value is None: value = self.datastream.get_next()
 
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
-        if Zeeman is None:
-            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.")
-            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
         angle = self.angle + value*math.pi/2
         # pos and neg field
@@ -339,7 +335,7 @@ class OOPSquareChessFieldInputter(Inputter):
         """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external
             field for each magnet, with magnitude <magnitude>*<datastream.get_next()>.
             A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
-            <frequency> specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
+            <frequency> specifies the frequency [Hz] at which bits are being applied to the system, if it is nonzero.
             At most <n> Monte Carlo steps will be performed for a single input bit.
         """
         super().__init__(datastream)
@@ -349,12 +345,10 @@ class OOPSquareChessFieldInputter(Inputter):
 
     def input_single(self, mm: OOP_Square, value=None):
         if value is None: value = self.datastream.get_next(n=1)
-        input_sequence = xp.asarray(value) if self.datastream.is_binary else self.datastream.as_bits(int(value), endianness='little')
+        input_sequence = xp.asarray(value).reshape(-1) if self.datastream.is_binary else self.datastream.as_bits(int(value), endianness='little')
         # TODO: is there a way to do this int-to-bits etc. cleaner? Because this kind of method will be used more often if this succeeds... Also, the type of 'value' is getting less well defined by the day...
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
-        if Zeeman is None:
-            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.", stacklevel=2)
-            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
         AFM_mask = (((mm.ixx + mm.iyy) % 2)*2 - 1).astype(float) # simple checkerboard pattern of 1 and -1
         for inbit in input_sequence:
@@ -427,17 +421,51 @@ class OOPSquareClockwiseInputter(Inputter):
         """
         if value is None: value = self.datastream.get_next()
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
-        if Zeeman is None:
-            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.", stacklevel=2)
-            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
-        combinations = [(0, 0), (1, 0), (1, 1), (0, 1)] # Determines which quarter of the magnets is stimulated at each substep
-        if not value: combinations.reverse() # This is (the only place) where <value> comes in
-
-        for offset_x, offset_y in combinations:
-            mask_positive = np.logical_and((mm.ixx % 2) == offset_x, (mm.iyy % 2) == offset_y).astype(float)
-            mask_negative = np.logical_and((mm.ixx % 2) != offset_x, (mm.iyy % 2) == offset_y).astype(float) # TODO: verify this position based on SOT physics
-            magnitude_local = self.magnitude*(mask_positive - mask_negative) # need astype float for good multiplication
+        combinations = [(0, 0), (1, 0), (1, 1), (0, 1)] if value else [(0, 0), (0, 1), (1, 1), (1, 0)] # This is (the only place) where <value> comes in
+        # combinations = [(0, 0), (1, 0), (0, 1), (1, 1)] if value else [(0, 0), (0, 1), (1, 0), (1, 1)] # This is (the only place) where <value> comes in
+        for offset_x, offset_y in combinations: # Determines which quarter of the magnets is stimulated at each substep
+            mask_positive = xp.logical_and((mm.ixx % 2) == offset_x, (mm.iyy % 2) == offset_y).astype(float) # need astype float for good multiplication with self.magnitude
+            mask_negative = xp.logical_and((mm.ixx % 2) != offset_x, (mm.iyy % 2) == offset_y).astype(float) # TODO: verify this position based on SOT physics
+            # magnitude_local = self.magnitude*(mask_positive - mask_negative)
+            magnitude_local = self.magnitude*mask_positive
+            magnitude_local = self.magnitude*(mask_positive if value else -mask_negative)
             Zeeman.set_field(magnitude=magnitude_local)
-            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n) # TODO: should we reduce this by 4 due to the 4-cycle? then frequency and MCsteps are for one whole clock cycle
+            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+        return value
+
+
+class OOPSquareChessStepsInputter(Inputter):
+    def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
+        """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external
+            field for each magnet, with magnitude <magnitude>*<datastream.get_next()>.
+            NOTE: the difference between this and an OOPSquareChessFieldInputter is that this inputter
+                  performs the input in 2 separate steps, where in each step half of the checkerboard pattern
+                  is stimulated, which should prevent domain walls from propagating all the way to saturation.
+            A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
+            <frequency> specifies the frequency [Hz] at which bits are being applied to the system, if it is nonzero.
+            At most <n> Monte Carlo steps will be performed for a single input bit.
+        """
+        super().__init__(datastream)
+        self.magnitude = magnitude
+        self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
+        self.frequency = frequency
+
+    def input_single(self, mm: OOP_Square, value=None):
+        if value is None: value = self.datastream.get_next(n=1)
+        input_sequence = xp.asarray(value).reshape(-1) if self.datastream.is_binary else self.datastream.as_bits(int(value), endianness='little')
+        # TODO: is there a way to do this int-to-bits etc. cleaner? Because this kind of method will be used more often if this succeeds... Also, the type of 'value' is getting less well defined by the day...
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+
+        AFM_mask = ((mm.ixx + mm.iyy) % 2).astype(float) # Need astype float for correct multiplication
+        AFM_mask_step1 = AFM_mask*self.magnitude # 0 and 1 on a checkerboard pattern
+        AFM_mask_step2 = (AFM_mask - 1)*self.magnitude # -1 and 0 checkerboard pattern, with 0s on other spots w.r.t. step 1
+        for inbit in input_sequence:
+            sign = 2*inbit - 1
+            Zeeman.set_field(magnitude=AFM_mask_step1*sign)
+            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+            Zeeman.set_field(magnitude=AFM_mask_step2*sign)
+            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
         return value
