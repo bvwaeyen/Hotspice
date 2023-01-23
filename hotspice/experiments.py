@@ -67,7 +67,7 @@ class Experiment(ABC):
 
 class Sweep(ABC):
     def __init__(self, groups: Iterable[tuple[str]] = None, **kwargs): # kwargs can be anything to specify the sweeping variables and their values.
-        """ Sweep quacks like a generator yielding <Experiment>-like objects.
+        """ Sweep quacks like a generator yielding <Experiment> instances, or subclasses thereof.
             The purpose of a Sweep is to reliably generate a sequence of <Experiment>s in a consistent order.
             @param groups [iterable[tuple[str]]] (None): a tuple of tuples of strings. Each tuple represents a group:
                 groups are sweeped together. The strings inside those tuples represent the names of the
@@ -75,23 +75,25 @@ class Sweep(ABC):
                 variables move through their sweeping values simultaneously, instead of forming a
                 hypercube through their values in which each pair is visited. We only visit the diagonal.
                 Example: groups=(('nx', 'ny'), ('res_x', 'res_y')) will cause the variables <nx> and <ny>
-                    to sweep through their values together, i.e. e.g. when <nx> is at its fourth value, also
-                    <ny> will be at its fourth value.
-            The additional arguments (kwargs) passed to this are interpreted as follows:
+                    to sweep together, e.g. when <nx> is at its fourth value, <ny> will also be at its fourth value.
+                    The same will go for <res_x> and <res_y> together, but they are independent of <nx> and <ny>.
+            Any additional keyword arguments (**kwargs) are interpreted as follows:
             If a kwarg is iterable then it is stored in self.variables as a sweeped variable,
                 unless it has length 1, in which case its only element is stored in self.constants.
-                NOTE: watch out with multi-dimensional arrays, as their first axis can be interpreted as the 'sweep'!
+                WARN: watch out with multi-dimensional arrays, as their first axis can be interpreted as the 'sweep'!
             If an argument is not iterable, its value is stored in self.constants without converting to a length-1 tuple.
-            Subclasses of <Sweep> determine which arguments are used.
+            Subclasses of <Sweep> determine which kwargs are accepted and how they are used to build <Experiment>s.
             @attr parameters [dict[str, tuple]]: stores all variables and constants with their values in a tuple,
                 even if this tuple only has length 1.
             @attr variables [dict[str, tuple]]: stores the sweeped variables and their values in a tuple.
             @attr constants [dict[str, Any]]: stores the non-sweeped variables and their only value.
         """
+        ## Create the main dictionaries (parameters, divided into variables and constants)
         self.parameters: dict[str, tuple] = {k: Sweep.variable(v) for k, v in kwargs.items()}
         self.variables = {k: v for k, v in self.parameters.items() if len(v) > 1}
         self.constants = {k: v[0] for k, v in self.parameters.items() if len(v) == 1}
 
+        ## Create and verify groups of variables
         if groups is None: groups = []
         groups = [tuple([key for key in group if key in self.variables.keys()]) for group in groups] # Remove non-variable groups
         groups = [group for group in groups if len(group)] # Remove now-empty groups
@@ -99,12 +101,23 @@ class Sweep(ABC):
             if not any(k in group for group in groups): # Then we have a variable that is not in a group
                 groups.append((k,))
         self.groups = tuple(groups) # Make immutable
-        self.n_per_group = tuple([len(self.variables[group[0]]) for group in self.groups])
+        self._n_per_group = tuple([len(self.variables[group[0]]) for group in self.groups])
 
-        # Check that vars in a single group have the same sweeping length
-        for group in self.groups:
+        for group in self.groups: # Check that vars in a single group have the same sweeping length
             l = [len(self.variables[key]) for key in group]
-            if not l.count(l[0]) == len(l): raise ValueError(f"Not all elements of {group} have same sweeping length: {l} respecitvely.")
+            if not l.count(l[0]) == len(l):
+                raise ValueError(f"Not all elements of {group} have same sweeping length: {l} respecitvely.")
+
+        ## Attempt creating an experiment, to see if the sweep works correctly
+        try:
+            _, self._example_experiment = self.get_iteration(0)
+        except Exception as e:
+            raise RuntimeError("The sweep does not correctly generate Experiment instances.")
+
+    @abstractmethod
+    def create_experiment(self, params: dict) -> Experiment:
+        """ Subclasses should create an Experiment here according to <params> and return it. """
+        pass
 
     @staticmethod
     def variable(iterable):
@@ -114,51 +127,48 @@ class Sweep(ABC):
         except TypeError: return (iterable,)
 
     def __len__(self) -> int:
-        return np.prod(self.n_per_group)
+        return np.prod(self._n_per_group)
 
     @property
     def info(self):
         """ Some information about a specific sweep, e.g. what the input/output protocol is etc.
             This should simply be set using self.info = ...
         """
-        return self._info if hasattr(self, '_info') else "No specific information provided for this sweep."
+        if not hasattr(self, '_info'):
+            self._info = self.__doc__
+            if self._info is None: self._info = self.__init__.__doc__
+            if self._info is None: self._info = "No specific information about this sweep was provided."
+        return self._info
     
     @info.setter
-    def info(self, value):
-        self._info = dedent(value).strip()
-
-    @property
-    def sweeper(self):
-        for index, _ in np.ndenumerate(np.zeros(self.n_per_group)): # Return an iterable of sorts for sweeping the hypercube of variables
-            yield {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
+    def info(self, value: str):
+        self._info = dedent(str(value)).strip()
 
     def __iter__(self):
-        """ A generator to conveniently iterate over self.sweeper. Yields a tuple containing
-            the variables with their values in this iteration, as well as the experiment object.
+        """ A generator to conveniently iterate as "for vars, exp in sweep:".
+            Yields a tuple for this iteration: (variable:value dict, experiment object).
         """
-        for vars in self.sweeper:
-            params = vars | self.constants
-            experiment = self.create_experiment(params)
-            yield (vars, experiment)
+        for i in range(len(self)):
+            yield self.get_iteration(i)
 
     def get_iteration(self, i: int):
         """ Basically returns one iteration of the self.__iter__() generator, the <i>th that would normally be generated. """
-        index = np.unravel_index(i, self.n_per_group)
-        vars = {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group} # TODO: double code, how to unify?
+        index = np.unravel_index(i, self._n_per_group)
+        vars = {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
         params = vars | self.constants
         experiment = self.create_experiment(params)
         return (vars, experiment)
-
-    @abstractmethod
-    def create_experiment(self, params: dict) -> Experiment:
-        """ Subclasses should create an Experiment here according to <params> and return it. """
-        pass
 
     def as_metadata_dict(self):
         return {
             'type': full_obj_name(self),
             'info': self.info,
-            'variables': self.variables,
+            'system': {
+                'ASI_type': full_obj_name(self._example_experiment.mm),
+                'datastream': full_obj_name(self._example_experiment.inputter.datastream),
+                'inputter': full_obj_name(self._example_experiment.inputter),
+                'outputreader': full_obj_name(self._example_experiment.outputreader)
+            },
             'parameters': self.parameters,
             'groups': self.groups
         }
@@ -189,7 +199,7 @@ class Sweep(ABC):
             # 2) Re-initialize <experiment> with this data
             experiment.load_dataframe(df_i)
             # 3) Calculate relevant metrics
-            experiment.calculate_all(ignore_errors=False)
+            experiment.calculate_all(ignore_errors=False) # TODO: add a way to pass kwargs to this method without hardcoding ignore_errors
             # 4) Save these <experiment.results> and <vars> to a dataframe that we are calculating on the fly
             all_info = vars | experiment.results
             for key, value in all_info.items():
@@ -444,9 +454,9 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         super().__init__(inputter, outputreader, mm)
         if self.inputter.datastream.is_binary:
             warnings.warn("A TaskAgnosticExperiment might not work properly for a binary datastream.", stacklevel=2)
-        self.results = {'NL': None, 'NL_local': None, 'MC': None, 'MC_local': None, 'S': None, 'S_local': None}
         self.initial_state = self.outputreader.read_state().reshape(-1)
         self.n_out = self.outputreader.n
+        self.results = {'NL': None, 'NL_local': None, 'MC': None, 'MC_local': None, 'S': None, 'S_local': None}
 
     @classmethod
     def dummy(cls, mm: Magnets = None):
