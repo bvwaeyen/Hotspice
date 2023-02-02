@@ -453,8 +453,6 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
             to implement task-agnostic metrics for reservoir computing using a single random input signal.
         """
         super().__init__(inputter, outputreader, mm)
-        if self.inputter.datastream.is_binary:
-            warnings.warn("A TaskAgnosticExperiment might not work properly for a binary datastream.", stacklevel=2)
         self.initial_state = self.outputreader.read_state().reshape(-1)
         self.n_out = self.outputreader.n
         self.results = {'NL': None, 'NL_local': None, 'MC': None, 'MC_local': None, 'S': None, 'S_local': None}
@@ -531,10 +529,22 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         """
         if verbose: log(f"Calculating NL_local...")
 
-        train_test_cutoff = math.ceil(self.u.size*(1 - test_fraction))
+        if self.inputter.datastream.is_binary: # TODO: play with <n_bits>, and maybe limit number of bytes that we recall (now we recall <k>) such that we only look a maximum of <k> bits (instead of bytes) back in time, just as we do with MC
+            n_bits = 8
+            bit_mask = 2**np.arange(n_bits)
+            bit_mask = bit_mask[::-1] # For little-endian representation
+            u_strided = strided(self.u, n_bits) # The <n_bits> most recent bits. NOTE: the first <n_bits-1> rows will contain NaNs
+            u = np.sum(np.multiply(bit_mask, u_strided), axis=1) # NOTE: the first <n_bits-1> elements will be NaN
+            u = u[::n_bits]
+            y = self.y[::n_bits,:]
+        else:
+            u = self.u
+            y = self.y
+        
+        train_test_cutoff = math.ceil(u.size*(1 - test_fraction))
         if train_test_cutoff < k: raise ValueError(f"Nonlinearity: size of training set ({train_test_cutoff}) must be >= k ({k}).")
-        u_train_strided, u_test_strided = xp.split(strided(self.u, k), [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
-        y_train, y_test = xp.split(self.y, [train_test_cutoff])
+        u_train_strided, u_test_strided = xp.split(strided(u, k), [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
+        y_train, y_test = xp.split(y, [train_test_cutoff])
 
         Rsq = xp.empty(self.n_out) # R² correlation coefficient for each output node
         for j in range(self.n_out): # Train an estimator for the j-th output node
