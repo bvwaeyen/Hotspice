@@ -1,6 +1,5 @@
 import math
 import os
-import re
 import warnings
 
 import matplotlib.pyplot as plt
@@ -13,11 +12,11 @@ from abc import ABC, abstractmethod
 from matplotlib import cm, widgets
 from scipy.spatial import distance
 from textwrap import dedent
-from typing import Any, Iterable
+from typing import Iterable
 
-from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
+from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
-from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
+from .io import Inputter, OutputReader, FieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, save_plot, show_m
 from .utils import asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
 from . import config
@@ -138,6 +137,7 @@ class Sweep(ABC):
             self._info = self.__doc__
             if self._info is None: self._info = self.__init__.__doc__
             if self._info is None: self._info = "No specific information about this sweep was provided."
+            self._info = dedent(self._info).strip()
         return self._info
     
     @info.setter
@@ -181,6 +181,7 @@ class Sweep(ABC):
             @param save [bool|str] (True): if truthy, the results are saved to a file.
                 If specified as a string, the base name of this saved file is this string.
         """
+        if return_savepath and not save: raise ValueError("Can not have return_savepath=True if save=False.")
         dir = os.path.normpath(dir)
         savedir = os.path.dirname(dir)
         savename = os.path.basename(dir)
@@ -208,7 +209,7 @@ class Sweep(ABC):
 
         data = Data(df, constants=data.constants, metadata=data.metadata)
         if save: save = data.save(dir=savedir, name=savename, timestamp=False)
-        return save if (return_savepath and save) else data
+        return save if return_savepath else data
     
     def plot(self, summary_files, param_x=None, param_y=None, unit_x=None, unit_y=None, transform_x=None, transform_y=None, name_x=None, name_y=None, title=None, save=True, plot=True, metrics_dict=None):
         """ Generic function to plot the results of a sweep in a general way.

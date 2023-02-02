@@ -347,6 +347,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         value.setdefault('creator', creator_info)
         value.setdefault('simulator', "Hotspice")
         value.setdefault('description', "No custom description available.")
+        value['description'] = dedent(value['description']).strip()
         try:
             gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
                 ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
