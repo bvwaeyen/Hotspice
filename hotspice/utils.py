@@ -436,7 +436,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         return Data(df, constants=self.constants, metadata=self.metadata)
 
     @staticmethod
-    def load(JSON):
+    def load(JSON): # TODO: improve the error handling here so a caller of load() can see what is going on
         """ Reads a JSON-parseable object containing previously generated Hotspice data, and returns its
             contents as Data object.
             @param JSON: a parseable object resembling JSON data, can be any of: 

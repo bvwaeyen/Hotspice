@@ -101,6 +101,7 @@ class Sweep(ABC):
                 groups.append((k,))
         self.groups = tuple(groups) # Make immutable
         self._n_per_group = tuple([len(self.variables[group[0]]) for group in self.groups])
+        self._n = np.prod(self._n_per_group)
 
         for group in self.groups: # Check that vars in a single group have the same sweeping length
             l = [len(self.variables[key]) for key in group]
@@ -126,7 +127,7 @@ class Sweep(ABC):
         except TypeError: return (iterable,)
 
     def __len__(self) -> int:
-        return np.prod(self._n_per_group)
+        return self._n
 
     @property
     def info(self):
@@ -151,13 +152,17 @@ class Sweep(ABC):
         for i in range(len(self)):
             yield self.get_iteration(i)
 
-    def get_iteration(self, i: int):
-        """ Basically returns one iteration of the self.__iter__() generator, the <i>th that would normally be generated. """
-        index = np.unravel_index(i, self._n_per_group)
-        vars = {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
+    def get_iteration(self, i: int) -> tuple[dict, Experiment]:
+        """ Returns one iteration of the self.__iter__() generator, the <i>th (zero-indexed) that would normally be generated. """
+        vars = self.get_iteration_vars(i)
         params = vars | self.constants
         experiment = self.create_experiment(params)
         return (vars, experiment)
+    
+    def get_iteration_vars(self, i: int) -> dict:
+        """ Returns a dictionary with the values of all variables in iteration <i> (zero-indexed). """
+        index = np.unravel_index(i, self._n_per_group)
+        return {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
 
     def as_metadata_dict(self):
         return {
@@ -186,28 +191,45 @@ class Sweep(ABC):
         savedir = os.path.dirname(dir)
         savename = os.path.basename(dir)
 
-        data = Data.load_collection(dir, verbose=verbose) # Load all the iterations' data into one large object
+        df = pd.DataFrame() # Here we will put all the final results of all the iterations in
+        varnames = [key for key in self.variables.keys()]
+        vars_iterations = [self.get_iteration_vars(i) for i in range(len(self))]
+        found_iterations = []
+        datafiles = [os.path.join(dir, path) for path in os.listdir(dir) if path.endswith('.json')]
 
-        df = pd.DataFrame()
-        vars: dict
-        experiment: Experiment
-        for i, (vars, experiment) in enumerate(self):
-            if verbose and is_significant(i, len(self)): print(f"Calculating results of experiment {i+1} of {len(self)}...")
-            # 1) Select the part with <vars> in <data>
-            df_i = data.df.copy()
-            for varname, value in vars.items():
-                df_i = df_i.loc[np.isclose(df_i[varname], value, atol=0)]
-            # 2) Re-initialize <experiment> with this data
-            experiment.load_dataframe(df_i)
-            # 3) Calculate relevant metrics
+        # Note to self: parallelizing this for loop gives no performance gain
+        for filepath in datafiles: # We do not care about the order; self.plot() should take care of that for us.
+            try:
+                data_here = Data.load(filepath)
+                vars_here = {varname: data_here.constants[varname] for varname in varnames}
+            except Exception: continue # Then the file could not be loaded or does not contain the right variables
+            ## 1) We need to find the index that this file belongs to, so we can generate the appropriate Experiment
+            found = False
+            for i, vars_compare in enumerate(vars_iterations):
+                if all(np.isclose(vars_here[varname], vars_compare[varname], atol=0) for varname in varnames):
+                    vars, experiment = self.get_iteration(i)
+                    found_iterations.append(i)
+                    found = True
+                    break
+            if not found: continue
+            ## 2) Re-initialize <experiment> with this data and calculate metrics
+            if verbose: print(f"Calculating results of iteration {i}/{len(datafiles)}... ({filepath})")
+            experiment.load_dataframe(data_here.df)
             experiment.calculate_all(ignore_errors=False) # TODO: add a way to pass kwargs to this method without hardcoding ignore_errors
-            # 4) Save these <experiment.results> and <vars> to a dataframe that we are calculating on the fly
+            ## 3) Put these <experiment.results> and <vars> into a nice df representation 
             all_info = vars | experiment.results
             for key, value in all_info.items():
                 if isinstance(value, xp.ndarray): all_info[key] = [value] # Otherwise it is treated as an array
-            df = pd.concat([df, pd.DataFrame(data=all_info, index=[0])], ignore_index=True)
+            df = pd.concat([df, pd.DataFrame(data=all_info, index=[i])], ignore_index=True)
+        data = Data(df, constants=data_here.constants, metadata=data_here.metadata)
 
-        data = Data(df, constants=data.constants, metadata=data.metadata)
+        ## Check if all iterations were unique and all iterations were found, otherwise warn a warning
+        if not data.df.index.is_unique:#len(found_iterations) > len(set(found_iterations)):
+            warnings.warn(f"Some iteration(s) was/were found multiple times in {dir}!", stacklevel=2)
+        if len(found_iterations) != len(self):
+            warnings.warn(f"Some iteration(s) was/were not found in {dir}!", stacklevel=2)
+
+        ## Save or return the results
         if save: save = data.save(dir=savedir, name=savename, timestamp=False)
         return save if return_savepath else data
     
