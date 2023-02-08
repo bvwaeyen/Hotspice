@@ -1,8 +1,6 @@
 import math
 import warnings
 
-import numpy as np
-
 from abc import ABC, abstractmethod
 from typing import Literal
 
