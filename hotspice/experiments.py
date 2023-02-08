@@ -451,8 +451,8 @@ class KernelQualityExperiment(Experiment):
             self.all_states_K = xp.array([[1]]*len(df_K))
             self.all_states_G = xp.array([[1]]*len(df_G))
         else:
-            self.all_states_K = xp.asarray(df_K['y'])
-            self.all_states_G = xp.asarray(df_G['y'])
+            self.all_states_K = xp.asarray([xp.asarray(readout) for readout in df_K['y']])
+            self.all_states_G = xp.asarray([xp.asarray(readout) for readout in df_G['y']])
         self.all_inputs_K = list(df_K['inputs'])
         self.all_inputs_G = list(df_G['inputs'])
 
