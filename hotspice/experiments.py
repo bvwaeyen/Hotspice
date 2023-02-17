@@ -379,9 +379,7 @@ class KernelQualityExperiment(Experiment):
         self.results = {'K': None, 'G': None, 'k': None, 'g': None} # Kernel-quality and Generalization-capability, and their normalized counterparts
 
     def run(self, input_length: int = 100, constant_fraction: float = 0.6, pattern=None, verbose=False):
-        """ @param input_length [int]: the number of times inputter.input_single() is called,
-                before every recording of the output state.
-        """
+        """ @param input_length [int]: the number of inputter.input() calls before each recording of the output state. """
         if verbose: log("Calculating kernel-quality K.")
         self.run_K(input_length=input_length, verbose=verbose, pattern=pattern)
         if verbose: log("Calculating generalization-capability G.")
@@ -397,7 +395,7 @@ class KernelQualityExperiment(Experiment):
             for j in range(input_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
                     log(f"Row {i+1}/{self.n_out}, value {j+1}/{input_length}...")
-                val = self.inputter.input_single(self.mm)
+                val = self.inputter.input(self.mm)
                 self.all_inputs_K[i] += str(int(val))
 
             state = self.outputreader.read_state()
@@ -418,12 +416,12 @@ class KernelQualityExperiment(Experiment):
             for j in range(random_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
                     log(f"Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...")
-                val = self.inputter.input_single(self.mm)
+                val = self.inputter.input(self.mm)
                 self.all_inputs_G[i] += str(int(val))
             for j, value in enumerate(constant_sequence):
                 if verbose and is_significant(i*input_length + j + random_length, input_length*self.n_out, order=1):
                     log(f"Row {i+1}/{self.n_out}, constant value {j+1}/{constant_length}...")
-                constant = self.inputter.input_single(self.mm, value=float(value))
+                constant = self.inputter.input(self.mm, float(value))
                 self.all_inputs_G[i] += str(int(constant))
 
             state = self.outputreader.read_state()
@@ -510,7 +508,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         return cls(inputter, outputreader, mm)
 
     def run(self, N=1000, pattern=None, verbose=False):
-        """ @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
+        """ @param N [int]: The total number of <self.inputter.input()> iterations performed.
             @param pattern [str] (None): The state that <self.mm> is initialized in. If not specified,
                 the ground state of the spin ice geometry is used.
             @param verbose [int] (False): If 0, nothing is printed or plotted.
@@ -532,7 +530,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         self.u = xp.zeros(N) # Inputs
         self.y = xp.zeros((N, self.n_out)) # Outputs
         for i in range(N):
-            self.u[i] = self.inputter.input_single(self.mm)
+            self.u[i] = self.inputter.input(self.mm)
             self.y[i,:] = self.outputreader.read_state()
             if verbose:
                 if verbose > 1: fig = show_m(self.mm, figure=fig)
@@ -715,9 +713,8 @@ class IODistanceExperiment(Experiment):
         for i in range(N):
             for j in range(input_length):
                 if verbose and is_significant((iter := i*input_length + j), N*input_length): log(f"Inputting bit ({i}, {j}) of ({N}, {input_length})...")
-                value = self.inputter.datastream.get_next()
-                self.inputter.input_single(self.mm, value=value)
-                self.input_sequences[i, j] = value
+                value = self.inputter.input(self.mm)
+                self.input_sequences[i, j] = value # Works if value is scalar or size-1 array, which it should be
             self.output_sequences[i,:] = self.outputreader.read_state().reshape(-1)
         # Still need to call self.calculate_all() manually after this method.
     
