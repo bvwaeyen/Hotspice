@@ -16,7 +16,7 @@ from typing import Iterable
 
 from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
-from .io import Inputter, OutputReader, FieldInputter, RandomUniformDatastream, RegionalOutputReader
+from .io import Datastream, ScalarDatastream, IntegerDatastream, BinaryDatastream, Inputter, OutputReader, FieldInputter, RandomScalarDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, save_plot, show_m
 from .utils import appropriate_SIprefix, asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
 from . import config
@@ -116,6 +116,8 @@ class Sweep(ABC):
                 raise ValueError(f"Not all elements of {group} have same sweeping length: {l} respecitvely.")
 
         ## Utility attributes: names and units
+        if names is None: names = {}
+        if units is None: units = {}
         self.names = {paramname: names.get(paramname, paramname) for paramname in self.parameters.keys()}
         self.units = {paramname: units.get(paramname, None) for paramname in self.parameters.keys()}
 
@@ -370,8 +372,8 @@ class KernelQualityExperiment(Experiment):
                 Johannes H. Jensen and Gunnar Tufte. Reservoir Computing in Artificial Spin Ice. ALIFE 2020.
             to implement a similar simulation to determine the kernel-quality K and generalization-capability G.
         """
-        super().__init__(inputter, outputreader, mm)
-        if not self.inputter.datastream.is_binary: # This is necessary for the (admittedly very bad) way that the inputs are recorded into a dataframe now
+        super().__init__(inputter, outputreader, mm) # TODO: allow float datastreams as well
+        if not isinstance(self.inputter.datastream, BinaryDatastream): # This is necessary for the (admittedly very bad) way that the inputs are recorded into a dataframe now
             raise AttributeError("KernelQualityExperiment should be performed with a binary datastream only.")
         self.n_out = self.outputreader.n
         self.results = {'K': None, 'G': None, 'k': None, 'g': None} # Kernel-quality and Generalization-capability, and their normalized counterparts
@@ -502,7 +504,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
                 object. Otherwise, a minimalistic hotspice.ASI.OOP_Square() instance is used.
         """
         if mm is None: mm = OOP_Square(1, 10, energies=(DipolarEnergy(), ZeemanEnergy()))
-        datastream = RandomUniformDatastream(low=-1, high=1)
+        datastream = RandomScalarDatastream(low=-1, high=1)
         inputter = FieldInputter(datastream)
         outputreader = RegionalOutputReader(2, 2, mm)
         return cls(inputter, outputreader, mm)
@@ -566,18 +568,8 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
                 to evaluate the metrics. The remaining 1-<test_fraction> are used to train the estimators.
         """
         if verbose: log(f"Calculating NL_local...")
-
-        if self.inputter.datastream.is_binary: # TODO: play with <n_bits>, and maybe limit number of bytes that we recall (now we recall <k>) such that we only look a maximum of <k> bits (instead of bytes) back in time, just as we do with MC
-            n_bits = 8
-            bit_mask = 2**np.arange(n_bits)
-            bit_mask = bit_mask[::-1] # For little-endian representation
-            u_strided = strided(self.u, n_bits) # The <n_bits> most recent bits. NOTE: the first <n_bits-1> rows will contain NaNs
-            u = np.sum(np.multiply(bit_mask, u_strided), axis=1) # NOTE: the first <n_bits-1> elements will be NaN
-            u = u[::n_bits]
-            y = self.y[::n_bits,:]
-        else:
-            u = self.u
-            y = self.y
+        u = self.u
+        y = self.y
         
         train_test_cutoff = math.ceil(u.size*(1 - test_fraction))
         if train_test_cutoff < k: raise ValueError(f"Nonlinearity: size of training set ({train_test_cutoff}) must be >= k ({k}).")
@@ -710,7 +702,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
 class IODistanceExperiment(Experiment):
     # TODO: try some distance metric that weighs more recent bits more? Or some memory-like distance like that
     def __init__(self, inputter: Inputter, outputreader: OutputReader, mm: Magnets):
-        if not inputter.datastream.is_binary: raise ValueError("IODistanceExperiment must use an inputter with a binary datastream.")
+        if not isinstance(inputter.datastream, BinaryDatastream): raise ValueError("IODistanceExperiment must use an inputter with a binary datastream.")
         super().__init__(inputter, outputreader, mm)
     
     def run(self, N=10, input_length=100, verbose=False):

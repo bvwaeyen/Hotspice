@@ -21,28 +21,38 @@ class Datastream(ABC):
 
     @abstractmethod
     def get_next(self, n=1) -> xp.ndarray:
-        """ Calling this method returns an array containing exactly <n> elements, containing the requested data.
-            Depending on the specific subclass, these can be int or float.
-        """
-    
-    def as_bits(self, integer: int, endianness: Literal['little', 'big'] = 'little'):
-        raise NotImplementedError("This datastream can not be converted to a binary stream.")
+        """ Calling this method returns an array containing exactly <n> (default: 1) scalar values of a certain type. """
 
     @property
-    def is_binary(self): return False
+    @abstractmethod
+    def dtype(self):
+        return None
 
+class ScalarDatastream(Datastream):
     @property
     def dtype(self): return float
 
 class BinaryDatastream(Datastream):
     """ Just an alias for Datastream: a normal Datastream can contain floats, while this only yields 0 or 1. """
-    pass
+    @property
+    def dtype(self): return int # 0 or 1 actually
+
+class IntegerDatastream(Datastream):
+    @property
+    def dtype(self): return int
 
     @property
-    def is_binary(self): return True
+    @abstractmethod
+    def bits_per_int(self) -> int: pass
 
-    @property
-    def dtype(self): return bool
+    def as_bits(self, integer: int, endianness: Literal['little', 'big'] = 'little') -> xp.ndarray:
+        """ For our RC purposes, little-endian is preferred, because nearby integers will have similar final bits.
+            This should allow for easier training for the estimators in TaskAgnosticExperiment.
+            When subclassing, one can extend this method 
+        """
+        bitstring = bin(integer)[2:].zfill(self.bits_per_int) # Slice from 2 to remove '0b', zfill to left-pad with zeros 
+        if endianness == 'little': bitstring = bitstring[::-1]
+        return xp.asarray([int(bit) for bit in bitstring])
 
 
 class Inputter(ABC):
@@ -103,7 +113,7 @@ class RandomBinaryDatastream(BinaryDatastream):
     def get_next(self, n=1) -> xp.ndarray:
         return self.rng.random(size=(n,)) >= self.p0
 
-class RandomUniformByteDatastream(Datastream):
+class RandomIntegerDatastream(IntegerDatastream):
     """ Generates random integers uniformly distributed from 0 up to and including 2**<num_bytes> - 1. """
     def __init__(self, num_bits: int = 8):
         if not isinstance(num_bits, int): raise ValueError("Number of bits per 'byte' in RandomUniformByteDatastream must be of type <int>.")
@@ -122,7 +132,7 @@ class RandomUniformByteDatastream(Datastream):
         if endianness == 'little': bitstring = bitstring[::-1]
         return xp.asarray([int(bit) for bit in bitstring])
 
-class RandomUniformDatastream(Datastream):
+class RandomScalarDatastream(ScalarDatastream):
     def __init__(self, low=0, high=1):
         """ Generates uniform random floats between <low=0> and <high=1>. """
         self.low, self.high = low, high
