@@ -18,7 +18,7 @@ from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
 from .io import Inputter, OutputReader, FieldInputter, RandomUniformDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, save_plot, show_m
-from .utils import asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
+from .utils import appropriate_SIprefix, asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
 from . import config
 if config.USE_GPU:
     import cupy as xp
