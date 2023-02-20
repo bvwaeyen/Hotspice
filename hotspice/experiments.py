@@ -524,14 +524,13 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
                 fig = None
             log(f"[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...")
         self.mm.relax()
-        self.initial_state = self.outputreader.read_state() # TODO: change to self.mm.m.copy()? (issue: plotting S_local might get harder then because we need the correct mm geometry then when recalling it after something had been saved)
-
+        self.initial_state = self.outputreader.read_state().copy() # TODO: is copying the right way to solve our problems?
         # Run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
         self.u = xp.zeros(N) # Inputs
         self.y = xp.zeros((N, self.n_out)) # Outputs
         for i in range(N):
             self.u[i] = self.inputter.input(self.mm)
-            self.y[i,:] = self.outputreader.read_state()
+            self.y[i,:] = self.outputreader.read_state().copy()
             if verbose:
                 if verbose > 1: fig = show_m(self.mm, figure=fig)
                 if is_significant(i, N):
@@ -540,7 +539,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
 
         # Relax and store the final state
         self.mm.relax()
-        self.final_state = self.outputreader.read_state()
+        self.final_state = self.outputreader.read_state().copy()
         # Still need to call self.calculate_all() manually after this method.
 
     def calculate_all(self, ignore_errors=False, **kwargs):

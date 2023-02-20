@@ -445,13 +445,14 @@ class OOPSquareChessStepsInputter(Inputter):
             A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
             NOTE: the difference between this and an OOPSquareChessFieldInputter is that this inputter
                   performs the input in 2 separate steps, where in each step half of the checkerboard pattern
-                  is stimulated, which should prevent domain walls from propagating all the way to saturation.
+                  is addressed, which should prevent domain walls from propagating all the way to saturation.
             @param n [float] (4.): At most <n> Monte Carlo steps will be performed for a single input bit.
             @param frequency [float] (1.): The frequency at which bits are being applied to the system, if it is nonzero.
+
+            The datastream-to-field relationship is piecewise linear (see self.val_to_mag_piecewiselinear):
             @param magnitude [float] (1.): The absolute value of the external field magnitude for an input of 0 (-) or 1 (+).
-            @param magnitude_range [float] (0.5): The difference in magnitude for inputs of <0.5-s/2> and <0>.
-            @param transition_range [float] (0.1): A region of size <s> around 0.5 is used to transition between the + and - magnitude regimes.
-            As such, the datastream-to-field relationship is piecewise linear (see self.val_to_mag_piecewiselinear).
+            @param magnitude_range [float] (0.5): The difference in magnitude between input <0> and <0.5-transition_range/2>.
+            @param transition_range [float] (0.1): A region of size <transition_range> around 0.5 separates the + and - magnitude regimes.
         """
         super().__init__(datastream)
         self.magnitude, self.magnitude_range, self.transition_range = magnitude, magnitude_range, transition_range
