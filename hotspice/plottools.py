@@ -11,7 +11,7 @@ from enum import Enum
 from matplotlib import cm, colors, patches, widgets
 
 from .core import Magnets
-from .utils import asnumpy, unit_prefix_to_mul
+from .utils import asnumpy, SIprefix_to_mul
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -221,7 +221,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         show_quiver = mm.n < 1e5 or overlay_quiver # Quiver becomes very slow for more than 100k quivers, so just dont show it then
     else:
         show_quiver = False
-    unit_factor = unit_prefix_to_mul(unit)
+    unit_factor = SIprefix_to_mul(unit)
     averaged_extent = _get_averaged_extent(mm, avg)/unit_factor # List comp to convert to micrometre
     full_extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dx/2])/unit_factor
 

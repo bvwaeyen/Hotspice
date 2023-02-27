@@ -1,8 +1,6 @@
 import math
 import warnings
 
-import numpy as np
-
 from abc import ABC, abstractmethod
 from typing import Literal
 
@@ -23,41 +21,61 @@ class Datastream(ABC):
 
     @abstractmethod
     def get_next(self, n=1) -> xp.ndarray:
-        """ Calling this method returns an array containing exactly <n> elements, containing the requested data.
-            Depending on the specific subclass, these can be int or float.
-        """
-    
-    def as_bits(self, integer: int, endianness: Literal['little', 'big'] = 'little'):
-        raise NotImplementedError("This datastream can not be converted to a binary stream.")
+        """ Calling this method returns an array containing exactly <n> (default: 1) scalar values of a certain type. """
 
     @property
-    def is_binary(self): return False
+    @abstractmethod
+    def dtype(self):
+        return None
 
+class ScalarDatastream(Datastream):
     @property
     def dtype(self): return float
 
 class BinaryDatastream(Datastream):
     """ Just an alias for Datastream: a normal Datastream can contain floats, while this only yields 0 or 1. """
-    pass
+    @property
+    def dtype(self): return int # 0 or 1 actually
+
+class IntegerDatastream(Datastream):
+    @property
+    def dtype(self): return int
 
     @property
-    def is_binary(self): return True
+    @abstractmethod
+    def bits_per_int(self) -> int: pass
 
-    @property
-    def dtype(self): return bool
+    def as_bits(self, integer: int, endianness: Literal['little', 'big'] = 'little') -> xp.ndarray:
+        """ For our RC purposes, little-endian is preferred, because nearby integers will have similar final bits.
+            This should allow for easier training for the estimators in TaskAgnosticExperiment.
+            When subclassing, one can extend this method 
+        """
+        bitstring = bin(integer)[2:].zfill(self.bits_per_int) # Slice from 2 to remove '0b', zfill to left-pad with zeros 
+        if endianness == 'little': bitstring = bitstring[::-1]
+        return xp.asarray([int(bit) for bit in bitstring])
 
 
 class Inputter(ABC):
     def __init__(self, datastream: Datastream):
         self.datastream = datastream
+    
+    def input(self, mm: Magnets, values=None) -> xp.ndarray:
+        """ Inputs one or multiple values as passed to the <values> argument.
+            If <values> is not provided, the next value yielded by <self.datastream> is used.
+        """
+        if values is None: values = self.datastream.get_next(n=1)
+        values = xp.asarray(values).reshape(-1)
+
+        inputs = values.copy() # "inputs" is what we actually pass to self.input_single()
+        if isinstance(self.datastream, IntegerDatastream): # If we have integers, we decompose them into bits
+            inputs = xp.asarray([self.datastream.as_bits(value) for value in values]).reshape(-1)
+
+        for value in inputs: self.input_single(mm, value)
+        return values
 
     @abstractmethod
-    def input_single(self, mm: Magnets, value=None):
-        """ Performs an input corresponding to <value> (generated using <self.datastream>)
-            into the <mm> simulation, and returns this <value>.
-        """
-        if value is None: value = self.datastream.get_next()
-        return value
+    def input_single(self, mm: Magnets, value: float|int|bool):
+        """ Applies a certain stimulus onto the <mm> simulation depending on the scalar <value>. """
 
 
 class OutputReader(ABC):
@@ -105,7 +123,7 @@ class RandomBinaryDatastream(BinaryDatastream):
     def get_next(self, n=1) -> xp.ndarray:
         return self.rng.random(size=(n,)) >= self.p0
 
-class RandomUniformByteDatastream(Datastream):
+class RandomIntegerDatastream(IntegerDatastream):
     """ Generates random integers uniformly distributed from 0 up to and including 2**<num_bytes> - 1. """
     def __init__(self, num_bits: int = 8):
         if not isinstance(num_bits, int): raise ValueError("Number of bits per 'byte' in RandomUniformByteDatastream must be of type <int>.")
@@ -124,7 +142,7 @@ class RandomUniformByteDatastream(Datastream):
         if endianness == 'little': bitstring = bitstring[::-1]
         return xp.asarray([int(bit) for bit in bitstring])
 
-class RandomUniformDatastream(Datastream):
+class RandomScalarDatastream(ScalarDatastream):
     def __init__(self, low=0, high=1):
         """ Generates uniform random floats between <low=0> and <high=1>. """
         self.low, self.high = low, high
@@ -151,6 +169,7 @@ class FieldInputter(Inputter):
             If <sine> is True, the field magnitude follows a full sinusoidal period for each input bit.
             If <half_period> is True, only the first half-period ⏜ of the sine is used, otherwise the full ∿ period.
             At most <n> Monte Carlo steps will be performed.
+            NOTE: this class is ancient and might not work correctly.
         """
         super().__init__(datastream)
         self.angle = angle
@@ -174,10 +193,9 @@ class FieldInputter(Inputter):
     def magnitude(self, value):
         self._magnitude = value
 
-    def input_single(self, mm: Magnets, value=None):
+    def input_single(self, mm: Magnets, value: float|int):
         if self.sine and mm.params.UPDATE_SCHEME != 'Néel':
             raise AttributeError("Can not use temporal sine=True if UPDATE_SCHEME != 'Néel'.")
-        if value is None: value = self.datastream.get_next()
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
         if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
@@ -190,7 +208,6 @@ class FieldInputter(Inputter):
         else: # Use constant magnitude
             Zeeman.set_field(magnitude=self.magnitude*value)
             mm.progress(t_max=1/self.frequency, MCsteps_max=self.n) # No sine, so no 20 steps per wavelength needed here
-        return value
 
 
 class FieldInputterBinary(FieldInputter):
@@ -201,14 +218,13 @@ class FieldInputterBinary(FieldInputter):
             Differing attributes compared to FieldInputter:
                 <self.magnitude> is set to <magnitudes[1]>
                 <self.magnitude_ratio> is used to store the ratio <magnitudes[0]/magnitudes[1]>.
+            NOTE: this class is ancient and might not work correctly.
         """
         self.magnitude_ratio = magnitudes[0]/magnitudes[1]
         super().__init__(datastream, magnitude=magnitudes[1], half_period=False, **kwargs)
 
-    def input_single(self, mm: Magnets, value=None):
-        if value is None: value = self.datastream.get_next()
-        value = self.magnitude_ratio if value == 0 else 1
-        return super().input_single(mm, value=value)
+    def input_single(self, mm: Magnets, value: bool|int):
+        super().input_single(mm, 1 if value else self.magnitude_ratio)
 
 
 class PerpFieldInputter(FieldInputter):
@@ -217,17 +233,16 @@ class PerpFieldInputter(FieldInputter):
             the bit '0' corresponds to an angle of <phi> radians, the bit '1' to <phi>+pi/2 radians.
             Also works for continuous numbers, resulting in intermediate angles, but this is not the intended use.
             For more information about the kwargs, see FieldInputter.
+            NOTE: this class is ancient and might not work correctly.
         """
         self.relax = relax
         super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, frequency=frequency)
 
-
-    def input_single(self, mm: IP_ASI, value=None):
+    def input_single(self, mm: IP_ASI, value: bool|int):
         if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
             raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != 'Néel'.")
         if not mm.in_plane:
             raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
-        if value is None: value = self.datastream.get_next()
 
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
         if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
@@ -244,20 +259,15 @@ class PerpFieldInputter(FieldInputter):
             mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
             Zeeman.set_field(magnitude=-self.magnitude, angle=angle)
             mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
-        return value
 
-
-    def input_single_generalized(self, mm: IP_ASI, value=None):
+    def input_single_generalized(self, mm: IP_ASI, value: bool|int):
         if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
             raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != 'Néel'.")
         if not mm.in_plane:
             raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
-        if value is None: value = self.datastream.get_next()
 
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
-        if Zeeman is None:
-            warnings.warn("No Zeeman energy associated with the spin ice was found. Using zero field by default.")
-            mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
         angle = self.angle + value*math.pi/2
         MCsteps0, t0 = mm.MCsteps, mm.t
@@ -268,7 +278,6 @@ class PerpFieldInputter(FieldInputter):
         else: # Use constant magnitude
             Zeeman.set_field(magnitude=self.magnitude, angle=angle)
             mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-        return value
 
 
 class FullOutputReader(OutputReader):
@@ -277,6 +286,7 @@ class FullOutputReader(OutputReader):
         """ Reads the full state of the ASI. Ignores empty cells.
             By reading the full state, we allow for squinting afterwards. How exactly to do this, is a # TODO point.
             @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+            NOTE: this class is ancient and might not work correctly.
         """
         super().__init__(mm)
     
@@ -353,18 +363,13 @@ class OOPSquareChessFieldInputter(Inputter):
         self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
         self.frequency = frequency
 
-    def input_single(self, mm: OOP_Square, value=None):
-        if value is None: value = self.datastream.get_next(n=1)
-        input_sequence = xp.asarray(value).reshape(-1) if self.datastream.is_binary else self.datastream.as_bits(int(value), endianness='little')
-        # TODO: is there a way to do this int-to-bits etc. cleaner? Because this kind of method will be used more often if this succeeds... Also, the type of 'value' is getting less well defined by the day...
+    def input_single(self, mm: OOP_Square, value: bool|int):
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
         if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
         AFM_mask = (((mm.ixx + mm.iyy) % 2)*2 - 1).astype(float) # simple checkerboard pattern of 1 and -1
-        for inbit in input_sequence:
-            Zeeman.set_field(magnitude=AFM_mask*(2*inbit-1)*self.magnitude)
-            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-        return value
+        Zeeman.set_field(magnitude=AFM_mask*(2*value-1)*self.magnitude)
+        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
 
 
 class OOPSquareChessOutputReader(OutputReader):
@@ -425,11 +430,10 @@ class OOPSquareClockwiseInputter(Inputter):
         self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
         self.frequency = frequency # The min. frequency the bits are applied at, if the time is known (i.e. Néel scheme is used)
 
-    def input_single(self, mm: OOP_Square, value=None):
+    def input_single(self, mm: OOP_Square, value: bool|int):
         """ Performs an input corresponding to <value> (generated using <self.datastream>)
             into the <mm> simulation, and returns this <value>.
         """
-        if value is None: value = self.datastream.get_next()
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
         if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
@@ -443,39 +447,59 @@ class OOPSquareClockwiseInputter(Inputter):
             magnitude_local = self.magnitude*(mask_positive if value else -mask_negative)
             Zeeman.set_field(magnitude=magnitude_local)
             mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-        return value
 
 
 class OOPSquareChessStepsInputter(Inputter):
-    def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
-        """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external
-            field for each magnet, with magnitude <magnitude>*<datastream.get_next()>.
+    def __init__(self, datastream: Datastream, magnitude: float = 1, magnitude_range: float = 0.5, transition_range: float = 0.1, n: float = 4., frequency: float = 1.):
+        """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external field for each magnet.
+            A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
             NOTE: the difference between this and an OOPSquareChessFieldInputter is that this inputter
                   performs the input in 2 separate steps, where in each step half of the checkerboard pattern
-                  is stimulated, which should prevent domain walls from propagating all the way to saturation.
-            A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
-            <frequency> specifies the frequency [Hz] at which bits are being applied to the system, if it is nonzero.
-            At most <n> Monte Carlo steps will be performed for a single input bit.
+                  is addressed, which should prevent domain walls from propagating all the way to saturation.
+            @param n [float] (4.): At most <n> Monte Carlo steps will be performed for a single input bit.
+            @param frequency [float] (1.): The frequency at which bits are being applied to the system, if it is nonzero.
+
+            The datastream-to-field relationship is piecewise linear (see self.val_to_mag_piecewiselinear):
+            @param magnitude [float] (1.): The absolute value of the external field magnitude for an input of 0 (-) or 1 (+).
+            @param magnitude_range [float] (0.5): The difference in magnitude between input <0> and <0.5-transition_range/2>.
+            @param transition_range [float] (0.1): A region of size <transition_range> around 0.5 separates the + and - magnitude regimes.
         """
         super().__init__(datastream)
-        self.magnitude = magnitude
+        self.magnitude, self.magnitude_range, self.transition_range = magnitude, magnitude_range, transition_range
         self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
         self.frequency = frequency
+        self.transform = self.get_transform_func()
+    
+    def get_transform_func(self):
+        if isinstance(self.datastream, (BinaryDatastream, IntegerDatastream)):
+            return lambda bit: (2*bit - 1)*self.magnitude
+        if isinstance(self.datastream, ScalarDatastream):
+            return self.val_to_mag_piecewiselinear
+    
+    def val_to_mag_piecewiselinear(self, value: float):
+        """ A piecewise linear function between
+            (0, -magnitude),
+            (0.5 - transition_range/2, -magnitude + magnitude_range),
+            (0.5 + transition_range/2, magnitude - magnitude_range) and
+            (1, magnitude).
+        """
+        s = 0.5 - self.transition_range/2
+        if value < s:
+            return -self.magnitude + value*self.magnitude_range/s
+        if value > 1 - s:
+            return self.magnitude + (value - 1)*self.magnitude_range/s
+        return 2*(self.magnitude - self.magnitude_range)/self.transition_range*(value - 0.5)
 
-    def input_single(self, mm: OOP_Square, value=None):
-        if value is None: value = self.datastream.get_next(n=1)
-        input_sequence = xp.asarray(value).reshape(-1) if self.datastream.is_binary else self.datastream.as_bits(int(value), endianness='little')
-        # TODO: is there a way to do this int-to-bits etc. cleaner? Because this kind of method will be used more often if this succeeds... Also, the type of 'value' is getting less well defined by the day...
+    def input_single(self, mm: OOP_Square, value: float|int|bool):
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
         if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
+        magnitude = self.transform(value)
         AFM_mask = ((mm.ixx + mm.iyy) % 2).astype(float) # Need astype float for correct multiplication
-        AFM_mask_step1 = AFM_mask*self.magnitude # 0 and 1 on a checkerboard pattern
-        AFM_mask_step2 = (AFM_mask - 1)*self.magnitude # -1 and 0 checkerboard pattern, with 0s on other spots w.r.t. step 1
-        for inbit in input_sequence:
-            sign = 2*inbit - 1
-            Zeeman.set_field(magnitude=AFM_mask_step1*sign)
-            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-            Zeeman.set_field(magnitude=AFM_mask_step2*sign)
-            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-        return value
+        AFM_mask_step1 = AFM_mask*magnitude # 0 and 1 on a checkerboard pattern
+        AFM_mask_step2 = (AFM_mask - 1)*magnitude # -1 and 0 checkerboard pattern, with 0s on other spots w.r.t. step 1
+
+        Zeeman.set_field(magnitude=AFM_mask_step1)
+        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+        Zeeman.set_field(magnitude=AFM_mask_step2)
+        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
