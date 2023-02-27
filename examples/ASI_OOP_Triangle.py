@@ -12,11 +12,11 @@ n = 100
 ## Initialize main Magnets object
 t = time.perf_counter()
 mm = hotspice.ASI.OOP_Triangle(800e-9, n, T=T, E_B=E_B, pattern='uniform', energies=[hotspice.DipolarEnergy()], PBC=True)
-print(f'Initialization time: {time.perf_counter() - t} seconds.')
+print(f"Initialization time: {time.perf_counter() - t} seconds.")
 
 
 if __name__ == "__main__":
-    print('Initialization energy:', mm.E_tot)
+    print("Initialization energy:", mm.E_tot)
 
     # ef.run_a_bit(mm, N=10e2, T=160, verbose=True)
     # ef.neelTemperature(mm, T_max=400)

@@ -18,6 +18,8 @@ where `hotspice310` is the name of the new environment (because it uses Python 3
 
 Hotspice relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
 
+Note that CuPy will not function properly on systems without CUDA support. On such systems, Hotspice can still be used by using the CPU as shown in [choosing between GPU or CPU](#choosing-between-gpu-or-cpu).
+
 To [install CuPy](https://docs.cupy.dev/en/stable/install.html) separately, the easiest method is likely to use the following `conda` command, as this automatically installs the appropriate version of the CUDA toolkit:
 
 ```shell
@@ -36,7 +38,8 @@ To create a simulation, the first thing one has to do is to create a spin ice. T
 
 ```python
 import hotspice
-mm = hotspice.ASI.IP_Pinwheel(1e-6, 100)
+mm = hotspice.ASI.IP_Pinwheel(1e-6, 100) # Create the spin ice object
+hotspice.plottools.show_m(mm) # Display the current state of the spin ice
 ```
 
 The meaning of the values `1e-6` and `100` requires a small introduction on how the spin ices are stored in memory.
@@ -91,7 +94,7 @@ At the moment when hotspice is imported through `import hotspice`, it
 ```python
 import os
 os.environ['HOTSPICE_USE_GPU'] = 'False' # Must be type 'str'
-import hotspice # Only import AFTER setting HOTSPICE_USE_GPU!
+import hotspice # Only import AFTER setting 'HOTSPICE_USE_GPU'!
 ```
 
 *Note that the CPU/GPU choice must be made **BEFORE** the `import hotspice` statement* (and can thus be made only once)! <sub><sup>This is because behind-the-scenes, this choice determines which modules are imported by hotspice (either NumPy or CuPy), and it is not possible to re-assign these without significant runtime issues.</sup></sub>

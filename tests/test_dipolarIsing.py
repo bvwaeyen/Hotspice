@@ -1,11 +1,11 @@
-r''' This file tests the correspondence between theory and simulation for a
+r""" This file tests the correspondence between theory and simulation for a
     two-dimensional square Ising model, with exchange and dipolar interactions,
     by observing striped phases as a function of the relative strength $\delta$
     between the exchange and dipolar interaction at low temperature.
     Based on the paper
         J. H. Toloza, F. A. Tamarit, and S. A. Cannas. Aging in a two-dimensional Ising model
         with dipolar interactions. Physical Review B, 58(14):R8885, 1998.
-'''
+"""
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -21,15 +21,15 @@ class test_dipolarIsing:
     
     @property
     def dipolar_nearest(self):
-        ''' Yields the dipolar interaction energy between nearest neighbors. '''
+        """ Yields the dipolar interaction energy between nearest neighbors. """
         return 1e-7*self.mm.get_energy('dipolar').prefactor*(self.mm._momentSq)/(self.mm.a**3)
     
     @property
     def delta(self):
-        ''' Dipolar energy magnitude:  m*m* prefactor/(a**3)*1e-7*(moment**2)
+        """ Dipolar energy magnitude:  m*m* prefactor/(a**3)*1e-7*(moment**2)
             Exchange energy magnitude: m*m* J
             So delta = exchange/dipolar is given by...
-        '''
+        """
         return 2*self.mm.get_energy('exchange').J/self.dipolar_nearest
     
     @delta.setter
@@ -57,9 +57,9 @@ class test_dipolarIsing:
             AFMness[i] = hotspice.plottools.get_AFMness(self.mm) # np.mean(AFMnesses)
             AFMness_std[i] = np.std(AFMnesses)
         
-        df = pd.DataFrame({"delta": delta_range, "AFMness": AFMness, "AFMness_std": AFMness_std})
-        metadata = {"description": r"2D Ising model with exchange and dipolar interactions, sweeping $\delta$ as described in `Striped phases in two-dimensional dipolar ferromagnets` by MacIsaac et al."}
-        constants = {"nx": self.mm.nx, "ny": self.mm.ny, "MCstepsize": N, "T": self.mm.T_avg}
+        df = pd.DataFrame({'delta': delta_range, 'AFMness': AFMness, 'AFMness_std': AFMness_std})
+        metadata = {'description': r"2D Ising model with exchange and dipolar interactions, sweeping $\delta$ as described in `Striped phases in two-dimensional dipolar ferromagnets` by MacIsaac et al."}
+        constants = {'nx': self.mm.nx, 'ny': self.mm.ny, 'MCstepsize': N, 'T': self.mm.T_avg}
         data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
         if save: save = data.save(dir="results/test_dipolarIsing", name=f"deltasweep{df['delta'].min()}..{df['delta'].max()}({df['delta'].nunique()})_{self.mm.nx}x{self.mm.ny}")
         if plot or save: test_dipolarIsing.test_delta_influence_plot(df, save=save, show=plot)
@@ -70,10 +70,10 @@ class test_dipolarIsing:
         hotspice.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.errorbar(df["delta"], df["AFMness"], yerr=df["AFMness_std"], fmt='o', label='Hotspice')
+        ax.errorbar(df['delta'], df['AFMness'], yerr=df['AFMness_std'], fmt='o', label="Hotspice")
         ax.set_xlabel(r"$\delta$ (relative exchange/dipolar strength)")
         ax.set_ylabel('AFM-ness')
-        ax.set_xlim([df["delta"].min()-.005, df["delta"].max()+.005])
+        ax.set_xlim([df['delta'].min()-.005, df['delta'].max()+.005])
         ax.set_ylim([ax.get_ylim()[0], 1])
         ax.axvline(0.85, linestyle=':', color='black')
         plt.gcf().tight_layout()

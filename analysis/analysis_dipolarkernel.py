@@ -14,13 +14,13 @@ else:
 
 
 def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n:int=10000, L:int=400, Lx:int=None, Ly:int=None, cutoff=16, pattern:str=None, plot:bool=True, save:bool=False):
-    ''' In this analysis, the difference between using either a truncated hotspice.DipolarEnergy() kernel,
+    """ In this analysis, the difference between using either a truncated hotspice.DipolarEnergy() kernel,
         or using the full dipolar kernel, is analyzed.
         
         @param n [int] (10000): the number of times the energy is updated using a reduced kernel.
         @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify <L> for square domain.
         @param cutoff [int] (16): the size of the reduced kernel. TODO: could it be interesting to sweep this?
-    '''
+    """
     if mm is None: mm = hotspice.ASI.OOP_Square(1e-6, nx=(Lx or L), ny=(Ly or L), PBC=True)
 
     if mm.get_energy('dipolar', verbose=False) is None: mm.add_energy(hotspice.DipolarEnergy())
@@ -57,7 +57,7 @@ def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n:int=10000, L:int=
     print(f"--- ANALYSIS RESULTS ---")
     print(f"max inc: {xp.max(xp.abs(E_incremented))}")
     print(f"max rec: {xp.max(xp.abs(E_recalculated))}")
-    print('-'*4)
+    print("-"*4)
     print(f"avg diff: {xp.mean(xp.abs(E_diff[mm.occupation != 0]))}")
     print(f"max diff: {xp.max(xp.abs(E_diff[mm.occupation != 0]))}")
     
@@ -91,8 +91,8 @@ def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n:int=10000, L:int=
 
     # PLOT 4: THE TIME-DEPENDENCE
     ax4 = fig.add_subplot(2, 2, 4)
-    ax4.plot(switches, absdiff_avg, color='C0', label=r'$\langle E_{err} \rangle$')
-    ax4.plot(switches, absdiff_max, color='C1', label=r'max($E_{err}$)')
+    ax4.plot(switches, absdiff_avg, color='C0', label=r"$\langle E_{err} \rangle$")
+    ax4.plot(switches, absdiff_max, color='C1', label=r"max($E_{err}$)")
     ax4.set_xscale('log')
     ax4.set_xlim([1, np.max(switches)])
     ax4.set_ylim([0, ax4.get_ylim()[1]])
@@ -104,10 +104,10 @@ def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n:int=10000, L:int=
     plt.suptitle(f"{mm.nx}x{mm.ny} {type(mm).__name__}, truncated {2*cutoff+1}x{2*cutoff+1} kernel\n{n} steps ({mm.switches} switches)")
     plt.gcf().tight_layout()
 
-    df = pd.DataFrame({"iteration": interesting_iterations, "switches": switches, "absdiff_avg": absdiff_avg, "absdiff_max": absdiff_max})
-    metadata = {"description": r"Difference between using either a truncated dipolar kernel, or using the full dipolar kernel."}
-    constants = {"T": mm.T_avg, "E_B": mm.E_B_avg, "dx": mm.dx, "dy": mm.dy, "ASI_type": hotspice.utils.full_obj_name(mm), "PBC": mm.PBC}
-    if pattern is not None: constants["pattern"] = pattern
+    df = pd.DataFrame({'iteration': interesting_iterations, 'switches': switches, 'absdiff_avg': absdiff_avg, 'absdiff_max': absdiff_max})
+    metadata = {'description': r"Difference between using either a truncated dipolar kernel, or using the full dipolar kernel."}
+    constants = {'T': mm.T_avg, 'E_B': mm.E_B_avg, 'dx': mm.dx, 'dy': mm.dy, 'ASI_type': hotspice.utils.full_obj_name(mm), 'PBC': mm.PBC}
+    if pattern is not None: constants['pattern'] = pattern
     data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
     if save:
         save = data.save(dir="results/analysis_dipolarkernel", name=f"{type(mm).__name__}_{mm.nx}x{mm.ny}_trunc={cutoff}" + f"_{pattern}"*(pattern is not None))

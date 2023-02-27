@@ -1,8 +1,8 @@
-''' This file tests the correspondence between experiment and simulation for a
+""" This file tests the correspondence between experiment and simulation for a
     two-dimensional pinwheel artifical spin ice, which is initialized in a uniform
     state and reversed using an external field. Ideally, the reversal should take place
     in two steps, roughly corresponding to two 90° rotations.
-'''
+"""
 
 import math
 import warnings
@@ -16,18 +16,18 @@ from context import hotspice
 
 class Threshold:
     def __init__(self, thresholds: list[float], start_value=0):
-        ''' Use self.pass_check(value) to check if <value> is beyond any of the thresholds
+        """ Use self.pass_check(value) to check if <value> is beyond any of the thresholds
             when seen from the <old_value> of the previous self.pass_check(old_value) call.
             The most recently passed threshold is disabled until another threshold is passed.
             @param thresholds: a list containing floats, each float representing a threshold.
             @param start_value (0): the <old_value> for the first time self.pass_check() is called.
-        '''
+        """
         self.thresholds = np.asarray(thresholds) # List of thresholds where self.check() returns true if passed
         self.value = start_value # Last seen value
         self._last_threshold_passed = None # Used to make sure we don't activate the same threshold twice in row (is annoying)
     
     def pass_check(self, value):
-        ''' Returns True if a threshold was passed when going from <value> to <self.value>. '''
+        """ Returns True if a threshold was passed when going from <value> to <self.value>. """
         thresholds_passed = np.where(np.sign(self.thresholds - value) != np.sign(self.thresholds - self.value))[0]
         self.value = value
 
@@ -58,10 +58,10 @@ class test_pinwheelReversal:
         self.data = self.test_reversal(*args, **kwargs)
     
     def test_reversal(self, angle: float=0., N: int = 10000, verbose=False, show_intermediate=True, plot=True, save=True):
-        ''' Performs a hysteresis of magnetization reversal for an external field at <angle> rad swept
+        """ Performs a hysteresis of magnetization reversal for an external field at <angle> rad swept
             from <self.H_max> to -<self.H_max> to <self.H_max> again in a total of 2*<N> steps.
-        '''
-        if verbose: print(f'External field angle is {round(angle*180/math.pi):d} degrees.')
+        """
+        if verbose: print(f"External field angle is {round(angle*180/math.pi):d} degrees.")
         if not (-math.pi/4 < angle < math.pi/4): warnings.warn(f"Field angle {angle} is outside the nominal -pi/4 < angle < pi/4 range. Undesired behavior might occur.", stacklevel=2)
         self.mm = hotspice.ASI.IP_Pinwheel(self.a, self.size, E_B=self.E_B, T=self.T, PBC=False, Msat=860e3, V=self.V, params=hotspice.SimParams(UPDATE_SCHEME=self.scheme))
         self.mm.initialize_m(pattern='uniform', angle=0)
@@ -80,15 +80,15 @@ class test_pinwheelReversal:
             elif self.scheme == 'Néel':
                 self.mm.update()
             self.mm.get_energy('Zeeman').set_field(magnitude=H)
-            self.mm.history_entry()
+            self.mm.history.entry()
             m_avg_H[i] = self.mm.m_avg_x*math.cos(angle) + self.mm.m_avg_y*math.sin(angle) # Along the directon of the ext field
             if thresholds.pass_check(self.mm.m_avg_x):
                 if verbose: print(f"[{i+1}/{H_range.size}] H = {H:.2e} T, m_x={self.mm.m_avg_x:.2f} (threshold passed{', plotting magnetization...' if show_intermediate else ''})")
                 if show_intermediate: hotspice.plottools.show_m(self.mm)
 
-        df = pd.DataFrame({"H": H_range, "m_avg": m_avg_H})
-        metadata = {"description": r"Pinwheel reversal test as described in pp. 8-10 of `flatspin: A Large-Scale Artificial Spin Ice Simulator` by Jensen et al."}
-        constants = {"H_angle": angle, "T": self.T, "E_B": self.E_B, "nx": self.mm.nx, "ny": self.mm.ny}
+        df = pd.DataFrame({'H': H_range, 'm_avg': m_avg_H})
+        metadata = {'description': r"Pinwheel reversal test as described in pp. 8-10 of `flatspin: A Large-Scale Artificial Spin Ice Simulator` by Jensen et al."}
+        constants = {'H_angle': angle, 'T': self.T, 'E_B': self.E_B, 'nx': self.mm.nx, 'ny': self.mm.ny}
         data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
         if save: save = data.save(dir=f"results/test_pinwheelReversal/{self.mm.params.UPDATE_SCHEME}", name=f"N={N:.0f}_H={self.H_max:.2e}_{round(angle*180/math.pi):.0f}deg_T={self.T:.0f}_{self.size}x{self.size}")
         if plot or save: test_pinwheelReversal.test_reversal_plot(df, save=save, show=plot)
@@ -96,21 +96,21 @@ class test_pinwheelReversal:
 
     @staticmethod
     def test_reversal_plot(df: pd.DataFrame, save=False, show=True, reduce: int = 10000):
-        ''' If <reduce> is nonzero, the number of plotted points is kept reasonable so the pdf
+        """ If <reduce> is nonzero, the number of plotted points is kept reasonable so the pdf
             does not take eons to load (the number of plotted points is <= <reduce>).
-        '''
+        """
         N = len(df.index)
         if reduce: df = df.iloc[::math.ceil(N/reduce)]
-        M_sat_parallel = df["m_avg"].abs().max() # Assuming that the saturation is achieved somewhere (normally at initialization, so this should be ok)
+        M_sat_parallel = df['m_avg'].abs().max() # Assuming that the saturation is achieved somewhere (normally at initialization, so this should be ok)
 
         hotspice.plottools.init_fonts()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.plot(df["H"]*1e3, df["m_avg"]/M_sat_parallel, linewidth=1, color='black', zorder=-1)
-        ax.scatter(df["H"]*1e3, df["m_avg"]/M_sat_parallel, s=10, zorder=1)
+        ax.plot(df['H']*1e3, df['m_avg']/M_sat_parallel, linewidth=1, color='black', zorder=-1)
+        ax.scatter(df['H']*1e3, df['m_avg']/M_sat_parallel, s=10, zorder=1)
         ax.grid(color='grey', linestyle=':')
-        ax.set_xlabel('External field magnitude [mT]')
-        ax.set_ylabel('Magnetization $\\langle M_{\\parallel}\\rangle /M_0$')
+        ax.set_xlabel("External field magnitude [mT]")
+        ax.set_ylabel(r"Magnetization $\langle M_{\parallel} \rangle /M_0$")
         ax.set_ylim([-1.1, 1.1])
         plt.gcf().tight_layout()
         if save:

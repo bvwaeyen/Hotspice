@@ -1,3 +1,5 @@
+__all__ = ['xp', 'kB', 'SimParams', 'Magnets', 'Energy', 'ZeemanEnergy', 'DipolarEnergy', 'ExchangeEnergy']
+
 import math
 import warnings
 
@@ -10,7 +12,7 @@ from scipy.spatial import distance
 from textwrap import dedent
 
 from .poisson import PoissonGrid, SequentialPoissonDiskSampling, poisson_disc_samples
-from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, mirror4
+from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, lower_than, mirror4
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -45,7 +47,7 @@ class Magnets(ABC):
         self, nx: int, ny: int, dx: float, dy: float, *,
         T: Field = 300, E_B: Field = 0., moment: Field = None, Msat: Field = 800e3, V: Field = 2e-22,
         pattern: str = None, energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None, in_plane: bool = False):
-        '''
+        """
             !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
             The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are currently allowed.
             The initial configuration of a Magnets geometry consists of 3 parts:
@@ -62,7 +64,7 @@ class Magnets(ABC):
             To enable periodic boundary conditions (default: disabled), pass PBC=True.
             To add an extra rotation to all spins in addition to self._get_angles(), pass <angle> as a float (in radians).
             The parameter <in_plane> should only be used in a super().__init__() call when subclassing this class.
-        '''
+        """
         self.rng = xp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
         self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J] use dipolar energy by default
@@ -101,13 +103,13 @@ class Magnets(ABC):
         for energy in energies: self.add_energy(energy)
 
     def _get_closest_dist(self):
-        ''' Returns the closest distance between two magnets in the simulation. '''
+        """ Returns the closest distance between two magnets in the simulation. """
         slice = xp.where(self.occupation[:self.unitcell.y*2,:self.unitcell.x*2]) # We only need at most two unit cells
         pos_x, pos_y = self.xx[slice], self.yy[slice]
         return distance.pdist(asnumpy(xp.asarray([pos_x, pos_y]).T)).min()
 
     def _get_m_uniform(self, angle=0):
-        ''' Returns the self.m state with all magnets aligned along <angle> as much as possible. '''
+        """ Returns the self.m state with all magnets aligned along <angle> as much as possible. """
         angle += 1e-6 # To avoid possible ambiguous rounding for popular angles, if <angle> ⊥ <self.orientation>
         if self.in_plane:
             return self.occupation*(2*((self.orientation[:,:,0]*xp.cos(angle) + self.orientation[:,:,1]*xp.sin(angle)) >= 0) - 1)
@@ -115,10 +117,10 @@ class Magnets(ABC):
             return xp.ones_like(self.xx)*((xp.floor(angle/math.pi - .5) % 2)*2 - 1)
 
     def _get_unitcell(self, max_cell=100):
-        ''' Returns a Unitcell containing the number of single grid cells in a unit cell along the x- and y-axis.
+        """ Returns a Unitcell containing the number of single grid cells in a unit cell along the x- and y-axis.
             Only works for square-lattice unit cells. # TODO: allow manual assignment of more complex unit cells
             @param max_cell [int] (100): Only unitcells with ux+uy < max_cell are considered for performance reasons.
-        '''
+        """
         for n in range(1, min(self.nx + self.ny + 1, max_cell + 1)): # Test possible unit cells in a triangle-like manner: (1,1), (2,1), (1,2), (3,1), (2,2), (1,3), ...
             for i in range(max(0, n - self.nx) + 1, min(n, self.ny) + 1): # Don't test unit cells larger than the domain
                 ux = n - i + 1
@@ -135,10 +137,10 @@ class Magnets(ABC):
         return Unitcell(self.nx, self.ny)
 
     def initialize_m(self, pattern: str|Field = 'random', *, angle: float = 0, update_energy: bool = True):
-        ''' Initializes the self.m (array of -1, 0 or 1) and occupation.
-            @param pattern [str|utils.Field]: If type str, this can be any of "random", "uniform", "AFM" by default.
+        """ Initializes the self.m (array of -1, 0 or 1) and occupation.
+            @param pattern [str|utils.Field]: If type str, this can be any of 'random', 'uniform', 'AFM' by default.
             @param angle [float]: 
-        '''
+        """
         if isinstance(pattern, str):
             self._set_m(pattern)
         else: # Then pattern is a Field-like object
@@ -154,11 +156,11 @@ class Magnets(ABC):
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
 
     def _initialize_ip(self, angle: float = 0.):
-        ''' Initialize the angles of all the magnets (only applicable in the in-plane case).
+        """ Initialize the angles of all the magnets (only applicable in the in-plane case).
             This function should only be called by the Magnets() class itself, not by the user.
             @param angle [float] (0): the additional angle (in radians) by which every spin in
                 the system will be rotated, i.e. in addition to self._get_angles().
-        '''
+        """
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
         self.angles = (self._get_angles() + angle)*self.occupation
         self.orientation = xp.zeros(self.xx.shape + (2,))
@@ -166,23 +168,23 @@ class Magnets(ABC):
         self.orientation[:,:,1] = xp.sin(self.angles)*self.occupation
 
     def add_energy(self, energy: 'Energy', verbose=True):
-        ''' Adds an Energy object to self._energies. This object is stored under its reduced name,
+        """ Adds an Energy object to self._energies. This object is stored under its reduced name,
             e.g. ZeemanEnergy is stored under 'zeeman'.
             @param energy [Energy]: the energy to be added.
-        '''
+        """
         energy.initialize(self)
         for i, e in enumerate(self._energies):
             if type(e) is type(energy):
-                if verbose: warnings.warn(f'An instance of {type(energy).__name__} was already included in the simulation, and has now been overwritten.', stacklevel=2)
+                if verbose: warnings.warn(f"An instance of {type(energy).__name__} was already included in the simulation, and has now been overwritten.", stacklevel=2)
                 self._energies[i] = energy
                 return
         self._energies.append(energy)
 
     def remove_energy(self, name: str, verbose=True): # This is faster when using self._energies as dict
-        ''' Removes the specified energy from self._energies.
+        """ Removes the specified energy from self._energies.
             @param name [str]: the name of the energy to be removed. Case-insensitive and may or may not include
                 the 'energy' part of the class name. Valid options include e.g. 'dipolar', 'DipolarEnergy'...
-        '''
+        """
         name = name.lower().replace('energy', '')
         for i, e in enumerate(self._energies):
             if name == e.shortname:
@@ -191,11 +193,11 @@ class Magnets(ABC):
         if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self._energies]}", stacklevel=2)
 
     def get_energy(self, name: str, verbose=True): # This is faster when using self._energies as dict
-        ''' Returns the specified energy from self._energies.
+        """ Returns the specified energy from self._energies.
             @param name [str]: the name of the energy to be returned. Case-insensitive and may or may not include
                 the 'energy' part of the class name. Valid options include e.g. 'dipolar', 'DipolarEnergy'...
             @returns [Energy]: the requested energy object.
-        '''
+        """
         name = name.lower().replace('energy', '')
         for e in self._energies:
             if name == e.shortname: return e
@@ -203,11 +205,11 @@ class Magnets(ABC):
         return None
 
     def update_energy(self, index: xp.ndarray = None): # This is faster when using self._energies as list
-        ''' Updates all the energies which are currently present in the simulation.
+        """ Updates all the energies which are currently present in the simulation.
             @param index [xp.array(2, -)] (None): a 2D array with the first row representing the
                 y-coordinates and the second representing the x-coordinates of the indices. if specified, only the magnets at these indices are considered in the calculation.
                 We need a NumPy or CuPy array (to easily determine its size: if =2, then only a single switch is considered.)
-        '''
+        """
         for energy in self._energies:
             if index is None: # No index specified, so update fully
                 energy.update()
@@ -217,11 +219,18 @@ class Magnets(ABC):
                 energy.update_multiple(index)
 
     def switch_energy(self, indices2D=None):
-        ''' @param indices2D [xp.array(2, -)] (None): a 2D array with the first row representing the
+        """ @param indices2D [xp.array(2, -)] (None): a 2D array with the first row representing the
                 y-coordinates and the second representing the x-coordinates of the indices.
             @return [xp.array]: the change in energy for each magnet in indices2D, in the same order, if they were to switch.
-        '''
+        """
         return sum(energy.energy_switch(indices2D) for energy in self._energies)
+
+    @property
+    def t(self): # Elapsed time
+        return float(self._t) # Need this as @property to guarantee that self.t is always a float
+    @t.setter
+    def t(self, value):
+        self._t = float(value)
 
     @property
     def MCsteps(self): # Number of Monte Carlo steps
@@ -234,7 +243,6 @@ class Magnets(ABC):
     @property
     def T(self) -> xp.ndarray:
         return self._T
-
     @T.setter
     def T(self, value: Field):
         self._T = as_2D_array(value, self.shape)
@@ -242,7 +250,6 @@ class Magnets(ABC):
     @property
     def E_B(self) -> xp.ndarray:
         return self._E_B
-
     @E_B.setter
     def E_B(self, value: Field):
         self._E_B = as_2D_array(value, self.shape)
@@ -250,7 +257,6 @@ class Magnets(ABC):
     @property
     def moment(self) -> xp.ndarray:
         return self._moment
-
     @moment.setter
     def moment(self, value: Field):
         self._moment = as_2D_array(value, self.shape)
@@ -263,7 +269,6 @@ class Magnets(ABC):
     @property
     def PBC(self):
         return self._PBC
-
     @PBC.setter
     def PBC(self, value: bool):
         if hasattr(self, 'unitcell'): # First check if PBC are even possible with the current nx, ny and unitcell
@@ -316,12 +321,12 @@ class Magnets(ABC):
         return float(xp.mean(self.moment))
 
     def set_T(self, f, /, *, center=False, crystalunits=False):
-        ''' Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
+        """ Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
             @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy/NumPy arrays as x and y).
             @param center [bool] (False): if True, the origin is put in the middle of the simulation,
                 otherwise it is in the usual lower left corner.
             @param crystalunits [bool] (False): if True, x and y are assumed to be a number of cells instead of a distance in meters (but still float).
-        '''
+        """
         if center:
             xx = self.xx + self.dx*self.nx/2
             yy = self.yy + self.dy*self.ny/2
@@ -332,7 +337,7 @@ class Magnets(ABC):
 
 
     def select(self, **kwargs):
-        ''' Performs the appropriate sampling method as specified by self.params.MULTISAMPLING_SCHEME.
+        """ Performs the appropriate sampling method as specified by self.params.MULTISAMPLING_SCHEME.
             - 'single': strictly speaking, this is the only physically correct sampling scheme. However,
                 to improve efficiency while making as small an approximation as possible, the grid and
                 Poisson schemes exist for use in the Glauber update scheme.
@@ -349,7 +354,7 @@ class Magnets(ABC):
             @param r [float] (self.calc_r(0.01)): minimal distance between magnets, in meters
             @return [xp.array]: a 2xN array, where the 2 rows represent y- and x-coordinates (!), respectively.
                 (this is because the indexing of 2D arrays is e.g. self.m[y,x])
-        '''
+        """
         match self.params.MULTISAMPLING_SCHEME:
             case 'single': # Strictly speaking, this is the only physically correct sampling scheme
                 pos = self._select_single(**kwargs)
@@ -365,21 +370,21 @@ class Magnets(ABC):
         return pos[:,valid] if valid.size > 0 else self.select(**kwargs) # If at first you don't succeed try, try and try again
 
     def _select_single(self, **kwargs):
-        ''' Selects just a single magnet from the simulation domain.
+        """ Selects just a single magnet from the simulation domain.
             Strictly speaking, this is the only physically correct sampling scheme.
-        '''
+        """
         idx = np.random.randint(self.n) # MUCH faster than cp.random
         return self.nonzero[:,idx].reshape(2,-1)
 
     def _select_grid(self, r=None, poisson=None, **kwargs):
-        ''' Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
+        """ Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
             ! <r> is a distance in meters, not a number of cells !
             @param r [float] (self.calc_r(0.01)): the minimal distance between two samples.
             @param poisson [bool] (True|False): whether or not to choose the supercells using a poisson-like scheme.
                 Using poisson=True is slower (already 2x slower for more than ~15x15 supercells) and places less
                 samples at once, but provides a much better sample distribution where the orthogonal grid bias is
                 not entirely eliminated but nonetheless significantly reduced as compared to poisson=False.
-        '''
+        """
         ## Appropriately determine r, Rx, Ry
         if r is None: r = self.calc_r(0.01)
         # if poisson is None: poisson = (15*r)**2 < self.nx*self.ny # use poisson supercells only if there are not too many supercells
@@ -444,10 +449,10 @@ class Magnets(ABC):
         return xp.asarray(points.T)
 
     def _select_cluster(self, **kwargs):
-        ''' Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model.
+        """ Selects a cluster based on the Wolff algorithm for the two-dimensional square Ising model.
             This is supposed to alleviate the 'critical slowing down' near the critical temperature.
             Therefore, this should not be used for low or high T, only near the T_C is this useful.
-        '''
+        """
         if self.get_energy('dipolar', verbose=False) is not None:
             return self._select_cluster_longrange()
         else:
@@ -476,9 +481,13 @@ class Magnets(ABC):
         return xp.asarray(xp.where(cluster == 1))
 
     def update(self, *args, **kwargs):
+        """ Runs a single update step using the update scheme and magnet selection method in self.params. """
         can_handle_zero_temperature = ['Glauber']
-        if xp.any(self.T == 0) and (self.params.UPDATE_SCHEME not in can_handle_zero_temperature):
-            warnings.warn('Temperature is zero somewhere, so no switch will be simulated to prevent DIV/0 errors.', stacklevel=2)
+        if xp.any(self.T == 0):
+            if self.params.UPDATE_SCHEME not in can_handle_zero_temperature:
+                warnings.warn("T=0 somewhere in the domain, so no switch will be simulated to prevent DIV/0 errors.", stacklevel=2)
+            else:
+                warnings.warn("T=0 somewhere in the domain, so ergodicity can not be guaranteed. Proceed with caution.", stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
         match self.params.UPDATE_SCHEME:
             case 'Néel':
@@ -500,8 +509,8 @@ class Magnets(ABC):
         # exponential = xp.clip(xp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # OPTION 2: AD-HOC ADJUSTED GLAUBER, where we assume that the 'other state' is at the top of the energy barrier
         # TODO: more accurate energy barrier using 4-state approach? (might not be worth the computational cost)
-        with np.errstate(divide='ignore'): # To allow T=0 without warnings or errors
-            barrier = xp.maximum((delta_E := self.switch_energy(idx)), self.E_B[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
+        barrier = xp.maximum((delta_E := self.switch_energy(idx)), self.E_B[idx[0], idx[1]] + delta_E/2) # To correctly account for the situation where energy barrier disappears
+        with np.errstate(divide='ignore', over='ignore'): # To allow low T or even T=0 without warnings or errors
             exponential = xp.clip(xp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
         idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance
@@ -513,11 +522,12 @@ class Magnets(ABC):
         return idx_switch # TODO: can we get some sort of elapsed time? Yes for one switch, but what about many at once?
 
     def _update_Néel(self, t_max=1, attempt_freq=1e10):
-        ''' Performs a single magnetization switch, if the switch would occur sooner than <t_max> seconds. '''
+        """ Performs a single magnetization switch, if the switch would occur sooner than <t_max> seconds. """
         # TODO: we might be able to multi-switch here as well, by taking into account the double-switch time
         # delta_E = self.switch_energy()
         # barrier = xp.where(delta_E > -2*self.E_B, xp.maximum(delta_E, self.E_B + delta_E/2), delta_E)/self.occupation
-        barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
+        with np.errstate(invalid='ignore', divide='ignore'): # Ignore the divide-by-zero warning that will follow, as it is intended
+            barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
         minBarrier = xp.nanmin(barrier)
         barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
@@ -530,12 +540,12 @@ class Magnets(ABC):
                 return None # Just exit if switching would take ages and ages and ages
             self.m[indexmin2D] *= -1
             self.switches += 1
-            self.t += time
+            self.t += float(time)
         self.update_energy(index=xp.asarray(indexmin2D).reshape(2,-1))
         return indexmin2D
 
     def _update_Wolff(self):
-        ''' Only works for Exchange-coupled 2D Ising system. '''
+        """ Only works for Exchange-coupled 2D Ising system. """
         cluster = self._select_cluster()
         self.m[cluster[0], cluster[1]] *= -1
         self.switches += cluster.shape[1]
@@ -545,7 +555,7 @@ class Magnets(ABC):
 
 
     def calc_r(self, Q, as_scalar=True) -> float|xp.ndarray:
-        ''' Calculates the minimal value of r (IN METERS). Considering two nearby sampled magnets, the switching probability
+        """ Calculates the minimal value of r (IN METERS). Considering two nearby sampled magnets, the switching probability
             of the first magnet will depend on the state of the second. For magnets further than <calc_r(Q)> apart, the switching
             probability of the first will not change by more than <Q> if the second magnet switches.
             @param Q [float]: (0<Q<1) the maximum allowed change in switching probability of a sample if any other sample switches.
@@ -553,19 +563,35 @@ class Magnets(ABC):
                 If False, an array is returned which can for example be used in adaptive Poisson disc sampling.
             @return [float|xp.ndarray]: the minimal distance (in meters) between samples, if their mutual influence on their
                 switching probabilities is to be less than <Q>.
-        '''
+        """
         r = (8e-7*self._momentSq/(Q*self.kBT))**(1/3)
         r = xp.clip(r, 0, self.nx*self.dx + self.ny*self.dy) # If T=0, we clip the infinite r back to a high value nx*dx+ny*dy which is slightly larger than the simulation
         return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
+    def progress(self, t_max: float = xp.inf, MCsteps_max: float = 4.):
+        """ Runs as many self.update steps as is required to progress a certain amount of
+            time or Monte Carlo steps (whichever is reached first) into the future.
+            @param time [float] (None): The maximum amount of time difference between start and end of this function.
+            @param MCsteps [float] (4.): The maximum amount of Monte Carlo steps performed during this function.
+            @return [tuple(2)]: the elapsed time and number of performed MC steps during the execution of this function.
+        """
+        t_0, MCsteps_0 = self.t, self.MCsteps
+        while lower_than(dt := self.t - t_0, t_max) and lower_than(dMCsteps := self.MCsteps - MCsteps_0, MCsteps_max):
+            # progress = max(dt/t_max, dMCsteps/MCsteps_max) # Always < 1
+            if self.params.UPDATE_SCHEME == 'Néel':
+                self.update(t_max=(t_max - dt)) # A max time can be specified
+            else:
+                self.update() # No time
+        return dt, dMCsteps
+
     def minimize(self):
-        ''' NOTE: this is basically the sequential version of self.relax().
+        """ NOTE: this is basically the sequential version of self.relax().
             Switches the magnet which has the highest switching probability.
             Repeats this until there are no more magnets that can gain energy from switching.
             NOTE: it can take a while for large simulations to become fully relaxed, especially with this
                 sequential procedure. Consider using self.relax() for large simulations.
-        '''
+        """
         visited = np.zeros_like(self.m) # Used to make sure we don't get an infinite loop
         while True:
             barrier = xp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)
@@ -585,13 +611,13 @@ class Magnets(ABC):
             self.update_energy(index=idx)
 
     def minimize_all(self, simultaneous=False, use_barrier=True):
-        ''' Switches all magnets that can gain energy by switching.
+        """ Switches all magnets that can gain energy by switching.
             By default, several subsets of the domain are updated in a random order, such that in total
             every cell got exactly one chance at switching. This randomness may increase the runtime, but
             reduces systematic bias and possible loops which would otherwise cause self.relax() to get stuck.
             @param simultaneous [bool] (False): if True, all magnets are evaluated simultaneously (nonphysical, error-prone).
                 If False, several subgrids are evaluated after each other in a random order to prevent systematic bias.
-        '''
+        """
         if simultaneous:
             step_x = step_y = 1
         else:
@@ -612,10 +638,10 @@ class Magnets(ABC):
                 self.update_energy(index=indices)
 
     def relax(self, verbose=False):
-        ''' NOTE: this is basically the parallel version of self.minimize().
+        """ NOTE: this is basically the parallel version of self.minimize().
             Relaxes self.m to a (meta)stable state using multiple self.minimize_all() calls.
             NOTE: it can take a while for large simulations to become fully relaxed.
-        '''
+        """
         if verbose:
             import matplotlib.pyplot as plt
             plt.ion()
@@ -640,38 +666,33 @@ class Magnets(ABC):
 
 
     def history_save(self, *, E_tot=None, t=None, T_avg=None, m_avg=None):
-        ''' Records E_tot, t, T_avg and m_avg as they were last calculated. This default behavior can be overruled: if
+        """ Records E_tot, t, T_avg and m_avg as they were last calculated. This default behavior can be overruled: if
             passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T_avg|m_avg> value(s).
-        '''
-        self.history_entry()
+        """
+        self.history.entry()
         if E_tot is not None: self.history.E[-1] = float(E_tot)
         if t is not None: self.history.t[-1] = float(t)
         if T_avg is not None: self.history.T[-1] = float(T_avg)
         if m_avg is not None: self.history.m[-1] = float(m_avg)
 
-    def history_entry(self):
-        self.history.entry(self)
-
-    def history_clear(self):
-        self.history.clear()
-
 
     def autocorrelation(self, *, normalize=True):
-        ''' In case of a 2D signal, this basically calculates the autocorrelation of the
+        """ In case of a 2D signal, this basically calculates the autocorrelation of the
             self.m matrix, while taking into account self.orientation for the in-plane case.
             Note that strictly speaking this assumes dx and dy to be the same for all cells.
-        '''
+        """
+        boundary = 'wrap' if self.PBC else 'fill'
         # Now, convolve self.m with its point-mirrored/180°-rotated counterpart
         if self.in_plane:
             mx, my = self.m*self.orientation[:,:,0], self.m*self.orientation[:,:,1]
-            corr_xx = signal.correlate2d(mx, mx, boundary='wrap' if self.PBC else 'fill')
-            corr_yy = signal.correlate2d(my, my, boundary='wrap' if self.PBC else 'fill')
+            corr_xx = signal.correlate2d(mx, mx, boundary=boundary)
+            corr_yy = signal.correlate2d(my, my, boundary=boundary)
             corr = corr_xx + corr_yy # Basically trace of autocorrelation matrix
         else:
-            corr = signal.correlate2d(self.m, self.m, boundary='wrap' if self.PBC else 'fill')
+            corr = signal.correlate2d(self.m, self.m, boundary=boundary)
 
         if normalize:
-            corr_norm = signal.correlate2d(xp.ones_like(self.m), xp.ones_like(self.m), boundary='wrap' if self.PBC else 'fill') # Is this necessary? (this is number of occurences of each cell in correlation sum)
+            corr_norm = signal.correlate2d(xp.ones_like(self.m), xp.ones_like(self.m), boundary=boundary) # Is this necessary? (this is number of occurences of each cell in correlation sum)
             corr = corr*self.m.size/self.n/corr_norm # Put between 0 and 1
         
         return corr[(self.ny-1):(2*self.ny-1),(self.nx-1):(2*self.nx-1)]**2
@@ -685,17 +706,17 @@ class Magnets(ABC):
     ######## Now, some useful functions to overwrite when subclassing this class
     @abstractmethod # Not needed for out-of-plane ASI, but essential for in-plane ASI, therefore abstractmethod anyway
     def _get_angles(self):
-        ''' Returns a 2D array containing the angle (measured counterclockwise from the x-axis)
+        """ Returns a 2D array containing the angle (measured counterclockwise from the x-axis)
             of each spin. The angle of unoccupied cells (self._get_occupation() == 0) is ignored.
-        '''
+        """
         return xp.zeros_like(self.ixx) # Example
 
     @abstractmethod # TODO: should this really be an abstractmethod? Uniform and random can be defaults and subclasses can define more of course
     def _set_m(self, pattern: str):
-        ''' Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "vortex", "AFM" or "random".
+        """ Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "vortex", "AFM" or "random".
             <self.m> is a shape (ny, nx) array containing only -1, 0 or 1 indicating the magnetization direction.
             ONLY <self.m> should be set/changed/defined by this function.
-        '''
+        """
         match str(pattern).strip().lower():
             case 'uniform':
                 self.m = self._get_m_uniform()
@@ -716,86 +737,86 @@ class Magnets(ABC):
                 self.m[occupied] = sign[occupied]
             case str(unknown_pattern):
                 self.m = self.rng.integers(0, 2, size=self.xx.shape)*2 - 1
-                if unknown_pattern != 'random': warnings.warn(f'Pattern "{unknown_pattern}" not recognized, defaulting to "random".', stacklevel=2)
+                if unknown_pattern != 'random': warnings.warn(f"Pattern '{unknown_pattern}'' not recognized, defaulting to 'random'.", stacklevel=2)
 
     @abstractmethod
     def _get_occupation(self):
-        ''' Returns a 2D array which contains 1 at the cells which are occupied by a magnet, and 0 elsewhere. '''
+        """ Returns a 2D array which contains 1 at the cells which are occupied by a magnet, and 0 elsewhere. """
         return xp.ones_like(self.ixx) # Example
 
     @abstractmethod
     def _get_groundstate(self):
-        ''' Returns <pattern> in self.initialize_m(<pattern>) which corresponds to a global ground state of the system.
+        """ Returns <pattern> in self.initialize_m(<pattern>) which corresponds to a global ground state of the system.
             Use 'random' if no ground state is implemented in self._set_m().
-        '''
+        """
         return 'random'
 
     @abstractmethod
     def _get_nearest_neighbors(self):
-        ''' Returns a small mask with the magnet at the center, and 1 at the positions of its nearest neighbors (elsewhere 0). '''
+        """ Returns a small mask with the magnet at the center, and 1 at the positions of its nearest neighbors (elsewhere 0). """
         return xp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]) # Example
 
     @abstractmethod # TODO: this is a pretty archaic method at this point
     def _get_appropriate_avg(self):
-        ''' Returns the most appropriate averaging mask for a given type of ASI. '''
+        """ Returns the most appropriate averaging mask for a given type of ASI. """
         return 'cross' # Example
 
     @abstractmethod # TODO: this is a pretty archaic method at this point as well. Sould this really be abstract?
     def _get_AFMmask(self):
-        ''' Returns the (normalized) mask used to determine how anti-ferromagnetic the magnetization profile is. '''
+        """ Returns the (normalized) mask used to determine how anti-ferromagnetic the magnetization profile is. """
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float') # Example
 
 
 class Energy(ABC):
     def __init__(self):
-        ''' The __init__ method contains all initialization of variables which do not depend
+        """ The __init__ method contains all initialization of variables which do not depend
             on a specific given Magnets() object. It is not required to override this method.
-        '''
+        """
         pass
 
     @abstractmethod
     def initialize(self, mm: Magnets):
-        ''' Do all the things which can be done when given a certain Magnets() object. '''
+        """ Do all the things which can be done when given a certain Magnets() object. """
         self.mm = mm # Like this
         self.update() # And this, to initialize the energies etc.
 
     @abstractmethod
     def update(self):
-        ''' Calculates the entire self.E array, for the situation in self.mm.m.
+        """ Calculates the entire self.E array, for the situation in self.mm.m.
             No approximations should be made here: this serves to (re)calculate the whole energy.
-        '''
+        """
         self.E = xp.zeros_like(self.mm.xx) # [J]
 
     @abstractmethod
     def energy_switch(self, indices2D):
-        ''' Returns the change in energy experienced by the magnets at <indices2D>, if they were to switch.
+        """ Returns the change in energy experienced by the magnets at <indices2D>, if they were to switch.
             @param indices2D [xp.array(2, -)]: A 2D array with the first row containing the y-coordinates,
                 and the second row containing the corresponding x-coordinates of the sampled magnets.
             @return [list(N)]: A list containing the local changes in energy for each magnet of <indices2D>, in the same order.
-        '''
+        """
 
     @abstractmethod
     def update_single(self, index2D):
-        ''' Updates self.E by only taking into account that a single magnet (at index2D) switched.
+        """ Updates self.E by only taking into account that a single magnet (at index2D) switched.
             @param index2D [tuple(2)]: A tuple containing two size-1 arrays representing y- and x-index of the switched magnet.
-        '''
+        """
 
     @abstractmethod
     def update_multiple(self, indices2D):
-        ''' Updates self.E by only taking into account that some magnets (at indices2D) switched.
+        """ Updates self.E by only taking into account that some magnets (at indices2D) switched.
             This seems like it is just multiple times self.update_single(), but sometimes an optimization is possible,
             hence this required alternative function for updating multiple magnets at once.
             @param indices2D [tuple(2)]: A tuple containing two equal-size 1D arrays representing the y- and x-
                 indices of the sampled magnets, such that this tuple can be used directly to index self.E.
-        '''
+        """
 
     @property
     @abstractmethod
     def E_tot(self):
-        ''' Returns the total energy for this energy contribution. This function is necessary since this is not equal
+        """ Returns the total energy for this energy contribution. This function is necessary since this is not equal
             for all energies: e.g. sum(E) in the DipolarEnergy would count each interaction twice, while sum(E) is
             correct for ZeemanEnergy.
-        '''
+        """
 
     @property
     @cache
@@ -805,11 +826,11 @@ class Energy(ABC):
 
 class ZeemanEnergy(Energy):
     def __init__(self, magnitude=0, angle=0):
-        ''' This ZeemanEnergy class implements the Zeeman energy for a spatially uniform external field, whose magnitude
+        """ This ZeemanEnergy class implements the Zeeman energy for a spatially uniform external field, whose magnitude
             (and angle, if the magnetization is in-plane) can be set using the set_field method.
             @param magnitude [float] (0): The magnitude of the external field.
             @param angle [float] (0): The angle (in radians) of the external field.
-        '''
+        """
         # NOTE: self._magnitude and self._angle are not cleaned, and can be int, float, array...
         #       self.magnitude and self.angle, on the other hand, are always cast as_2D_array() upon calling.
         self._magnitude = magnitude # [T]
@@ -860,10 +881,10 @@ class ZeemanEnergy(Energy):
 
 class DipolarEnergy(Energy):
     def __init__(self, prefactor=1):
-        ''' This DipolarEnergy class implements the interaction between the magnets of the simulation themselves.
+        """ This DipolarEnergy class implements the interaction between the magnets of the simulation themselves.
             It should therefore always be included in the simulations.
             @param prefactor [float] (1): The relative strength of the dipolar interaction.
-        '''
+        """
         self.prefactor = prefactor
 
     def initialize(self, mm: Magnets):
@@ -1036,7 +1057,7 @@ class ExchangeEnergy(Energy):
 
 @dataclass
 class History:
-    ''' Stores the history of the energy, temperature, time, and average magnetization. '''
+    """ Stores the history of the energy, temperature, time, and average magnetization. """
     E: list = field(default_factory=list) # Total energy
     T: list = field(default_factory=list) # Average temperature
     t: list = field(default_factory=list) # Elapsed time/switches
@@ -1056,6 +1077,6 @@ class History:
 
 @dataclass(slots=True)
 class Unitcell:
-    ''' Stores x and y components, so we don't need to index [0] or [1] in a tuple, which would be unclear. '''
+    """ Stores x and y components, so we don't need to index [0] or [1] in a tuple, which would be unclear. """
     x: float
     y: float

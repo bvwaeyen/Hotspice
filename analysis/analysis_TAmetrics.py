@@ -11,11 +11,11 @@ except ModuleNotFoundError: import hotspice
 
 
 def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbose=True):
-    ''' Loads a full TaskAgnosticExperiment dataframe (of a single run) and determines the
+    """ Loads a full TaskAgnosticExperiment dataframe (of a single run) and determines the
         task-agnostic metrics NL, MC and CP as a function of the number of recorded iterations N.
         This will allow to determine an optimum value of N before performing any sort of
         parameter sweep on an HPC cluster such that we do not use too much time.
-    '''
+    """
     data_in = hotspice.utils.Data.load(filename)
     df_in = data_in.df
     k_range = np.asarray(k_range).reshape(-1) # Turn into 1D range
@@ -35,15 +35,15 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
             NL[index] = experiment.NL(k=k)
             MC[index] = experiment.MC(k=k)
             CP[index] = experiment.CP()
-            if verbose: print("Performed iteration", index, "of", (k_range.size-1, N_range.size-1))
+            if verbose: print(f"Performed iteration {index} of {(k_range.size-1, N_range.size-1)}")
         except Exception:
-            if verbose: print("Failed in iteration", index, "of", (k_range.size-1, N_range.size-1))
+            if verbose: print(f"Failed in iteration {index} of {(k_range.size-1, N_range.size-1)}")
     
     # BELOW HERE IS STILL UNDER CONSTRUCTION, ABOVE HERE SHOULD BE OK
-    df = pd.DataFrame({"N": N_grid.reshape(-1), "k": k_grid.reshape(-1), "NL": NL.reshape(-1), "MC": MC.reshape(-1), "CP": CP.reshape(-1)})
+    df = pd.DataFrame({'N': N_grid.reshape(-1), 'k': k_grid.reshape(-1), 'NL': NL.reshape(-1), 'MC': MC.reshape(-1), 'CP': CP.reshape(-1)})
     metadata = data_in.metadata | {
-        "description": r"Metrics calculated for different N and k, based on a long TaskAgnosticExperiment, in order to determine an optimal value of N and k before starting a parameter sweep.",
-        "original_filename": filename
+        'description': r"Metrics calculated for different N and k, based on a long TaskAgnosticExperiment, in order to determine an optimal value of N and k before starting a parameter sweep.",
+        'original_filename': filename
     }
     constants = data_in.constants
     data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
@@ -52,32 +52,32 @@ def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbo
     return data
 
 def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
-    k_vals = df["k"].nunique()
-    N_grid = df["N"].values.reshape(-1, k_vals)
-    k_grid = df["k"].values.reshape(-1, k_vals)
-    NL_grid = df["NL"].values.reshape(-1, k_vals)
-    MC_grid = df["MC"].values.reshape(-1, k_vals)
-    CP_grid = df["CP"].values.reshape(-1, k_vals)
+    k_vals = df['k'].nunique()
+    N_grid = df['N'].values.reshape(-1, k_vals)
+    k_grid = df['k'].values.reshape(-1, k_vals)
+    NL_grid = df['NL'].values.reshape(-1, k_vals)
+    MC_grid = df['MC'].values.reshape(-1, k_vals)
+    CP_grid = df['CP'].values.reshape(-1, k_vals)
 
     hotspice.plottools.init_fonts()
     fig = plt.figure(figsize=(5, 5))
     if k_vals > 1: # use surface plot in 3D
         ax = fig.add_subplot(111, projection='3d')
-        NL_surf = ax.plot_surface(N_grid, k_grid, NL_grid, color="C0", linewidth=0, antialiased=True, label='NL')
-        MC_surf = ax.plot_surface(N_grid, k_grid, MC_grid, color="C1", linewidth=0, antialiased=True, label='MC')
-        CP_surf = ax.plot_surface(N_grid, k_grid, CP_grid, color="C2", linewidth=0, antialiased=True, label='CP')
-        fakeNLline = Line2D([0],[0], linestyle="none", color="C0", marker='o')
-        fakeMCline = Line2D([0],[0], linestyle="none", color="C1", marker='o')
-        fakeCPline = Line2D([0],[0], linestyle="none", color="C2", marker='o')
+        NL_surf = ax.plot_surface(N_grid, k_grid, NL_grid, color='C0', linewidth=0, antialiased=True, label="NL")
+        MC_surf = ax.plot_surface(N_grid, k_grid, MC_grid, color='C1', linewidth=0, antialiased=True, label="MC")
+        CP_surf = ax.plot_surface(N_grid, k_grid, CP_grid, color='C2', linewidth=0, antialiased=True, label="CP")
+        fakeNLline = Line2D([0],[0], linestyle='none', color='C0', marker='o')
+        fakeMCline = Line2D([0],[0], linestyle='none', color='C1', marker='o')
+        fakeCPline = Line2D([0],[0], linestyle='none', color='C2', marker='o')
         ax.set_xlabel("N")
         ax.set_ylabel("k")
         ax.set_zlabel("metrics")
-        ax.legend([fakeNLline, fakeMCline, fakeCPline], ['NL', 'MC', 'CP'], numpoints = 1)
+        ax.legend([fakeNLline, fakeMCline, fakeCPline], ["NL", "MC", "CP"], numpoints = 1)
     else:
         ax = fig.add_subplot(111)
-        NL_line = ax.plot(N_grid, NL_grid, color="C0", label='NL')
-        MC_line = ax.plot(N_grid, MC_grid, color="C1", label='MC')
-        CP_line = ax.plot(N_grid, CP_grid, color="C2", label='CP')
+        NL_line = ax.plot(N_grid, NL_grid, color='C0', label="NL")
+        MC_line = ax.plot(N_grid, MC_grid, color='C1', label="MC")
+        CP_line = ax.plot(N_grid, CP_grid, color='C2', label="CP")
         ax.set_xlabel("N")
         ax.set_ylabel("metrics")
         ax.legend()

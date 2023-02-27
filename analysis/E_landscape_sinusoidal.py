@@ -4,9 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def E(E_B, ext_field, angle):
-    """ Adds an external field (period 2π) to the energy barrier (period π). """
-    return lambda x: -E_B*(np.cos(2*x)-1)/2 - ext_field*(np.cos(x - angle)-1)/2
+def E(E_B, ext_field, angle=0):
+    """ Adds an external field (period 2π) to the energy barrier (period π).
+        If angle=0, ext_field is equal to Delta_E (energy diff. between m angle at 0 and at π).
+    """
+    return lambda theta: -E_B*(np.cos(2*theta)-1)/2 - ext_field*(np.cos(theta - angle)-1)/2
 
 
 def plot(E_B, ext_field, angle, verbose=True):
@@ -37,8 +39,8 @@ def plot(E_B, ext_field, angle, verbose=True):
 def show():
     plt.xlim([0, np.pi*2])
     plt.ylim(0, plt.ylim()[1])
-    # plt.xticks([i*np.pi/2 for i in range(5)], ['0', 'π/2', 'π', '3π/2', '2π'])
-    plt.xticks([i*np.pi/2 for i in range(5)], ['0°', '90°', '180°', '270°', '360°'])
+    # plt.xticks([i*np.pi/2 for i in range(5)], ["0", "π/2", "π", "3π/2", "2π"])
+    plt.xticks([i*np.pi/2 for i in range(5)], ["0°", "90°", "180°", "270°", "360°"])
     for x in [i*np.pi/2 for i in range(5)]: plt.axvline(x, color='#CCC', linestyle=':')
     plt.xlabel("Magnetization angle [°]")
     plt.ylabel("Energy [a.u.]")

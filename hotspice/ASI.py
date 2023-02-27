@@ -9,7 +9,7 @@ else:
 
 
 class OOP_ASI(Magnets):
-    ''' Generic abstract class for out-of-plane ASI. '''
+    """ Generic abstract class for out-of-plane ASI. """
     # Example of __init__ method for out-of-plane ASI:
     # def __init__(self, n: int, a: float, *, nx: int = None, ny: int = None, **kwargs):
     #     self.a = a # [m] Some sort of lattice constant representative for the ASI
@@ -23,7 +23,7 @@ class OOP_ASI(Magnets):
 
 
 class IP_ASI(Magnets):
-    ''' Generic abstract class for in-plane ASI. '''
+    """ Generic abstract class for in-plane ASI. """
     # Example of __init__ method for in-plane ASI:
     # def __init__(self, n: int, a: float, *, nx: int = None, ny: int = None, **kwargs):
     #     self.a = a # [m] Some sort of lattice constant representative for the ASI
@@ -34,7 +34,7 @@ class IP_ASI(Magnets):
 
 class OOP_Square(OOP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        ''' Out-of-plane ASI in a square arrangement. '''
+        """ Out-of-plane ASI in a square arrangement. """
         self.a = a # [m] The distance between two nearest neighboring spins
         if nx is None or ny is None:
             if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
@@ -67,7 +67,7 @@ class OOP_Square(OOP_ASI):
 
 class OOP_Triangle(OOP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        ''' Out-of-plane ASI on a triangular (hexagonal) lattice. '''
+        """ Out-of-plane ASI on a triangular (hexagonal) lattice. """
         self.a = a # [m] The distance between two nearest neighboring spins
         if nx is None or ny is None:
             if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
@@ -106,7 +106,7 @@ class OOP_Triangle(OOP_ASI):
 
 class IP_Ising(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        ''' In-plane ASI with all spins on a square grid, all pointing in the same direction. '''
+        """ In-plane ASI with all spins on a square grid, all pointing in the same direction. """
         self.a = a # [m] The distance between two nearest neighboring spins
         if nx is None or ny is None:
             if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
@@ -142,7 +142,7 @@ class IP_Ising(IP_ASI):
 
 class IP_Square(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares. '''
+        """ In-plane ASI with the spins placed on, and oriented along, the edges of squares. """
         self.a = a # [m] The side length of the squares (i.e. side length of a unit cell)
         if nx is None or ny is None:
             if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
@@ -180,7 +180,7 @@ class IP_Square(IP_ASI):
 
 class IP_Pinwheel(IP_Square):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        ''' In-plane ASI similar to IP_Square, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
+        """ In-plane ASI similar to IP_Square, but all spins rotated by 45°, hence forming a pinwheel geometry. """
         kwargs['angle'] = kwargs.get('angle', 0) - math.pi/4
         super().__init__(a, n=n, nx=nx, ny=ny, **kwargs)
 
@@ -190,9 +190,9 @@ class IP_Pinwheel(IP_Square):
 
 class IP_SquareDiamond(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        ''' In-plane ASI with the spins placed on, and oriented along, the edges of squares.
+        """ In-plane ASI with the spins placed on, and oriented along, the edges of squares.
             The entire domain does not, however, form a square, but rather a 'diamond'.
-        '''
+        """
         self.a = a # [m] The side length of the squares
         if nx is None or ny is None:
             if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
@@ -230,7 +230,7 @@ class IP_SquareDiamond(IP_ASI):
 
 class IP_PinwheelDiamond(IP_SquareDiamond):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        ''' In-plane ASI similar to IP_SquareDiamond, but all spins rotated by 45°, hence forming a pinwheel geometry. '''
+        """ In-plane ASI similar to IP_SquareDiamond, but all spins rotated by 45°, hence forming a pinwheel geometry. """
         kwargs['angle'] = kwargs.get('angle', 0) - math.pi/4
         super().__init__(a, n=n, nx=nx, ny=ny, **kwargs)
 
@@ -243,7 +243,7 @@ class IP_PinwheelDiamond(IP_SquareDiamond):
 
 class IP_Kagome(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        ''' In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. '''
+        """ In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. """
         self.a = a # [m] The distance between opposing sides of a hexagon
         if nx is None or ny is None:
             if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
@@ -292,7 +292,7 @@ class IP_Kagome(IP_ASI):
 
 class IP_Triangle(IP_Kagome):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        ''' In-plane ASI with all spins placed on, and oriented along, the edges of triangles. '''
+        """ In-plane ASI with all spins placed on, and oriented along, the edges of triangles. """
         kwargs['angle'] = kwargs.get('angle', 0) - math.pi/2
         super().__init__(a, n=n, nx=nx, ny=ny, **kwargs)
 

@@ -5,6 +5,7 @@ import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.ma as ma
 import pandas as pd
 import statsmodels.api as sm
 
@@ -31,61 +32,68 @@ class Experiment(ABC):
         self.inputter = inputter
         self.outputreader = outputreader
         self.mm = mm
+        self.outputreader.configure_for(self.mm)
         self.results = {} # General-purpose dict to store simulation results in
     
     @abstractmethod
-    def run(self):
-        ''' Runs the entire experiment and records all the useful data. '''
+    def run(self) -> None:
+        """ Runs the entire experiment and records all the useful data. """
     
     @abstractmethod
-    def calculate_all(self):
-        ''' (Re)calculates all the metrics in the self.results dict. '''
+    def calculate_all(self) -> None:
+        """ (Re)calculates all the metrics in the <self.results> dict. """
     
     @abstractmethod
-    def to_dataframe(self):
-        ''' Creates a Pandas dataframe from the saved results of self.run(). '''
+    def to_dataframe(self) -> pd.DataFrame:
+        """ Creates a Pandas dataframe from the saved results of self.run(). """
     
     @abstractmethod
-    def load_dataframe(self):
-        ''' Loads the data from self.to_dataframe() to the current object. '''
+    def load_dataframe(self, df: pd.DataFrame) -> None:
+        """ Loads the data from self.to_dataframe() to the current object.
+            Might return the most important columns of data, but this is not required.
+        """
     
     @staticmethod
     @abstractmethod
     def get_plot_metrics(self):
-        ''' Returns a dictionary with as many elements as there should be 2D or 1D plots
+        """ Returns a dictionary with as many elements as there should be 2D or 1D plots
             in Sweep().plot(). Keys are names of these metrics, values are functions that
-            take one argument which is a pd.DataFrame, and returns either a simple column
-            or a mathematical combination of several columns.
-        '''
+            take one argument (a hotspice.utils.Data object, which for this purpose is
+            equivalent to a pandas.DataFrame), and returns a pandas.Series which is either
+            a simple column from the Data, or a mathematical combination of several columns.
+        """
+        return {}
 
 
 class Sweep(ABC):
     def __init__(self, groups: Iterable[tuple[str]] = None, **kwargs): # kwargs can be anything to specify the sweeping variables and their values.
-        ''' Sweep quacks like a generator yielding <Experiment>-like objects.
+        """ Sweep quacks like a generator yielding <Experiment> instances, or subclasses thereof.
             The purpose of a Sweep is to reliably generate a sequence of <Experiment>s in a consistent order.
             @param groups [iterable[tuple[str]]] (None): a tuple of tuples of strings. Each tuple represents a group:
                 groups are sweeped together. The strings inside those tuples represent the names of the
                 variables that are being swept together. By sweeping together, it is meant that those
                 variables move through their sweeping values simultaneously, instead of forming a
                 hypercube through their values in which each pair is visited. We only visit the diagonal.
-                Example: groups=(("nx", "ny"), ("res_x", "res_y")) will cause the variables <nx> and <ny>
-                    to sweep through their values together, i.e. e.g. when <nx> is at its fourth value, also
-                    <ny> will be at its fourth value.
-            The additional arguments (kwargs) passed to this are interpreted as follows:
+                Example: groups=(('nx', 'ny'), ('res_x', 'res_y')) will cause the variables <nx> and <ny>
+                    to sweep together, e.g. when <nx> is at its fourth value, <ny> will also be at its fourth value.
+                    The same will go for <res_x> and <res_y> together, but they are independent of <nx> and <ny>.
+            Any additional keyword arguments (**kwargs) are interpreted as follows:
             If a kwarg is iterable then it is stored in self.variables as a sweeped variable,
                 unless it has length 1, in which case its only element is stored in self.constants.
-                NOTE: watch out with multi-dimensional arrays, as their first axis can be interpreted as the 'sweep'!
+                WARN: watch out with multi-dimensional arrays, as their first axis can be interpreted as the 'sweep'!
             If an argument is not iterable, its value is stored in self.constants without converting to a length-1 tuple.
-            Subclasses of <Sweep> determine which arguments are used.
+            Subclasses of <Sweep> determine which kwargs are accepted and how they are used to build <Experiment>s.
             @attr parameters [dict[str, tuple]]: stores all variables and constants with their values in a tuple,
                 even if this tuple only has length 1.
             @attr variables [dict[str, tuple]]: stores the sweeped variables and their values in a tuple.
             @attr constants [dict[str, Any]]: stores the non-sweeped variables and their only value.
-        '''
+        """
+        ## Create the main dictionaries (parameters, divided into variables and constants)
         self.parameters: dict[str, tuple] = {k: Sweep.variable(v) for k, v in kwargs.items()}
         self.variables = {k: v for k, v in self.parameters.items() if len(v) > 1}
         self.constants = {k: v[0] for k, v in self.parameters.items() if len(v) == 1}
 
+        ## Create and verify groups of variables
         if groups is None: groups = []
         groups = [tuple([key for key in group if key in self.variables.keys()]) for group in groups] # Remove non-variable groups
         groups = [group for group in groups if len(group)] # Remove now-empty groups
@@ -93,99 +101,109 @@ class Sweep(ABC):
             if not any(k in group for group in groups): # Then we have a variable that is not in a group
                 groups.append((k,))
         self.groups = tuple(groups) # Make immutable
-        self.n_per_group = tuple([len(self.variables[group[0]]) for group in self.groups])
+        self._n_per_group = tuple([len(self.variables[group[0]]) for group in self.groups])
 
-        # Check that vars in a single group have the same sweeping length
-        for group in self.groups:
+        for group in self.groups: # Check that vars in a single group have the same sweeping length
             l = [len(self.variables[key]) for key in group]
-            if not l.count(l[0]) == len(l): raise ValueError(f"Not all elements of {group} have same sweeping length: {l} respecitvely.")
+            if not l.count(l[0]) == len(l):
+                raise ValueError(f"Not all elements of {group} have same sweeping length: {l} respecitvely.")
+
+        ## Attempt creating an experiment, to see if the sweep works correctly
+        try:
+            _, self._example_experiment = self.get_iteration(0)
+        except Exception as e:
+            raise RuntimeError("The sweep does not correctly generate Experiment instances.")
+
+    @abstractmethod
+    def create_experiment(self, params: dict) -> Experiment:
+        """ Subclasses should create an Experiment here according to <params> and return it. """
+        pass
 
     @staticmethod
     def variable(iterable):
-        ''' Converts <iterable> into a tuple, or a length-1 tuple if <iterable> is not iterable.'''
+        """ Converts <iterable> into a tuple, or a length-1 tuple if <iterable> is not iterable."""
         if isinstance(iterable, str): return (iterable,) # We don't want to parse strings character by character
         try: return tuple(iterable)
         except TypeError: return (iterable,)
 
     def __len__(self) -> int:
-        return np.prod(self.n_per_group)
+        return np.prod(self._n_per_group)
 
     @property
     def info(self):
-        ''' Some information about a specific sweep, e.g. what the input/output protocol is etc.
+        """ Some information about a specific sweep, e.g. what the input/output protocol is etc.
             This should simply be set using self.info = ...
-        '''
-        return self._info if hasattr(self, '_info') else "No specific information provided for this sweep."
+        """
+        if not hasattr(self, '_info'):
+            self._info = self.__doc__
+            if self._info is None: self._info = self.__init__.__doc__
+            if self._info is None: self._info = "No specific information about this sweep was provided."
+        return self._info
     
     @info.setter
-    def info(self, value):
-        self._info = dedent(value).strip()
-
-    @property
-    def sweeper(self):
-        for index, _ in np.ndenumerate(np.zeros(self.n_per_group)): # Return an iterable of sorts for sweeping the hypercube of variables
-            yield {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
+    def info(self, value: str):
+        self._info = dedent(str(value)).strip()
 
     def __iter__(self):
-        ''' A generator to conveniently iterate over self.sweeper. Yields a tuple containing
-            the variables with their values in this iteration, as well as the experiment object.
-        '''
-        for vars in self.sweeper:
-            params = vars | self.constants
-            experiment = self.create_experiment(params)
-            yield (vars, experiment)
+        """ A generator to conveniently iterate as "for vars, exp in sweep:".
+            Yields a tuple for this iteration: (variable:value dict, experiment object).
+        """
+        for i in range(len(self)):
+            yield self.get_iteration(i)
 
     def get_iteration(self, i: int):
-        ''' Basically returns one iteration of the self.__iter__() generator, the <i>th that would normally be generated. '''
-        index = np.unravel_index(i, self.n_per_group)
-        vars = {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group} # TODO: double code, how to unify?
+        """ Basically returns one iteration of the self.__iter__() generator, the <i>th that would normally be generated. """
+        index = np.unravel_index(i, self._n_per_group)
+        vars = {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
         params = vars | self.constants
         experiment = self.create_experiment(params)
         return (vars, experiment)
 
-    @abstractmethod
-    def create_experiment(self, params: dict) -> Experiment:
-        ''' Subclasses should create an Experiment here according to <params> and return it. '''
-        pass
-
     def as_metadata_dict(self):
         return {
-            "type": full_obj_name(self),
-            "info": self.info,
-            "variables": self.variables,
-            "parameters": self.parameters,
-            "groups": self.groups
+            'type': full_obj_name(self),
+            'info': self.info,
+            'system': {
+                'ASI_type': full_obj_name(self._example_experiment.mm),
+                'datastream': full_obj_name(self._example_experiment.inputter.datastream),
+                'inputter': full_obj_name(self._example_experiment.inputter),
+                'outputreader': full_obj_name(self._example_experiment.outputreader)
+            },
+            'parameters': self.parameters,
+            'groups': self.groups
         }
 
     def load_results(self, dir: str, save=True, verbose=True, return_savepath=False):
-        ''' Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,
+        """ Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,
             calculates the relevant results with Experiment().calculate_all() and saves these all to a single file.
             @param dir [str]: the path to the directory where all the sweep data was stored.
             @param sweep [Sweep]: the sweep that generated all the data in <dir>.
             @param save [bool|str] (True): if truthy, the results are saved to a file.
                 If specified as a string, the base name of this saved file is this string.
-        '''
+        """
         dir = os.path.normpath(dir)
         savedir = os.path.dirname(dir)
         savename = os.path.basename(dir)
 
-        data = Data.load_collection(dir) # Load all the iterations' data into one large object
+        data = Data.load_collection(dir, verbose=verbose) # Load all the iterations' data into one large object
 
         df = pd.DataFrame()
         vars: dict
         experiment: Experiment
         for i, (vars, experiment) in enumerate(self):
-            if verbose and is_significant(i, len(self)): print(f'Calculating results of experiment {i+1} of {len(self)}...')
+            if verbose and is_significant(i, len(self)): print(f"Calculating results of experiment {i+1} of {len(self)}...")
             # 1) Select the part with <vars> in <data>
             df_i = data.df.copy()
             for varname, value in vars.items():
-                df_i = df_i.loc[np.isclose(df_i[varname], value)]
+                df_i = df_i.loc[np.isclose(df_i[varname], value, atol=0)]
             # 2) Re-initialize <experiment> with this data
             experiment.load_dataframe(df_i)
             # 3) Calculate relevant metrics
-            experiment.calculate_all(ignore_errors=False)
+            experiment.calculate_all(ignore_errors=False) # TODO: add a way to pass kwargs to this method without hardcoding ignore_errors
             # 4) Save these <experiment.results> and <vars> to a dataframe that we are calculating on the fly
             all_info = vars | experiment.results
+            for key, value in all_info.items():
+                if isinstance(value, xp.ndarray): all_info[key] = [value] # Otherwise it is treated as an array
             df = pd.concat([df, pd.DataFrame(data=all_info, index=[0])], ignore_index=True)
 
         data = Data(df, constants=data.constants, metadata=data.metadata)
@@ -193,7 +211,7 @@ class Sweep(ABC):
         return save if (return_savepath and save) else data
     
     def plot(self, summary_files, param_x=None, param_y=None, unit_x=None, unit_y=None, transform_x=None, transform_y=None, name_x=None, name_y=None, title=None, save=True, plot=True, metrics_dict=None):
-        ''' Generic function to plot the results of a sweep in a general way.
+        """ Generic function to plot the results of a sweep in a general way.
             @param summary_file [list(str)]: list of path()s to file(s) as generated by Sweep.load_results().
                 If more than one such file is passed on, multiple sweeps' metrics are averaged. This is for example
                 useful when there is a random energy barrier that needs to be sampled many times for a correct distribution.
@@ -204,8 +222,12 @@ class Sweep(ABC):
             # TODO: do something about transform_x and transform_y, they feel out-of-place right now
             # TODO: revisit save=True, plot=True, title=None...
             # TODO: is there a way to somehow detect the units of the axes without explicitly passing them to name_x and name_y?
-        '''
-        if isinstance(summary_files, str): summary_files = [summary_files] # We use an iterable of strings, just in case they need to be averaged.
+        """
+        if isinstance(summary_files, str):
+            if os.path.isfile(summary_files):
+                summary_files = [summary_files] # We use an iterable of strings, just in case they need to be averaged.
+            else: # is dir
+                summary_files = [file for file in os.listdir(summary_files) if (os.path.isfile(file) and file.endswith('.json'))]
 
         ## Default arguments
         colnames = [group[0] for group in self.groups] # For each group, just take the first parameter to show values/name
@@ -238,11 +260,13 @@ class Sweep(ABC):
                 metrics_i = [[] for _ in range(n)]
                 if is_2D:
                     for val_y, dfj in dfi.groupby(param_y):
+                        data_j = data.mimic(dfj)
                         for i, metric_func in enumerate(metrics_dict.values()):
-                            metrics_i[i].append(metric_func(dfj).iloc[0])
+                            metrics_i[i].append(metric_func(data_j).iloc[0])
                 else:
+                    data_i = data.mimic(dfi)
                     for i, metric_func in enumerate(metrics_dict.values()):
-                        metrics_i[i] = metric_func(dfi).iloc[0]
+                        metrics_i[i] = metric_func(data_i).iloc[0]
                 for i, _ in enumerate(metrics):
                     metrics[i].append(metrics_i[i])
             for i, metric in enumerate(metrics):
@@ -277,7 +301,7 @@ class Sweep(ABC):
                 ax.set_xlabel(label_x)
                 ax.set_ylabel(label_y)
                 ax.set_title(name)
-                im = ax.pcolormesh(X, Y, np.transpose(metrics[i]), cmap=cmap) # OPT: can use vmin and vmax, but not without a Metric() class, which I think would lead us a bit too far once again
+                im = ax.pcolormesh(X, Y, np.transpose(all_metrics[i]), cmap=cmap) # OPT: can use vmin and vmax, but not without a Metric() class, which I think would lead us a bit too far once again
                 c = plt.colorbar(im) # OPT: can use extend='min' for nice triangle at the bottom if range is known
                 # c.ax.yaxis.get_major_locator().set_params(integer=True) # only integer colorbar labels
         else:
@@ -285,7 +309,7 @@ class Sweep(ABC):
             for i, name in enumerate(metrics_dict.keys()):
                 ax.set_xlabel(label_x)
                 ax.set_ylabel("Reservoir metric")
-                ax.plot(x_vals, metrics[i], label=name)
+                ax.plot(x_vals, all_metrics[i], label=name)
 
         if title is not None: plt.suptitle(title)
         multi = widgets.MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
@@ -303,10 +327,10 @@ class Sweep(ABC):
 
 class KernelQualityExperiment(Experiment):
     def __init__(self, inputter, outputreader, mm):
-        ''' Follows the paper
+        """ Follows the paper
                 Johannes H. Jensen and Gunnar Tufte. Reservoir Computing in Artificial Spin Ice. ALIFE 2020.
             to implement a similar simulation to determine the kernel-quality K and generalization-capability G.
-        '''
+        """
         super().__init__(inputter, outputreader, mm)
         if not self.inputter.datastream.is_binary: # This is necessary for the (admittedly very bad) way that the inputs are recorded into a dataframe now
             raise AttributeError("KernelQualityExperiment should be performed with a binary datastream only.")
@@ -314,13 +338,14 @@ class KernelQualityExperiment(Experiment):
         self.results = {'K': None, 'G': None, 'k': None, 'g': None} # Kernel-quality and Generalization-capability, and their normalized counterparts
 
     def run(self, input_length: int = 100, constant_fraction: float = 0.6, pattern=None, verbose=False):
-        ''' @param input_length [int]: the number of times inputter.input_single() is called,
+        """ @param input_length [int]: the number of times inputter.input_single() is called,
                 before every recording of the output state.
-        '''
+        """
         if verbose: log("Calculating kernel-quality K.")
         self.run_K(input_length=input_length, verbose=verbose, pattern=pattern)
         if verbose: log("Calculating generalization-capability G.")
         self.run_G(input_length=input_length, constant_fraction=constant_fraction, verbose=verbose, pattern=pattern)
+        # Still need to call self.calculate_all() manually after this method.
 
     def run_K(self, input_length: int = 100, pattern=None, verbose=False):
         self.all_states_K = xp.zeros((self.n_out,)*2)
@@ -330,7 +355,7 @@ class KernelQualityExperiment(Experiment):
             self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
             for j in range(input_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
-                    log(f'Row {i+1}/{self.n_out}, value {j+1}/{input_length}...')
+                    log(f"Row {i+1}/{self.n_out}, value {j+1}/{input_length}...")
                 val = self.inputter.input_single(self.mm)
                 self.all_inputs_K[i] += str(int(val))
 
@@ -338,9 +363,9 @@ class KernelQualityExperiment(Experiment):
             self.all_states_K[i,:] = state.reshape(-1)
 
     def run_G(self, input_length: int = 100, constant_fraction=0.6, pattern=None, verbose=False):
-        ''' @param constant_fraction [float] (0.6): the last <constant_fraction>*<input_length> bits will
+        """ @param constant_fraction [float] (0.6): the last <constant_fraction>*<input_length> bits will
                 be equal for all <self.n_out> bit sequences.
-        '''
+        """
         self.all_states_G = xp.zeros((self.n_out,)*2)
         self.all_inputs_G = ["" for _ in range(self.n_out)]
         constant_length = int(input_length*constant_fraction)
@@ -351,12 +376,12 @@ class KernelQualityExperiment(Experiment):
             self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
             for j in range(random_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
-                    log(f'Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...')
+                    log(f"Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...")
                 val = self.inputter.input_single(self.mm)
                 self.all_inputs_G[i] += str(int(val))
             for j, value in enumerate(constant_sequence):
                 if verbose and is_significant(i*input_length + j + random_length, input_length*self.n_out, order=1):
-                    log(f'Row {i+1}/{self.n_out}, constant value {j+1}/{constant_length}...')
+                    log(f"Row {i+1}/{self.n_out}, constant value {j+1}/{constant_length}...")
                 constant = self.inputter.input_single(self.mm, value=float(value))
                 self.all_inputs_G[i] += str(int(constant))
 
@@ -364,7 +389,7 @@ class KernelQualityExperiment(Experiment):
             self.all_states_G[i,:] = state.reshape(-1)
 
     def calculate_all(self, ignore_errors=True, **kwargs):
-        ''' Recalculates K, G, k and g if possible. '''
+        """ Recalculates K, G, k and g if possible. """
         try:
             self.results['K'] = int(xp.linalg.matrix_rank(self.all_states_K))
             self.results['k'] = self.results['K']/self.n_out if self.n_out != 0 else 0
@@ -379,243 +404,220 @@ class KernelQualityExperiment(Experiment):
 
 
     def to_dataframe(self):
-        ''' DF has columns "metric" and "y0", "y1", ... "y<self.n_out - 1>".
-            When "metric" == 'K', the row corresponds to a state from self.run_K(), and vice versa for 'G'.
-        '''
+        """ DF has columns 'metric' and 'y'.
+            When 'metric' == "K", the row corresponds to a state from self.run_K(), and vice versa for 'G'.
+        """
         u = self.all_inputs_K + self.all_inputs_G # Both are lists so we can concatenate them like this
         yK = asnumpy(self.all_states_K) # Need as NumPy array for pd
         yG = asnumpy(self.all_states_G) # Need as NumPy array for pd
-        metric = np.array(['K']*yK.shape[0] + ['G']*yG.shape[0])
+        metric = np.array(["K"]*yK.shape[0] + ["G"]*yG.shape[0])
         if yK.shape[1] != yG.shape[1]: raise ValueError(f'K and G were not simulated with an equal amount of readout nodes.')
 
-        df_front = pd.DataFrame({"metric": metric, "inputs": u})
-        df_yK = pd.DataFrame({f"y{i}": yK[:,i] for i in range(yK.shape[1])})
-        df_yG = pd.DataFrame({f"y{i}": yG[:,i] for i in range(yG.shape[1])})
-        df = pd.concat([df_yK, df_yG], axis=0, ignore_index=True) # Put K and G readouts below each other
-        df = pd.concat([df_front, df], axis=1, ignore_index=False) # Add the 'metric' column in front
-        return df
+        return pd.DataFrame({'metric': metric, 'inputs': u, 'y': list(yK) + list(yG)})
 
     def load_dataframe(self, df: pd.DataFrame):
-        ''' Loads the arrays <all_states_K> and <all_states_G> stored in the dataframe <df>
+        """ Loads the arrays <all_states_K> and <all_states_G> stored in the dataframe <df>
             into the <self.all_states_K> and <self.all_states_G> attributes, and returns both.
-        '''
-        df_K = df[df["metric"] == 'K']
-        df_G = df[df["metric"] == 'G']
+        """
+        df_K = df[df['metric'] == "K"]
+        df_G = df[df['metric'] == "G"]
 
         if df_K.empty or df_G.empty:
-            raise ValueError('Dataframe is empty, so could not be loaded to KernelQualityExperiment.')
-
-        # Select the y{i} columns
-        pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
-        y_cols = [colname for colname in df if pattern.match(colname)]
-        y_cols.sort(key=human_sort) # Usually of the format 'y0', 'y1', 'y2', ..., 'y10', where human_sort makes sure e.g. 10 comes after 2
-        n_cols = len(y_cols)
-
-        self.all_states_K = xp.asarray(df_K[y_cols]) if n_cols != 0 else xp.array([[1]]*len(df_K)) # n_cols can be 0 if all constant
-        self.all_states_G = xp.asarray(df_G[y_cols]) if n_cols != 0 else xp.array([[1]]*len(df_G))
-        self.all_inputs_K = list(df_K["inputs"])
-        self.all_inputs_G = list(df_G["inputs"])
+            raise ValueError("Dataframe is empty, so could not be loaded to KernelQualityExperiment.")
+        if 'y' not in df_K or 'y' not in df_G: # Then 'y' is not in the dataframe because it is constant (this should not happen anymore, but let's keep this to be sure)
+            self.all_states_K = xp.array([[1]]*len(df_K))
+            self.all_states_G = xp.array([[1]]*len(df_G))
+        else:
+            self.all_states_K = xp.asarray(df_K['y'])
+            self.all_states_G = xp.asarray(df_G['y'])
+        self.all_inputs_K = list(df_K['inputs'])
+        self.all_inputs_G = list(df_G['inputs'])
 
         return self.all_states_K, self.all_states_G
     
     @staticmethod
     def get_plot_metrics():
         return {
-            "K": lambda df: df["K"],
-            "G": lambda df: df["G"],
-            "Q": lambda df: np.maximum(0, df["K"] - df["G"])
+            'K': lambda data: data['K'],
+            'G': lambda data: data['G'],
+            'Q': lambda data: np.maximum(0, data['K'] - data['G'])
         }
 
 
-class TaskAgnosticExperiment(Experiment):
+class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this class that plots the spatial metrics, and leave the total (non-local) metrics exposed for the Sweep.plot().
     def __init__(self, inputter, outputreader, mm):
-        ''' Follows the paper
-                J. Love, J. Mulkers, G. Bourianoff, J. Leliaert, and K. Everschor-Sitte. Task agnostic
-                metrics for reservoir computing. arXiv preprint arXiv:2108.01512, 2021.
+        """ Follows the paper
+                J. Love, J. Mulkers, R. Msiska, G. Bourianoff, J. Leliaert, and K. Everschor-Sitte. 
+                Spatial Analysis of Physical Reservoir Computers. arXiv preprint arXiv:2108.01512, 2022.
             to implement task-agnostic metrics for reservoir computing using a single random input signal.
-        '''
+        """
         super().__init__(inputter, outputreader, mm)
         if self.inputter.datastream.is_binary:
             warnings.warn("A TaskAgnosticExperiment might not work properly for a binary datastream.", stacklevel=2)
-        self.results = {'NL': None, 'MC': None, 'CP': None, 'S': None}
         self.initial_state = self.outputreader.read_state().reshape(-1)
         self.n_out = self.outputreader.n
+        self.results = {'NL': None, 'NL_local': None, 'MC': None, 'MC_local': None, 'S': None, 'S_local': None}
 
     @classmethod
     def dummy(cls, mm: Magnets = None):
-        ''' Creates a minimalistic working TaskAgnosticExperiment instance.
+        """ Creates a minimalistic working TaskAgnosticExperiment instance.
             @param mm [hotspice.Magnets] (None): if specified, this is used as Magnets()
                 object. Otherwise, a minimalistic hotspice.ASI.OOP_Square() instance is used.
-        '''
+        """
         if mm is None: mm = OOP_Square(1, 10, energies=(DipolarEnergy(), ZeemanEnergy()))
         datastream = RandomUniformDatastream(low=-1, high=1)
         inputter = FieldInputter(datastream)
         outputreader = RegionalOutputReader(2, 2, mm)
         return cls(inputter, outputreader, mm)
 
-    def run(self, N=1000, add=False, verbose=False):
-        ''' @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
-            @param add [bool]: If True, the newly calculated iterations are appended to the
-                current <self.u> and <self.y> arrays, and <self.final_state> is updated.
-            @param verbose [int]: If 0, nothing is printed or plotted.
+    def run(self, N=1000, pattern=None, verbose=False):
+        """ @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
+            @param pattern [str] (None): The state that <self.mm> is initialized in. If not specified,
+                the ground state of the spin ice geometry is used.
+            @param verbose [int] (False): If 0, nothing is printed or plotted.
                 If 1, significant iterations are printed to console.
-                If 2, the magnetization profile is plotted after every input bit in addition to printing.
-        '''
+                If >1, the magnetization profile is plotted after every input bit in addition to printing.
+        """
+        # Ground state initialization, relax and store the initial state
+        self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
         if verbose:
             if verbose > 1:
                 init_fonts()
                 init_interactive()
                 fig = None
-            log(f'[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...')
+            log(f"[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...")
+        self.mm.relax()
+        self.initial_state = self.outputreader.read_state() # TODO: change to self.mm.m.copy()? (issue: plotting S_local might get harder then because we need the correct mm geometry then when recalling it after something had been saved)
 
-        if not add: 
-            self.mm.relax()
-            self.initial_state = self.outputreader.read_state().reshape(-1)
         # Run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
-        u = xp.zeros(N) # Inputs
-        y = xp.zeros((N, self.n_out)) # Outputs
+        self.u = xp.zeros(N) # Inputs
+        self.y = xp.zeros((N, self.n_out)) # Outputs
         for i in range(N):
-            u[i] = self.inputter.input_single(self.mm)
-            y[i,:] = self.outputreader.read_state().reshape(-1)
+            self.u[i] = self.inputter.input_single(self.mm)
+            self.y[i,:] = self.outputreader.read_state()
             if verbose:
                 if verbose > 1: fig = show_m(self.mm, figure=fig)
                 if is_significant(i, N):
-                    log(f'[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).')
-        self.mm.relax()
-        self.final_state = self.outputreader.read_state().reshape(-1)
-
-        self.u = xp.concatenate([self.u, u], axis=0) if add else u
-        self.y = xp.concatenate([self.y, y], axis=0) if add else y
-
+                    log(f"[{i+1}/{N}] {self.mm.switches}/{self.mm.attempted_switches} switching attempts successful ({self.mm.MCsteps:.2f} MC steps).")
         if verbose > 1: close_interactive(fig) # Close the realtime figure as it is no longer needed
+
+        # Relax and store the final state
+        self.mm.relax()
+        self.final_state = self.outputreader.read_state()
         # Still need to call self.calculate_all() manually after this method.
 
     def calculate_all(self, ignore_errors=False, **kwargs):
-        ''' Recalculates NL, MC, CP and S. Arguments passed to calculate_all()
+        """ Recalculates NL, MC, CP and S. Arguments passed to calculate_all()
             are directly passed through to the appropriate self.<metric> functions.
             @param ignore_errors [bool] (False): if True, exceptions raised by the
                 self.<metric> functions are ignored (use with caution).
-        '''
-        for metric, method in {"NL": self.NL, "MC": self.MC, "CP": self.CP, "S": self.S}.items():
+        """
+        kwargs.setdefault('use_stored', True)
+        for metric, method in {'NL_local': self.NL_local, 'NL': self.NL, 'MC_local': self.MC_local, 'MC': self.MC, 'S_local': self.S_local, 'S': self.S}.items():
             try:
-                self.results[metric] = method(**filter_kwargs(kwargs, method))
+                self.results[metric] = method(**kwargs)
             except Exception:
                 if not ignore_errors: raise
 
-    def NL(self, k: int = 10, local: bool = False, test_fraction: float = 1/4, verbose: bool = False): # Non-linearity
-        ''' Returns a float (local=False) or an array (local=True) representing the nonlinearity,
-            either globally or locally depending on <local>. For this, an estimator for the current readout state is
-            trained which for any time instant has access to the <k> most recent inputs (including the present one).
-        '''
-        if verbose: log(f"Calculating NL (local={local})...")
-        
-        train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
-        if train_test_cutoff < k: raise ValueError(f"NL: k={k} must be <={train_test_cutoff} for the available data.")
-        u_train_strided, u_test_strided = xp.split(strided(self.u, k), [train_test_cutoff])
-        y_train, y_test = xp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
-        
-        # u_train_strided, y_train = u_train_strided[k-1:], y_train[k-1:] # First <k-1> rows don't have <k> previous entries yet to use as 'samples'
-        Rsq = xp.empty(self.n_out) # R² correlation coefficient
-        for j in range(self.n_out): # Train an estimator for the j-th output feature
-            model = sm.OLS(asnumpy(y_train[:,j]), asnumpy(u_train_strided), missing='drop') # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
+    def NL_local(self, k: int = 10, test_fraction: float = 1/4, verbose: bool = False, **kwargs) -> xp.ndarray:
+        """ Returns an array representing the nonlinearity of each output node. For this, a linear
+            estimator is trained which attempts to predict the current output (self.y) based on the
+            <k> most recent inputs (self.u) (including the current one).
+            @param k [int] (10): the number of previous inputs visible to the linear estimator to
+                estimate the output (this should be longer than the relaxation time of the reservoir).
+            @param test_fraction [float] (.25): this is the fraction of data points used in the test set
+                to evaluate the metrics. The remaining 1-<test_fraction> are used to train the estimators.
+        """
+        if verbose: log(f"Calculating NL_local...")
+
+        train_test_cutoff = math.ceil(self.u.size*(1 - test_fraction))
+        if train_test_cutoff < k: raise ValueError(f"Nonlinearity: size of training set ({train_test_cutoff}) must be >= k ({k}).")
+        u_train_strided, u_test_strided = xp.split(strided(self.u, k), [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
+        y_train, y_test = xp.split(self.y, [train_test_cutoff])
+
+        Rsq = xp.empty(self.n_out) # R² correlation coefficient for each output node
+        for j in range(self.n_out): # Train an estimator for the j-th output node
+            Y = asnumpy(y_train[:,j])
+            X = sm.add_constant(asnumpy(u_train_strided), has_constant='add') # Also add constant 'c' from formula 3 of paper
+            model = sm.OLS(Y, X, missing='drop') # missing='drop' ignores samples with NaN (here: the first k-1 samples)
             results = model.fit()
-            y_hat_test = results.predict(asnumpy(u_test_strided))
-            sigma_y_hat, sigma_y = np.var(y_hat_test), np.var(y_test[:,j])
-            if sigma_y_hat == 0: # (highly unlikely) predicting constant value, so R² depends on whether this constant is the average or not
+            y_hat_test = results.predict(sm.add_constant(asnumpy(u_test_strided), has_constant='add'))
+            if np.var(y_hat_test) == 0: # Predicting constant value, so R² depends on whether this constant is the average or not
                 Rsq[j] = float(xp.mean(y_hat_test) == xp.mean(y_test[:,j]))
-            elif sigma_y == 0: # Constant readout, so NL should logically be 0, so Rsq = 1-NL = 1
+            elif np.var(y_test[:,j]) == 0: # Constant readout, so NL should be 0, so Rsq = 1-NL = 1
                 Rsq[j] = 1.
-            else: # Rsq is 1 for very predictable 
-                Rsq[j] = R_squared(y_hat_test, y_test[:,j]) # Same as np.corrcoef(y_hat_test, y_test[:,j])[0,1]**2
-
-        # Handle <local> True or False and return appropriately
-        if local:
-            return 1 - Rsq
-        else:
-            return float(1 - xp.mean(Rsq))
-    
-    def MC(self, k=10, local=False, test_fraction=1/4, verbose=False): # Memory capacity
-        ''' Returns a float (local=False) or an array (local=True) representing the memory capacity,
-            either globally or locally depending on <local>. For this, an estimator is trained which
-            for any time instant attempts to predict the previous <k> inputs based on the current readout state.
-        '''
-        if verbose: log(f"Calculating MC (local={local})...")
-
-        train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
-        if train_test_cutoff < k: raise ValueError(f"MC: k={k} must be <={train_test_cutoff} for the available data.")
-        u_train, u_test = xp.split(self.u, [train_test_cutoff])
-        y_train, y_test = xp.split(self.y, [train_test_cutoff]) # Need to put train_test_cutoff in iterable for correct behavior
-
-        Rsq = xp.empty(k) # R² correlation coefficient
-        if local: weights = xp.zeros((k, self.n_out))
-        for j in range(1, k+1): # Train an estimator for the input j iterations ago
-            # This one is a mess of indices, but at least we don't need striding like for non-linearity
-            results = sm.OLS(asnumpy(u_train[k-j:-j]), asnumpy(y_train[k:,:]), missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
-            if local: weights[j-1,:] = xp.asarray(results.params) # TODO: this gives an error I think
-            u_hat_test = results.predict(asnumpy(y_test[j:,:])) # Start at y_test[j] to prevent leakage between train/test
-            Rsq[j-1] = R_squared(u_hat_test, u_test[:-j])
-        Rsq[xp.isnan(Rsq)] = 0 # If some std=0, then it is constant so R² actually gives 0
-
-        # Handle <local> True or False and return appropriately
-        if local:
-            # TODO: I think some normalization is wrong here (result is all near 0.5, not full range between 0 and 1 as in paper)
-            weights = weights - xp.min(weights, axis=1).reshape(-1, 1) # Minimum value becomes 0
-            weights = weights / xp.max(weights, axis=1).reshape(-1, 1) # Maximum value becomes 1
-            weights_avg = xp.mean(weights, axis=0) # Average across 'time'
-            return weights_avg
-        else:
-            return float(xp.sum(Rsq))
-
-    def CP(self, transposed=False): # Complexity
-        ''' Calculates the complexity: i.e. the effective rank of the kernel matrix as used in KernelQualityExperiment.
-            The default method used here is to simply average the complexity of recent observations over time.
-            @param transposed [bool] (False): If True, CP is the rank of <self.y> multiplied with <self.y.T>.
-                If False, it is the average of all consecutive square matrices in <self.y> along the time axis.
-                Usually, transposed=True gives (slightly) higher values than for transposed=False.
-                NOTE: never compare results from transposed=True with those for transposed=False.
-        '''
-        if self.y.shape[0] < self.y.shape[1]: # Less rows than columns, so rank can at most be the number of rows
-            warnings.warn(f"Not enough recorded iterations to reliably calculate complexity ({self.y.shape[0]} samples < {self.y.shape[1]} features)" , stacklevel=2)
-        
-        if transposed:
-            # Multiply with transposed to get a square matrix of size <self.n_out> (suggested by J. Leliaert)
-            squarematrix = xp.matmul(self.y.T, self.y)
-            rank = xp.linalg.matrix_rank(squarematrix)
-        else:
-            ranks = xp.asarray([xp.linalg.matrix_rank(self.y[i:i+self.y.shape[1],:]) for i in range(max(1, self.y.shape[0]-self.y.shape[1]+1))])
-            rank = xp.mean(ranks)
-        return float(rank)/self.y.shape[1]
-    
-    def S(self, relax=False): # Stability
-        ''' Calculates the stability: i.e. how similar the initial and final states are, after relaxation.
-            NOTE: It can be advantageous to define a different metric for stability if the entire magnetization profile
-                  is known, since this function only has access to the readout nodes, not the whole self.m array.
-            @param relax [bool] (False): if True, the final state is determined by relaxing the current state of <self.mm>.
-        '''
-        if relax:
-            self.mm.relax()
-            final_readout = self.outputreader.read_state().reshape(-1)
-        elif not hasattr(self, 'final_state'):
-            if self.y.size > 0:
-                final_readout = self.y[-1,:]
             else:
-                final_readout = self.outputreader.read_state().reshape(-1)
+                Rsq[j] = R_squared(y_hat_test, y_test[:,j])
+        return 1 - Rsq
 
-        initial_readout = self.initial_state # Assuming this was relaxed first
-        final_readout = self.final_state # Assuming this was also relaxed first
-        return 1 - distance.cosine(asnumpy(initial_readout), asnumpy(final_readout))/2 # distance.cosine is in range [0., 2.]
-        # Another possibly interesting metric: Hamming distance 
-        # (is proportion of disagreeing elements, but would require full access to state mm.m to work properly (-1 or 1 binary state))
+    def NL(self, use_stored=False, **kwargs) -> float:
+        """ Returns the average nonlinearity throughout the system. """
+        NL = self.results["NL_local"] if use_stored else self.NL(**kwargs)
+        return float(xp.mean(NL))
 
+    def MC_local(self, k: int = 10, test_fraction: float = 1/4, threshold_dist: float = None, verbose: bool = False, **kwargs) -> xp.ndarray:
+        """ Returns an array representing the memory capacity of each output node. For this, a
+            linear estimator is trained to recall the history of inputs (self.u) based on the
+            output values (self.y) of the output nodes within a threshold distance of each node.
+            @param k [int] (10): the furthest amount of steps back in time that an estimator is
+                trained to recall (this should be longer than the relaxation time of the reservoir).
+            @param test_fraction [float] (.25): this is the fraction of data points used in the test set
+                to evaluate the metrics. The remaining 1-<test_fraction> are used to train the estimators.
+            @param threshold_dist [float] (2*NN_dist): to determine local MC, a neighborhood (all output
+                nodes at a distance of at most <threshold_dist>) around the output node is used to provide
+                data for the estimator.
+        """
+        if verbose: log(f"Calculating MC_local...")
+        train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
+        u_train, u_test = xp.split(self.u, [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
+        if u_train.size <= k: raise ValueError(f"Memory capacity: size of training set ({u_train.size}) must be > k ({k}).")
+        if u_test.size <= k: raise ValueError(f"Memory capacity: size of test set ({u_test.size}) must be > k ({k}).")
+
+        dist_matrix = xp.asarray(distance.cdist(asnumpy(self.outputreader.node_coords), asnumpy(self.outputreader.node_coords)))
+        if threshold_dist is None: # By default we take twice the minimum NN distance to get some averaging nearby
+            mx = ma.masked_array(dist_matrix, mask=(dist_matrix==0))
+            min_dist_for_each_cell = mx.min(axis=1).data
+            threshold_dist = 2*xp.max(min_dist_for_each_cell)
+
+        N = self.outputreader.n if threshold_dist != xp.inf else 1 # If distance is xp.inf, all nodes will give the same, so set N=1 for efficiency
+        MC_of_each_node = xp.zeros(self.outputreader.n)
+        for outputnode in range(N):
+            neighbors = xp.where(dist_matrix[outputnode,:] < threshold_dist)[0] # \gamma_n in paper
+            y_train, y_test = xp.split(sm.add_constant(asnumpy(self.y[:,neighbors]), has_constant='add'), [train_test_cutoff])
+            Rsq = xp.empty(k) # R² correlation coefficient
+            for tau in range(1, k+1): # Train an estimator for the input j iterations ago
+                # This one is a mess of indices, but at least we don't need striding like for NL
+                results = sm.OLS(asnumpy(u_train[k-tau:-tau]), y_train[k:,:], missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
+                u_hat_test = results.predict(y_test[tau:,:]) # Start at y_test[j] to prevent leakage between train/test
+                Rsq[tau-1] = R_squared(u_hat_test, u_test[:-tau])
+            MC_of_each_node[outputnode] = float(xp.sum(Rsq))
+        if N == 1: MC_of_each_node[:] = MC_of_each_node[0]
+        return MC_of_each_node
+
+    def MC(self, **kwargs) -> float:
+        """ Returns the memory capacity based on an estimator with access to all the output nodes. """
+        kwargs["threshold_dist"] = xp.inf # To remove locality
+        return float(xp.mean(self.MC_local(**kwargs)))
+
+    def S_local(self, **kwargs):
+        """ Returns an array representing the stability of each output node, which is a boolean
+            value that is True if the initial and final states are the same, otherwise False.
+        """
+        return (self.initial_state == self.final_state).astype(float) # (ideally these should be full mm.m states, not the output readout)
+        
+    def S(self, **kwargs):
+        """ Returns the stability of the complete system using a cosine distance metric. """
+        return 1 - distance.cosine(asnumpy(self.initial_state), asnumpy(self.final_state))/2 # distance.cosine is in range [0., 2.]
+        # Another possibly interesting metric: Hamming distance (would require access to full mm.m state to work properly)
 
     def to_dataframe(self, u: xp.ndarray = None, y: xp.ndarray = None):
-        ''' If <u> and <y> are not explicitly provided, the saved <self.u> and <self.y>
+        """ If <u> and <y> are not explicitly provided, the saved <self.u> and <self.y>
             arrays are used. When providing <u> and <y> directly,
                 <u> should be a 1D array of length N, and
                 <y> a <NxL> array, where L is the number of output nodes.
-            The resulting dataframe has columns "u", "y0", "y1", ... "y<L-1>".
-        '''
-        if (u is None) != (y is None): raise ValueError('Either none or both of <u> and <y> arguments must be provided.')
+            The resulting dataframe has columns 'u' and 'y'.
+        """
+        if (u is None) != (y is None): raise ValueError("Either none or both of <u> and <y> arguments must be provided.")
         if u is None:
             u = xp.concatenate((xp.asarray([xp.nan]), self.u, xp.asarray([xp.nan]))) # self.u with NaN input as 0th index
         if y is None:
@@ -623,26 +625,20 @@ class TaskAgnosticExperiment(Experiment):
         
         u = asnumpy(u) # Need as NumPy array for pd
         y = asnumpy(y) # Need as NumPy array for pd
-        if u.shape[0] != y.shape[0]: raise ValueError(f'Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.')
+        if u.shape[0] != y.shape[0]: raise ValueError(f"Length of <u> ({u.shape[0]}) and <y> ({y.shape[0]}) is incompatible.")
 
-        df_u = pd.DataFrame({"u": u})
-        df_y = pd.DataFrame({f"y{i}": y[:,i] for i in range(y.shape[1])})
-        df = pd.concat([df_u, df_y], axis=1)
-        return df
+        return pd.DataFrame({'u': u, 'y': list(y)})
 
     def load_dataframe(self, df: pd.DataFrame, u: xp.ndarray = None, y: xp.ndarray = None):
-        ''' Loads the arrays <u> and <y> stored in the dataframe <df>
+        """ Loads the arrays <u> and <y> stored in the dataframe <df>
             into the <self.u> and <self.y> attributes, and returns both.
-        '''
-        if u is None: u = xp.asarray(df["u"])
-        if y is None:
-            pattern = re.compile(r"\Ay[0-9]+\Z") # Match 'y0', 'y1', ... (\A and \Z represent end and start of string, respectively)
-            y_cols = [colname for colname in df if pattern.match(colname)].sort(key=human_sort)
-            y = xp.asarray(df[y_cols])
+        """
+        if u is None: u = xp.asarray(df['u'])
+        if y is None: y = xp.asarray(df['y'])
 
         self.u = xp.asarray(u).reshape(-1)
-        self.y = xp.asarray(y, dtype=float).reshape(self.u.shape[0], -1)
-        self.n_out = y.shape[1]
+        self.y = xp.asarray([arr for arr in y], dtype=float).reshape(self.u.shape[0], -1)
+        self.n_out = self.y.shape[1]
         if math.isnan(self.u[0]):
             self.initial_state = self.y[0,:]
             self.u = self.u[1:]
@@ -654,84 +650,72 @@ class TaskAgnosticExperiment(Experiment):
         return self.u, self.y
 
     @staticmethod
-    def get_plot_metrics():
+    def get_plot_metrics(): # TODO: Maybe this needs a better name to avoid confusion with self.plot() (array metric vs scalar metric)
         return {
-            "NL": lambda df: df["NL"],
-            "MC": lambda df: df["MC"],
-            "CP": lambda df: df["CP"],
-            "S":  lambda df: df["S"]
+            'NL': lambda data: data['NL'],
+            'MC': lambda data: data['MC'],
+            'S':  lambda data: data['S']
         }
 
 
-class DeterminismExperiment(Experiment):
-    """
-    An experiment to test the deterministic nature of the ASI and inputter. It will input the exact same signal some
-    amount of times, and calculates via matrix rank how many different outputs are read.
-    """
-
-    def __init__(self, inputter, outputreader, mm):
+class IODistanceExperiment(Experiment):
+    # TODO: try some distance metric that weighs more recent bits more? Or some memory-like distance like that
+    def __init__(self, inputter: Inputter, outputreader: OutputReader, mm: Magnets):
+        if not inputter.datastream.is_binary: raise ValueError("IODistanceExperiment must use an inputter with a binary datastream.")
         super().__init__(inputter, outputreader, mm)
-        self.results = {"D": None, "d": None}
-
-    def run(self, input_number: int = 10, input_sequence=None, input_length: int = 100, pattern=None, verbose=False):
+    
+    def run(self, N=10, input_length=100, verbose=False):
+        """ Performs some input sequences and records the output after each sequence.
+            @param N [int] (10): The number of distinct input sequences whose distances will be compared.
+            @param input_length [int] (100): The number of bits in each input sequence.
         """
-        @param input_number: amount of times the input should be tested.
-        @param input_sequence: array of inputs. If None, will generate a random sequence of input_length
-        @param input_length: number of bits of one signal. Won't be used if a sequence is given.
-        @param pattern: pattern of mm.initialize_m()
-        @param verbose: verbosity of the experiment
+        self.input_sequences = xp.zeros((N, input_length), dtype=self.inputter.datastream.dtype) # dtype provided for faster pdist if possible
+        self.output_sequences = xp.zeros((N, self.outputreader.n))
+        for i in range(N):
+            for j in range(input_length):
+                if verbose and is_significant((iter := i*input_length + j), N*input_length): log(f"Inputting bit ({i}, {j}) of ({N}, {input_length})...")
+                value = self.inputter.datastream.get_next()
+                self.inputter.input_single(self.mm, value=value)
+                self.input_sequences[i, j] = value
+            self.output_sequences[i,:] = self.outputreader.read_state().reshape(-1)
+        # Still need to call self.calculate_all() manually after this method.
+    
+    def calculate_all(self, input_metric='hamming', output_metric='euclidean', input_metric_kwargs=None, output_metric_kwargs=None):
+        """ (Re)calculates all the metrics in the self.results dict.
+            @param input_metric [str] ('hamming'): the distance metric to use between two input sequences.
+                The default metric 'hamming' represents the fraction of disagreeing elements between two input sequences.
+            @param output_metric [str] ('euclidean'): the distance metric to use between two output sequences.
+            @param input_metric_kwargs, output_metric_kwargs [dict] (None): optional kwargs for the SciPy metrics.
         """
-        self.input_number = input_number
-
-        if input_sequence is None:
-            self.input_sequence = self.inputter.datastream.get_next(n=input_length)
-        else:
-            self.input_sequence = input_sequence
-
-        if input_number > self.outputreader.n:
-            raise (Exception("input_number should not be larger than outputreader.n"))
-
-        self.all_states = xp.zeros((self.outputreader.n,) * 2)
-
-        for i in range(self.input_number):
-
-            if verbose and is_significant(i, input_number, order=0.5):
-                log(f"Inputting signal {i + 1}/{input_number}")
-
-            state = self.run_signal(self.input_sequence, pattern=pattern)
-            self.all_states[i, :] = state.reshape(-1)
-
-
-    def run_signal(self, input_sequence, pattern=None):
-        """
-        One complete signal input.
-        @param input_sequence: the signal to be inputted.
-        @param pattern: pattern of mm.initialize_m()
-        @return: state of the output
-        """
-        self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
-        for value in input_sequence:
-            self.inputter.input_single(self.mm, value=float(value))
-        state = self.outputreader.read_state(self.mm)
-        return state
-
-
-    def calculate_all(self, ignore_errors=True, **kwargs):
-        ''' Recalculates K, G, k and g if possible. '''
-        try:
-            self.results["D"] = int(xp.linalg.matrix_rank(self.all_states))
-            self.results["d"] = self.results["D"] / self.input_number
-        except AttributeError:
-            if not ignore_errors: raise
-
-    @staticmethod
+        # This calculation should be relatively fast, hence why we save the input_sequences instead of input_distances etc.
+        self.input_metric, self.output_metric = input_metric, output_metric
+        if input_metric_kwargs is None or not isinstance(input_metric_kwargs, dict): input_metric_kwargs = {}
+        if output_metric_kwargs is None or not isinstance(output_metric_kwargs, dict): output_metric_kwargs = {}
+        self.input_distances = distance.pdist(asnumpy(self.input_sequences), input_metric).reshape(-1)
+        self.output_distances = distance.pdist(asnumpy(self.output_sequences), output_metric).reshape(-1)
+    
     def to_dataframe(self):
-        return None
-
-    @staticmethod
-    def load_dataframe(self):
-        return None
-
+        df = pd.DataFrame({'input_sequence': self.input_sequences, 'output_sequence': self.output_sequences})
+        return df
+    
+    def load_dataframe(self, df: pd.DataFrame):
+        """ Loads data generated by self.to_dataframe() to the current object. """
+        self.input_sequences = xp.asarray(df['input_sequence'])
+        self.output_sequences = xp.asarray(df['output_sequence'])
+        self.calculate_all()
+        return self.input_sequences, self.output_sequences
+    
+    def plot(self, input_metric: str = None, output_metric: str = None):
+        plt.scatter(asnumpy(self.input_distances), asnumpy(self.output_distances))
+        plt.xlabel(f"Input distance ({self.input_metric if input_metric is None else input_metric})")
+        plt.ylabel(f"Output distance ({self.output_metric if output_metric is None else output_metric})")
+        plt.show()
+    
     @staticmethod
     def get_plot_metrics(self):
-        return None
+        """ Returns a dictionary with as many elements as there should be 2D or 1D plots
+            in Sweep().plot(). Keys are names of these metrics, values are functions that
+            take one argument which is a pd.DataFrame, and returns either a simple column
+            or a mathematical combination of several columns.
+        """
+        return {}

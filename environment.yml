@@ -4,14 +4,15 @@ name: hotspice310
 channels:
   - defaults
 dependencies:
-  - conda-forge::cupy=10.6.0=py310h782d1bb_0
-  - ipython=8.2.0=py310haa95532_0
-  - joblib=1.1.0=pyhd3eb1b0_0
-  - matplotlib=3.5.1=py310haa95532_1
-  - numpy=1.21.5=py310h6d2d95c_1
-  - pandas=1.4.1=py310hd77b12b_1
-  - psutil=5.9.0=py310h2bbff1b_0
-  - pylint=2.12.2=py310haa95532_1
-  - python=3.10.4=hbb2ffb3_0
-  - scipy=1.7.3=py310h6d2d95c_0
-  - statsmodels=0.13.2=py310h2bbff1b_0
+  - python=3.10.4
+  - conda-forge::cupy=11.4.0
+  - numpy=1.21.5
+  - scipy=1.7.3
+  - pandas=1.4.1
+  - statsmodels=0.13.2
+  - joblib=1.1.0
+  - psutil=5.9.0
+  - matplotlib=3.5.1
+  - ipython=8.2.0
+  - colorama=0.4.4
+  - pylint=2.12.2

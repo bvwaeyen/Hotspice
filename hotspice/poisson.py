@@ -16,11 +16,11 @@ from typing import Callable
 
 
 def PoissonGrid(nx: int, ny: int, k=10):
-    ''' Selects non-adjacent cells (neither diagonally nor orthogonally) in an <nx> x <ny> periodic grid.
+    """ Selects non-adjacent cells (neither diagonally nor orthogonally) in an <nx> x <ny> periodic grid.
         The cell at (0, 0) is always chosen: additional randomization should be performed by _select_grid().
         (this is basically an optimized version of poisson_disc_samples() for choosing supercells specifically)
         Inspired by https://github.com/emulbreh/bridson/blob/master/bridson/__init__.py.
-    '''
+    """
     grid = np.zeros((nx, ny))
     annulus = [(-2, -1), (-2, 1), (-1, 2), (1, 2), (2, 1), (2, -1), (1, -2), (-1, -2)] # Chess horse
     # annulus += [(-2, 0), (0, 2), (2, 0), (0, -2)] # Adding these increases grid-like bias in periodogram but gains 10% more samples
@@ -54,12 +54,12 @@ def PoissonGrid(nx: int, ny: int, k=10):
 
 
 def distSqPBC(w: float, h: float, positions: np.ndarray):
-    ''' Determines the squared distance between the two positions in <positions>,
+    """ Determines the squared distance between the two positions in <positions>,
         taking into account periodic boundaries between x=[0, w] and y=[0, h].
         Adapted from https://yangyushi.github.io/science/2020/11/02/pbc_py.html.
         @param positions [array(2,2)]: 2x2 NumPy array, format [[x0, y0], [x1, y1]]
         @return [float]: the distance between these points, squared.
-    '''
+    """
     box = [w, h]
     dist_2d_sq = 0
     for dim in range(2):
@@ -70,10 +70,10 @@ def distSqPBC(w: float, h: float, positions: np.ndarray):
 
 
 def poisson_disc_samples(width, height, r, k=5, random: Callable = np.random.random, PBC=True):
-    ''' Performs Poisson disk sampling in the box (width, height) with minimal
+    """ Performs Poisson disk sampling in the box (width, height) with minimal
         distance between samples <r>. Only deviation from normal Poisson disk
         sampling, is that all points are at integer locations.
-    '''
+    """
     r += 1
     cellsize = r/math.sqrt(2)
     rSq = r*r
@@ -143,7 +143,7 @@ class SequentialPoissonDiskSampling:
     neighbourhoodLength = len(neighbourhood)
 
     def __init__(self, width: int, height: int, radius: float, tries: int = 3, rng: Callable = np.random.random):
-        ''' Class to implement poisson disk sampling. Code inspired by the Javascript version from
+        """ Class to implement poisson disk sampling. Code inspired by the Javascript version from
             https://github.com/kchapelier/fast-2d-poisson-disk-sampling/blob/master/src/fast-poisson-disk-sampling.js,
             adapted to our own requirements (e.g. integer positions, PBC)
             NOTE: this class is quite basic, it can only support integer positions with equal dx and dy,
@@ -152,7 +152,7 @@ class SequentialPoissonDiskSampling:
             @param radius [float]: minimum distance between separate points
             @param tries [int] (30): number of times the algorithm will try to place a point in the neighbourhood of other points
             @param rng [function] (np.random.random): RNG function between 0 to 1
-        '''
+        """
         epsilon = 2e-14
 
         self.width = width
@@ -179,9 +179,9 @@ class SequentialPoissonDiskSampling:
         self.grid = np.zeros(self.gridShape, dtype=int) # will store references to samplePoints
 
     def addRandomPoint(self):
-        ''' Add a totally random point in the grid
+        """ Add a totally random point in the grid
             @return [list(2)]: the point added to the grid
-        '''
+        """
         return self.directAddPoint([
             int(self.rng()*self.width),
             int(self.rng()*self.height),
@@ -190,10 +190,10 @@ class SequentialPoissonDiskSampling:
         ])
 
     def directAddPoint(self, point):
-        ''' Add a given point to the grid, without any check
+        """ Add a given point to the grid, without any check
             @param point [list(4)]: point represented as [x, y, angle, tries]
             @return [list(2)]: the point added to the grid as [x, y]
-        '''
+        """
         coordsOnly = [point[0], point[1]]
         self.processList.append(point)
         self.samplePoints.append(coordsOnly)
@@ -202,10 +202,10 @@ class SequentialPoissonDiskSampling:
         return coordsOnly
 
     def inNeighbourhood(self, point):
-        ''' Check whether a given point is in the neighbourhood of existing points.
+        """ Check whether a given point is in the neighbourhood of existing points.
             @param point [list(4)]: point represented as [x, y, angle, tries]
             @return [bool]: whether the point is in the neighbourhood of another point
-        '''
+        """
         for neighbourIndex in range(self.neighbourhoodLength): # PBC dont work perfectly due to neighbourhood being a bit too small near edges
             gridIndex = ((int(point[0]/self.cellSize) + self.neighbourhood[neighbourIndex][0]) % self.gridShape[0],
                          (int(point[1]/self.cellSize) + self.neighbourhood[neighbourIndex][1]) % self.gridShape[1])
@@ -217,9 +217,9 @@ class SequentialPoissonDiskSampling:
         return False
 
     def next(self):
-        ''' Try to generate a new point in the grid.
+        """ Try to generate a new point in the grid.
             @return [list(2)|None]: the added point [x, y] or None
-        '''
+        """
         while len(self.processList) > 0:
             index = int(len(self.processList)*self.rng()) | 0
 
@@ -257,22 +257,22 @@ class SequentialPoissonDiskSampling:
         self.samplePoints = samplePoints.tolist()
 
     def fill(self):
-        ''' Automatically fill the grid, adding a random point to start the process if needed.
+        """ Automatically fill the grid, adding a random point to start the process if needed.
             @return [list(N,2)]: N sample points
-        '''
+        """
         if len(self.samplePoints) == 0: self.addRandomPoint()
         while self.next(): pass
         self.offset()
         return self.samplePoints
 
     def getAllPoints(self):
-        ''' Get all the points in the grid.
+        """ Get all the points in the grid.
             @return [list(N,2)]: all N sample points
-        '''
+        """
         return self.samplePoints
 
     def reset(self):
-        ''' Reinitialize the grid as well as the internal state. '''
+        """ Reinitialize the grid as well as the internal state. """
         self.grid = np.zeros_like(self.grid)
         self.samplePoints = []
         self.processList = []
@@ -286,7 +286,7 @@ if __name__ == "__main__":
     r = 2
     # points = SequentialPoissonDiskSampling(w, h, r, tries=3).fill() # 3 (or 2) tries is optimal in terms of points/second
     points = np.transpose(PoissonGrid(w, h))
-    print(f'Sampled {len(points)} points.')
+    print(f"Sampled {len(points)} points.")
 
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal')

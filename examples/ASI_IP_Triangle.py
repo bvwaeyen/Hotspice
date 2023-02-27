@@ -12,11 +12,11 @@ nx = 25 *4+1 # Multiple of 4 + 1
 ## Initialize main Magnets object
 t = time.perf_counter()
 mm = hotspice.ASI.IP_Triangle(4e-6, nx, T=T, E_B=E_B, pattern='AFM', energies=[hotspice.DipolarEnergy()], PBC=False)
-print(f'Initialization time: {time.perf_counter() - t} seconds.')
+print(f"Initialization time: {time.perf_counter() - t} seconds.")
 
 
 if __name__ == "__main__":
-    print('Initialization energy:', mm.E_tot)
+    print("Initialization energy:", mm.E_tot)
 
     # ef.run_a_bit(mm, N=10e3, T=20)
     # neelTemperature(mm, T_max=600)
