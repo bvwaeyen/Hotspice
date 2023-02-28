@@ -135,11 +135,21 @@ def readable_bytes(N: int):
     number = N/(1024**i)
     return f"{number:.2f} {('B', 'KiB', 'MiB', 'GiB', 'TiB')[i]}"
 
-def unit_prefix_to_mul(unit: Literal['p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']):
-    d = {'p': 1e-12, 'n': 1e-9, 'µ': 1e-6, 'm': 1e-3, 'c': 1e-2, 'd': 1e-1, 
-     '': 1e0,
-     'da': 1e1, 'h': 1e2, 'k': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12}
-    return d[unit]
+SIprefix_to_magnitude = {'f': -15, 'p': -12, 'n': -9, 'µ': -6, 'm': -3, 'c': -2, 'd': -1, '': 0, 'da': 1, 'h': 2, 'k': 3, 'M': 6, 'G': 9, 'T': 12}
+def SIprefix_to_mul(unit: Literal['f', 'p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']):
+    return 10**SIprefix_to_magnitude[unit]
+
+magnitude_to_SIprefix = {v: k for k, v in SIprefix_to_magnitude.items()}
+def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f', 'p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']=''):
+    """ Converts <n> (which already has SI prefix <unit_prefix> for whatever unit it is in)
+        to a reasonable number with a new SI prefix. Returns a tuple with (the new scalar values, the new SI prefix).
+    """
+    value = n.min() if isinstance(n, (np.ndarray, xp.ndarray)) else n # To avoid excessive commas, we take min()
+    nearest_magnitude = round(math.log10(value)) + SIprefix_to_magnitude[unit_prefix]
+    used_magnitude = -100 # placeholder
+    for supported_magnitude in sorted(magnitude_to_SIprefix.keys()):
+        if supported_magnitude <= nearest_magnitude: used_magnitude = supported_magnitude
+    return (n/10**used_magnitude, SIprefix_to_magnitude[used_magnitude])
 
 def shell():
     """ Pauses the program and opens an interactive shell where the user
@@ -347,6 +357,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         value.setdefault('creator', creator_info)
         value.setdefault('simulator', "Hotspice")
         value.setdefault('description', "No custom description available.")
+        value['description'] = dedent(value['description']).strip()
         try:
             gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
                 ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
@@ -435,7 +446,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         return Data(df, constants=self.constants, metadata=self.metadata)
 
     @staticmethod
-    def load(JSON):
+    def load(JSON): # TODO: improve the error handling here so a caller of load() can see what is going on
         """ Reads a JSON-parseable object containing previously generated Hotspice data, and returns its
             contents as Data object.
             @param JSON: a parseable object resembling JSON data, can be any of: 

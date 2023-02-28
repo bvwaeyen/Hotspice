@@ -585,8 +585,10 @@ class Magnets(ABC):
                 self.update() # No time
         return dt, dMCsteps
 
-    def minimize(self):
+    # TODO: clean the minimize(), _minimize_all() and relax() functions (i.e. verbosity and standardize barrier calculation)
+    def minimize(self, ignore_barrier=True, verbose=False, _frac=0.3):
         """ NOTE: this is basically the sequential version of self.relax().
+            NOTE: this is not deterministic.
             Switches the magnet which has the highest switching probability.
             Repeats this until there are no more magnets that can gain energy from switching.
             NOTE: it can take a while for large simulations to become fully relaxed, especially with this
@@ -594,31 +596,42 @@ class Magnets(ABC):
         """
         visited = np.zeros_like(self.m) # Used to make sure we don't get an infinite loop
         while True:
-            barrier = xp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)
+            if ignore_barrier:
+                barrier = self.switch_energy()
+            else:
+                barrier = xp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)
             if (n := (nobarrier := xp.where(barrier < -self.kBT))[0].size) != 0: # Then some magnet(s) simply has/have no barrier at all for switching
-                # Randomly switch half of them (this ratio can be optimized probably? TODO?), this is because if we switch them all we might end up in an infinite loop
-                rand = np.random.choice(n, size=math.ceil(n/2), replace=False)
+                # Randomly switch <frac> of the no-barrier magnets, this is because if we switch them all we might end up in an infinite loop
+                rand = np.random.choice(n, size=math.ceil(n*_frac), replace=False)
                 idx = (nobarrier[0][rand], nobarrier[1][rand])
             else: # No ultra-prone switchers, so choose the one that would gain the most energy
                 idx = divmod(xp.argmin(barrier), self.nx) # The one with the most energy to gain from switching
                 if barrier[idx] >= 0: break # Then energy would increase, so we have ended our minimization procedure.
                 visited[idx] += 1
                 if xp.any(visited[idx] >= 3): break
+            if verbose:
+                import matplotlib.pyplot as plt
+                plt.scatter(idx[1], idx[0])
+                plt.imshow(asnumpy(self.m), origin='lower')
+                plt.show()
+                from .plottools import show_m
+                show_m(self)
             idx = xp.asarray(idx).reshape(2,-1)
-            self.m[idx] = -self.m[idx]
-            self.switches += 1
-            self.attempted_switches += 1
+            self.m[idx[0], idx[1]] *= -1
+            self.switches += idx.shape[1]
+            self.attempted_switches += idx.shape[1]
             self.update_energy(index=idx)
 
-    def minimize_all(self, simultaneous=False, use_barrier=True):
+    def _minimize_all(self, ignore_barrier=True, _simultaneous=False):
         """ Switches all magnets that can gain energy by switching.
             By default, several subsets of the domain are updated in a random order, such that in total
             every cell got exactly one chance at switching. This randomness may increase the runtime, but
             reduces systematic bias and possible loops which would otherwise cause self.relax() to get stuck.
-            @param simultaneous [bool] (False): if True, all magnets are evaluated simultaneously (nonphysical, error-prone).
+            @param _simultaneous [bool] (False): if True, all magnets are evaluated simultaneously (nonphysical, error-prone).
                 If False, several subgrids are evaluated after each other in a random order to prevent systematic bias.
         """
-        if simultaneous:
+        if _simultaneous:
+            warnings.warn("_simultaneous=True in _minimize_all(). I hope you know what you are doing, as this is very nonphysical ;)")
             step_x = step_y = 1
         else:
             step_x, step_y = self.unitcell.x*2, self.unitcell.y*2
@@ -627,19 +640,19 @@ class Magnets(ABC):
             y, x = divmod(i, step_x)
             if not self.occupation[y, x]: continue
             subset_indices = xp.asarray(xp.meshgrid(xp.arange(y, self.ny, step_y), xp.arange(x, self.nx, step_x))).reshape(2, -1)
-            if use_barrier:
-                indices = subset_indices[:,self.switch_energy(subset_indices)/2 + self.E_B[subset_indices[0], subset_indices[1]] < 0]
-            else:
+            if ignore_barrier:
                 indices = subset_indices[:,xp.where(self.switch_energy(subset_indices) < 0)[0]]
+            else:
+                indices = subset_indices[:,self.switch_energy(subset_indices)/2 + self.E_B[subset_indices[0], subset_indices[1]] < 0]
             if indices.size > 0:
                 self.m[indices[0], indices[1]] = -self.m[indices[0], indices[1]]
                 self.switches += indices.shape[1]
                 self.attempted_switches += indices.shape[1]
                 self.update_energy(index=indices)
 
-    def relax(self, verbose=False):
+    def relax(self, verbose=False, **kwargs):
         """ NOTE: this is basically the parallel version of self.minimize().
-            Relaxes self.m to a (meta)stable state using multiple self.minimize_all() calls.
+            Relaxes self.m to a (meta)stable state using multiple self._minimize_all() calls.
             NOTE: it can take a while for large simulations to become fully relaxed.
         """
         if verbose:
@@ -652,16 +665,19 @@ class Magnets(ABC):
         # TODO: use a better stopping criterion than just "oh no we exceeded n_max steps", and remove verbose code when all is fixed
         n, n_max = 0, int(math.sqrt(self.nx**2 + self.ny**2)) # Maximum steps is to get signal across the whole grid
         previous_states = [self.m.copy(), xp.zeros_like(self.m), xp.zeros_like(self.m)] # Current state, previous, and the one before
+        switches = self.switches
         while not xp.allclose(previous_states[2], previous_states[0]) and n < n_max: # Loop exits once we detect a 2-cycle, i.e. the only thing happening is some magnets keep switching back and forth
-            self.minimize_all()
+            n += 1
+            self._minimize_all(**kwargs)
+            if switches == self.switches: break # Then nothing changed
             if verbose:
                 im.set_array(asnumpy(self.m))
                 fig.canvas.draw_idle()
                 fig.canvas.flush_events()
+            switches = self.switches
             previous_states[2] = previous_states[1].copy()
             previous_states[1] = previous_states[0].copy()
             previous_states[0] = self.m.copy()
-            n += 1
         if verbose: print(f"Used {n} (out of {n_max}) steps in relax().")
 
 
@@ -1005,8 +1021,9 @@ class DipolarEnergy(Energy):
                 ### EITHER WE DO THIS (CONVOLUTION) (starts to be better at approx. 40 simultaneous switches for 41x41 kernel, taking into account the need for complete recalculation every <something> steps, so especially for large T this is good)
                 switched_field = xp.zeros_like(self.mm.m)
                 switched_field[indices2D_here[0], indices2D_here[1]] = self.mm.m[indices2D_here[0], indices2D_here[1]]
-                n = self.mm.params.REDUCED_KERNEL_SIZE
-                usefulkernel = kernel[self.mm.ny-1-n:self.mm.ny+n, self.mm.nx-1-n:self.mm.nx+n] if n else kernel
+                k = self.mm.params.REDUCED_KERNEL_SIZE
+                kx, ky = min(k, self.mm.nx-1), min(k, self.mm.ny-1)
+                usefulkernel = kernel[self.mm.ny-1-ky:self.mm.ny+ky, self.mm.nx-1-kx:self.mm.nx+kx] if k else kernel
                 convolvedkernel = signal.convolve2d(switched_field, usefulkernel, mode='same', boundary='wrap' if self.mm.PBC else 'fill')
             else:
                 ### OR WE DO THIS (BASICALLY self.update_single BUT SLIGHTLY PARALLEL AND SLIGHTLY NONPARALLEL) 

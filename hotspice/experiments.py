@@ -1,6 +1,5 @@
 import math
 import os
-import re
 import warnings
 
 import matplotlib.pyplot as plt
@@ -13,13 +12,13 @@ from abc import ABC, abstractmethod
 from matplotlib import cm, widgets
 from scipy.spatial import distance
 from textwrap import dedent
-from typing import Any, Iterable
+from typing import Iterable
 
-from .core import Energy, ExchangeEnergy, Magnets, DipolarEnergy, ZeemanEnergy
+from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
-from .io import Inputter, OutputReader, RandomBinaryDatastream, FieldInputter, PerpFieldInputter, RandomUniformDatastream, RegionalOutputReader
+from .io import Datastream, ScalarDatastream, IntegerDatastream, BinaryDatastream, Inputter, OutputReader, FieldInputter, RandomScalarDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, save_plot, show_m
-from .utils import asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
+from .utils import appropriate_SIprefix, asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -66,7 +65,7 @@ class Experiment(ABC):
 
 
 class Sweep(ABC):
-    def __init__(self, groups: Iterable[tuple[str]] = None, **kwargs): # kwargs can be anything to specify the sweeping variables and their values.
+    def __init__(self, groups: Iterable[tuple[str]] = None, names: dict[str, str] = None, units: dict[str, str] = None, **kwargs): # kwargs can be anything to specify the sweeping variables and their values.
         """ Sweep quacks like a generator yielding <Experiment> instances, or subclasses thereof.
             The purpose of a Sweep is to reliably generate a sequence of <Experiment>s in a consistent order.
             @param groups [iterable[tuple[str]]] (None): a tuple of tuples of strings. Each tuple represents a group:
@@ -77,6 +76,13 @@ class Sweep(ABC):
                 Example: groups=(('nx', 'ny'), ('res_x', 'res_y')) will cause the variables <nx> and <ny>
                     to sweep together, e.g. when <nx> is at its fourth value, <ny> will also be at its fourth value.
                     The same will go for <res_x> and <res_y> together, but they are independent of <nx> and <ny>.
+            @param names [dict[str, str]] (None): a dictionary whose keys are the parameters (i.e. **kwargs names),
+                and whose values are a readable name for said parameter. This is used in self.plot().
+                By default, if a parameter is not present in <names>, the its name in **kwargs is used.
+            @param units [dict[str, str]] (None): same as <names>, but now the values are the SI units of the parameter.
+                By default, if a parameter is not present in <units>, its unit is None.
+                Example: names={'a': "Lattice parameter", ...} and units={'a': "m", ...}
+
             Any additional keyword arguments (**kwargs) are interpreted as follows:
             If a kwarg is iterable then it is stored in self.variables as a sweeped variable,
                 unless it has length 1, in which case its only element is stored in self.constants.
@@ -102,16 +108,23 @@ class Sweep(ABC):
                 groups.append((k,))
         self.groups = tuple(groups) # Make immutable
         self._n_per_group = tuple([len(self.variables[group[0]]) for group in self.groups])
+        self._n = np.prod(self._n_per_group)
 
         for group in self.groups: # Check that vars in a single group have the same sweeping length
             l = [len(self.variables[key]) for key in group]
             if not l.count(l[0]) == len(l):
                 raise ValueError(f"Not all elements of {group} have same sweeping length: {l} respecitvely.")
 
+        ## Utility attributes: names and units
+        if names is None: names = {}
+        if units is None: units = {}
+        self.names = {paramname: names.get(paramname, paramname) for paramname in self.parameters.keys()}
+        self.units = {paramname: units.get(paramname, None) for paramname in self.parameters.keys()}
+
         ## Attempt creating an experiment, to see if the sweep works correctly
         try:
             _, self._example_experiment = self.get_iteration(0)
-        except Exception as e:
+        except Exception:
             raise RuntimeError("The sweep does not correctly generate Experiment instances.")
 
     @abstractmethod
@@ -127,7 +140,7 @@ class Sweep(ABC):
         except TypeError: return (iterable,)
 
     def __len__(self) -> int:
-        return np.prod(self._n_per_group)
+        return self._n
 
     @property
     def info(self):
@@ -138,6 +151,7 @@ class Sweep(ABC):
             self._info = self.__doc__
             if self._info is None: self._info = self.__init__.__doc__
             if self._info is None: self._info = "No specific information about this sweep was provided."
+            self._info = dedent(self._info).strip()
         return self._info
     
     @info.setter
@@ -151,13 +165,17 @@ class Sweep(ABC):
         for i in range(len(self)):
             yield self.get_iteration(i)
 
-    def get_iteration(self, i: int):
-        """ Basically returns one iteration of the self.__iter__() generator, the <i>th that would normally be generated. """
-        index = np.unravel_index(i, self._n_per_group)
-        vars = {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
+    def get_iteration(self, i: int) -> tuple[dict, Experiment]:
+        """ Returns one iteration of the self.__iter__() generator, the <i>th (zero-indexed) that would normally be generated. """
+        vars = self.get_iteration_vars(i)
         params = vars | self.constants
         experiment = self.create_experiment(params)
         return (vars, experiment)
+    
+    def get_iteration_vars(self, i: int) -> dict:
+        """ Returns a dictionary with the values of all variables in iteration <i> (zero-indexed). """
+        index = np.unravel_index(i, self._n_per_group)
+        return {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
 
     def as_metadata_dict(self):
         return {
@@ -169,6 +187,7 @@ class Sweep(ABC):
                 'inputter': full_obj_name(self._example_experiment.inputter),
                 'outputreader': full_obj_name(self._example_experiment.outputreader)
             },
+            'paramnames': {paramname: (self.names[paramname], self.units[paramname]) for paramname in self.parameters.keys()},
             'parameters': self.parameters,
             'groups': self.groups
         }
@@ -181,38 +200,56 @@ class Sweep(ABC):
             @param save [bool|str] (True): if truthy, the results are saved to a file.
                 If specified as a string, the base name of this saved file is this string.
         """
+        if return_savepath and not save: raise ValueError("Can not have return_savepath=True if save=False.")
         dir = os.path.normpath(dir)
         savedir = os.path.dirname(dir)
         savename = os.path.basename(dir)
 
-        data = Data.load_collection(dir, verbose=verbose) # Load all the iterations' data into one large object
+        df = pd.DataFrame() # Here we will put all the final results of all the iterations in
+        varnames = [key for key in self.variables.keys()]
+        vars_iterations = [self.get_iteration_vars(i) for i in range(len(self))]
+        found_iterations = []
+        datafiles = [os.path.join(dir, path) for path in os.listdir(dir) if path.endswith('.json')]
 
-        df = pd.DataFrame()
-        vars: dict
-        experiment: Experiment
-        for i, (vars, experiment) in enumerate(self):
-            if verbose and is_significant(i, len(self)): print(f"Calculating results of experiment {i+1} of {len(self)}...")
-            # 1) Select the part with <vars> in <data>
-            df_i = data.df.copy()
-            for varname, value in vars.items():
-                df_i = df_i.loc[np.isclose(df_i[varname], value, atol=0)]
-            # 2) Re-initialize <experiment> with this data
-            experiment.load_dataframe(df_i)
-            # 3) Calculate relevant metrics
+        # Note to self: parallelizing this for loop gives no performance gain
+        for filepath in datafiles: # We do not care about the order; self.plot() should take care of that for us.
+            try:
+                data_here = Data.load(filepath)
+                vars_here = {varname: data_here.constants[varname] for varname in varnames}
+            except Exception: continue # Then the file could not be loaded or does not contain the right variables
+            ## 1) We need to find the index that this file belongs to, so we can generate the appropriate Experiment
+            found = False
+            for i, vars_compare in enumerate(vars_iterations):
+                if all(np.isclose(vars_here[varname], vars_compare[varname], atol=0) for varname in varnames):
+                    vars, experiment = self.get_iteration(i)
+                    found_iterations.append(i)
+                    found = True
+                    break
+            if not found: continue
+            ## 2) Re-initialize <experiment> with this data and calculate metrics
+            if verbose: print(f"Calculating results of iteration {i}/{len(datafiles)}... ({filepath})")
+            experiment.load_dataframe(data_here.df)
             experiment.calculate_all(ignore_errors=False) # TODO: add a way to pass kwargs to this method without hardcoding ignore_errors
-            # 4) Save these <experiment.results> and <vars> to a dataframe that we are calculating on the fly
+            ## 3) Put these <experiment.results> and <vars> into a nice df representation 
             all_info = vars | experiment.results
             for key, value in all_info.items():
                 if isinstance(value, xp.ndarray): all_info[key] = [value] # Otherwise it is treated as an array
-            df = pd.concat([df, pd.DataFrame(data=all_info, index=[0])], ignore_index=True)
+            df = pd.concat([df, pd.DataFrame(data=all_info, index=[i])], ignore_index=True)
+        data = Data(df, constants=data_here.constants, metadata=data_here.metadata)
 
-        data = Data(df, constants=data.constants, metadata=data.metadata)
+        ## Check if all iterations were unique and all iterations were found, otherwise warn a warning
+        if not data.df.index.is_unique:#len(found_iterations) > len(set(found_iterations)):
+            warnings.warn(f"Some iteration(s) was/were found multiple times in {dir}!", stacklevel=2)
+        if len(found_iterations) != len(self):
+            warnings.warn(f"Some iteration(s) was/were not found in {dir}!", stacklevel=2)
+
+        ## Save or return the results
         if save: save = data.save(dir=savedir, name=savename, timestamp=False)
-        return save if (return_savepath and save) else data
+        return save if return_savepath else data
     
     def plot(self, summary_files, param_x=None, param_y=None, unit_x=None, unit_y=None, transform_x=None, transform_y=None, name_x=None, name_y=None, title=None, save=True, plot=True, metrics_dict=None):
         """ Generic function to plot the results of a sweep in a general way.
-            @param summary_file [list(str)]: list of path()s to file(s) as generated by Sweep.load_results().
+            @param summary_files [list(str)]: list of path()s to file(s) as generated by Sweep.load_results().
                 If more than one such file is passed on, multiple sweeps' metrics are averaged. This is for example
                 useful when there is a random energy barrier that needs to be sampled many times for a correct distribution.
             @param param_x, param_y [str] (None): the column names of the sweeped parameters
@@ -244,6 +281,12 @@ class Sweep(ABC):
                     param_y = colname
                     break
         is_2D = param_y is not None
+
+        ## Units and names
+        if unit_x is None: unit_x = self.units[param_x]
+        if unit_y is None: unit_y = self.units[param_y]
+        if name_x is None: name_x = self.names[param_x]
+        if name_y is None: name_y = self.names[param_y]
 
         ## Load data and extract metrics
         all_metrics = [0 for _ in range(n)]
@@ -281,12 +324,10 @@ class Sweep(ABC):
         fig = plt.figure(figsize=(3.3*n, 3.5))
 
         if transform_x is not None: x_vals = transform_x(x_vals)
-        if name_x is None: name_x = param_x
         x_lims = [(3*x_vals[0] - x_vals[1])/2] + [(x_vals[i+1] + x_vals[i])/2 for i in range(len(x_vals)-1)] + [3*x_vals[-1]/2 - x_vals[-2]/2]
 
         if is_2D:
             if transform_y is not None: y_vals = transform_y(y_vals)
-            if name_y is None: name_y = param_y
             y_lims = [(3*y_vals[0] - y_vals[1])/2] + [(y_vals[i+1] + y_vals[i])/2 for i in range(len(y_vals)-1)] + [3*y_vals[-1]/2 - y_vals[-2]/2]
             X, Y = np.meshgrid(x_vals, y_vals)
 
@@ -331,16 +372,14 @@ class KernelQualityExperiment(Experiment):
                 Johannes H. Jensen and Gunnar Tufte. Reservoir Computing in Artificial Spin Ice. ALIFE 2020.
             to implement a similar simulation to determine the kernel-quality K and generalization-capability G.
         """
-        super().__init__(inputter, outputreader, mm)
-        if not self.inputter.datastream.is_binary: # This is necessary for the (admittedly very bad) way that the inputs are recorded into a dataframe now
+        super().__init__(inputter, outputreader, mm) # TODO: allow float datastreams as well
+        if not isinstance(self.inputter.datastream, BinaryDatastream): # This is necessary for the (admittedly very bad) way that the inputs are recorded into a dataframe now
             raise AttributeError("KernelQualityExperiment should be performed with a binary datastream only.")
         self.n_out = self.outputreader.n
         self.results = {'K': None, 'G': None, 'k': None, 'g': None} # Kernel-quality and Generalization-capability, and their normalized counterparts
 
     def run(self, input_length: int = 100, constant_fraction: float = 0.6, pattern=None, verbose=False):
-        """ @param input_length [int]: the number of times inputter.input_single() is called,
-                before every recording of the output state.
-        """
+        """ @param input_length [int]: the number of inputter.input() calls before each recording of the output state. """
         if verbose: log("Calculating kernel-quality K.")
         self.run_K(input_length=input_length, verbose=verbose, pattern=pattern)
         if verbose: log("Calculating generalization-capability G.")
@@ -356,7 +395,7 @@ class KernelQualityExperiment(Experiment):
             for j in range(input_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
                     log(f"Row {i+1}/{self.n_out}, value {j+1}/{input_length}...")
-                val = self.inputter.input_single(self.mm)
+                val = self.inputter.input(self.mm)
                 self.all_inputs_K[i] += str(int(val))
 
             state = self.outputreader.read_state()
@@ -377,12 +416,12 @@ class KernelQualityExperiment(Experiment):
             for j in range(random_length):
                 if verbose and is_significant(i*input_length + j, input_length*self.n_out, order=1):
                     log(f"Row {i+1}/{self.n_out}, random value {j+1}/{random_length}...")
-                val = self.inputter.input_single(self.mm)
+                val = self.inputter.input(self.mm)
                 self.all_inputs_G[i] += str(int(val))
             for j, value in enumerate(constant_sequence):
                 if verbose and is_significant(i*input_length + j + random_length, input_length*self.n_out, order=1):
                     log(f"Row {i+1}/{self.n_out}, constant value {j+1}/{constant_length}...")
-                constant = self.inputter.input_single(self.mm, value=float(value))
+                constant = self.inputter.input(self.mm, float(value))
                 self.all_inputs_G[i] += str(int(constant))
 
             state = self.outputreader.read_state()
@@ -428,8 +467,8 @@ class KernelQualityExperiment(Experiment):
             self.all_states_K = xp.array([[1]]*len(df_K))
             self.all_states_G = xp.array([[1]]*len(df_G))
         else:
-            self.all_states_K = xp.asarray(df_K['y'])
-            self.all_states_G = xp.asarray(df_G['y'])
+            self.all_states_K = xp.asarray([xp.asarray(readout) for readout in df_K['y']])
+            self.all_states_G = xp.asarray([xp.asarray(readout) for readout in df_G['y']])
         self.all_inputs_K = list(df_K['inputs'])
         self.all_inputs_G = list(df_G['inputs'])
 
@@ -452,8 +491,6 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
             to implement task-agnostic metrics for reservoir computing using a single random input signal.
         """
         super().__init__(inputter, outputreader, mm)
-        if self.inputter.datastream.is_binary:
-            warnings.warn("A TaskAgnosticExperiment might not work properly for a binary datastream.", stacklevel=2)
         self.initial_state = self.outputreader.read_state().reshape(-1)
         self.n_out = self.outputreader.n
         self.results = {'NL': None, 'NL_local': None, 'MC': None, 'MC_local': None, 'S': None, 'S_local': None}
@@ -465,13 +502,13 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
                 object. Otherwise, a minimalistic hotspice.ASI.OOP_Square() instance is used.
         """
         if mm is None: mm = OOP_Square(1, 10, energies=(DipolarEnergy(), ZeemanEnergy()))
-        datastream = RandomUniformDatastream(low=-1, high=1)
+        datastream = RandomScalarDatastream(low=-1, high=1)
         inputter = FieldInputter(datastream)
         outputreader = RegionalOutputReader(2, 2, mm)
         return cls(inputter, outputreader, mm)
 
     def run(self, N=1000, pattern=None, verbose=False):
-        """ @param N [int]: The total number of <self.inputter.input_single()> iterations performed.
+        """ @param N [int]: The total number of <self.inputter.input()> iterations performed.
             @param pattern [str] (None): The state that <self.mm> is initialized in. If not specified,
                 the ground state of the spin ice geometry is used.
             @param verbose [int] (False): If 0, nothing is printed or plotted.
@@ -487,14 +524,13 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
                 fig = None
             log(f"[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...")
         self.mm.relax()
-        self.initial_state = self.outputreader.read_state() # TODO: change to self.mm.m.copy()? (issue: plotting S_local might get harder then because we need the correct mm geometry then when recalling it after something had been saved)
-
+        self.initial_state = self.outputreader.read_state().copy() # TODO: is copying the right way to solve our problems?
         # Run the simulation for <N> steps where each step consists of <inputter.n> full Monte Carlo steps.
         self.u = xp.zeros(N) # Inputs
         self.y = xp.zeros((N, self.n_out)) # Outputs
         for i in range(N):
-            self.u[i] = self.inputter.input_single(self.mm)
-            self.y[i,:] = self.outputreader.read_state()
+            self.u[i] = self.inputter.input(self.mm)
+            self.y[i,:] = self.outputreader.read_state().copy()
             if verbose:
                 if verbose > 1: fig = show_m(self.mm, figure=fig)
                 if is_significant(i, N):
@@ -503,7 +539,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
 
         # Relax and store the final state
         self.mm.relax()
-        self.final_state = self.outputreader.read_state()
+        self.final_state = self.outputreader.read_state().copy()
         # Still need to call self.calculate_all() manually after this method.
 
     def calculate_all(self, ignore_errors=False, **kwargs):
@@ -529,11 +565,13 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
                 to evaluate the metrics. The remaining 1-<test_fraction> are used to train the estimators.
         """
         if verbose: log(f"Calculating NL_local...")
-
-        train_test_cutoff = math.ceil(self.u.size*(1 - test_fraction))
+        u = self.u
+        y = self.y
+        
+        train_test_cutoff = math.ceil(u.size*(1 - test_fraction))
         if train_test_cutoff < k: raise ValueError(f"Nonlinearity: size of training set ({train_test_cutoff}) must be >= k ({k}).")
-        u_train_strided, u_test_strided = xp.split(strided(self.u, k), [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
-        y_train, y_test = xp.split(self.y, [train_test_cutoff])
+        u_train_strided, u_test_strided = xp.split(strided(u, k), [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
+        y_train, y_test = xp.split(y, [train_test_cutoff])
 
         Rsq = xp.empty(self.n_out) # R² correlation coefficient for each output node
         for j in range(self.n_out): # Train an estimator for the j-th output node
@@ -661,7 +699,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
 class IODistanceExperiment(Experiment):
     # TODO: try some distance metric that weighs more recent bits more? Or some memory-like distance like that
     def __init__(self, inputter: Inputter, outputreader: OutputReader, mm: Magnets):
-        if not inputter.datastream.is_binary: raise ValueError("IODistanceExperiment must use an inputter with a binary datastream.")
+        if not isinstance(inputter.datastream, BinaryDatastream): raise ValueError("IODistanceExperiment must use an inputter with a binary datastream.")
         super().__init__(inputter, outputreader, mm)
     
     def run(self, N=10, input_length=100, verbose=False):
@@ -674,9 +712,8 @@ class IODistanceExperiment(Experiment):
         for i in range(N):
             for j in range(input_length):
                 if verbose and is_significant((iter := i*input_length + j), N*input_length): log(f"Inputting bit ({i}, {j}) of ({N}, {input_length})...")
-                value = self.inputter.datastream.get_next()
-                self.inputter.input_single(self.mm, value=value)
-                self.input_sequences[i, j] = value
+                value = self.inputter.input(self.mm)
+                self.input_sequences[i, j] = value # Works if value is scalar or size-1 array, which it should be
             self.output_sequences[i,:] = self.outputreader.read_state().reshape(-1)
         # Still need to call self.calculate_all() manually after this method.
     
