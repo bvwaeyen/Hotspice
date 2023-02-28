@@ -361,6 +361,23 @@ class Sweep(ABC):
         if plot:
             plt.show()
 
+@dataclass
+class SweepMetricPlotparams:
+    ''' Stores some parameters to correctly plot the metrics belonging to a certain experiment.
+        @param full_name [str]: A human-readable name for the metric.
+        @param data_extractor [function]: A function that takes one argument, namely a Data object.
+            It returns a DataFrame column with the metric. Usually, this will just be a column from Data().df.
+            The simplest example of this would be something like "lambda data: data[<column_of_metric>]".
+            Combinations of columns are also possible, e.g. "lambda data: data[<some_metric>] - data[<other_metric>]".
+        @param min_value [float] (None): The minimum value that the metric can be.
+        @param max_value [float] (None): The maximum value that the metric can be.
+        If <min_value> or <max_value> are None, the plot is simply scaled to the min/max values throughout the sweep.
+    '''
+    full_name: str # e.g.: 'Nonlinearity'
+    data_extractor: Callable # e.g.: lambda data: data['NL']
+    min_value: float = None # e.g.: 0
+    max_value: float = None # e.g.: 1
+
 
 ######## Below are subclasses of the superclasses above
 
