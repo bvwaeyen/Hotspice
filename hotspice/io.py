@@ -73,6 +73,9 @@ class Inputter(ABC):
         for value in inputs: self.input_single(mm, value)
         return values
 
+    def remove_stimulus(self, mm: Magnets):
+        mm.get_energy('Zeeman').magnitude = 0
+
     @abstractmethod
     def input_single(self, mm: Magnets, value: float|int|bool):
         """ Applies a certain stimulus onto the <mm> simulation depending on the scalar <value>. """
@@ -460,6 +463,20 @@ class OOPSquareChessStepsInputter(Inputter):
         self.frequency = frequency
         self.transform = self.get_transform_func()
     
+    def input_single(self, mm: OOP_Square, value: float|int|bool):
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+
+        magnitude = self.transform(value)
+        AFM_mask = ((mm.ixx + mm.iyy) % 2).astype(float) # Need astype float for correct multiplication
+        AFM_mask_step1 = AFM_mask*magnitude # 0 and 1 on a checkerboard pattern
+        AFM_mask_step2 = (AFM_mask - 1)*magnitude # -1 and 0 checkerboard pattern, with 0s on other spots w.r.t. step 1
+
+        Zeeman.set_field(magnitude=AFM_mask_step1)
+        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+        Zeeman.set_field(magnitude=AFM_mask_step2)
+        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+
     def get_transform_func(self):
         if isinstance(self.datastream, (BinaryDatastream, IntegerDatastream)):
             return lambda bit: (2*bit - 1)*self.magnitude
@@ -479,17 +496,3 @@ class OOPSquareChessStepsInputter(Inputter):
         if value > 1 - s:
             return self.magnitude + (value - 1)*self.magnitude_range/s
         return 2*(self.magnitude - self.magnitude_range)/self.transition_range*(value - 0.5)
-
-    def input_single(self, mm: OOP_Square, value: float|int|bool):
-        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
-        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
-
-        magnitude = self.transform(value)
-        AFM_mask = ((mm.ixx + mm.iyy) % 2).astype(float) # Need astype float for correct multiplication
-        AFM_mask_step1 = AFM_mask*magnitude # 0 and 1 on a checkerboard pattern
-        AFM_mask_step2 = (AFM_mask - 1)*magnitude # -1 and 0 checkerboard pattern, with 0s on other spots w.r.t. step 1
-
-        Zeeman.set_field(magnitude=AFM_mask_step1)
-        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-        Zeeman.set_field(magnitude=AFM_mask_step2)
-        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)

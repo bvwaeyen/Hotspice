@@ -527,7 +527,7 @@ class Magnets(ABC):
         # delta_E = self.switch_energy()
         # barrier = xp.where(delta_E > -2*self.E_B, xp.maximum(delta_E, self.E_B + delta_E/2), delta_E)/self.occupation
         with np.errstate(invalid='ignore', divide='ignore'): # Ignore the divide-by-zero warning that will follow, as it is intended
-            barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
+            barrier = xp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)/self.occupation # To correctly account for the situation where energy barrier disappears
         minBarrier = xp.nanmin(barrier)
         barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
@@ -685,7 +685,7 @@ class Magnets(ABC):
         """ Records E_tot, t, T_avg and m_avg as they were last calculated. This default behavior can be overruled: if
             passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T_avg|m_avg> value(s).
         """
-        self.history.entry()
+        self.history.entry(self)
         if E_tot is not None: self.history.E[-1] = float(E_tot)
         if t is not None: self.history.t[-1] = float(t)
         if T_avg is not None: self.history.T[-1] = float(T_avg)

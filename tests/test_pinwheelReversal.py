@@ -80,7 +80,7 @@ class test_pinwheelReversal:
             elif self.scheme == 'Néel':
                 self.mm.update()
             self.mm.get_energy('Zeeman').set_field(magnitude=H)
-            self.mm.history.entry()
+            self.mm.history.entry(self.mm)
             m_avg_H[i] = self.mm.m_avg_x*math.cos(angle) + self.mm.m_avg_y*math.sin(angle) # Along the directon of the ext field
             if thresholds.pass_check(self.mm.m_avg_x):
                 if verbose: print(f"[{i+1}/{H_range.size}] H = {H:.2e} T, m_x={self.mm.m_avg_x:.2f} (threshold passed{', plotting magnetization...' if show_intermediate else ''})")

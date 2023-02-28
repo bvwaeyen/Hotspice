@@ -536,6 +536,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         if verbose > 1: close_interactive(fig) # Close the realtime figure as it is no longer needed
 
         # Relax and store the final state
+        self.inputter.remove_stimulus(self.mm)
         self.mm.relax()
         self.final_state = self.outputreader.read_state().copy()
         # Still need to call self.calculate_all() manually after this method.
@@ -700,7 +701,7 @@ class IODistanceExperiment(Experiment):
         if not isinstance(inputter.datastream, BinaryDatastream): raise ValueError("IODistanceExperiment must use an inputter with a binary datastream.")
         super().__init__(inputter, outputreader, mm)
     
-    def run(self, N=10, input_length=100, verbose=False):
+    def run(self, N=10, input_length=100, pattern=None, verbose=False):
         """ Performs some input sequences and records the output after each sequence.
             @param N [int] (10): The number of distinct input sequences whose distances will be compared.
             @param input_length [int] (100): The number of bits in each input sequence.
@@ -708,6 +709,7 @@ class IODistanceExperiment(Experiment):
         self.input_sequences = xp.zeros((N, input_length), dtype=self.inputter.datastream.dtype) # dtype provided for faster pdist if possible
         self.output_sequences = xp.zeros((N, self.outputreader.n))
         for i in range(N):
+            self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
             for j in range(input_length):
                 if verbose and is_significant((iter := i*input_length + j), N*input_length): log(f"Inputting bit ({i}, {j}) of ({N}, {input_length})...")
                 value = self.inputter.input(self.mm)
