@@ -3,6 +3,8 @@ import math
 import matplotlib
 import os
 import warnings
+import tkinter as tk
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,8 +12,8 @@ import numpy as np
 from enum import Enum
 from matplotlib import cm, colors, patches, widgets
 
-from .core import Magnets
-from .utils import asnumpy, SIprefix_to_mul
+from .core import Magnets, ZeemanEnergy
+from .utils import asnumpy, SIprefix_to_mul, J_to_eV, eV_to_J
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -492,6 +494,285 @@ def save_plot(save_path: str, ext=None):
         plt.savefig(save_path)
     except PermissionError:
         warnings.warn(f"Could not save to {save_path}, probably because the file is opened somewhere else.", stacklevel=2)
+
+
+class RealTime():
+
+    def __init__(self, mm: Magnets, compass=True, colorbar=True, T_range=(1,10000),
+                 E_B_range=(0, eV_to_J(200)), moment_range=(0, 2*800e3*2e-22),
+                 H_range=(0,100e-3), angle_range=(0, 2*math.pi)):
+        """
+        Object capable of simulation and plotting in real time
+        @param mm: magnets to simulate
+        @param compass: whether or not to add a compass indicator
+        @param colorbar: whether or not to add a colorbar indicating angles
+        Following ranges should be specified in SI units
+        @param T_range: temperature slider range (T_min, T_max), can be None if unwanted
+        @param E_B_range: energy barrier slider range (E_B_min, E_B_max), can be None if unwanted
+        @param moment_range: moment slider range (moment_min, moment_min), can be None if unwanted
+        @param H_range: magnetic field magnitude slider range (H_min, H_max), can be None if unwanted, but is needed for a compass
+        @param anglerange: angle slider range (angle_min, angle_max), can be None if unwanted
+        """
+
+        # self all arguments, all in SI units
+        self.mm = mm
+        self.compass = compass if H_range is not None else False  # compass needs H_max
+        self.colorbar = colorbar
+        if T_range is not None: self.T_min, self.T_max = T_range
+        if E_B_range is not None: self.E_B_min, self.E_B_max = E_B_range
+        if moment_range is not None: self.moment_min, self.moment_max = moment_range
+        if H_range is not None: self.H_min, self.H_max = H_range
+        if angle_range is not None: self.angle_min, self.angle_max = angle_range
+
+
+        # make sure there is zeeman energy
+        if self.mm.get_energy('Zeeman') is None: mm.add_energy(ZeemanEnergy(0, 0))
+        self.zeeman = mm.get_energy("zeeman")
+
+        # vanity parameters
+        self.slider_length = 500  # in widths of character 0
+        self.slider_density = 100
+        self.tick_density = 4
+        self.plt_pause = 0.01  # in seconds, pausing to give plot time to catch up
+        self.response_time = 0.02  # in seconds, checks and updates user input every response_time instead of every loop
+        self.imshow_kwargs = {"cmap": 'hsv', "origin": 'lower', "vmin": 0, "vmax": 2 * math.pi,
+                              "interpolation": 'antialiased', "interpolation_stage": 'rgba'}
+        self.compass_frac = 8  # added even if compass=False, can then be easily modified later
+        self.compass_x, self.compass_y = -self.mm.nx/self.compass_frac - 1, self.mm.ny/self.compass_frac
+        self.compass_amp = self.mm.nx/self.compass_frac
+
+        # initialization of non-variables
+        self.init_interface()
+        self.init_plot()
+
+
+    def init_interface(self):
+        """
+        Initializes everything to do with tkinter. Run this again if you change parameters manually.
+        """
+
+        # window
+        self.window = tk.Tk()
+        self.window.title("Hotspice Interface")
+        self.window.protocol("WM_DELETE_WINDOW", self.exit)
+
+        # control
+        control_frame = tk.Frame(self.window)
+        # pause/unpause button
+        self.play_button = tk.Button(control_frame, text="⏸", command=self.pause_unpause)
+        self.play_button.pack(side=tk.LEFT, expand=True)
+        # time keeping
+        self.time_label = tk.Label(control_frame, text="")
+        self.time_label.pack(side=tk.LEFT, expand=True)
+        # update scheme choice
+        tk.OptionMenu(control_frame, tk.StringVar(value=self.mm.params.UPDATE_SCHEME), "Glauber", "Néel", "Wolff",
+                      command=self.update_update_scheme).pack(side=tk.LEFT, expand=True)
+        # PBC checkbox
+        self.PBC_checkbutton = tk.Checkbutton(control_frame, text="PBC", command=self.update_PBC,
+                                              variable=tk.IntVar(name="PBC"), onvalue=True, offvalue=False)
+        self.PBC_checkbutton.setvar("PBC", self.mm.PBC)  # needed separately, otherwise not correctly displayed
+        self.PBC_checkbutton.pack(side=tk.LEFT, expand=True)
+        control_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+
+        # inialization buttons
+        button_frame = tk.Frame(self.window)
+        tk.Label(button_frame, text="Initialize:").pack(side=tk.TOP)
+        tk.Button(button_frame, text="random", command=lambda: self.initialize_m("random")).pack(side=tk.LEFT)
+        tk.Button(button_frame, text="uniform", command=lambda: self.initialize_m("uniform")).pack(side=tk.LEFT)
+        tk.Button(button_frame, text="AFM", command=lambda: self.initialize_m("AFM")).pack(side=tk.LEFT)
+        tk.Button(button_frame, text="vortex", command=lambda: self.initialize_m("vortex")).pack(side=tk.LEFT)
+        tk.Button(button_frame, text="groundstate", command=lambda: self.initialize_m(self.mm._get_groundstate())).pack(side=tk.LEFT)
+        button_frame.pack()
+
+        # sliders
+        # why try and except? If min and max are not set (correctly), don't add the slider
+        # E_B slider in eV
+        try:
+            barrier_slider = tk.Scale(self.window,  length=self.slider_length, orient=tk.HORIZONTAL,
+                                      label="E_B (eV)", from_=J_to_eV(self.E_B_min), to=J_to_eV(self.E_B_max),
+                                      tickinterval=J_to_eV(self.E_B_max - self.E_B_min)/self.tick_density,
+                                      resolution=J_to_eV(self.E_B_max - self.E_B_min)/self.slider_density,
+                                      command=self.update_barrier)
+            barrier_slider.set(J_to_eV(self.mm.E_B_avg))
+            barrier_slider.pack()
+        except:
+            pass
+
+        # moment slider in eV/mT
+        try:
+            moment_slider = tk.Scale(self.window, length=self.slider_length, orient=tk.HORIZONTAL,
+                                     label="moment (eV/mT)", from_=J_to_eV(self.moment_min) / 1000,
+                                     to=J_to_eV(self.moment_max) / 1000,
+                                     tickinterval=J_to_eV(self.moment_max - self.moment_min) / 1000 / self.tick_density,
+                                     resolution=J_to_eV(self.moment_max - self.moment_min) / 1000 / self.slider_density,
+                                     command=self.update_moment)
+            moment_slider.set(J_to_eV(self.mm.moment_avg)/1000)
+            moment_slider.pack()
+        except:
+            pass
+
+        # T slider in K
+        try:
+            temperature_slider = tk.Scale(self.window, length=self.slider_length, orient=tk.HORIZONTAL,
+                                          label="T (K)", from_=self.T_min, to=self.T_max,
+                                          tickinterval=(self.T_max - self.T_min)/self.tick_density,
+                                          resolution=(self.T_max - self.T_min)/self.slider_density,
+                                          command=self.update_temperature)
+            temperature_slider.set(self.mm.T_avg)
+            temperature_slider.pack()
+        except:
+            pass
+
+        # H slider in mT
+        try:
+            magnetic_slider = tk.Scale(self.window, length=self.slider_length, orient=tk.HORIZONTAL,
+                                       label="H (mT)", from_=self.H_min*1000, to=self.H_max*1000,
+                                       tickinterval=(self.H_max - self.H_min)/self.tick_density *1000,
+                                       resolution=(self.H_max - self.H_min)/self.slider_density *1000,
+                                       command=self.update_magnetic_field)
+            magnetic_slider.set(self.zeeman._magnitude * 1000)
+            magnetic_slider.pack()
+        except:
+            pass
+
+        # angle slider in °
+        try:
+            angle_slider = tk.Scale(self.window,  length=self.slider_length, orient=tk.HORIZONTAL,
+                                    label="Angle (degrees)", from_=self.angle_min*180/math.pi, to=self.angle_max*180/math.pi,
+                                    tickinterval=(self.angle_max - self.angle_min)/self.tick_density*180/math.pi, command=self.update_angle)
+            angle_slider.set(self.zeeman._angle * 180 / math.pi)
+            angle_slider.pack()
+        except:
+            pass
+
+    def init_plot(self):
+        """
+        Initializes everything matplotlib. Run this again if you change parameters manually.
+        """
+
+        self.fig, self.ax = plt.subplots()
+        self.ax.axis("off")
+
+        # first rgb for first image
+        self.avg = Average.resolve(True, self.mm)  # only needs to compute this once
+        rgb = get_rgb(self.mm, avg=self.avg, fill=True)
+        self.im = self.ax.imshow(rgb, **self.imshow_kwargs)  # will be updated continually
+
+        # colorbar
+        if self.colorbar:
+            cbar = self.fig.colorbar(self.im, ticks=[a*math.pi/4 for a in range(0, 9)])
+            cbar.ax.set_yticklabels([f"{a * 45}$^\circ$" for a in range(0,9)])
+
+        # compass
+        if self.compass:
+            self.arrow = self.ax.arrow(self.compass_x, self.compass_y,
+                                       self.zeeman._magnitude / self.H_max * self.compass_amp * math.cos(self.zeeman._angle),
+                                       -self.zeeman._magnitude / self.H_max * self.compass_amp * math.sin(self.zeeman._angle),
+                                       color=colors.hsv_to_rgb((self.zeeman._angle/2/math.pi, 1, 1)), width=self.mm.nx/self.compass_frac/20)
+            self.ax.add_patch(plt.Circle((self.compass_x, self.compass_y), self.compass_amp, color="k", fill=False))
+
+    def exit(self):
+        self.running = False
+
+    def pause_unpause(self, simulating=None):
+        # starts and stops the simulation without exiting the program
+        if simulating is None:
+            self.simulating = not self.simulating
+        else:
+            self.simulating = simulating
+
+        # update button
+        if self.simulating:
+            self.play_button.config(text="⏸")
+        else:
+            self.play_button.config(text="⏵")
+
+    def update_magnetic_field(self, value):
+        # value (str) in mT to magnitude in T
+        H = float(value) / 1000
+        self.zeeman.set_field(magnitude=H)
+        if self.compass:  # update compass too
+            self.arrow.set_data(dx=H / self.H_max * self.compass_amp * math.cos(self.zeeman._angle),
+                                dy=H / self.H_max * self.compass_amp * math.sin(self.zeeman._angle))
+
+    def update_angle(self, value):
+        # value (str) in degrees to angle in radians
+        angle = float(value) / 180 * math.pi
+        self.zeeman.set_field(angle=angle)
+        if self.compass:  # update compass too
+            self.arrow.set_data(dx=self.zeeman._magnitude / self.H_max * self.compass_amp * math.cos(angle),
+                                dy=self.zeeman._magnitude / self.H_max * self.compass_amp * math.sin(angle))
+            self.arrow.set(color=colors.hsv_to_rgb((angle/2/math.pi, 1, 1)))  # color too
+
+    def update_temperature(self, value):
+        # value (str) in Kelvin
+        self.mm.T = float(value)
+
+    def update_barrier(self, value):
+        # value (str) in eV to E_B in Joules
+        self.mm.E_B = eV_to_J(float(value))
+
+    def update_moment(self, value):
+        # value (str) in eV/mT
+        self.mm.moment = eV_to_J(float(value)) * 1000
+
+    def update_update_scheme(self, update_scheme):
+        self.mm.params.UPDATE_SCHEME = update_scheme
+
+    def update_PBC(self):
+        self.mm.PBC = self.PBC_checkbutton.getvar("PBC")
+
+    def draw_mm(self):
+        # updates image and pauses matplotlib to catch up
+        rgb = get_rgb(self.mm, avg=self.avg, fill=True)
+        self.im.set_array(rgb)
+        plt.pause(self.plt_pause)  # not strictly needed, but looks way better if present
+
+    def initialize_m(self, pattern):
+        # initializes mm to pattern and redraws it
+        self.mm.initialize_m(pattern=pattern)
+        self.draw_mm()
+
+    def update_time(self):
+        # Shows appropriate "time" in time_label
+        if self.mm.params.UPDATE_SCHEME == "Glauber" or self.mm.params.UPDATE_SCHEME == "Wolff":
+            # MCSteps
+            self.time_label.config(text=f"Monte Carlo Steps: {self.mm.MCsteps:.2f}")
+        elif self.mm.params.UPDATE_SCHEME == "Néel":
+            # time
+            self.time_label.config(text=f"Time: {self.mm.t * 1e9 :,.3f}ns")
+        else:
+            warnings.warn(f"New update scheme {self.mm.params.UPDATE_SCHEME} not known")
+
+    def run(self):
+        # Main function to run it all
+
+        plt.ion()  # magic real time function
+        plt.pause(self.plt_pause)  # initial pause for setup
+
+        self.running = True  # for running the main loop
+        self.pause_unpause(simulating=True)  # for updating the magnets
+
+        previous_time = time.time()
+        while self.running:
+
+            current_time = time.time()
+            passed_time = current_time - previous_time  # in seconds
+
+            if passed_time >= self.response_time:  # checks and updates user input every response_time instead of every loop
+                # stuff that needs to be real time
+                previous_time = current_time  # time tracking
+                self.update_time()
+                self.window.update()  # show update
+
+            if self.simulating:
+                flipped_spins = self.mm.update()  # always run simulation as fast as possible I suppose
+
+                try:
+                    if len(flipped_spins) > 0:  # something new to draw
+                        self.draw_mm()
+                except:
+                    pass
 
 
 if __name__ == "__main__":
