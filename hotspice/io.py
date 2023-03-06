@@ -296,7 +296,7 @@ class FullOutputReader(OutputReader):
         self.state = self.mm.m[self.indices]
         self._node_coords = xp.asarray([mm.xx[self.indices], mm.yy[self.indices]]).T
     
-    def read_state(self, mm: Magnets, m: xp.ndarray = None) -> xp.ndarray:
+    def read_state(self, mm: Magnets = None, m: xp.ndarray = None) -> xp.ndarray:
         super().read_state(mm)
         if m is None: m = self.mm.m
         self.state = m[self.indices]

@@ -14,6 +14,7 @@ from scipy.spatial import distance
 from textwrap import dedent
 from typing import Iterable
 
+import hotspice.coranking
 from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
 from .io import Datastream, ScalarDatastream, IntegerDatastream, BinaryDatastream, Inputter, OutputReader, FieldInputter, RandomScalarDatastream, RegionalOutputReader
@@ -702,7 +703,7 @@ class IODistanceExperiment(Experiment):
         if not isinstance(inputter.datastream, BinaryDatastream): raise ValueError("IODistanceExperiment must use an inputter with a binary datastream.")
         super().__init__(inputter, outputreader, mm)
     
-    def run(self, N=10, input_length=100, verbose=False):
+    def run(self, N=10, input_length=100, verbose=False, pattern = None):
         """ Performs some input sequences and records the output after each sequence.
             @param N [int] (10): The number of distinct input sequences whose distances will be compared.
             @param input_length [int] (100): The number of bits in each input sequence.
@@ -710,8 +711,9 @@ class IODistanceExperiment(Experiment):
         self.input_sequences = xp.zeros((N, input_length), dtype=self.inputter.datastream.dtype) # dtype provided for faster pdist if possible
         self.output_sequences = xp.zeros((N, self.outputreader.n))
         for i in range(N):
+            self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
             for j in range(input_length):
-                if verbose and is_significant((iter := i*input_length + j), N*input_length): log(f"Inputting bit ({i}, {j}) of ({N}, {input_length})...")
+                if verbose and is_significant((iter := i*input_length + j), N*input_length): log(f"Inputting bit ({i+1}, {j+1}) of ({N}, {input_length})...")
                 value = self.inputter.input(self.mm)
                 self.input_sequences[i, j] = value # Works if value is scalar or size-1 array, which it should be
             self.output_sequences[i,:] = self.outputreader.read_state().reshape(-1)
@@ -730,6 +732,7 @@ class IODistanceExperiment(Experiment):
         if output_metric_kwargs is None or not isinstance(output_metric_kwargs, dict): output_metric_kwargs = {}
         self.input_distances = distance.pdist(asnumpy(self.input_sequences), input_metric).reshape(-1)
         self.output_distances = distance.pdist(asnumpy(self.output_sequences), output_metric).reshape(-1)
+        self.coranking_matrix = hotspice.coranking.coranking_matrix(self.input_distances, self.output_distances)
     
     def to_dataframe(self):
         df = pd.DataFrame({'input_sequence': self.input_sequences, 'output_sequence': self.output_sequences})
@@ -742,11 +745,22 @@ class IODistanceExperiment(Experiment):
         self.calculate_all()
         return self.input_sequences, self.output_sequences
     
-    def plot(self, input_metric: str = None, output_metric: str = None):
-        plt.scatter(asnumpy(self.input_distances), asnumpy(self.output_distances))
-        plt.xlabel(f"Input distance ({self.input_metric if input_metric is None else input_metric})")
-        plt.ylabel(f"Output distance ({self.output_metric if output_metric is None else output_metric})")
-        plt.show()
+    def plot_shepard_diagram(self, input_metric: str = None, output_metric: str = None, show=True, **axes_set_kwargs):
+        fig, ax = plt.subplots()
+        ax.scatter(asnumpy(self.input_distances), asnumpy(self.output_distances))
+        ax.set_xlabel(f"Input distance ({self.input_metric if input_metric is None else input_metric})")
+        ax.set_ylabel(f"Output distance ({self.output_metric if output_metric is None else output_metric})")
+        if axes_set_kwargs: ax.set(**axes_set_kwargs)
+        if show: plt.show()
+        return fig
+
+    def plot_corankning_matrix(self, show=True, **axes_set_kwargs):
+        fig, ax = plt.subplots()
+        im = ax.imshow(self.coranking_matrix, cmap="gray_r", vmin=0, vmax=self.coranking_matrix.shape[0]+1)
+        fig.colorbar(im)
+        if axes_set_kwargs: ax.set(**axes_set_kwargs)
+        if show: plt.show()
+        return fig
     
     @staticmethod
     def get_plot_metrics(self):
