@@ -73,16 +73,13 @@ class Magnets(ABC):
         self._energies = list[Energy]() # Don't manually add anything to this, instead call self.add_energy()
         self.in_plane = in_plane
         self.nx, self.ny = int(nx), int(ny)
-        self.dx, self.dy = float(dx), float(dy)
-        self.xx, self.yy = xp.meshgrid(xp.linspace(0, self.dx*(self.nx-1), self.nx), xp.linspace(0, self.dy*(self.ny-1), self.ny)) # [m]
-        self.index = range(self.xx.size)
         self.ixx, self.iyy = xp.meshgrid(xp.arange(0, self.nx), xp.arange(0, self.ny))
-        self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
+        self.dx, self.dy = dx, dy
 
         # Main initialization steps to create the geometry
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
-        self.n = int(xp.sum(self.occupation)) # Number of magnets in the simulation
         self.nonzero = xp.asarray(xp.nonzero(self.occupation)).reshape(2, -1) # Indices of nonzero elements
+        self.n = int(xp.sum(self.occupation)) # Number of magnets in the simulation
         if self.n == 0: raise ValueError(f"Can not initialize {full_obj_name(self)} of size {self.nx}x{self.ny}, as this does not contain any spins.")
         if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
         self.unitcell = self._get_unitcell() # This needs to be after occupation and initialize_ip, and before any defects are introduced
@@ -163,7 +160,7 @@ class Magnets(ABC):
         """
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
         self.angles = (self._get_angles() + angle)*self.occupation
-        self.orientation = xp.zeros(self.xx.shape + (2,))
+        self.orientation = xp.zeros(self.ixx.shape + (2,))
         self.orientation[:,:,0] = xp.cos(self.angles)*self.occupation
         self.orientation[:,:,1] = xp.sin(self.angles)*self.occupation
 
@@ -284,11 +281,33 @@ class Magnets(ABC):
                 self._PBC = False
                 return
         self._PBC = bool(value)
-        if hasattr(self, 'energies'):
-            for energy in self._energies: energy.initialize(self)
+        for energy in self._energies: energy.initialize(self)
+
+    @property
+    def dx(self):
+        """ Spacing between cells along the x-axis, in meters. """
+        return self._dx
+    @dx.setter
+    def dx(self, value: float):
+        self._dx = float(value)
+        self.xx, _ = xp.meshgrid(xp.linspace(0, self._dx*(self.nx-1), self.nx), xp.arange(self.ny))
+        self.x_min, self.x_max = float(self.xx[0,0]), float(self.xx[-1,-1])
+        for energy in self._energies: energy.initialize(self)
+    
+    @property
+    def dy(self):
+        """ Spacing between cells along the y-axis, in meters. """
+        return self._dy
+    @dy.setter
+    def dy(self, value: float):
+        self._dy = float(value)
+        _, self.yy = xp.meshgrid(xp.arange(self.nx), xp.linspace(0, self._dy*(self.ny-1), self.ny))
+        self.y_min, self.y_max = float(self.yy[0,0]), float(self.yy[-1,-1])
+        for energy in self._energies: energy.initialize(self)
 
     @property
     def kBT(self) -> xp.ndarray:
+        """ Array representing the thermal energy k_B*T throughout the system. """
         return kB*self._T
 
     @property

@@ -36,11 +36,11 @@ class OOP_Square(OOP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ Out-of-plane ASI in a square arrangement. """
         self.a = a # [m] The distance between two nearest neighboring spins
-        if nx is None or ny is None:
-            if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
-        self.nx, self.ny = nx or n, ny or n
-        self.dx, self.dy = kwargs.pop('dx', a), kwargs.pop('dy', a)
-        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx, dy = kwargs.pop('dx', a), kwargs.pop('dy', a)
+        super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
 
     def _set_m(self, pattern: str):
         match str(pattern).strip().lower():
@@ -69,17 +69,14 @@ class OOP_Triangle(OOP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ Out-of-plane ASI on a triangular (hexagonal) lattice. """
         self.a = a # [m] The distance between two nearest neighboring spins
-        if nx is None or ny is None:
-            if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
-        self.nx = nx or n
+        if nx is None: nx = n
         if ny is None:
-            self.ny = int(self.nx/math.sqrt(3))//2*2 # Try to make the domain reasonably square-shaped
-            if not kwargs.get('PBC', False): self.ny -= 1 # Remove dangling spins if no PBC
-        else:
-            self.ny = ny
-        self.dx = kwargs.pop('dx', a/2)
-        self.dy = kwargs.pop('dy', math.sqrt(3)*self.dx)
-        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=False, **kwargs)
+            ny = int(nx/math.sqrt(3))//2*2 # Try to make the domain reasonably square-shaped
+            if not kwargs.get('PBC', False): ny -= 1 # Remove dangling spins if no PBC
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx = kwargs.pop('dx', a/2)
+        dy = kwargs.pop('dy', math.sqrt(3)*dx)
+        super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
 
     def _set_m(self, pattern: str):
         match str(pattern).strip().lower():
@@ -108,11 +105,11 @@ class IP_Ising(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with all spins on a square grid, all pointing in the same direction. """
         self.a = a # [m] The distance between two nearest neighboring spins
-        if nx is None or ny is None:
-            if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
-        self.nx, self.ny = nx or n, ny or n
-        self.dx, self.dy = kwargs.pop('dx', a), kwargs.pop('dy', a)
-        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx, dy = kwargs.pop('dx', a), kwargs.pop('dy', a)
+        super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str):
         match str(pattern).strip().lower():
@@ -144,11 +141,11 @@ class IP_Square(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with the spins placed on, and oriented along, the edges of squares. """
         self.a = a # [m] The side length of the squares (i.e. side length of a unit cell)
-        if nx is None or ny is None:
-            if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
-        self.nx, self.ny = nx or n, ny or n
-        self.dx, self.dy = kwargs.pop('dx', a/2), kwargs.pop('dy', a/2)
-        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx, dy = kwargs.pop('dx', a/2), kwargs.pop('dy', a/2)
+        super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str):
         match str(pattern).strip().lower():
@@ -194,11 +191,11 @@ class IP_SquareDiamond(IP_ASI):
             The entire domain does not, however, form a square, but rather a 'diamond'.
         """
         self.a = a # [m] The side length of the squares
-        if nx is None or ny is None:
-            if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
-        self.nx, self.ny = nx or n, ny or n
-        self.dx, self.dy = kwargs.pop('dx', a/math.sqrt(2)), kwargs.pop('dy', a/math.sqrt(2))
-        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx, dy = kwargs.pop('dx', a/math.sqrt(2)), kwargs.pop('dy', a/math.sqrt(2))
+        super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str):
         match str(pattern).strip().lower():
@@ -245,17 +242,14 @@ class IP_Kagome(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. """
         self.a = a # [m] The distance between opposing sides of a hexagon
-        if nx is None or ny is None:
-            if n is None: raise AttributeError("Must specify <n> if not both <nx> and <ny> are specified.")
-        self.nx = nx or n
+        if nx is None: nx = n
         if ny is None:
-            self.ny = int(self.nx/math.sqrt(3))//4*4 # Try to make the domain reasonably square-shaped
-            if not kwargs.get('PBC', False): self.ny -= 1 # Remove dangling spins if no PBC
-        else:
-            self.ny = ny
-        self.dx = kwargs.pop('dx', a/4)
-        self.dy = kwargs.pop('dy', math.sqrt(3)*self.dx)
-        super().__init__(self.nx, self.ny, self.dx, self.dy, in_plane=True, **kwargs)
+            ny = int(nx/math.sqrt(3))//4*4 # Try to make the domain reasonably square-shaped
+            if not kwargs.get('PBC', False): ny -= 1 # Remove dangling spins if no PBC
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx = kwargs.pop('dx', a/4)
+        dy = kwargs.pop('dy', math.sqrt(3)*dx)
+        super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str, angle=None):
         match str(pattern).strip().lower():

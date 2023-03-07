@@ -336,7 +336,10 @@ class Sweep(ABC):
         if is_2D:
             label_y = name_y if unit_y is None else f"{name_y} [{unit_y}]"
             for i, params in enumerate(metrics_dict.values()):
-                ax = fig.add_subplot(1, n, i+1)
+                try:
+                    ax = fig.add_subplot(1, n, i+1, sharex=ax, sharey=ax)
+                except NameError:
+                    ax = fig.add_subplot(1, n, i+1)
                 axes.append(ax)
                 ax.set_xlabel(label_x)
                 ax.set_ylabel(label_y)
