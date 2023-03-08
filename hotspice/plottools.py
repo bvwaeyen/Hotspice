@@ -526,8 +526,9 @@ class RealTime():
 
 
         # make sure there is zeeman energy
-        if self.mm.get_energy('Zeeman') is None: mm.add_energy(ZeemanEnergy(0, 0))
-        self.zeeman = mm.get_energy("zeeman")
+        if H_range is not None and angle_range is not None:
+            if self.mm.get_energy('Zeeman') is None: mm.add_energy(ZeemanEnergy(0, 0))
+            self.zeeman = mm.get_energy("zeeman")
 
         # vanity parameters
         self.slider_length = 500  # in widths of character 0
@@ -729,8 +730,9 @@ class RealTime():
         plt.pause(self.plt_pause)  # not strictly needed, but looks way better if present
 
     def initialize_m(self, pattern):
-        # initializes mm to pattern and redraws it
+        # initializes mm to pattern, resets time and redraws
         self.mm.initialize_m(pattern=pattern)
+        self.mm.t, self.mm.attempted_switches = 0, 0
         self.draw_mm()
 
     def update_time(self):
@@ -744,14 +746,14 @@ class RealTime():
         else:
             warnings.warn(f"New update scheme {self.mm.params.UPDATE_SCHEME} not known")
 
-    def run(self):
+    def run(self, simulating=True):
         # Main function to run it all
 
         plt.ion()  # magic real time function
         plt.pause(self.plt_pause)  # initial pause for setup
 
         self.running = True  # for running the main loop
-        self.pause_unpause(simulating=True)  # for updating the magnets
+        self.pause_unpause(simulating=simulating)  # for updating the magnets
 
         previous_time = time.time()
         while self.running:
@@ -768,11 +770,13 @@ class RealTime():
             if self.simulating:
                 flipped_spins = self.mm.update()  # always run simulation as fast as possible I suppose
 
-                try:
-                    if len(flipped_spins) > 0:  # something new to draw
+                # Check for something new to draw
+                if self.mm.params.UPDATE_SCHEME == "Glauber" or self.mm.params.UPDATE_SCHEME == "Wolff":
+                    if flipped_spins.size > 0:  # will be ndarray
                         self.draw_mm()
-                except:
-                    pass
+                elif self.mm.params.UPDATE_SCHEME == "Néel":
+                    if flipped_spins is not None:  #will be tuple or None
+                        self.draw_mm()
 
 
 if __name__ == "__main__":
