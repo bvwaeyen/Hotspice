@@ -12,7 +12,7 @@ import hotspice
 from hotspice.ASI import *
 if __name__ == "__main__": print("Everything imported")
 
-def get_mag_stats(mm: hotspice.core.Magnets, T, MaxTimeLike, nsamples: int = 1):
+def get_mag_stats(mm: hotspice.core.Magnets, T, t_max=np.inf, MCsteps_max = 4, nsamples: int = 1):
     """Starts from a uniform grid at temperature T, it updates for some amount of timelike and returns order parameter m_avg.
     If nsamples is more than 1, it will do this multiple times and return the statistical mean and standard deviation."""
 
@@ -22,19 +22,7 @@ def get_mag_stats(mm: hotspice.core.Magnets, T, MaxTimeLike, nsamples: int = 1):
     for sample in range(nsamples):
         mm.initialize_m(pattern="uniform")
 
-        if mm.params.UPDATE_SCHEME == "Glauber":
-            TimeLikeStart = mm.MCsteps
-            TimeLike = TimeLikeStart
-            while TimeLike - TimeLikeStart < MaxTimeLike:
-                mm.update()
-                TimeLike = mm.MCsteps
-
-        elif mm.params.UPDATE_SCHEME == "Néel":
-            TimeLikeStart = mm.t
-            TimeLike = TimeLikeStart
-            while TimeLike - TimeLikeStart < MaxTimeLike:
-                mm.update(t_max=(MaxTimeLike-TimeLike))
-                TimeLike = mm.t
+        mm.progress(t_max, MCsteps_max)
 
         m_array[sample] = mm.m_avg
 
@@ -43,23 +31,23 @@ def get_mag_stats(mm: hotspice.core.Magnets, T, MaxTimeLike, nsamples: int = 1):
 
     return np.mean(m_array), np.std(m_array)
 
-def sweep_order_temperature(mm: hotspice.core.Magnets, T_array, MaxTimeLike, nsamples: int = 1, verbose=False):
+def sweep_order_temperature(mm: hotspice.core.Magnets, T_array, t_max=np.inf, MCsteps_max=4, nsamples: int = 1, verbose=False):
     """Sweeps over range of temperature and returns data."""
     l = len(T_array)
     data_dict = {"T": T_array, "ComputationTime[s]": [0] * l}
-    if samples == 1:
+    if nsamples == 1:
         data_dict["m_avg"] = [0] * l
     else:
         data_dict["m_mean"], data_dict["m_std"] = [0] * l, [0] * l
 
     constants = {"Grid": f"{mm.nx}x{mm.ny}", "Geometry": type(mm).__name__, "a": mm.a, "PBC": mm.PBC,
-                 "UPDATE_SCHEME": mm.params.UPDATE_SCHEME, "nsamples": nsamples, "MaxTimeLike": MaxTimeLike}
+                 "UPDATE_SCHEME": mm.params.UPDATE_SCHEME, "nsamples": nsamples, "t_max": t_max, "MCsteps_max": MCsteps_max}
 
     for i, T in enumerate(T_array):
         # the actual test
         if verbose and hotspice.utils.is_significant(i, l): hotspice.utils.log(f"Starting {i+1} of {l}: {100*(i+1)/l:.2f}%")
         start_time = time.time()
-        output = get_mag_stats(mm, T, MaxTimeLike, nsamples=nsamples)  # Computing for specific T
+        output = get_mag_stats(mm, T, t_max=t_max, MCsteps_max=MCsteps_max, nsamples=nsamples)  # Computing for specific T
         end_time = time.time()
         data_dict["ComputationTime[s]"][i] = end_time - start_time
 
@@ -79,10 +67,7 @@ def plot_order_T(data: hotspice.utils.Data):
     # Elaborate title construction
     cte = data.constants
     title = f"Order parameter of {cte['Grid']} {cte['Geometry']} {'with' if cte['PBC'] else 'without'} PBC, a={cte['a']}"
-    if cte["UPDATE_SCHEME"] == "Glauber":
-        title += f", {cte['MaxTimeLike']}  MC steps to relax"
-    elif cte["UPDATE_SCHEME"] == "Néel":
-        title += f", {cte['MaxTimeLike']:.4f} sec to relax"
+    title += f", {cte['t_max']:.4f} sec and {cte['MCsteps_max']} MC Steps to relax"
     if cte["nsamples"] > 1:
         title += f" with {cte['nsamples']} samples per T"
     title += "."
@@ -91,13 +76,13 @@ def plot_order_T(data: hotspice.utils.Data):
     # Actual plotting of data
     fig, ax = plt.subplots()
 
-    T = data.get("T")
+    T = data["T"]
     if cte["nsamples"] > 1:
-        m_mean, m_std = data.get("m_mean"), data.get("m_std")
+        m_mean, m_std = data["m_mean"], data["m_std"]
         ax.plot(T, m_mean, label="Mean of average magnetization")
         ax.plot(T, m_std, label="Standard deviation")
     else:
-        m_avg = data.get("m_avg")
+        m_avg = data["m_avg"]
         ax.plot(T, m_avg, label="Average magnetization")
 
     ax.legend()
