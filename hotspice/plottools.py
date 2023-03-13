@@ -11,7 +11,7 @@ from enum import Enum
 from matplotlib import cm, colors, patches, widgets
 
 from .core import Magnets
-from .utils import asnumpy, SIprefix_to_mul
+from .utils import asnumpy, J_to_eV, SIprefix_to_mul
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -191,7 +191,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
 def get_rgb(*args, **kwargs):
     return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
-def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, unit='µ', figure=None, **figparams):
+def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, unit='µ', figure=None, subtract_barrier=False, in_eV=True, **figparams):
     """ Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
         the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -207,6 +207,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         @param color_quiver [bool] (True): if True, the quiver plot arrows are colored according to their angle.
         @param unit [str] ('µ'): the symbol of the unit. Automatically converts this to a power of 10 for scaling.
         @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this show_m().
+        @param subtract_barrier [bool] (False): if True, the energy scale displayed is the effective energy barrier.
         @param fontsize_colorbar [int] (10): the font size of the color bar description.
         @param fontsize_axes [int] (10): the font size of the axes labels and titles.
         @param text_averaging [bool] (True): if False, the averaging mask is not stated in the colorbar description.
@@ -286,11 +287,15 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         ax2.set_ylim(full_extent[2:])
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
-        im3 = ax3.imshow(asnumpy(xp.where(mm.m != 0, mm.E, xp.nan)), origin='lower',
-                            extent=full_extent, interpolation='antialiased', interpolation_stage='rgba')
+        E = xp.where(mm.m != 0, mm.E, xp.nan)
+        if subtract_barrier: E = mm.E_B - E # Crude approximation of the effective energy barrier for each magnet
+        if in_eV: E = J_to_eV(E)
+        E_unit = 'eV' if in_eV else 'J'
+        im3 = ax3.imshow(asnumpy(E), origin='lower',
+                            extent=full_extent, vmin=(min(0, xp.min(E)) if subtract_barrier else None), interpolation='antialiased', interpolation_stage='rgba')
         c3 = plt.colorbar(im3)
         c3.ax.get_yaxis().labelpad = 15
-        c3.ax.set_ylabel("Local energy [J]", rotation=270, fontsize=figparams['fontsize_colorbar'])
+        c3.ax.set_ylabel(f"Local energy [{E_unit}]" if not subtract_barrier else f"Effective energy barrier [{E_unit}]", rotation=270, fontsize=figparams['fontsize_colorbar'])
         ax3.set_title(r"$E_{int}$")
         ax3.set_xlabel(f"x [{unit}m]")
         ax3.set_ylabel(f"y [{unit}m]")

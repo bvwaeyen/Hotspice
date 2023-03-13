@@ -79,7 +79,7 @@ def R_squared(a, b):
         "Task Agnostic Metrics for Reservoir Computing" by Love et al.
     """
     if (var_a := xp.var(a)) == 0 or (var_b := xp.var(b)) == 0: return 0
-    cov = xp.mean((a - xp.mean(a))*(b - xp.mean(b)))
+    cov = xp.mean((a - xp.mean(a))*(b - xp.mean(b))) # Alternative definition of R² divides by N-1 (instead of the implicit N in xp.mean) (in "Numerical simulation of artificial spin ice for reservoir computing")
     return cov**2/var_a/var_b # Same as xp.corrcoef(a, b)[0,1]**2, but faster
 
 def strided(a: xp.ndarray, W: int):
