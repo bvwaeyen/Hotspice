@@ -11,10 +11,12 @@
 ## Core functionality
 
 1. High priority
-    - [ ] Create an `OOPSquareClockwiseInputter`
     - [ ] Take a look at the `E_B` calculation for Néel, as the current method might not be entirely correct after all.
 
 2. Medium priority
+    - [ ] In-plane systems could benefit from a better, angle-dependent, `E_barrier` calculation. Currently, the effective energy barrier in the presence of a dipolar or Zeeman interaction is crudely approximated as something like `E_B - switch_energy/2`. There are two ways this can be improved, both of whose effect should be investigated to see if they are worth the trouble.
+        - [ ] The first way is to improve this formula, by using the actual minima and maxima and calculating the effective barrier from them. If I recall correctly, this would not significantly affect the effective barrier as compared to how it is calculated now.
+        - [ ] The second way is to make the `DipolarEnergy` angular dependent, and combining this with the `ZeemanEnergy`'s inherent angular dependence, to create a better effective barrier by taking into account the offset angles of all the sines making up the energy landscape. This should not be too hard to do, but will require a completely different calculation which will certainly affect performance (because we need a separate dipolar kernel for both the x- and y-axes, so everything will take twice as long to calculate).
     - [ ] Improve the output saving with e.g. a `FullOutputReader` etc.
         - [ ] For `TaskAgnosticExperiment`: use the full `mm.m` in `initial_state` and `final_state` for a better `S` calculation (instead of `outputreader.read_state()`).
         - [ ] For `FullOutputReader`, perhaps we could save the full state as bits (`(mm.m + 1)/2`) (with encoding `np.packbits()` and `np.unpackbits()` to `uint8` to save space), but further compression might not be easy because we use JSON.
@@ -22,7 +24,6 @@
     - [ ] Make unit tests
     - [ ] Implement commonly used metrics to compare with theory/experiment (average magnetization and dimensionless amplitude ratio  $\langle m^2 \rangle^2/\langle m^4 \rangle$, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction or by looking at the dot/cross(?) product between vectors, susceptibility, width of domains (related to correlation probably)...)
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state (e.g. Néel vector?)
-    - [ ] Can we come up with some sort of time measure for multiswitching Glauber dynamics?
     - [ ] Make a `get_summary()` method that returns a dict with important parameters of the simulation for easier creation of the "constants" in JSON data files (e.g. average `E_B`, `T`, `moment`...).
 
 3. Low priority

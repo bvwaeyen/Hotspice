@@ -47,9 +47,7 @@ class Magnets(ABC):
         self, nx: int, ny: int, dx: float, dy: float, *,
         T: Field = 300, E_B: Field = 0., moment: Field = None, Msat: Field = 800e3, V: Field = 2e-22,
         pattern: str = None, energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None, in_plane: bool = False):
-        """
-            !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
-            The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are currently allowed.
+        """ The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are currently allowed.
             The initial configuration of a Magnets geometry consists of 3 parts:
                 1) in_plane: Magnets can be in-plane or out-of-plane: True or False, respectively. Determined by subclassing.
                 2) ASI type: Defined through subclasses (pinwheel, kagome, Ising...). This concerns the layout of spins.

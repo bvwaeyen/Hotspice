@@ -375,7 +375,7 @@ class OOPSquareChessOutputReader(OutputReader):
             @param mm [hotspice.ASI.OOP_Square] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
                 Otherwise, the user will have to call configure_for() separately after initializing the class instance.
         """
-        self.nx, self.ny = nx, ny
+        self.nx, self.ny = int(nx), int(ny)
         super().__init__(mm)
 
     def configure_for(self, mm: OOP_Square):

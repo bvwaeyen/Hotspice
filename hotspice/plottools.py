@@ -257,8 +257,8 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
                  'blue':  [[0.0, b0,  b0],
                            [0.5, 0.0, 0.0],
                            [1.0, b1,  b1]]}
-        newcmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
-        im1 = ax1.imshow(im, cmap=newcmap, origin='lower', vmin=-1, vmax=1,
+        OOPcmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
+        im1 = ax1.imshow(im, cmap=OOPcmap, origin='lower', vmin=-1, vmax=1,
                          extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba')
         c1 = plt.colorbar(im1)
         c1.ax.get_yaxis().labelpad = 10 + 2*figparams['fontsize_colorbar']
