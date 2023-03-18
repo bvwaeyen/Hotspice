@@ -498,15 +498,19 @@ def save_plot(save_path: str, ext=None):
 
 class RealTime():
 
-    def __init__(self, mm: Magnets, compass=True, colorbar=True, T_range=(1,10000),
-                 E_B_range=(0, eV_to_J(200)), moment_range=(0, 2*800e3*2e-22),
+    def __init__(self, mm: Magnets, compass: bool = True, colorbar: bool = True, avg: bool = True, fill: bool = True,
+                 T_range=(1,10000), E_B_range=(0, eV_to_J(200)), moment_range=(0, 2*800e3*2e-22),
                  H_range=(0,100e-3), angle_range=(0, 2*math.pi)):
         """
         Object capable of simulation and plotting in real time
         @param mm: magnets to simulate
         @param compass: whether or not to add a compass indicator
         @param colorbar: whether or not to add a colorbar indicating angles
+        @param avg: whether or not to average the rgb values. Checkerboard pattern quickly emerges if False
+        @param fill: if True, empty pixels are interpolated if all neighboring averages are equal
         Following ranges should be specified in SI units
+        RANGES WILL OVERWRITE EXISTING VALUES, MAKING EVERYTHING HOMOGENEOUS, e.g. random E_B distribution will be set to E_B_avg.
+        Set a range to None if this structure is important!
         @param T_range: temperature slider range (T_min, T_max), can be None if unwanted
         @param E_B_range: energy barrier slider range (E_B_min, E_B_max), can be None if unwanted
         @param moment_range: moment slider range (moment_min, moment_min), can be None if unwanted
@@ -518,6 +522,9 @@ class RealTime():
         self.mm = mm
         self.compass = compass if H_range is not None else False  # compass needs H_max
         self.colorbar = colorbar
+        self.avg = avg
+        self.fill = fill
+
         if T_range is not None: self.T_min, self.T_max = T_range
         if E_B_range is not None: self.E_B_min, self.E_B_max = E_B_range
         if moment_range is not None: self.moment_min, self.moment_max = moment_range
@@ -573,7 +580,21 @@ class RealTime():
                                               variable=tk.IntVar(name="PBC"), onvalue=True, offvalue=False)
         self.PBC_checkbutton.setvar("PBC", self.mm.PBC)  # needed separately, otherwise not correctly displayed
         self.PBC_checkbutton.pack(side=tk.LEFT, expand=True)
-        control_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+
+        # checkboxes
+        style_frame = tk.Frame(control_frame)
+        # average checkbox
+        self.avg_checkbutton = tk.Checkbutton(style_frame, text="avg", command=self.update_avg,
+                                              variable=tk.BooleanVar(name="avg"), onvalue=True, offvalue=False)
+        self.avg_checkbutton.setvar("avg", self.avg)  # needed separately, otherwise not correctly displayed
+        self.avg_checkbutton.pack(side=tk.TOP, fill=tk.BOTH)
+        # fill checkbox
+        self.fill = tk.BooleanVar(None, value=self.fill, name="fill")  # not regular python boolean, but tkinter boolean
+        tk.Checkbutton(style_frame, text="fill", command=self.draw_mm, variable=self.fill,
+                       onvalue=True, offvalue=False).pack(side=tk.LEFT, fill=tk.BOTH)
+        style_frame.pack(side=tk.LEFT, expand=True)
+
+        control_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)  # pack control stuff
 
         # inialization buttons
         button_frame = tk.Frame(self.window)
@@ -653,10 +674,9 @@ class RealTime():
 
         self.fig, self.ax = plt.subplots()
         self.ax.axis("off")
-
+        self.avg = Average.resolve(self.avg, self.mm)  # only needs to compute this once
         # first rgb for first image
-        self.avg = Average.resolve(True, self.mm)  # only needs to compute this once
-        rgb = get_rgb(self.mm, avg=self.avg, fill=True)
+        rgb = get_rgb(self.mm, avg=self.avg, fill=self.fill.get())  # self.fill is tkinter boolean variable
         self.im = self.ax.imshow(rgb, **self.imshow_kwargs)  # will be updated continually
 
         # colorbar
@@ -723,9 +743,13 @@ class RealTime():
     def update_PBC(self):
         self.mm.PBC = self.PBC_checkbutton.getvar("PBC")
 
+    def update_avg(self):
+        self.avg = Average.resolve(self.avg_checkbutton.getvar("avg"), self.mm)
+        self.draw_mm()
+
     def draw_mm(self):
         # updates image and pauses matplotlib to catch up
-        rgb = get_rgb(self.mm, avg=self.avg, fill=True)
+        rgb = get_rgb(self.mm, avg=self.avg, fill=self.fill.get())  # self.fill is tkinter boolean variable
         self.im.set_array(rgb)
         plt.pause(self.plt_pause)  # not strictly needed, but looks way better if present
 
