@@ -71,6 +71,7 @@ class Inputter(ABC):
             inputs = xp.asarray([self.datastream.as_bits(value) for value in values]).reshape(-1)
 
         for value in inputs: self.input_single(mm, value)
+        self.remove_stimulus(mm) # TODO: this might be a big performance impact due to get_energy('Zeeman'), can this lookup be more efficient? (e.g. making Dipolar and Zeeman energies special attributes of the class, and put any other energies in some extra array because they are rarely used?)
         return values
 
     def remove_stimulus(self, mm: Magnets):

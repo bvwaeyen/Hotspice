@@ -11,6 +11,7 @@ import statsmodels.api as sm
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from scipy.spatial import distance
+from scipy.stats import linregress
 from textwrap import dedent
 from typing import Callable, Iterable, Literal
 
@@ -345,7 +346,6 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         all_metrics = [metric/len(summary_files) for metric in all_metrics]
 
         ## PLOTTING
-        # TODO: determine beforehand if the x or y axes would be better suited to put on a logarithmic scale
         cmap = cm.get_cmap('viridis').copy()
         # cmap.set_under(color='black')
         init_fonts()
@@ -360,6 +360,13 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
             y_lims = [(3*y_vals[0] - y_vals[1])/2] + [(y_vals[i+1] + y_vals[i])/2 for i in range(len(y_vals)-1)] + [3*y_vals[-1]/2 - y_vals[-2]/2]
             X, Y = np.meshgrid(x_vals, y_vals)
 
+        # Check how linear the x and y axes are, to choose if log or linear scale is more appropriate in plots
+        x_linearity = abs(linregress(x_vals, range(len(x_vals))).rvalue)
+        xscale = 'linear' if x_linearity > 0.8 else 'log'
+        if is_2D:
+            y_linearity = abs(linregress(y_vals, range(len(y_vals))).rvalue)
+            yscale = 'linear' if y_linearity > 0.8 else 'log'
+
         # Plot the metrics
         axes = []
         label_x = name_x if unit_x is None else f"{name_x} [{unit_x}]"
@@ -371,6 +378,8 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
                 except NameError:
                     ax = fig.add_subplot(1, n, i+1)
                 axes.append(ax)
+                ax.set_xscale(xscale)
+                ax.set_yscale(yscale)
                 ax.set_xlabel(label_x)
                 ax.set_ylabel(label_y)
                 ax.set_title(params.full_name)
@@ -380,6 +389,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         else:
             ax = fig.add_subplot(1, 1, 1)
             for i, params in enumerate(metrics_dict.values()):
+                ax.set_xscale(xscale)
                 ax.set_xlabel(label_x)
                 ax.set_ylabel("Reservoir metric")
                 ax.plot(x_vals, all_metrics[i], label=params.full_name)
@@ -391,6 +401,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         if save:
             save_path = os.path.splitext(summary_file)[0]
             save_plot(save_path, ext='.pdf')
+            save_plot(save_path, ext='.png')
         if plot:
             plt.show()
 

@@ -63,6 +63,9 @@ class OOP_Square(OOP_ASI):
 
     def _get_groundstate(self):
         return 'afm'
+    
+    def get_domains(self): # TODO: perhaps introduce this in other ASIs?
+        return (((self.ixx + self.iyy) % 2)*2 - 1) == self.m
 
 
 class OOP_Triangle(OOP_ASI):
