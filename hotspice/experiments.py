@@ -63,7 +63,7 @@ class Experiment(ABC):
         return {}
 
 
-class Sweep(ABC):
+class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specifying an output directory to be completed
     def __init__(self, groups: Iterable[tuple[str]] = None, names: dict[str, str] = None, units: dict[str, str] = None, **kwargs): # kwargs can be anything to specify the sweeping variables and their values.
         """ Sweep quacks like a generator yielding <Experiment> instances, or subclasses thereof.
             The purpose of a Sweep is to reliably generate a sequence of <Experiment>s in a consistent order.

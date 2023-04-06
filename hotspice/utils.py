@@ -247,6 +247,8 @@ def run_script(script_name, args=None):
     if not os.path.splitext(script_name)[1]: script_name += '.py'
     path = pathlib.Path(__file__).parent / "scripts" / script_name
     if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
+
+    args = [str(arg) for arg in args]
     command = ["python", str(path)] + list(args)
     try:
         subprocess.run(command, check=True)
@@ -257,11 +259,13 @@ def run_script(script_name, args=None):
             {colorama.Fore.LIGHTYELLOW_EX}{' '.join(command)}{colorama.Style.RESET_ALL}
         """), stacklevel=2)
 
-def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_script_name="ParallelJobs"):
+def ParallelJobs(sweepscript_path, outdir: str = None, iterations: list = None, _ParallelJobs_script_name: str = "ParallelJobs"):
     """ Convenient wrapper around run_script() for the ParallelJobs.py script in particular. """
     args = [sweepscript_path]
     if outdir is not None:
-        args = ['-o', outdir] + args
+        args += ['-o', outdir]
+    if iterations is not None:
+        args += ['-i'] + iterations
     run_script(_ParallelJobs_script_name, args=args)
 
 def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = None, show_device=True):
