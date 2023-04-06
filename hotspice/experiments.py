@@ -10,6 +10,7 @@ import statsmodels.api as sm
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from matplotlib import cm, colors, widgets
 from scipy.spatial import distance
 from scipy.stats import linregress
 from textwrap import dedent
@@ -552,7 +553,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         super().__init__(inputter, outputreader, mm)
         self.initial_state = self.outputreader.read_state().reshape(-1)
         self.n_out = self.outputreader.n
-        self.results = {'NL': None, 'NL_local': None, 'MC': None, 'MC_local': None, 'S': None, 'S_local': None}
+        self.results = {'NL': None, 'NL_local': None, 'MC': None, 'MC_local': None, 'S': None, 'S_local': None, 'PC': None, 'PC_local': None}
 
     @classmethod
     def dummy(cls, mm: Magnets = None):
@@ -603,13 +604,13 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         # Still need to call self.calculate_all() manually after this method.
 
     def calculate_all(self, ignore_errors=False, **kwargs):
-        """ Recalculates NL, MC, CP and S. Arguments passed to calculate_all()
+        """ Recalculates NL, MC, S and PC. Arguments passed to calculate_all()
             are directly passed through to the appropriate self.<metric> functions.
             @param ignore_errors [bool] (False): if True, exceptions raised by the
                 self.<metric> functions are ignored (use with caution).
         """
         kwargs.setdefault('use_stored', True)
-        for metric, method in {'NL_local': self.NL_local, 'NL': self.NL, 'MC_local': self.MC_local, 'MC': self.MC, 'S_local': self.S_local, 'S': self.S}.items():
+        for metric, method in {'NL_local': self.NL_local, 'NL': self.NL, 'MC_local': self.MC_local, 'MC': self.MC, 'S_local': self.S_local, 'S': self.S, 'PC_local': self.PC_local, 'PC': self.PC}.items():
             try:
                 self.results[metric] = method(**kwargs)
             except Exception:
@@ -706,7 +707,43 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         return 1 - distance.cosine(asnumpy(self.initial_state), asnumpy(self.final_state))/2 # distance.cosine is in range [0., 2.]
         # Another possibly interesting metric: Hamming distance (would require access to full mm.m state to work properly)
 
-    # TODO: can add parity check metric from "Numerical simulation of artificial spin ice for reservoir computing", which has a very similar calculation procedure
+    # TODO: make sure this Parity Check absolutely works as intended
+    def PC_local(self, k: int = 10, test_fraction: float = 1/4, threshold_dist: float = None, verbose: bool = False, **kwargs) -> xp.ndarray:
+        """ Parity check metric from "Numerical simulation of ASI for RC". """
+        if verbose: log(f"Calculating PC_local...")
+        train_test_cutoff = math.ceil(self.u.size*(1-test_fraction))
+        u_train, u_test = xp.split(self.u, [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
+        
+        if u_train.size <= k: raise ValueError(f"Parity check: size of training set ({u_train.size}) must be > k ({k}).")
+        if u_test.size <= k: raise ValueError(f"Parity check: size of test set ({u_test.size}) must be > k ({k}).")
+
+        dist_matrix = xp.asarray(distance.cdist(asnumpy(self.outputreader.node_coords), asnumpy(self.outputreader.node_coords)))
+        if threshold_dist is None: # By default we take twice the minimum NN distance to get some averaging nearby
+            mx = ma.masked_array(dist_matrix, mask=(dist_matrix==0))
+            min_dist_for_each_cell = mx.min(axis=1).data
+            threshold_dist = 2*xp.max(min_dist_for_each_cell)
+
+        N = self.outputreader.n if threshold_dist != xp.inf else 1 # If distance is xp.inf, all nodes will give the same, so set N=1 for efficiency
+        PC_of_each_node = xp.zeros(self.outputreader.n)
+        for outputnode in range(N):
+            neighbors = xp.where(dist_matrix[outputnode,:] < threshold_dist)[0] # \gamma_n in paper
+            y_train, y_test = np.split(sm.add_constant(asnumpy(self.y[:,neighbors]), has_constant='add'), [train_test_cutoff])
+            Rsq = xp.empty(k) # R² correlation coefficient
+            for d in range(1, k+1): # Train an estimator for the parity of the d previous inputs
+                parity_d = xp.sum((strided(self.u, d)*2) - 1, axis=1) # Parity of previous <d> inputs including the current one
+                parity_train, parity_test = xp.split(parity_d, [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
+                results = sm.OLS(asnumpy(parity_train), y_train, missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
+                parity_hat_test = results.predict(y_test[d:,:]) # Start at y_test[d] to prevent leakage between train/test
+                Rsq[d-1] = R_squared(parity_hat_test, parity_test[d:])
+            PC_of_each_node[outputnode] = float(xp.sum(Rsq))
+        if N == 1: PC_of_each_node[:] = PC_of_each_node[0]
+        return PC_of_each_node
+
+    def PC(self, **kwargs):
+        """ Returns the parity check based on an estimator with access to all the output nodes. """
+        kwargs["threshold_dist"] = xp.inf # To remove locality
+        return float(xp.mean(self.PC_local(**kwargs))) # xp.mean to get float instead of size-1 array
+
 
     def to_dataframe(self, u: xp.ndarray = None, y: xp.ndarray = None):
         """ If <u> and <y> are not explicitly provided, the saved <self.u> and <self.y>
@@ -752,7 +789,8 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         return {
             'NL': SweepMetricPlotparams('Nonlinearity', lambda data: data['NL'], min_value=0, max_value=1),
             'MC': SweepMetricPlotparams('Memory Capacity', lambda data: data['MC'], min_value=0),
-            'S':  SweepMetricPlotparams('Stability', lambda data: data['S'], min_value=0, max_value=1)
+            'S':  SweepMetricPlotparams('Stability', lambda data: data['S'], min_value=0, max_value=1),
+            'PC': SweepMetricPlotparams('Parity Check', lambda data: data['PC'], min_value=0, max_value=None)
         }
 
 
