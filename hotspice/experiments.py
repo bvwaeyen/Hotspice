@@ -232,6 +232,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         vars_iterations = [self.get_iteration_vars(i) for i in range(len(self))]
         found_iterations = []
         datafiles = [os.path.join(dir, path) for path in os.listdir(dir) if path.endswith('.json')]
+        if len(datafiles) == 0: raise FileNotFoundError(f"There are no sweep-JSON data files in the directory {dir}.")
 
         # Note to self: parallelizing this for loop gives no performance gain
         for filepath in datafiles: # We do not care about the order; self.plot() should take care of that for us.
@@ -344,6 +345,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         all_metrics = [metric/len(summary_files) for metric in all_metrics]
 
         ## PLOTTING
+        # TODO: determine beforehand if the x or y axes would be better suited to put on a logarithmic scale
         cmap = cm.get_cmap('viridis').copy()
         # cmap.set_under(color='black')
         init_fonts()
@@ -612,13 +614,11 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
                 to evaluate the metrics. The remaining 1-<test_fraction> are used to train the estimators.
         """
         if verbose: log(f"Calculating NL_local...")
-        u = self.u
-        y = self.y
         
-        train_test_cutoff = math.ceil(u.size*(1 - test_fraction))
+        train_test_cutoff = math.ceil(self.u.size*(1 - test_fraction))
         if train_test_cutoff < k: raise ValueError(f"Nonlinearity: size of training set ({train_test_cutoff}) must be >= k ({k}).")
-        u_train_strided, u_test_strided = xp.split(strided(u, k), [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
-        y_train, y_test = xp.split(y, [train_test_cutoff])
+        u_train_strided, u_test_strided = xp.split(strided(self.u, k), [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
+        y_train, y_test = xp.split(self.y, [train_test_cutoff])
 
         Rsq = xp.empty(self.n_out) # R² correlation coefficient for each output node
         for j in range(self.n_out): # Train an estimator for the j-th output node
@@ -668,9 +668,9 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         MC_of_each_node = xp.zeros(self.outputreader.n)
         for outputnode in range(N):
             neighbors = xp.where(dist_matrix[outputnode,:] < threshold_dist)[0] # \gamma_n in paper
-            y_train, y_test = xp.split(sm.add_constant(asnumpy(self.y[:,neighbors]), has_constant='add'), [train_test_cutoff])
+            y_train, y_test = np.split(sm.add_constant(asnumpy(self.y[:,neighbors]), has_constant='add'), [train_test_cutoff])
             Rsq = xp.empty(k) # R² correlation coefficient
-            for tau in range(1, k+1): # Train an estimator for the input j iterations ago
+            for tau in range(1, k+1): # Train an estimator for the input <tau> iterations ago
                 # This one is a mess of indices, but at least we don't need striding like for NL
                 results = sm.OLS(asnumpy(u_train[k-tau:-tau]), y_train[k:,:], missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
                 u_hat_test = results.predict(y_test[tau:,:]) # Start at y_test[j] to prevent leakage between train/test
@@ -682,7 +682,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
     def MC(self, **kwargs) -> float:
         """ Returns the memory capacity based on an estimator with access to all the output nodes. """
         kwargs["threshold_dist"] = xp.inf # To remove locality
-        return float(xp.mean(self.MC_local(**kwargs)))
+        return float(xp.mean(self.MC_local(**kwargs))) # xp.mean to get float instead of oddly-sized array
 
     def S_local(self, **kwargs):
         """ Returns an array representing the stability of each output node, which is a boolean

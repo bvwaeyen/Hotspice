@@ -278,7 +278,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
             ax2.set_xlabel(f"x [{unit}m]")
             ax2.set_ylabel(f"y [{unit}m]")
             axes.append(ax2)
-        nonzero = mm.m.nonzero()
+        nonzero = mm.nonzero
         mx, my = asnumpy(xp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(xp.multiply(m, mm.orientation[:,:,1])[nonzero])
         ax2.quiver(asnumpy(mm.xx[nonzero])/unit_factor, asnumpy(mm.yy[nonzero])/unit_factor, mx/unit_factor, my/unit_factor,
                 color=(cmap((np.arctan2(my, mx)/2/np.pi) % 1) if color_quiver else 'black'),

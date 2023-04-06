@@ -76,7 +76,8 @@ class Magnets(ABC):
 
         # Main initialization steps to create the geometry
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
-        self.nonzero = xp.asarray(xp.nonzero(self.occupation)).reshape(2, -1) # Indices of nonzero elements
+        self.nonzero = xp.nonzero(self.occupation) # Indices of nonzero elements, precalculated for efficiency
+        self._nonzero_array = xp.asarray(self.nonzero).reshape(2, -1) # Nonzero indices in array form, can be more efficient in some cases
         self.n = int(xp.sum(self.occupation)) # Number of magnets in the simulation
         if self.n == 0: raise ValueError(f"Can not initialize {full_obj_name(self)} of size {self.nx}x{self.ny}, as this does not contain any spins.")
         if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
@@ -391,7 +392,7 @@ class Magnets(ABC):
             Strictly speaking, this is the only physically correct sampling scheme.
         """
         idx = np.random.randint(self.n) # MUCH faster than cp.random
-        return self.nonzero[:,idx].reshape(2,-1)
+        return self._nonzero_array[:,idx].reshape(2,-1)
 
     def _select_grid(self, r=None, poisson=None, **kwargs):
         """ Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.

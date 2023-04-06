@@ -285,7 +285,7 @@ class FullOutputReader(OutputReader):
     
     def configure_for(self, mm: Magnets):
         self.mm = mm
-        self.indices = xp.nonzero(self.mm.occupation)
+        self.indices = self.mm.nonzero
         self.state = self.mm.m[self.indices]
         self._node_coords = xp.asarray([mm.xx[self.indices], mm.yy[self.indices]]).T
     
@@ -443,7 +443,7 @@ class OOPSquareClockwiseInputter(Inputter):
 
 
 class OOPSquareChessStepsInputter(Inputter):
-    def __init__(self, datastream: Datastream, magnitude: float = 1, magnitude_range: float = 0.5, transition_range: float = 0.1, n: float = 4., frequency: float = 1.):
+    def __init__(self, datastream: Datastream, magnitude: float = 1., magnitude_range: float = 0., transition_range: float = 1., n: float = 4., frequency: float = 1.):
         """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external field for each magnet.
             A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
             NOTE: the difference between this and an OOPSquareChessFieldInputter is that this inputter
@@ -454,14 +454,14 @@ class OOPSquareChessStepsInputter(Inputter):
 
             The datastream-to-field relationship is piecewise linear (see self.val_to_mag_piecewiselinear):
             @param magnitude [float] (1.): The absolute value of the external field magnitude for an input of 0 (-) or 1 (+).
-            @param magnitude_range [float] (0.5): The difference in magnitude between input <0> and <0.5-transition_range/2>.
-            @param transition_range [float] (0.1): A region of size <transition_range> around 0.5 separates the + and - magnitude regimes.
+            @param magnitude_range [float] (0.): The difference in magnitude between input <0> and <0.5-transition_range/2>.
+            @param transition_range [float] (1.): A region of size <transition_range> around 0.5 separates the + and - magnitude regimes.
         """
         super().__init__(datastream)
         self.magnitude, self.magnitude_range, self.transition_range = magnitude, magnitude_range, transition_range
         self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
         self.frequency = frequency
-        self.transform = self.get_transform_func()
+        self.transform = self._get_transform_func()
     
     def input_single(self, mm: OOP_Square, value: float|int|bool):
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
@@ -477,13 +477,13 @@ class OOPSquareChessStepsInputter(Inputter):
         Zeeman.set_field(magnitude=AFM_mask_step2)
         mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
 
-    def get_transform_func(self):
+    def _get_transform_func(self):
         if isinstance(self.datastream, (BinaryDatastream, IntegerDatastream)):
             return lambda bit: (2*bit - 1)*self.magnitude
         if isinstance(self.datastream, ScalarDatastream):
-            return self.val_to_mag_piecewiselinear
+            return self._val_to_mag_piecewiselinear
     
-    def val_to_mag_piecewiselinear(self, value: float):
+    def _val_to_mag_piecewiselinear(self, value: float):
         """ A piecewise linear function between
             (0, -magnitude),
             (0.5 - transition_range/2, -magnitude + magnitude_range),
