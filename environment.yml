@@ -16,3 +16,4 @@ dependencies:
   - ipython=8.2.0
   - colorama=0.4.4
   - pylint=2.12.2
+  - customtkinter=5.1.2

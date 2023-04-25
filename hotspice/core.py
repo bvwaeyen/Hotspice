@@ -188,6 +188,12 @@ class Magnets(ABC):
                 return
         if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self._energies]}", stacklevel=2)
 
+    def has_energy(self, name: str): # Is basically "self.get_energy(name, verbose=False) is not None"
+        name = name.lower().replace('energy', '')
+        for e in self._energies:
+            if name == e.shortname: return True
+        return False
+
     def get_energy(self, name: str, verbose=True): # This is faster when using self._energies as dict
         """ Returns the specified energy from self._energies.
             @param name [str]: the name of the energy to be returned. Case-insensitive and may or may not include
@@ -759,16 +765,20 @@ class Magnets(ABC):
                 #   <angle> near 0 or math.pi: clockwise/anticlockwise vortex, respectively
                 #   <angle> near math.pi/2 or -math.pi/2: bowtie configuration (top region: up/down, respectively)
                 self.m = xp.ones_like(self.xx)
-                middle = (self.dx*(self.nx-1)/2, self.dy*(self.ny-1)/2)
-                diff_x = self.xx - middle[0]
-                diff_y = self.yy - middle[1]
-                diff_complex = diff_x + 1j*diff_y
-                angle_desired = diff_complex*(-1j+1e-6) # Small offset from 90° to avoid weird boundaries in highly symmetric systems
-                dotprod = angle_desired.real*self.orientation[:,:,0] + angle_desired.imag*self.orientation[:,:,1]
-                dotprod[dotprod == 0] = 1
-                sign = xp.sign(dotprod)
-                occupied = xp.where(self.occupation == 1)
-                self.m[occupied] = sign[occupied]
+                if self.in_plane: # In-plane has a clear 'vortex' meaning
+                    middle = (self.dx*(self.nx-1)/2, self.dy*(self.ny-1)/2)
+                    diff_x = self.xx - middle[0]
+                    diff_y = self.yy - middle[1]
+                    diff_complex = diff_x + 1j*diff_y
+                    angle_desired = diff_complex*(-1j+1e-6) # Small offset from 90° to avoid weird boundaries in highly symmetric systems
+                    dotprod = angle_desired.real*self.orientation[:,:,0] + angle_desired.imag*self.orientation[:,:,1]
+                    dotprod[dotprod == 0] = 1
+                    sign = xp.sign(dotprod)
+                    occupied = xp.where(self.occupation == 1)
+                    self.m[occupied] = sign[occupied]
+                else: # for OOP, 'vortex' means 'up' on one side, 'down' on other side
+                    half_side = xp.where(self.xx >= (self.x_max-self.x_min)/2)
+                    self.m[half_side] *= -1
             case str(unknown_pattern):
                 self.m = self.rng.integers(0, 2, size=self.xx.shape)*2 - 1
                 if unknown_pattern != 'random': warnings.warn(f"Pattern '{unknown_pattern}'' not recognized, defaulting to 'random'.", stacklevel=2)
@@ -1006,8 +1016,8 @@ class DipolarEnergy(Energy):
                     partial_m = xp.zeros_like(self.mm.m)
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
 
-                    total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')*self.mm._momentSq
-        self.E = self.prefactor*total_energy
+                    total_energy += partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')
+        self.E = self.prefactor*self.mm._momentSq*total_energy
 
     def energy_switch(self, indices2D=None):
         return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]

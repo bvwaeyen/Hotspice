@@ -128,10 +128,10 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     useless_magnitudes = xp.where(magnets_in_avg == 0, xp.nan, 1) # No magnet (the NaNs here will be a subset of useless_angles)
     angles_avg *= useless_angles
     magnitudes_avg *= useless_magnitudes
-    if avg == 'triangle':
+    if avg == Average.TRIANGLE:
         angles_avg = angles_avg[1::2,1::2]
         magnitudes_avg = magnitudes_avg[1::2,1::2]
-    elif avg == 'hexagon': # Only keep the centers of hexagons, throw away the rest
+    elif avg == Average.HEXAGON: # Only keep the centers of hexagons, throw away the rest
         angles_avg = angles_avg[::2,::2]
         magnitudes_avg = magnitudes_avg[::2,::2]
         ixx, iyy = xp.meshgrid(xp.arange(0, angles_avg.shape[1]), xp.arange(0, angles_avg.shape[0])) # DO NOT REMOVE THIS, THIS IS NOT THE SAME AS mm.ixx, mm.iyy!

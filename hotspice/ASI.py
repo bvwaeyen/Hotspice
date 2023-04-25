@@ -65,7 +65,7 @@ class OOP_Square(OOP_ASI):
         return 'afm'
     
     def get_domains(self): # TODO: perhaps introduce this in other ASIs?
-        return (((self.ixx + self.iyy) % 2)*2 - 1) == self.m
+        return (((self.ixx + self.iyy) % 2)*2 - 1) == self.m # TODO: get the number of distinct domain possibilities
 
 
 class OOP_Triangle(OOP_ASI):
