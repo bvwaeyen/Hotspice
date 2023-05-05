@@ -10,7 +10,7 @@ import statsmodels.api as sm
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from matplotlib import cm, colors, widgets
+from matplotlib import cm, colormaps, colors, widgets
 from scipy.spatial import distance
 from scipy.stats import linregress
 from textwrap import dedent
@@ -347,7 +347,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         all_metrics = [metric/len(summary_files) for metric in all_metrics]
 
         ## PLOTTING
-        cmap = cm.get_cmap('viridis').copy()
+        cmap = colormaps['viridis'].copy()
         # cmap.set_under(color='black')
         init_fonts()
         n_plots = len(metrics)

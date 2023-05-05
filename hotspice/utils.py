@@ -174,6 +174,29 @@ def shell():
         pass
 
 
+## GUI
+def bresenham(start, end):
+    """ Bresenham's Line Generation Algorithm, adapted from https://www.youtube.com/watch?v=yaovJmM-0OM. """
+    x1, y1 = start
+    x2, y2 = end
+    dx, dy = abs(x2 - x1), abs(y2 - y1)
+    line_pixel = [(x1, y1)]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        if (flipped := np.divide(dy, dx) > 1): # Then flip x and y
+            dx, x1, x2, dy, y1, y2 = dy, y1, y2, dx, x1, x2
+
+    x, y, p = x1, y1, 2*dy - dx
+    for _ in range(2, dx + 2):
+        x += 1 if x < x2 else -1
+        if p > 0:
+            y += 1 if y < y2 else -1
+            p += 2*(dy - dx)
+        else:
+            p += 2*dy
+        line_pixel.append((y, x) if flipped else (x, y))
+    return line_pixel
+
+
 ## CONVERSION
 Field = TypeVar("Field", int, float, list, np.ndarray, xp.ndarray) # Every type that can be parsed by as_2D_array()
 def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:

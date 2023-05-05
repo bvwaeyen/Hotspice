@@ -6,16 +6,21 @@ import tkinter.ttk as ttk
 
 from dataclasses import dataclass
 from enum import auto, Enum
+from inpoly import inpoly2
 from inspect import signature
-from matplotlib import cm, colorbar, colors, image, quiver
+from matplotlib import cm, colorbar, colormaps, colors, image, quiver
+from matplotlib.axes import Axes
+from matplotlib.backend_bases import MouseButton, MouseEvent
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
+from matplotlib.patches import Polygon
+from textwrap import dedent
 from tkinter import messagebox
 from typing import Callable, Literal
 
 from .core import Magnets, DipolarEnergy, ZeemanEnergy, ExchangeEnergy, SimParams
 from .io import Inputter, OutputReader
-from .utils import asnumpy, J_to_eV, SIprefix_to_mul
+from .utils import asnumpy, bresenham, J_to_eV, SIprefix_to_mul
 from .plottools import get_rgb, Average, _get_averaged_extent, init_fonts
 from . import config
 if config.USE_GPU:
@@ -302,6 +307,9 @@ class MagnetizationView(ctk.CTkFrame):
         self.toolbar.update()
         self.toolbar.pack(side=ctk.BOTTOM, fill=ctk.X)
         self.canvas.get_tk_widget().pack(side=ctk.TOP, fill=ctk.BOTH, expand=True)
+        self.infobutton = NavigationToolbar2Tk._Button(self.toolbar, " 🛈 ", None, False, command=self.show_info)
+        self.infobutton.configure(fg='blue',font=('Calibri',14,'bold'))
+        self.infobutton.pack(side=ctk.RIGHT, fill=ctk.Y)
         self.canvas.draw()
         # TODO: add some sidebar or subbar or something where t, MCsteps, (attempted_)switches are shown
         # TODO: possibly also show realtime quantities like correlation_length, m_avg, T_avg, E_B_avg, moment_avg, E_tot etc.
@@ -315,8 +323,9 @@ class MagnetizationView(ctk.CTkFrame):
                                      self.mm.y_min - self.mm.dy/2,
                                      self.mm.y_max + self.mm.dy/2]
                                     )/self.unit_axes_factor
-        self.ax = self.figure.add_subplot(111)
-        self.ax.set_aspect('equal')
+        self.ax: Axes = self.figure.add_subplot(111)
+        self.ax_aspect = 'auto' if self.mm.nx == 1 or self.mm.ny == 1 else 'equal'
+        self.ax.set_aspect(self.ax_aspect)
         self.ax.set_xlabel(f"x [{self.unit_axes}m]")
         self.ax.set_ylabel(f"y [{self.unit_axes}m]")
         self.ax.set_xlim(self.full_extent[:2])
@@ -329,7 +338,7 @@ class MagnetizationView(ctk.CTkFrame):
             'text_averaging': True
         }
 
-        self.cmap_hsv = cm.get_cmap('hsv')
+        self.cmap_hsv = colormaps['hsv']
         if not self.mm.in_plane: # Determine OOP cmap from IP hsv cmap at angles 0 and pi
             r0, g0, b0, _ = self.cmap_hsv(.5) # Value at angle 'pi' (-1)
             r1, g1, b1, _ = self.cmap_hsv(0) # Value at angle '0' (1)
@@ -353,14 +362,128 @@ class MagnetizationView(ctk.CTkFrame):
             self.figure.set_tight_layout(True) # Activates a layout engine in self.figure
             self.figure.get_layout_engine().execute(self.figure) # That layout engine recalculates the layout of self.figure
             self.figure.set_tight_layout(False) # To prevent figure widgets changing size when changing DisplayMode
-        rid = self.figure.canvas.mpl_connect('resize_event', on_figure_resize)
-        def onclick(event): # When clicking on the plot: change magnetization state of nearest magnet
-            idx_x = xp.argmin(xp.abs(event.xdata*self.unit_axes_factor - self.mm.xx[0,:].reshape(-1)))
-            idx_y = xp.argmin(xp.abs(event.ydata*self.unit_axes_factor - self.mm.yy[:,0].reshape(-1)))
-            self.mm.m[idx_y,idx_x] *= -1
-            self.mm.update_energy(index=xp.asarray([idx_y, idx_x]).reshape(2,-1))
+        sid = self.figure.canvas.mpl_connect('resize_event', on_figure_resize)
+
+        ## MOUSE AND KEYBOARD CONTROLS
+        toolbar_is_in_use = lambda: any([button.var.get() for button in self.toolbar._buttons.values() if isinstance(button, tk.Checkbutton)]) # Only 'Pan' and 'Zoom' buttons are Checkbutton
+        def get_idx(mouse_event: MouseEvent):
+            """ Returns: (x, y) integer indices of self.mm.m array where MouseEvent took place.
+                         (None, None) if invalid event or somehow else not intending to change mm.m state.
+            """
+            if mouse_event.inaxes is not self.ax: return None, None # Only respond to mouse events inside the main drawing area (not e.g. the colorbar)
+            if toolbar_is_in_use(): return None, None # Do not change magnets when the user wants to Pan or Zoom
+            idx_x = int(xp.argmin(xp.abs(mouse_event.xdata*self.unit_axes_factor - self.mm.xx[0,:].reshape(-1))))
+            idx_y = int(xp.argmin(xp.abs(mouse_event.ydata*self.unit_axes_factor - self.mm.yy[:,0].reshape(-1))))
+            return idx_x, idx_y
+        
+        self.last_toggle_index = (0, 0) # (y, x)
+        def toggle(indices_x: int|xp.ndarray = None, indices_y: int|xp.ndarray = None, mouse_event: MouseEvent = None):
+            """ Toggles the magnet(s) at self.mm.m[indices_y, indices_x] (and updates all necessary variables along with it).
+                If <mouse_event> is passed as an argument, it is used to determine a more specific action, using filter_indices().
+            """
+            if indices_x is None or indices_y is None:
+                if mouse_event is None: return # Then no information was provided for the toggle, so we can't do anything
+                indices_x, indices_y = get_idx(mouse_event) # Get the indices information from mouse_event
+            if mouse_event is not None:
+                indices_x, indices_y = filter_indices(mouse_event.key, xp.asarray(indices_x).reshape(-1), xp.asarray(indices_y).reshape(-1))
+            if indices_x.size == 0: return # Efficiency
+            self.mm.m[indices_y, indices_x] *= -1
+            self.mm.update_energy(index=xp.asarray([indices_y, indices_x]).reshape(2, -1))
+            self.last_toggle_index = (int(indices_y[-1]), int(indices_x[-1]))
             self.redraw(settings_changed=False)
-        if self.gui.editable: cid = self.figure.canvas.mpl_connect('button_press_event', onclick)
+
+        def filter_indices(key: str, indices_x, indices_y): # KEY is a keyboard key, NOT MOUSE
+            """ Only retains the indices of magnets that should be flipped according to <key>. """
+            if indices_x.size == 0 or key is None: return indices_x, indices_y # No lookup needed
+            match key:
+                case 'left' | 'right': # Arrow keys left-right
+                    if not self.mm.in_plane: return indices_x, indices_y
+                    direction = -1 if key == 'left' else 1
+                    mx = self.mm.orientation[indices_y,indices_x,0]*self.mm.m[indices_y,indices_x]
+                    update_indices = xp.where(mx*direction < 0)
+                case 'up' | 'down': # Arrow keys up-down
+                    direction = -1 if key == 'down' else 1
+                    oy = self.mm.orientation[indices_y,indices_x,1] if self.mm.in_plane else 1
+                    update_indices = xp.where(oy*self.mm.m[indices_y,indices_x]*direction < 0)
+                case 'u' | 'd': # If U (D) pressed, set m to +1 (-1)
+                    update_indices = xp.where(self.mm.m[indices_y, indices_x] != (+1 if key == 'u' else -1))
+                case _:
+                    return indices_x, indices_y # Unknown key, so everything touched by the mouse may just flip
+            return indices_x[update_indices], indices_y[update_indices]
+
+        self.polygon = [] # list of (y, x) tuples
+        def onclick(event):
+            tup = get_idx(event)[::-1]
+            if tup == (None, None): return
+            match event.button:
+                case MouseButton.LEFT: # If left mouse button clicked: change state of clicked magnet
+                    toggle(mouse_event=event)
+                case MouseButton.RIGHT: # If right mouse button clicked: start building self.polygon
+                    self.polygon.append(tup)
+
+        def update_polygonplotted():
+            polygon = np.asarray(self.polygon).reshape(-1, 2)
+            if polygon.size > 0:
+                x = self.mm.xx[0, polygon.T[1]]/self.unit_axes_factor
+                y = self.mm.yy[polygon.T[0], 0]/self.unit_axes_factor
+                self.polygonplotted.set_xy(np.asarray([asnumpy(x), asnumpy(y)]).T)
+            else:
+                self.polygonplotted.set_xy([(0, 0)])
+            self.ax.draw_artist(self.polygonplotted)
+            self.figure.canvas.draw()
+        self.polygonplotted = Polygon([(0, 0)], facecolor='#88888888', edgecolor='#555')
+        self.ax.add_artist(self.polygonplotted)
+        update_polygonplotted()
+
+        def onmotion(event): 
+            tup = get_idx(event)[::-1]
+            if tup == (None, None): return
+            match event.button:
+                case MouseButton.LEFT: # If left mouse button dragged: change state of all magnets the mouse passes
+                    if self.last_toggle_index != (None, None):
+                        indices_y, indices_x = xp.asarray(bresenham(self.last_toggle_index, tup))[1:,:].T
+                    else:
+                        indices_y, indices_x = tup
+                    toggle(indices_x, indices_y, mouse_event=event)
+                case MouseButton.RIGHT: # If right mouse button dragged: enlarge polygon behind-the-scenes
+                    if len(self.polygon) != 0:
+                        if self.polygon[-1] == tup: return # Don't add identical successive vertices to self.polygon
+                    self.polygon.append(tup)
+                    update_polygonplotted()
+
+        def onrelease(event):
+            match event.button:
+                case MouseButton.RIGHT: # If right mouse button released: draw polygon
+                    if len(self.polygon) == 0: return
+                    polygon = np.asarray(self.polygon).reshape(-1, 2)
+                    xx, yy = np.meshgrid(np.arange(np.min(polygon[:,1]), np.max(polygon[:,1]) + 1), np.arange(np.min(polygon[:,0]), np.max(polygon[:,0]) + 1)) # Tight index-grid surely containing the polygon
+                    possible_x, possible_y = xx.reshape(-1), yy.reshape(-1)
+                    in_polygon, on_edge = inpoly2(np.asarray([possible_y, possible_x]).T, polygon)
+                    in_polygon = np.logical_or(in_polygon, on_edge)
+                    toggle(possible_x[in_polygon], possible_y[in_polygon], mouse_event=event)
+                    self.polygon = []
+                    update_polygonplotted()
+
+        if self.gui.editable:
+            cid = self.figure.canvas.mpl_connect('button_press_event', onclick)
+            mid = self.figure.canvas.mpl_connect('motion_notify_event', onmotion)
+            rid = self.figure.canvas.mpl_connect('button_release_event', onrelease)
+
+    def show_info(self): # Could also use third-party CTkMessagebox package for this
+        information = """
+            By clicking/dragging the mouse over the magnetization viewport, 
+            the state of the magnets can be switched by the user in real-time.
+                - Click left: toggles the state of the single magnet clicked.
+                - Drag left: toggles all magnets along the path of the mouse.
+                - Drag right: draws a polygon, toggling all magnets inside of it.
+
+            Holding down keys while clicking/dragging can modify the 'toggling':
+                - Arrow keys: toggles the magnets such that they point towards
+                    the arrow key. For OOP ASI, up/down is identical to 'U'/'D'.
+                - 'U'/'D' keys: set the magnetization to +1 or -1, respectively.
+                    Makes most sense for OOP ASI, though IP also supports this.
+        """
+        messagebox.showinfo("Keyboard and mouse controls", dedent(information[1:]))
 
     def change_setting(self, setting, value, _update=True):
         match setting: # Some cleaning of some values that are possibly passed as the wrong class, e.g. str instead of Average
@@ -399,7 +522,7 @@ class MagnetizationView(ctk.CTkFrame):
             case self.DisplayMode.AVERAGE:
                 self.ax.set_title(r"Magnetization $\overrightarrow{m}$")
                 IP = self.mm.in_plane
-                self.content = self.ax.imshow(im_placeholder, cmap=self.cmap_hsv, origin='lower', vmin=0 if IP else -1, vmax=2*np.pi if IP else 1, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
+                self.content = self.ax.imshow(im_placeholder, cmap=self.cmap_hsv, origin='lower', vmin=0 if IP else -1, vmax=2*np.pi if IP else 1, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect) # extent doesnt work perfectly with triangle or kagome but is still ok
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
             case self.DisplayMode.QUIVER:
@@ -414,17 +537,19 @@ class MagnetizationView(ctk.CTkFrame):
             case self.DisplayMode.DOMAINS:
                 if not hasattr(self.mm, 'get_domains'): raise ValueError("Can only use DisplayMode.DOMAINS for ASI that supports the .get_domains() method.")
                 self.ax.set_title(r"Domains")
-                self.content = self.ax.imshow(im_placeholder, cmap=cm.get_cmap('Greys'), origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba')
+                cmap = colormaps['Greys'].copy()
+                cmap.set_bad(color='#FFAAAA')
+                self.content = self.ax.imshow(im_placeholder, cmap=cmap, origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
                 self.colorbar.ax.set_ylabel("Domain number", rotation=270, fontsize=self.figparams['fontsize_colorbar']) # TODO: use the number of domains when that has been implemented in .ASI module
             case self.DisplayMode.ENERGY:
                 self.ax.set_title(r"Local energy $E_{int}$")
-                self.content = self.ax.imshow(im_placeholder, origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba')
+                self.content = self.ax.imshow(im_placeholder, origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 15
             case self.DisplayMode.FIELD:
-                self.content = self.ax.imshow(im_placeholder, cmap=cm.get_cmap('inferno'), origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba')
+                self.content = self.ax.imshow(im_placeholder, cmap=colormaps['inferno'], origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 15
             case self.DisplayMode.READOUT:
@@ -474,6 +599,7 @@ class MagnetizationView(ctk.CTkFrame):
 
     def _redraw_domains(self, settings_changed: bool = False):
         domains = self.mm.get_domains()
+        domains = xp.where(self.mm.occupation == 0, xp.nan, domains)
         lims = self.content.get_clim()
         self.content.set_data(asnumpy(domains))
         self.content.set_clim(vmin=min(lims[0], xp.nanmin(domains)), vmax=max(lims[1], xp.nanmax(domains)))
@@ -564,10 +690,10 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
 
         ## Tab 1: AVERAGE
         self.tab_AVERAGE = self.add(self.mode_to_name[MagnetizationView.DisplayMode.AVERAGE])
-        available_averages = [avg[0] + avg[1:].lower() for avg in Average._member_names_]
-        self.option_avg = ctk.CTkOptionMenu(self.tab_AVERAGE, values=available_averages, command=self.init_settings_magview)
+        available_averages = {avg: avg.name.capitalize() for avg in Average}
+        self.option_avg = ctk.CTkOptionMenu(self.tab_AVERAGE, values=list(available_averages.values()), command=self.init_settings_magview)
         self.option_avg.pack(pady=10, padx=10)
-        self.option_avg.set("Point") # Set to 'Point' by default
+        self.option_avg.set(available_averages[Average.resolve(self.mm._get_appropriate_avg())])
         self.option_fill = ctk.CTkSwitch(self.tab_AVERAGE, text="Fill", command=self.init_settings_magview)
         self.option_fill.pack(pady=10, padx=10)
         self.option_fill.select() # Set to 'on' by default
@@ -655,29 +781,33 @@ class ASISettingsFrame(ctk.CTkFrame):
 
         ## Update scheme
         self.updatescheme_tabview = ctk.CTkTabview(self, command=change_updatemode, height=120)
-        self.updatescheme_tabview.pack(pady=10, padx=10)
+        self.updatescheme_tabview.pack(pady=(0,10), padx=10)
 
         self.Néel = self.updatescheme_tabview.add("Néel")
         self.Néel.grid_columnconfigure(0, weight=2)
         self.Néel.grid_columnconfigure(1, weight=1)
-        sig_Néel = signature(self.mm._update_Néel)
-        self.Néel_t_max = ctk.CTkEntry(self.Néel, textvariable=tk.DoubleVar(value=sig_Néel.parameters['t_max'].default), width=100)
+        Néel_tmax_values = list(10.**np.arange(-10, 10)) + [1e100, np.inf]
+        self.Néel_t_max_var = tk.DoubleVar()
+        self.Néel_t_max = ttk.Spinbox(self.Néel, width=15, command=lambda: self.change_setting('t_max', float(self.Néel_t_max.get())), values=Néel_tmax_values, textvariable=self.Néel_t_max_var)
         self.Néel_t_max.grid(row=0, column=1, padx=10, sticky=ctk.W)
-        self.Néel_t_max_text = ctk.CTkLabel(self.Néel, text="t_max: ", anchor=ctk.E)
+        self.Néel_t_max_text = ctk.CTkLabel(self.Néel, text="t_max [s]: ", anchor=ctk.E)
         self.Néel_t_max_text.grid(row=0, column=0, sticky=ctk.E)
-        self.Néel_attempt_freq = ctk.CTkEntry(self.Néel, textvariable=tk.DoubleVar(value=sig_Néel.parameters['attempt_freq'].default), width=100)
+        Néel_attemptfreq_values = [1., 1.5, 2, 3, 5, 7.5, 10., 15., 20., 30., 50., 75., 100.]
+        self.Néel_attemptfreq_var = tk.DoubleVar()
+        self.Néel_attempt_freq = ttk.Spinbox(self.Néel, width=15, command=lambda: self.change_setting('attempt_freq', 1e9*float(self.Néel_attempt_freq.get())), values=Néel_attemptfreq_values, textvariable=self.Néel_attemptfreq_var)
         self.Néel_attempt_freq.grid(row=1, column=1, padx=10, sticky=ctk.W)
-        self.Néel_attempt_freq = ctk.CTkLabel(self.Néel, text="Attempt frequency: ", anchor=ctk.E)
-        self.Néel_attempt_freq.grid(row=1, column=0, sticky=ctk.E, padx=(10,0))
+        self.Néel_attempt_freq_text = ctk.CTkLabel(self.Néel, text="Attempt freq. [GHz]: ", anchor=ctk.E)
+        self.Néel_attempt_freq_text.grid(row=1, column=0, sticky=ctk.E, padx=(10,0))
 
         self.Glauber = self.updatescheme_tabview.add("Glauber")
         self.Glauber.grid_columnconfigure(0, weight=2)
         self.Glauber.grid_columnconfigure(1, weight=1)
-        sig_Glauber = signature(self.mm._update_Glauber)
-        self.Glauber_Q = ctk.CTkEntry(self.Glauber, textvariable=tk.DoubleVar(value=sig_Glauber.parameters['Q'].default), width=100)
+        Glauber_Q_values = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, np.inf]
+        self.Glauber_Q_var = tk.DoubleVar()
+        self.Glauber_Q = ttk.Spinbox(self.Glauber, width=7, command=lambda: self.change_setting('Q', float(self.Glauber_Q.get())), values=Glauber_Q_values, textvariable=self.Glauber_Q_var)
         self.Glauber_Q.grid(row=0, column=1, padx=10, sticky=ctk.W)
-        self.Glauber_Q = ctk.CTkLabel(self.Glauber, text="Q: ", anchor=ctk.E)
-        self.Glauber_Q.grid(row=0, column=0, sticky=ctk.E)
+        self.Glauber_Q_text = ctk.CTkLabel(self.Glauber, text="Q: ", anchor=ctk.E)
+        self.Glauber_Q_text.grid(row=0, column=0, sticky=ctk.E)
 
         self.get_settings_from_mm()
     
@@ -687,6 +817,11 @@ class ASISettingsFrame(ctk.CTkFrame):
     def get_settings_from_mm(self):
         self.settings.UPDATE_SCHEME = self.mm.params.UPDATE_SCHEME
         self.updatescheme_tabview.set(self.settings.UPDATE_SCHEME)
+        sig_Néel = signature(self.mm._update_Néel)
+        self.Néel_t_max_var.set(float(sig_Néel.parameters['t_max'].default))
+        self.Néel_attemptfreq_var.set(float(sig_Néel.parameters['attempt_freq'].default)*1e-9)
+        sig_Glauber = signature(self.mm._update_Glauber)
+        self.Glauber_Q_var.set(sig_Glauber.parameters['Q'].default)
 
     def change_setting(self, setting, value, _redraw=True):
         if not hasattr(self.settings, setting): # If the setting does not exist, then don't set it
@@ -713,35 +848,28 @@ class ASISettingsFrame(ctk.CTkFrame):
 
 
 
-# TODO: make this GUI.
-# Show auto-updated plots of:
-# - The current magnetization state
-#   - Option: fancy coloring (black and white fill etc.)
-#   - Option: show domains instead of magnetization direction (easy for OOP_Square, perhaps grey out this button for other ASI types)
-# - The energy of each magnet
-#   - TODO: finish this, because right now the two energy displays are a bit ambiguously defined with the switch
-# - The OutputReader() readout (if an OutputReader was provided), which is possible because nowadays we always have coordinates associated to each output node
-# 
-# - Show the current time, switches, MCsteps etc. and add a button to reset them to zero
-#
-# Allow the following actions:
-# - Updating the simulation one step
-#   - Choose Néel or Glauber
-#   - Choose number of times Néel is called before re-showing
-# - Progressing the simulation for <t_max> and/or <MCsteps_max>
-# - Applying a single input value through the Inputter() (and show what this value was)
-# - Initialize in a certain configuration
-# - Drawing on the state display to change mm.m (and automatically update energies when mouse is released)
-#
-# Possibly: create some sort of video of what happens, with a new frame every time the plot is updated? Details TBD
-#           Can create a switch that records frames when switch is on, and does not record new frames if off.
+
+# TODO: INPUT: applying a single input value through the Inputter()
+# TODO: VIEW: showing an OutputReader() readout (if an OutputReader was provided, and each node has coordinates)
+#       Could do this using scatter plot, with size determined by nearest output nodes
+#       Other option is to use voronoi diagram, but then I don't know how to color the regions that extend to infinity, plus is probably quite slow to draw 
+# TODO: INPUT: simple console that can eval() code in the namespace where GUI was created.
+#       Will have to use inspect module in __init__ probably, to determine locals there and save them to self._locals
+#       After each command, redraw the MagnetizationView
+# TODO: VIEW: show the current time, switches, MCsteps etc.
+#       Have a button to reset them to zero
+# TODO: MISC: allow recording what happens to a video
+#       Can have a switch, to toggle adding a new frame every time the plot is updated
+#       Also a manual button
 
 def show(mm, **kwargs):
     gui = GUI(mm, **kwargs)
     gui.show()
 
-def test(**kwargs):
+def test(in_plane=False, **kwargs):
     from .ASI import OOP_Square, IP_Pinwheel
-    # mm = IP_Pinwheel(230e-9, 20, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
-    mm = OOP_Square(230e-9, 20, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
+    if in_plane:
+        mm = IP_Pinwheel(230e-9, 20, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
+    else:
+        mm = OOP_Square(230e-9, 200, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
     show(mm, **kwargs)

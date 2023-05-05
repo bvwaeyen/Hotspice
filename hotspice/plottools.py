@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from enum import Enum
-from matplotlib import cm, colors, patches, widgets
+from matplotlib import cm, colormaps, colors, patches, widgets
 
 from .core import Magnets
 from .utils import asnumpy, J_to_eV, SIprefix_to_mul
@@ -236,7 +236,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
     if figure is not None: fig.clear()
     ax1 = fig.add_subplot(1, num_plots, 1)
     im = get_rgb(mm, m=m, avg=avg, fill=fill)
-    cmap = cm.get_cmap('hsv')
+    cmap = colormaps['hsv']
     if mm.in_plane:
         im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi,
                         extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
@@ -309,7 +309,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         update_interactive(fig)
     return fig
 
-def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, scale: float = .8, save: bool = False, save_ext: str = '.pdf'):
+def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_off: float = 1, scale: float = .8, save: bool = False, save_ext: str = '.pdf'):
     """ Shows a minimalistic rendition of the lattice on which the spins are placed.
         @param mm [Magnets]: an instance of the ASI class whose lattice should be plotted.
         @param nx, ny [int] (3): the number of unit cells that will be shown.
@@ -317,7 +317,13 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
         @param scale [float] (.8): how long the shown ellipses are, as a multiple of the distance between nearest neighbors.
         @param save [bool] (False): if True, the figure is saved as "results/lattices/<ASI_name>_<nx>x<ny>.pdf
     """
-    nx, ny = nx*mm.unitcell.x+1, ny*mm.unitcell.y+1
+    len_x = mm.unitcell.x*mm.dx
+    len_y = mm.unitcell.y*mm.dy
+    x_is_longer = len_x > len_y
+    if nx is None: nx = n if x_is_longer else round(n*len_y/len_x)
+    if ny is None: ny = round(nx*len_x/len_y) if x_is_longer else n
+    nx = nx*mm.unitcell.x + 1
+    ny = ny*mm.unitcell.y + 1
     if mm.nx < nx or mm.ny < ny:
         raise ValueError(f"Lattice of {type(mm).__name__} is too small: ({mm.nx}x{mm.ny})<({nx}x{ny}).")
 
