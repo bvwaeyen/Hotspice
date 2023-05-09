@@ -302,6 +302,59 @@ class PerpFieldInputter(FieldInputter):
             mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
 
 
+class Previous2DFieldInputter(Inputter):
+    def __init__(self, datastream: BinaryDatastream, magnitude=1, angles=(0.0, math.pi/2.0, -math.pi/2.0, math.pi), n=2, frequency=1):
+        """ Applies an external field of magnitude at an angle, e.g. 0° when input is 0. It applies the field at e.g. 180°
+        if the input is a 1. However, the extra dimension is utilized by looking at the previous bit.
+        For example, if the previous bit is different, add an extra 90°.
+        Default: current_bit(previous_bit):  0(0): 0°    0(1): 90°   1(0): 270°  1(1): 180°
+        Reading this as a binary number, this behaviour can be tweaked using the angles parameters (in radians).
+
+        @param datastream: BinaryDatastream supplying inputs
+        @param magnitude: of the magnetic field
+        @param angles: the 4 angles read as binary current_bit(previous_bit)
+        @param n: maximum number of MonteCarloSteps per input_single()
+        @param frequency: a single input takes 1/frequency seconds
+        """
+
+        super().__init__(datastream)
+
+        self.magnitude = magnitude
+        self.angles = angles
+        self.n = n  # The max number of Monte Carlo steps performed every time self.input_single(mm) is called
+        self.frequency = frequency
+        self.previous_value = 0  # default value for previous value  FIXME: uses last value of a different input, instead of default value!
+        print("Succesfully initiated")
+
+    @property
+    def angles(self):  # tuple of 4 angles [rad]
+        return self._angles
+    @angles.setter
+    def angles(self, new_angles):
+        self._angles = tuple((angle % math.tau for angle in new_angles))
+
+    @property
+    def magnitude(self):  # [T]
+        return self._magnitude
+    @magnitude.setter
+    def magnitude(self, value):
+        self._magnitude = value
+
+    def input_single(self, mm: Magnets, value: int):
+        if not mm.in_plane:
+            raise AttributeError("Can not use Previous2DFieldInputter on an out-of-plane ASI.")
+
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+
+        # use constant magnitude
+        # TODO: add sine? If anybody uses it. Maybe inherit FieldInputter instead of Inputter
+        angle = self.angles[2*value + self.previous_value]  # binary translation of current_bit(previous_bit)
+        Zeeman.set_field(magnitude=self.magnitude, angle=angle)
+        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+        self.previous_value = value
+
+
 class FullOutputReader(OutputReader):
     # TODO: add compression to this, so it can be used without storage-worry as default when storing in a dataframe (then afterwards we can re-load this into mm and read it with another kind of outputreader)
     def __init__(self, mm: Magnets = None):
