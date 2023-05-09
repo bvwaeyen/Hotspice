@@ -258,7 +258,7 @@ class PerpFieldInputter(FieldInputter):
             NOTE: this class is ancient and might not work correctly.
         """
         self.relax = relax
-        super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, frequency=frequency)
+        super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, frequency=frequency, **kwargs)  # Fixed to also kwargs, otherwise no sine and half_perdiod?
 
     def input_single(self, mm: IP_ASI, value: bool|int):
         if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
