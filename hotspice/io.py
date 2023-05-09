@@ -161,6 +161,28 @@ class ConstantDatastream(Datastream):
     def get_next(self, n=1) -> xp.ndarray:
         return xp.full((n,), self.value)
 
+class BinaryListDatastream(BinaryDatastream):
+    """Returns values from a given list. Can be periodic or repeat the last element forever."""
+    def __init__(self, binary_list: list[int] = [0], periodic=True):
+        self.binary_list = binary_list
+        self.len_list = len(binary_list)  # will be used often, no need to recalculate
+        self.periodic = periodic
+        self.index = 0  # start at the beginning
+        super().__init__()
+
+    def get_next(self, n=1) -> xp.ndarray:
+        """Returns next n values as xp.ndarray. Goes back to the beginning (periodic=True) or repeats the last index
+        (periodic=False) when out of range."""
+
+        if self.periodic:
+            array = xp.array([self.binary_list[(self.index + i) % self.len_list] for i in range(n)])
+        else:
+            array = xp.array([self.binary_list[min(self.index + i, self.len_list - 1)] for i in range(n)])
+
+        self.index += n
+
+        return array
+
 
 class FieldInputter(Inputter):
     def __init__(self, datastream: Datastream, magnitude=1, angle=0, n=2, sine=False, frequency=1, half_period=True):
@@ -221,7 +243,7 @@ class FieldInputterBinary(FieldInputter):
             NOTE: this class is ancient and might not work correctly.
         """
         self.magnitude_ratio = magnitudes[0]/magnitudes[1]
-        super().__init__(datastream, magnitude=magnitudes[1], half_period=False, **kwargs)
+        super().__init__(datastream, magnitude=magnitudes[1], **kwargs)
 
     def input_single(self, mm: Magnets, value: bool|int):
         super().input_single(mm, 1 if value else self.magnitude_ratio)
