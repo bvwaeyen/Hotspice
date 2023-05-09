@@ -302,6 +302,48 @@ class PerpFieldInputter(FieldInputter):
             mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
 
 
+class ClockingFieldInputter(FieldInputter):
+    def __init__(self, datastream: BinaryDatastream, magnitude=1, angle=0, spread=math.pi/8., n=2, frequency=1, relax=False):
+        """ Applies an external field at <angle> + <spread> rad for 0.5/frequency seconds, then at <angle> - <spread> rad
+        for bit 1. It does the same +180° for bit 0. The idea is that switching cascades are prevented by changing only
+        one sublattice at a time.
+        Was not made with <relax> = True in mind and this does not work well.
+        """
+
+        self.spread = spread
+        self.relax = relax
+        super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, frequency=frequency)
+
+    def bit_to_angles(self, bit):
+        if bit:
+            return (self.angle + self.spread, self.angle - self.spread)
+        return (self.angle + self.spread + math.pi, self.angle - self.spread + math.pi)
+
+
+    def input_single(self, mm: IP_ASI, value: bool|int):
+        if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
+            raise AttributeError("Can not use nonzero frequency if UPDATE_SCHEME != 'Néel'.")
+        if not mm.in_plane:
+            raise AttributeError("Can not use ClockingFieldInputter on an out-of-plane ASI.")
+
+
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+
+        angle1, angle2 = self.bit_to_angles(value)
+
+        if self.relax:
+            Zeeman.set_field(magnitude=self.magnitude, angle=angle1)
+            mm.minimize()
+            Zeeman.set_field(magnitude=self.magnitude, angle=angle2)
+            mm.minimize()
+        else:
+            Zeeman.set_field(magnitude=self.magnitude, angle=angle1)
+            mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
+            Zeeman.set_field(magnitude=self.magnitude, angle=angle2)
+            mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
+
+
 class Previous2DFieldInputter(Inputter):
     def __init__(self, datastream: BinaryDatastream, magnitude=1, angles=(0.0, math.pi/2.0, -math.pi/2.0, math.pi), n=2, frequency=1):
         """ Applies an external field of magnitude at an angle, e.g. 0° when input is 0. It applies the field at e.g. 180°
