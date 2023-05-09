@@ -325,6 +325,24 @@ class FullOutputReader(OutputReader):
         return self.state
 
 
+class CorrelationLengthOutputReader(OutputReader):
+    def __init__(self, mm: Magnets = None):
+        """
+        Reduces mm to its correlation length
+        @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+        """
+        super().__init__(mm)
+
+    def configure_for(self, mm: Magnets):
+        self.mm = mm
+        self.state = xp.array([self.mm.correlation_length() / self.mm.a])
+
+    def read_state(self, mm: Magnets = None, m: xp.ndarray = None) -> xp.ndarray:
+        super().read_state(mm)
+        self.state = xp.array([self.mm.correlation_length() / self.mm.a])
+        return self.state
+
+
 class RegionalOutputReader(OutputReader):
     def __init__(self, nx: int, ny: int, mm: Magnets = None):
         """ Reads the current state of the ASI with a certain level of detail.
