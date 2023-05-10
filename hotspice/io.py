@@ -419,6 +419,15 @@ class FullOutputReader(OutputReader):
         self.state = m[self.indices]
         return self.state
 
+    def unread_state(self, previous_state: xp.ndarray, mm: Magnets = None) -> Magnets:
+        """ Pours previous_state, which was the output of FullOutputReader.read_state(), back into mm.m and returns mm.
+        This can then be read by a different OutputReader. This only affects mm.m, and can not restore any other
+        information such as T, E_B, a, etc., which is all lost.
+        TODO: add un-compression"""
+        super().read_state(mm)  # to call configure_for for self.indices and mm -> self.mm
+        self.mm.m[self.indices] = previous_state
+        return self.mm
+
 
 class CorrelationLengthOutputReader(OutputReader):
     def __init__(self, mm: Magnets = None):
