@@ -488,7 +488,7 @@ def close_interactive(figure=None):
         plt.close()
 
 
-def save_plot(save_path: str, ext=None):
+def save_plot(save_path: str, ext=None, **savefig_kwargs):
     """ <save_path> is a full relative pathname, usually something like
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     """
@@ -500,7 +500,7 @@ def save_plot(save_path: str, ext=None):
         save_path += '.' + ext.removeprefix('.') # This slightly convoluted way allows <ext> to be e.g. '.pdf' but also just 'pdf'
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     try:
-        plt.savefig(save_path)
+        plt.savefig(save_path, **savefig_kwargs)
     except PermissionError:
         warnings.warn(f"Could not save to {save_path}, probably because the file is opened somewhere else.", stacklevel=2)
 

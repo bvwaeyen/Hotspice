@@ -929,6 +929,11 @@ class DipolarEnergy(Energy):
             It should therefore always be included in the simulations.
             @param prefactor [float] (1): The relative strength of the dipolar interaction.
         """
+        # TODO: a more intricate scaling with distance is needed to incorporate the effect of the magnets not being infinitely small magnetic spins.
+        #       As a first step, a new method DipolarEnergy().scale_NN() can be created, that scales <prefactor> such that NN interactions have a certain energy.
+        #                        (Use the highest nearest-neighbor absolute value for this, because some can be zero e.g. in Pinwheel.)
+        #                        (A complete rework of NN logic would also be quite welcome at this point)
+        #       Further steps can then concern themselves with the nonpolynomial fall-off with distance, as the magnets start to see each other more as infinitesimal spins rather than a finite FM geometry.
         self.prefactor = prefactor
 
     def initialize(self, mm: Magnets):

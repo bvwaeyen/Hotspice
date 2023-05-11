@@ -402,7 +402,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         if save:
             save_path = os.path.splitext(summary_file)[0]
             save_plot(save_path, ext='.pdf')
-            save_plot(save_path, ext='.png')
+            save_plot(save_path, ext='.png', dpi=200) # Default dpi is 100, so save at higher res
         if plot:
             plt.show()
 

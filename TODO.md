@@ -14,7 +14,7 @@
     - [ ] Take a look at the `E_B` calculation for Néel, as the current method might not be entirely correct after all.
 
 2. Medium priority
-    - [ ] Create some sort of GUI that takes an ASI, inputter and datastream and shows what happens, allows applying individual bits etc.
+    - [ ] Dynamically calculate the nearest neighbors, and do this for each position in a unit cell separately.
     - [ ] In-plane systems could benefit from a better, angle-dependent, `E_barrier` calculation. Currently, the effective energy barrier in the presence of a dipolar or Zeeman interaction is crudely approximated as something like `E_B - switch_energy/2`. There are two ways this can be improved, both of whose effect should be investigated to see if they are worth the trouble.
         - [ ] The first way is to improve this formula, by using the actual minima and maxima and calculating the effective barrier from them. If I recall correctly, this would not significantly affect the effective barrier as compared to how it is calculated now.
         - [ ] The second way is to make the `DipolarEnergy` angular dependent, and combining this with the `ZeemanEnergy`'s inherent angular dependence, to create a better effective barrier by taking into account the offset angles of all the sines making up the energy landscape. This should not be too hard to do, but will require a completely different calculation which will certainly affect performance (because we need a separate dipolar kernel for both the x- and y-axes, so everything will take twice as long to calculate).

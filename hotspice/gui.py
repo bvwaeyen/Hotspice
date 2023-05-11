@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 import tkinter as tk
@@ -7,7 +8,6 @@ import tkinter.ttk as ttk
 from dataclasses import dataclass
 from enum import auto, Enum
 from inpoly import inpoly2
-from inspect import signature
 from matplotlib import cm, colorbar, colormaps, colors, image, quiver
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import MouseButton, MouseEvent
@@ -48,9 +48,9 @@ class GUI(ctk.CTk):
         
         self.custom_step, self.custom_reset = custom_step, custom_reset
         if self.custom_step is not None:
-            if len(signature(custom_step).parameters) == 0: self.custom_step = lambda gui: custom_step()
+            if len(inspect.signature(custom_step).parameters) == 0: self.custom_step = lambda gui: custom_step()
         if self.custom_reset is not None:
-            if len(signature(custom_reset).parameters) == 0: self.custom_reset = lambda gui: custom_reset()
+            if len(inspect.signature(custom_reset).parameters) == 0: self.custom_reset = lambda gui: custom_reset()
 
         ## Configure layout of four main panels
         self.grid_rowconfigure(0, weight=1)
@@ -152,7 +152,7 @@ class ActionsPanel(ctk.CTkScrollableFrame):
         ## PROGRESS
         # Widget definitions and default values
         self.action_progress = ctk.CTkButton(self, text="Progress", command=lambda:self.action('progress', t_max=float(self.action_progress_tmax.get()), MCsteps_max=float(self.action_progress_MCstepsmax.get())))
-        sig_progress = signature(self.mm.progress)
+        sig_progress = inspect.signature(self.mm.progress)
         action_progress_tmax_values = list(10.**np.arange(-10, 10)) + [1e100, np.inf]
         self.action_progress_tmax = ttk.Spinbox(self, from_=0, wrap=True, width=15, values=action_progress_tmax_values, textvariable=tk.DoubleVar(value=sig_progress.parameters['t_max'].default))
         self.action_progress_tmax.insert(0, "1")
@@ -264,7 +264,7 @@ class ActionsPanel(ctk.CTkScrollableFrame):
 
 class MagnetizationView(ctk.CTkFrame):
     class DisplayMode(Enum):
-        AVERAGE = auto()
+        MAGNETIZATION = auto()
         QUIVER = auto()
         DOMAINS = auto()
         ENERGY = auto()
@@ -353,8 +353,8 @@ class MagnetizationView(ctk.CTkFrame):
                             [1.0, b1,  b1]]}
             self.cmap_hsv = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
         
-        ## Draw everything specific to a DisplayMode, default to AVERAGE
-        self.change_mode(self.DisplayMode.AVERAGE) # This initializes the contents of the matplotlib plot
+        ## Draw everything specific to a DisplayMode, default to MAGNETIZATION
+        self.change_mode(self.DisplayMode.MAGNETIZATION) # This initializes the contents of the matplotlib plot
         self.figure.set_tight_layout(False) # To prevent figure widgets changing size when changing DisplayMode
 
         ## MATPLOTLIB EVENT LISTENERS
@@ -519,7 +519,7 @@ class MagnetizationView(ctk.CTkFrame):
         ## HERE, WE DO SOME COMMANDS THAT ARE NEEDED ONLY WHEN SWITCHING BETWEEN DISPLAY MODES, LIKE TITLES AND TEXT, CHECKS ETC.
         im_placeholder = np.ones((1,1))
         match self.mode:
-            case self.DisplayMode.AVERAGE:
+            case self.DisplayMode.MAGNETIZATION:
                 self.ax.set_title(r"Magnetization $\overrightarrow{m}$")
                 IP = self.mm.in_plane
                 self.content = self.ax.imshow(im_placeholder, cmap=self.cmap_hsv, origin='lower', vmin=0 if IP else -1, vmax=2*np.pi if IP else 1, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect) # extent doesnt work perfectly with triangle or kagome but is still ok
@@ -560,8 +560,8 @@ class MagnetizationView(ctk.CTkFrame):
 
     def redraw(self, settings_changed: bool = False):
         match self.mode:
-            case self.DisplayMode.AVERAGE:
-                self._redraw_average(settings_changed)
+            case self.DisplayMode.MAGNETIZATION:
+                self._redraw_magnetization(settings_changed)
             case self.DisplayMode.QUIVER:
                 self._redraw_quiver(settings_changed)
             case self.DisplayMode.DOMAINS:
@@ -575,7 +575,7 @@ class MagnetizationView(ctk.CTkFrame):
         self.canvas.draw()
         self.canvas.flush_events()
 
-    def _redraw_average(self, settings_changed: bool = False):
+    def _redraw_magnetization(self, settings_changed: bool = False):
         avg, fill = self.settings.avg, self.settings.fill # Could also use self.get_settings, but then we don't get the type hints
         if settings_changed: # If averaging method changes, we need to update extent and colorbar text
             averaged_extent = _get_averaged_extent(self.mm, avg)/self.unit_axes_factor # List comp to convert to micrometre
@@ -688,13 +688,13 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
         self.magviewwidget = magnetization_view_widget
         self.mm = self.magviewwidget.mm
 
-        ## Tab 1: AVERAGE
-        self.tab_AVERAGE = self.add(self.mode_to_name[MagnetizationView.DisplayMode.AVERAGE])
+        ## Tab 1: MAGNETIZATION
+        self.tab_MAGNETIZATION = self.add(self.mode_to_name[MagnetizationView.DisplayMode.MAGNETIZATION])
         available_averages = {avg: avg.name.capitalize() for avg in Average}
-        self.option_avg = ctk.CTkOptionMenu(self.tab_AVERAGE, values=list(available_averages.values()), command=self.init_settings_magview)
+        self.option_avg = ctk.CTkOptionMenu(self.tab_MAGNETIZATION, values=list(available_averages.values()), command=self.init_settings_magview)
         self.option_avg.pack(pady=10, padx=10)
         self.option_avg.set(available_averages[Average.resolve(self.mm._get_appropriate_avg())])
-        self.option_fill = ctk.CTkSwitch(self.tab_AVERAGE, text="Fill", command=self.init_settings_magview)
+        self.option_fill = ctk.CTkSwitch(self.tab_MAGNETIZATION, text="Fill", command=self.init_settings_magview)
         self.option_fill.pack(pady=10, padx=10)
         self.option_fill.select() # Set to 'on' by default
 
@@ -817,10 +817,10 @@ class ASISettingsFrame(ctk.CTkFrame):
     def get_settings_from_mm(self):
         self.settings.UPDATE_SCHEME = self.mm.params.UPDATE_SCHEME
         self.updatescheme_tabview.set(self.settings.UPDATE_SCHEME)
-        sig_Néel = signature(self.mm._update_Néel)
+        sig_Néel = inspect.signature(self.mm._update_Néel)
         self.Néel_t_max_var.set(float(sig_Néel.parameters['t_max'].default))
         self.Néel_attemptfreq_var.set(float(sig_Néel.parameters['attempt_freq'].default)*1e-9)
-        sig_Glauber = signature(self.mm._update_Glauber)
+        sig_Glauber = inspect.signature(self.mm._update_Glauber)
         self.Glauber_Q_var.set(sig_Glauber.parameters['Q'].default)
 
     def change_setting(self, setting, value, _redraw=True):
@@ -855,7 +855,12 @@ class ASISettingsFrame(ctk.CTkFrame):
 #       Other option is to use voronoi diagram, but then I don't know how to color the regions that extend to infinity, plus is probably quite slow to draw 
 # TODO: INPUT: simple console that can eval() code in the namespace where GUI was created.
 #       Will have to use inspect module in __init__ probably, to determine locals there and save them to self._locals
-#       After each command, redraw the MagnetizationView
+#       This can be done with a popup window where one can run some (possibly multi-line) <command>,
+#       which behind-the-scenes can be executed upon pressing a 'run' button using something like 
+#        IPython.core.interactiveshell.InteractiveShell().run_cell("x += 5")
+#       but then with an InteractiveShell() that has been given the right scope.
+#       After each 'run' button press (i.e. each command), close the popup and redraw the MagnetizationView.
+#       If the return value is not None, display it in a new popup? (has to be big enough to scroll through array output etc.)
 # TODO: VIEW: show the current time, switches, MCsteps etc.
 #       Have a button to reset them to zero
 # TODO: MISC: allow recording what happens to a video
@@ -869,7 +874,7 @@ def show(mm, **kwargs):
 def test(in_plane=False, **kwargs):
     from .ASI import OOP_Square, IP_Pinwheel
     if in_plane:
-        mm = IP_Pinwheel(230e-9, 20, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
+        mm = IP_Pinwheel(230e-9, 40, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
     else:
         mm = OOP_Square(230e-9, 200, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
     show(mm, **kwargs)
