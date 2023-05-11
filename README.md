@@ -123,3 +123,4 @@ They all follow the pattern `hotspice.ASI.<class>(a, n, nx=None, ny=None, **kwar
 |---|:---:|---|
 | `OOP_Square` | <img src="./figures/ASI_lattices/OOP_Square_11x11.png" alt="OOP_Square_11x11" width="200"/> | `a` is the distance between nearest neighbors. The occupation is full. |
 | `OOP_Triangle` | <img src="./figures/ASI_lattices/OOP_Triangle_7x4.png" alt="OOP_Triangle_7x4" width="200"/> | `a` is the distance between nearest neighbors. The occupation is 1/2. |
+| `OOP_Honeycomb` | <img src="./figures/ASI_lattices/OOP_Honeycomb_4x7.png" alt="OOP_Honeycomb_4x7" width="200"/> | `a` is the distance between nearest neighbors. The occupation is 2/5. |

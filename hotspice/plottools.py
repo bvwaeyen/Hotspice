@@ -335,11 +335,13 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
     ux, uy = mm.unitcell.x*mm.dx, mm.unitcell.y*mm.dy
 
     figsize = 6
-    fig = plt.figure(figsize=(figsize, figsize*uy*ny/ux/nx))
+    size = mm._get_closest_dist()*scale
+    size_x = (xmax - xmin) + size
+    size_y = (ymax - ymin) + size
+    fig = plt.figure(figsize=(figsize, figsize*size_y/size_x))
     ax = fig.add_subplot(111)
     ax.set_aspect('equal')
     ax.set_axis_off()
-    size = mm._get_closest_dist()*scale
     if mm.in_plane:
         ox = asnumpy(mm.orientation[:,:,0][occupied_indices])
         oy = asnumpy(mm.orientation[:,:,1][occupied_indices])
