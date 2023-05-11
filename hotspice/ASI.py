@@ -4,8 +4,10 @@ from .core import Magnets
 from . import config
 if config.USE_GPU:
     import cupy as xp
+    from cupyx.scipy import signal
 else:
     import numpy as xp
+    from scipy import signal
 
 
 class OOP_ASI(Magnets):
@@ -21,6 +23,12 @@ class OOP_ASI(Magnets):
         # This abstract method is irrelevant for OOP ASI, so just return NaNs.
         return xp.nan*xp.zeros_like(self.ixx)
 
+    def correlation_NN(self): # Basically <S_i S_{i+1}>
+        NN = self._get_nearest_neighbors()
+        total_NN = signal.convolve2d(self.occupation, NN, mode='same', boundary='wrap' if self.PBC else 'fill')*self.occupation
+        neighbors_sign_sum = signal.convolve2d(self.m, NN, mode='same', boundary='wrap' if self.PBC else 'fill')
+        valid_positions = xp.where(total_NN != 0)
+        return xp.mean(self.m[valid_positions]*neighbors_sign_sum[valid_positions]/total_NN[valid_positions])
 
 class IP_ASI(Magnets):
     """ Generic abstract class for in-plane ASI. """
@@ -102,6 +110,52 @@ class OOP_Triangle(OOP_ASI):
 
     def _get_groundstate(self): # TODO: not so relevant
         return 'afm'
+
+
+class OOP_Honeycomb(OOP_ASI):
+    def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
+        """ Out-of-plane ASI in a honeycomb arrangement.
+            This happens e.g. when the magnets themselves are triangular and close-packed.
+            Unitcell 6x2.
+        """
+        self.a = a # [m] The distance between two nearest neighboring spins
+        if nx is None: nx = n
+        if ny is None:
+            ny = int(nx/math.sqrt(3))//2*2 # Try to make the domain reasonably square-shaped
+            if not kwargs.get('PBC', False): ny -= 1 # Remove dangling spins if no PBC
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx = kwargs.pop('dx', a/2)
+        dy = kwargs.pop('dy', math.sqrt(3)*dx)
+        super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
+
+    def _set_m(self, pattern: str):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = (self.ixx % 3 == 1)*2 - 1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_occupation(self):
+        occupation = xp.ones_like(self.xx)
+        occupation[(self.ixx + self.iyy) % 2 == 0] = 0 # A bunch of diagonals 
+        occupation[self.ixx % 3 == 2] = 0 # Some vertical lines that are completely empty
+        return occupation
+
+    def _get_appropriate_avg(self): # TODO: not so relevant
+        return 'point'
+
+    def _get_AFMmask(self): # TODO: not so relevant
+        return xp.array([[1, 1, 1], [0, 0, 0], [-1, -1, -1]], dtype='float')/4
+
+    def _get_nearest_neighbors(self):
+        return xp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
+
+    def _get_groundstate(self): # TODO: not so relevant
+        return 'afm'
+
+    def get_domains(self):
+        sublattice = xp.where(self.ixx % 3 == 0, -1, 1)
+        return (sublattice == self.m).astype(int)
 
 
 class IP_Ising(IP_ASI):

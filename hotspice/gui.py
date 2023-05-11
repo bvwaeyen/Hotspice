@@ -676,7 +676,7 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
     """ This thing does not concern itself with the ASI. It only cares about the MagnetizationView. """
     def __init__(self, master, magnetization_view_widget: MagnetizationView, **kwargs):
         self.name_to_mode = {
-            "Averaged": MagnetizationView.DisplayMode.AVERAGE,
+            "Magnetization": MagnetizationView.DisplayMode.MAGNETIZATION,
             "Quiver": MagnetizationView.DisplayMode.QUIVER,
             "Domains": MagnetizationView.DisplayMode.DOMAINS,
             "Energy": MagnetizationView.DisplayMode.ENERGY,

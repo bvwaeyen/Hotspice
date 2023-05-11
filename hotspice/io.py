@@ -59,7 +59,7 @@ class Inputter(ABC):
     def __init__(self, datastream: Datastream):
         self.datastream = datastream
     
-    def input(self, mm: Magnets, values=None) -> xp.ndarray:
+    def input(self, mm: Magnets, values=None, remove_stimulus=False) -> xp.ndarray:
         """ Inputs one or multiple values as passed to the <values> argument.
             If <values> is not provided, the next value yielded by <self.datastream> is used.
         """
@@ -71,7 +71,7 @@ class Inputter(ABC):
             inputs = xp.asarray([self.datastream.as_bits(value) for value in values]).reshape(-1)
 
         for value in inputs: self.input_single(mm, value)
-        self.remove_stimulus(mm) # TODO: this might be a big performance impact due to get_energy('Zeeman'), can this lookup be more efficient? (e.g. making Dipolar and Zeeman energies special attributes of the class, and put any other energies in some extra array because they are rarely used?)
+        if remove_stimulus: self.remove_stimulus(mm) # TODO: this might be a big performance impact due to get_energy('Zeeman'), can this lookup be more efficient? (e.g. making Dipolar and Zeeman energies special attributes of the class, and put any other energies in some extra array because they are rarely used?)
         return values
 
     def remove_stimulus(self, mm: Magnets):
@@ -116,6 +116,14 @@ class OutputReader(ABC):
 ######## Below are subclasses of the superclasses above
 # TODO: class FileDatastream(Datastream) which reads bits from a file? Can use package 'bitstring' for this.
 # TODO: class SemiRepeatingDatastream(Datastream) which has first <n> random bits and then <m> bits which are the same for all runs
+class ConstantDatastream(ScalarDatastream):
+    """ A dummy datastream that just returns <constant> all the time. """
+    def __init__(self, constant=1):
+        super().__init__()
+        self.constant = constant
+    def get_next(self, n=1) -> xp.ndarray:
+        return xp.ones(n, dtype=float)*self.constant
+
 class RandomBinaryDatastream(BinaryDatastream):
     def __init__(self, p0=.5):
         """ Generates random bits, with <p0> probability of getting 0, and 1-<p0> probability of getting 1.
@@ -186,6 +194,10 @@ class FieldInputter(Inputter):
     @magnitude.setter
     def magnitude(self, value):
         self._magnitude = value
+    
+    @property
+    def full_period(self):
+        return not self.half_period
 
     def input_single(self, mm: Magnets, value: float|int):
         if self.sine and mm.params.UPDATE_SCHEME != 'Néel':
@@ -195,13 +207,17 @@ class FieldInputter(Inputter):
 
         Zeeman.set_field(angle=(self.angle if mm.in_plane else None)) # set angle only once
         MCsteps0, t0 = mm.MCsteps, mm.t
+        period = 1/(1 + self.half_period) # 1 if full period, .5 if half period
         if self.sine: # Change magnitude sinusoidally
             while lower_than(progress := max((mm.MCsteps - MCsteps0)/self.n, (mm.t - t0)*self.frequency), 1):
-                Zeeman.set_field(magnitude=self.magnitude*value*math.sin(progress*math.pi*(2-self.half_period)))
+                Zeeman.set_field(magnitude=self.magnitude*value*math.sin(progress*math.pi*2*period))
                 mm.update(t_max=min(1-progress, 0.05)/self.frequency) # At least 20 (=1/0.05) steps to sample the sine decently
         else: # Use constant magnitude
             Zeeman.set_field(magnitude=self.magnitude*value)
-            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n) # No sine, so no 20 steps per wavelength needed here
+            mm.progress(t_max=1/self.frequency/(2*period), MCsteps_max=self.n/(2*period)) # No sine, so no 20 steps per wavelength needed here
+            if self.full_period:
+                Zeeman.set_field(magnitude=-self.magnitude*value)
+                mm.progress(t_max=.5/self.frequency, MCsteps_max=self.n/2) # No sine, so no 20 steps per wavelength needed here
 
 
 class FieldInputterBinary(FieldInputter):
@@ -497,3 +513,43 @@ class OOPSquareChessStepsInputter(Inputter):
         if value > 1 - s:
             return self.magnitude + (value - 1)*self.magnitude_range/s
         return 2*(self.magnitude - self.magnitude_range)/self.transition_range*(value - 0.5)
+
+
+class OOPSquareChessSOTStepsInputter(Inputter):
+    def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
+        """ Tries to model the SOT as a reduction in energy barrier of the magnets.
+            The question is then, how one should define a bit 0 or 1, or any value in between if we want analog input.
+            One option is to use an external field whose strength determines the value, just as was the case in the
+            OOPSquareChessStepsInputter (with magnitude <magnitude>*<datastream.get_next()>). This can be done without
+            a weird transfer function as the ASI is thermally active, I suppose.
+            Another option is to vary the strength of the SOT, however it is not entirely clear what the effect of this is.
+            I doubt it could be modeled as a smaller or larger reduction in the energy barrier. 
+            A checkerboard pattern is used to make sure domain walls only move one step at a time.
+            <frequency> specifies the frequency [Hz] at which bits are being applied to the system, if it is nonzero.
+            At most <n> Monte Carlo steps will be performed for a single input bit.
+        """
+        super().__init__(datastream)
+        self.magnitude = magnitude
+        self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
+        self.frequency = frequency
+
+    def input_single(self, mm: OOP_Square, value: bool|int):
+        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
+        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
+        magnitude = self.magnitude*(2*value - 1)
+        Zeeman.set_field(magnitude=magnitude) # Constant field, determined by the input value
+
+        AFM_mask = ((mm.ixx + mm.iyy) % 2).astype(float) # 0 and 1 checkerboard (need astype float for correct multiplication)
+        E_B_original = mm.E_B.copy()
+        E_B_step1 = E_B_original*AFM_mask # TODO: is this realistic? Not really, because E_B of zero means Ising approximation does not apply
+        E_B_step2 = E_B_original*(1 - AFM_mask)
+
+        # First substep
+        mm.E_B = E_B_step1
+        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+        # Second substep
+        mm.E_B = E_B_step2
+        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+
+        mm.E_B = E_B_original
+
