@@ -38,7 +38,9 @@ E_B_distr = E_B * random_distr
 mm = hotspice.ASI.IP_Pinwheel(a, n, E_B=E_B_distr, T=T, moment=moment, pattern=pattern, PBC=PBC)
 mm.params.UPDATE_SCHEME = update_scheme
 
-H = 2e-3  # suggested magnetic field
+H = 1e-3  # suggested magnetic field
+dt = 2e-9  # around 2 ns is thermal half life and close to magnetic half life
+input_angle = 7. * np.pi/180.  # angle is probably unnecessary, but can't hurt? Normally used to break symmetry ties
 
 
 if __name__ == "__main__":

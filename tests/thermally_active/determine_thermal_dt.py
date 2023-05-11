@@ -27,7 +27,7 @@ t_progress = 0.1e-9  # was 0.1 ns
 steps = int(t_total / t_progress)
 MCsteps_max = 10
 
-create_new_data = True
+create_new_data = False
 directory = "Thermal Relaxation/"
 
 
