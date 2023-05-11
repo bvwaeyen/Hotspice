@@ -228,8 +228,15 @@ class FieldInputter(Inputter):
                 Zeeman.set_field(magnitude=self.magnitude*value*math.sin(progress*math.pi*(2-self.half_period)))
                 mm.update(t_max=min(1-progress, 0.05)/self.frequency) # At least 20 (=1/0.05) steps to sample the sine decently
         else: # Use constant magnitude
-            Zeeman.set_field(magnitude=self.magnitude*value)
-            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n) # No sine, so no 20 steps per wavelength needed here
+            # No sine, so no 20 steps per wavelength needed here
+            if self.half_period:
+                Zeeman.set_field(magnitude=self.magnitude*value)
+                mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
+            else:
+                Zeeman.set_field(magnitude=self.magnitude*value)
+                mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
+                Zeeman.set_field(magnitude=-self.magnitude*value)  # turn field around
+                mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
 
 
 class FieldInputterBinary(FieldInputter):
@@ -272,15 +279,21 @@ class PerpFieldInputter(FieldInputter):
         angle = self.angle + value*math.pi/2
         # pos and neg field
         if self.relax:
-            for mag in [self.magnitude, -self.magnitude]:
-                Zeeman.set_field(magnitude=mag, angle=angle)
+            Zeeman.set_field(magnitude=self.magnitude, angle=angle)
+            mm.minimize()
+            if not self.half_period:
+                Zeeman.set_field(magnitude=-self.magnitude, angle=angle)  # turn field around
                 mm.minimize()
             # log(f"Performed {mm.MCsteps - MCsteps0} MC steps.")
         else:
-            Zeeman.set_field(magnitude=self.magnitude, angle=angle)
-            mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
-            Zeeman.set_field(magnitude=-self.magnitude, angle=angle)
-            mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
+            if self.half_period:
+                Zeeman.set_field(magnitude=self.magnitude, angle=angle)
+                mm.progress(t_max=1./self.frequency, MCsteps_max=self.n)  # one direction for full duration
+            else:  # both directions
+                Zeeman.set_field(magnitude=self.magnitude, angle=angle)
+                mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
+                Zeeman.set_field(magnitude=-self.magnitude, angle=angle)
+                mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
 
     def input_single_generalized(self, mm: IP_ASI, value: bool|int):
         if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
