@@ -41,7 +41,7 @@ if make_new_data:
         for dt_num, dt in enumerate(dt_list):
             inputter.frequency = 1./dt
             for sample in range(samples):
-                print(f"Calculating H = {H * 1000 :.2f} mT [{H_num+1}/{len(H_list)}], dt = {dt * 1e9} [{dt_num+1}/{len(dt_list)}] ns: sample {sample+1}/{samples}")
+                print(f"Calculating H = {H * 1000 :.2f} mT [{H_num+1}/{len(H_list)}], dt = {dt * 1e9} ns [{dt_num+1}/{len(dt_list)}]: sample {sample+1}/{samples}")
 
                 if os.path.exists(directory + filename(H, dt, H)):
                     print(f"File already exists! Skipping this one!")
