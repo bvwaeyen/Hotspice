@@ -136,7 +136,7 @@ def continuity_range(Q, min_k=1, max_k=None):
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-def LCMC(Q, K):
+def LCMC(Q, K):  # FIXME: see bugreport https://github.com/samueljackson92/coranking/issues/10
     """ The local continuity meta-criteria measures the number of mild
     intrusions and extrusions. This can be thought of as a measure of the
     number of true postives.
