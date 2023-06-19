@@ -68,7 +68,7 @@ class Inputter(ABC):
 
         inputs = values.copy() # "inputs" is what we actually pass to self.input_single()
         if isinstance(self.datastream, IntegerDatastream): # If we have integers, we decompose them into bits
-            inputs = xp.asarray([self.datastream.as_bits(value) for value in values]).reshape(-1)
+            inputs = xp.asarray([self.datastream.as_bits(int(value)) for value in values]).reshape(-1)
 
         for value in inputs: self.input_single(mm, value)
         if remove_stimulus: self.remove_stimulus(mm) # TODO: this might be a big performance impact due to get_energy('Zeeman'), can this lookup be more efficient? (e.g. making Dipolar and Zeeman energies special attributes of the class, and put any other energies in some extra array because they are rarely used?)
@@ -143,6 +143,9 @@ class RandomIntegerDatastream(IntegerDatastream):
         self._max = 2**self.num_bits
         super().__init__()
 
+    @property
+    def bits_per_int(self) -> int: return self.num_bits
+
     def get_next(self, n=1) -> xp.ndarray:
         return self.rng.integers(0, self._max, size=(n,))
 
@@ -187,13 +190,6 @@ class FieldInputter(Inputter):
     @angle.setter
     def angle(self, value):
         self._angle = value % math.tau
-
-    @property
-    def magnitude(self): # [T]
-        return self._magnitude
-    @magnitude.setter
-    def magnitude(self, value):
-        self._magnitude = value
     
     @property
     def full_period(self):

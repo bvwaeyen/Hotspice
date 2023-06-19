@@ -72,13 +72,13 @@ if not os.path.exists(outdir): os.makedirs(outdir, exist_ok=True)
 shutil.copy(args.script_path, copied_script_path)
 
 ## Create some global variables/functions for the entire sweep
-num_jobs = len(sweep)
+n_funcs = len(sweep)
 failed = []
 def runner(i):
     device_id = q.get() # ID of GPU or CPU core to be used
     text_core_num = f"GPU{device_id}" if hotspice.config.USE_GPU else f"CPU{device_id}"
     # Run a shell command that runs the relevant python script
-    hotspice.utils.log(f"Attempting to run job #{i} of {num_jobs} on {text_core_num}...", style='header')
+    hotspice.utils.log(f"Attempting to run job #{i} of {n_funcs} on {text_core_num}...", style='header')
     cmd = ["python", copied_script_path, '-o', outdir, str(i)]
     try:
         env = os.environ.copy()
@@ -97,7 +97,7 @@ def runner(i):
 
 
 ## Run the jobs
-iterations = range(num_jobs) if args.iterations is None else args.iterations # Which iterations of the sweep are ran (default: all)
+iterations = range(n_funcs) if args.iterations is None else args.iterations # Which iterations of the sweep are ran (default: all)
 num_cores = min(N_PARALLEL_JOBS, len(iterations))
 cores_text = f"{num_cores} {'G' if hotspice.config.USE_GPU else 'C'}PU{'s' if num_cores > 1 else ''}"
 hotspice.utils.log(f"Running {len(iterations)} job{'s' if len(iterations) > 1 else ''} on {cores_text}...", style='header', show_device=False)

@@ -19,7 +19,7 @@ from tkinter import messagebox
 from typing import Callable, Literal
 
 from .core import Magnets, DipolarEnergy, ZeemanEnergy, ExchangeEnergy, SimParams
-from .io import Inputter, OutputReader
+from .io import Inputter, OutputReader, BinaryDatastream, ScalarDatastream, IntegerDatastream
 from .utils import asnumpy, bresenham, J_to_eV, SIprefix_to_mul
 from .plottools import get_rgb, Average, _get_averaged_extent, init_fonts
 from . import config
@@ -199,19 +199,47 @@ class ActionsPanel(ctk.CTkScrollableFrame):
         self.action_initialize_angle.grid(row=row, column=0, columnspan=2, sticky=ctk.EW, padx=(50, 10))
         action_initialize_angle_label.grid(row=row, column=2, sticky=ctk.W, padx=10)
 
+        ## INPUTTER
+        # Widget definitions and default values
+        self.action_inputter = ctk.CTkButton(self, text="Input value", command=lambda:self.action('inputter', value=self.action_inputter_value.get(), remove_stimulus=self.action_inputter_remove_stimulus.get()))
+        self.action_inputter_random = ctk.CTkButton(self, text="Input random", fg_color="green", command=lambda:self.action('inputter', value=None, remove_stimulus=self.action_inputter_remove_stimulus.get()))
+        datastream = self.gui.inputter.datastream if self.gui.inputter is not None else None
+        if isinstance(datastream, BinaryDatastream):
+            self.action_inputter_value = ctk.CTkSwitch(self, text="1", width=100)
+        elif isinstance(datastream, ScalarDatastream):
+            self.action_inputter_value = ctk.CTkSlider(self, from_=0, to=1)
+            self.action_inputter_value.set(0)
+        elif isinstance(datastream, IntegerDatastream):
+            self.action_inputter_value = ttk.Spinbox(self, from_=0, to=int(2**datastream.bits_per_int)-1, wrap=False, width=6, textvariable=tk.IntVar(value=0))
+            self.action_inputter_value.insert(0, "0")
+            # self.action_inputter_value = ctk.CTkEntry(self, width=100, textvariable=tk.StringVar(value=""))
+        self.action_inputter_remove_stimulus = ctk.CTkSwitch(self, text="Remove stimulus after input")
+        self.action_inputter_remove_stimulus.deselect() # Set to 'off' by default
+        # Grid geometry manager
+        if self.gui.inputter is not None:
+            row += 1
+            ttk.Separator(self).grid(row=row, columnspan=cols, sticky=ctk.EW, pady=5)
+            row += 1
+            self.action_inputter_random.grid(row=row, column=0, columnspan=cols, sticky=ctk.EW, padx=40, pady=(10,0))
+            row += 1
+            self.action_inputter.grid(row=row, column=0, sticky=ctk.EW, padx=10, pady=(10,0))
+            if isinstance(datastream, BinaryDatastream):
+                ctk.CTkLabel(self, text="0").grid(row=row, column=1, sticky=ctk.E, padx=0, pady=(10,0))
+                self.action_inputter_value.grid(row=row, column=2, sticky=ctk.W, padx=10, pady=(10,0))
+            elif isinstance(datastream, ScalarDatastream):
+                self.action_inputter_value.grid(row=row, column=1, columnspan=2, sticky=ctk.EW, padx=10, pady=(10,0))
+            elif isinstance(datastream, IntegerDatastream):
+                self.action_inputter_value.grid(row=row, column=1, columnspan=2, sticky=ctk.W, padx=10, pady=(10,0))
+            row += 1
+            self.action_inputter_remove_stimulus.grid(row=row, column=0, columnspan=cols, sticky=ctk.EW, padx=10, pady=(10,0))
+
         ## CUSTOM FUNCTION
         # Widget definitions and default values
-        def custom_step():
-            self.action('custom', n=int(self.action_customstep_n.get()))
-            self.gui.redraw()
-        self.action_customstep = ctk.CTkButton(self, text="Custom step", fg_color="blue", command=custom_step)
+        self.action_customstep = ctk.CTkButton(self, text="Custom step", fg_color="blue", command=lambda:self.action('custom_step', n=int(self.action_customstep_n.get())))
         self.action_customstep_n = ttk.Spinbox(self, from_=1, wrap=True, values=[1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 75, 100, 200, 500, 1000], width=6, textvariable=tk.IntVar(value=1))
         action_customstep_n_label = ctk.CTkLabel(self, text="times", anchor=ctk.W)
         self.action_customstep_n.insert(0, "1")
-        def custom_reset():
-            self.gui.custom_reset(self.gui)
-            self.gui.redraw()
-        self.action_customreset = ctk.CTkButton(self, text="Custom reset", fg_color="blue", command=custom_reset)
+        self.action_customreset = ctk.CTkButton(self, text="Custom reset", fg_color="blue", command=lambda:self.action('custom_reset'))
         # Grid geometry manager
         if self.gui.custom_step is not None or self.gui.custom_reset is not None:
             row += 1
@@ -237,8 +265,12 @@ class ActionsPanel(ctk.CTkScrollableFrame):
                 self._action_progress(**kwargs)
             case 'initialize':
                 self._action_initialize(**kwargs)
-            case 'custom':
-                self._action_custom(**kwargs)
+            case 'inputter':
+                self._action_inputter(**kwargs)
+            case 'custom_step':
+                self._action_custom_step(**kwargs)
+            case 'custom_reset':
+                self._action_custom_reset(**kwargs)
         self.gui.magnetization_view.redraw(settings_changed=False)
     
     def _action_step(self, n=1, **kwargs):
@@ -257,9 +289,20 @@ class ActionsPanel(ctk.CTkScrollableFrame):
     def _action_initialize(self, pattern='random', **kwargs):
         self.mm.initialize_m(pattern, **kwargs)
     
-    def _action_custom(self, n=1, **kwargs):
+    def _action_inputter(self, value=None, **kwargs):
+        if value is not None:
+            try: value = float(value)
+            except ValueError: print('Hotspice GUI error: Inputter did not receive a valid scalar value.') # Don't throw a real error, we want to keep the GUI running
+        value = self.gui.inputter.input(self.mm, values=value, **kwargs)
+        print(f"Applied input value {value}")
+    
+    def _action_custom_step(self, n=1, **kwargs):
         if self.gui.custom_step is not None:
             for _ in range(n): self.gui.custom_step(self.gui)
+
+    def _action_custom_reset(self, **kwargs):
+        if self.gui.custom_reset is not None:
+            self.gui.custom_reset(self.gui)
 
 
 class MagnetizationView(ctk.CTkFrame):
@@ -452,6 +495,7 @@ class MagnetizationView(ctk.CTkFrame):
                     update_polygonplotted()
 
         def onrelease(event):
+            self.last_toggle_index = (None, None)
             match event.button:
                 case MouseButton.RIGHT: # If right mouse button released: draw polygon
                     if len(self.polygon) == 0: return
