@@ -143,13 +143,17 @@ magnitude_to_SIprefix = {v: k for k, v in SIprefix_to_magnitude.items()}
 def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f', 'p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']=''):
     """ Converts <n> (which already has SI prefix <unit_prefix> for whatever unit it is in)
         to a reasonable number with a new SI prefix. Returns a tuple with (the new scalar values, the new SI prefix).
+        Example: converting 0.0000238 ms would be appropriate_SIprefix(0.0000238, 'm') -> ()
     """
     value = n.min() if isinstance(n, (np.ndarray, xp.ndarray)) else n # To avoid excessive commas, we take min()
-    nearest_magnitude = round(math.log10(value)) + SIprefix_to_magnitude[unit_prefix]
-    used_magnitude = -100 # placeholder
+    if unit_prefix not in SIprefix_to_magnitude.keys(): raise ValueError(f"'{unit_prefix}' is not a supported SI prefix.")
+    offset_magnitude = SIprefix_to_magnitude[unit_prefix]
+    nearest_magnitude = (round(np.log10(abs(value))) if value != 0 else -np.inf) + offset_magnitude
+    nearest_magnitude = np.clip(nearest_magnitude, min(SIprefix_to_magnitude.values()), max(SIprefix_to_magnitude.values())) # Make sure it is in the known range
+    # used_magnitude = -100 # placeholder
     for supported_magnitude in sorted(magnitude_to_SIprefix.keys()):
         if supported_magnitude <= nearest_magnitude: used_magnitude = supported_magnitude
-    return (n/10**used_magnitude, SIprefix_to_magnitude[used_magnitude])
+    return (n/10**(used_magnitude - offset_magnitude), magnitude_to_SIprefix[used_magnitude])
 
 def shell():
     """ Pauses the program and opens an interactive shell where the user

@@ -27,9 +27,8 @@ kB = 1.380649e-23
 @dataclass(slots=True)
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are strictly more than <this> switches in a single iteration, a convolution is used, otherwise the energies are just summed.
-    # TODO: THOROUGH ANALYSIS OF REDUCED_KERNEL_SIZE AND TAKE APPROPRIATE MEASURES (e.g. full recalculation every <n> steps)
     REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
-    UPDATE_SCHEME: str = 'Glauber' # Can be any of 'Néel', 'Glauber', 'Wolff'
+    UPDATE_SCHEME: str = 'Néel' # Can be any of 'Néel', 'Glauber', 'Wolff'
     MULTISAMPLING_SCHEME: str = 'grid' # Can be any of 'single', 'grid', 'Poisson', 'cluster'. Only used if UPDATE_SCHEME is 'Glauber'.
 
     def __post_init__(self):
@@ -64,7 +63,7 @@ class Magnets(ABC):
             The parameter <in_plane> should only be used in a super().__init__() call when subclassing this class.
         """
         self.rng = xp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
-        self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
+        self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass # TODO: find a better way to do this, this is not very user-friendly now
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J] use dipolar energy by default
 
         # Initialize properties that are necessary to access by subsequent method calls

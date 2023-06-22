@@ -20,7 +20,7 @@ from typing import Callable, Literal
 
 from .core import Magnets, DipolarEnergy, ZeemanEnergy, ExchangeEnergy, SimParams
 from .io import Inputter, OutputReader, BinaryDatastream, ScalarDatastream, IntegerDatastream
-from .utils import asnumpy, bresenham, J_to_eV, SIprefix_to_mul
+from .utils import appropriate_SIprefix, asnumpy, bresenham, J_to_eV, SIprefix_to_mul
 from .plottools import get_rgb, Average, _get_averaged_extent, init_fonts
 from . import config
 if config.USE_GPU:
@@ -54,8 +54,9 @@ class GUI(ctk.CTk):
 
         ## Configure layout of four main panels
         self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=3, minsize=400)
-        self.grid_columnconfigure(1, weight=1, minsize=400 if self.editable else 0)
+        self.grid_columnconfigure(0, weight=1, minsize=300)
+        self.grid_columnconfigure(1, weight=3, minsize=400)
+        self.grid_columnconfigure(2, weight=1, minsize=400 if self.editable else 0)
         self.grid_rowconfigure(0, weight=3, minsize=300)
         self.grid_rowconfigure(1, weight=0, minsize=150)
 
@@ -74,24 +75,28 @@ class GUI(ctk.CTk):
         height = (min_height + screen_height)/2
         self.geometry(f"{width:.0f}x{height:.0f}+{(screen_width-width)/2:.0f}+{(screen_height - 40 - height)/2:.0f}")
 
-        ## 1) Magnetization view panel
+        ## 1.1) Magnetization view panel
         self.magnetization_view = MagnetizationView(self, gui=self)
-        self.magnetization_view.grid(row=0, column=0, padx=10, pady=(10, 0), sticky=ctk.NSEW)
+        self.magnetization_view.grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 0), sticky=ctk.NSEW)
+
+        ## 1.2) Realtime parameters info panel
+        self.parameter_info = ParameterInfo(self, gui=self, width=300)
+        self.parameter_info.grid(row=1, column=0, padx=10, pady=(10, 0), sticky=ctk.NSEW)
 
         ## 2) View-settings panel (quiver, averaging etc.)
         self.magnetization_view_settings = MagnetizationViewSettingsTabView(self, self.magnetization_view, height=150)
         self.magnetization_view_settings.grid_propagate(False)
-        self.magnetization_view_settings.grid(row=1, column=0, padx=10, pady=(0, 10), sticky=ctk.NSEW)
+        self.magnetization_view_settings.grid(row=1, column=1, padx=10, pady=(0, 10), sticky=ctk.NSEW)
         
         ## 3) Actions panel (step, progress, relax etc.)
         self.actions_panel = ActionsPanel(self, gui=self)
-        if self.editable: self.actions_panel.grid(row=0, column=1, padx=10, pady=(10, 0), sticky=ctk.NSEW)
+        if self.editable: self.actions_panel.grid(row=0, column=2, padx=10, pady=(10, 0), sticky=ctk.NSEW)
         self.actions_panel.grid_columnconfigure((0, 1), weight=1)
         self.actions_panel.grid_columnconfigure(2, weight=0)
 
         ## 4) ASI-settings panel (update scheme etc.)
         self.ASI_settings_frame = ASISettingsFrame(self, gui=self, fg_color="red")
-        if self.editable: self.ASI_settings_frame.grid(row=1, column=1, padx=10, pady=(20, 10), sticky=ctk.NSEW)
+        if self.editable: self.ASI_settings_frame.grid(row=1, column=2, padx=10, pady=(20, 10), sticky=ctk.NSEW)
         self.ASI_settings = self.ASI_settings_frame.settings
 
         if not self.editable:
@@ -114,6 +119,7 @@ class GUI(ctk.CTk):
     
     def redraw(self, *args, **kwargs):
         self.magnetization_view.redraw(*args, **kwargs)
+        self.parameter_info.update()
 
     @property
     def dark_mode(self) -> bool:
@@ -271,7 +277,7 @@ class ActionsPanel(ctk.CTkScrollableFrame):
                 self._action_custom_step(**kwargs)
             case 'custom_reset':
                 self._action_custom_reset(**kwargs)
-        self.gui.magnetization_view.redraw(settings_changed=False)
+        self.gui.redraw(settings_changed=False)
     
     def _action_step(self, n=1, **kwargs):
         match self.mm.params.UPDATE_SCHEME:
@@ -303,6 +309,52 @@ class ActionsPanel(ctk.CTkScrollableFrame):
     def _action_custom_reset(self, **kwargs):
         if self.gui.custom_reset is not None:
             self.gui.custom_reset(self.gui)
+
+
+class ParameterInfo(ctk.CTkFrame):
+    def __init__(self, master, gui: GUI, **kwargs):
+        super().__init__(master, **kwargs)
+        self.gui = gui
+        self.mm = gui.mm
+        # We will have three columns: <name> <value> <unit>
+        self.grid_columnconfigure(0, weight=2)
+        self.grid_columnconfigure(1, weight=1)
+        # 1) The time.
+        self.info_t = tk.StringVar()
+        self.info_t_label = ctk.CTkLabel(self, textvariable=self.info_t)
+        ctk.CTkLabel(self, text="Time elapsed:").grid(row=0, column=0, sticky=ctk.E)
+        self.info_t_label.grid(row=0, column=1, padx=10, sticky=ctk.W)
+        # 2) (Attempted) switches overall.
+        self.info_switches = tk.StringVar()
+        self.info_switches_label = ctk.CTkLabel(self, textvariable=self.info_switches)
+        ctk.CTkLabel(self, text="Switches:").grid(row=1, column=0, sticky=ctk.E)
+        self.info_switches_label.grid(row=1, column=1, padx=10, sticky=ctk.W)
+        # 3) MCsteps (Glauber)
+        self.info_MCsteps = tk.StringVar()
+        self.info_MCsteps_label = ctk.CTkLabel(self, textvariable=self.info_MCsteps)
+        ctk.CTkLabel(self, text="Monte Carlo steps:").grid(row=2, column=0, sticky=ctk.E)
+        self.info_MCsteps_label.grid(row=2, column=1, padx=10, sticky=ctk.W)
+        self.info_attempted_switches = tk.StringVar()
+        self.info_attempted_switches_label = ctk.CTkLabel(self, font=ctk.CTkFont(size=10), anchor=ctk.N, textvariable=self.info_attempted_switches)
+        self.info_attempted_switches_label.grid(row=3, column=1, padx=10, sticky=ctk.W)
+        # 4) Switches in the last iteration.
+        self.reset_button = ctk.CTkButton(self, text="Reset all values to zero", command=self.reset)
+        self.reset_button.grid(row=4, column=0, columnspan=2, padx=10, pady=0, sticky=ctk.EW)
+        # Possibly also T_avg etc. in another section if there is room.
+        self.update() # To initialize all StringVars in their correct formatting
+    
+    def update(self):
+        t, tp = appropriate_SIprefix(self.mm.t)
+        self.info_t.set(f"{t:.3f} {tp}s")
+        self.info_switches.set(f"{self.mm.switches:d}")
+        self.info_MCsteps.set(f"{self.mm.MCsteps:.2f}")
+        self.info_attempted_switches.set(f"({self.mm.attempted_switches:d} sw. attempts)")
+    
+    def reset(self): # TODO: make this a method of the ASI object itself, now it is quite hacky
+        self.mm.t = 0
+        self.mm.switches = 0
+        self.mm.attempted_switches = 0 # This sets MCsteps automatically
+        self.update()
 
 
 class MagnetizationView(ctk.CTkFrame):
@@ -920,5 +972,5 @@ def test(in_plane=False, **kwargs):
     if in_plane:
         mm = IP_Pinwheel(230e-9, 40, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
     else:
-        mm = OOP_Square(230e-9, 200, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
+        mm = OOP_Square(230e-9, 200, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Néel"))
     show(mm, **kwargs)
