@@ -923,17 +923,19 @@ class ZeemanEnergy(Energy):
 
 
 class DipolarEnergy(Energy):
-    def __init__(self, prefactor=1):
+    def __init__(self, prefactor: float = 1, decay_exponent: float = -3):
         """ This DipolarEnergy class implements the interaction between the magnets of the simulation themselves.
             It should therefore always be included in the simulations.
             @param prefactor [float] (1): The relative strength of the dipolar interaction.
+            @param decay_exponent [float] (-3): How fast the dipole interaction weakens with distance: DD ∝ 1/r^<decay_exponent>.
         """
         # TODO: a more intricate scaling with distance is needed to incorporate the effect of the magnets not being infinitely small magnetic spins.
         #       As a first step, a new method DipolarEnergy().scale_NN() can be created, that scales <prefactor> such that NN interactions have a certain energy.
         #                        (Use the highest nearest-neighbor absolute value for this, because some can be zero e.g. in Pinwheel.)
-        #                        (A complete rework of NN logic would also be quite welcome at this point)
+        #                        (TODO: A complete rework of NN logic would also be quite welcome at this point)
         #       Further steps can then concern themselves with the nonpolynomial fall-off with distance, as the magnets start to see each other more as infinitesimal spins rather than a finite FM geometry.
         self.prefactor = prefactor
+        self.decay_exponent = decay_exponent
 
     def initialize(self, mm: Magnets):
         self.mm = mm
@@ -948,7 +950,7 @@ class DipolarEnergy(Energy):
         rr_sq = rrx**2 + rry**2
         rr_sq[0,0] = xp.inf
         rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
-        rr_inv3 = rr_inv**3
+        rr_inv3 = rr_inv**(-self.decay_exponent) # =1/r^3 by default
         rinv3 = mirror4(rr_inv3)
         # Now we determine the normalized rx and ry
         ux = mirror4(rrx*rr_inv, negativex=True)
@@ -1069,6 +1071,25 @@ class DipolarEnergy(Energy):
     @property
     def E_tot(self):
         return xp.sum(self.E)/2
+
+    def get_NN_interaction(self):
+        """ An APPROXIMATE value for the nearest-neighbor dipolar interaction energy. """
+        # Approximation: use highest value from all nearest-neighbors in all kernels, and average magnetic moment
+        largest = 0
+        for kernel in self.kernel_unitcell:
+            ny, nx = kernel.shape
+            middle_y, middle_x = ny//2, nx//2
+            NN = self.mm._get_nearest_neighbors()
+            dy, dx = NN.shape
+            dy, dx = dy//2, dx//2
+            value = xp.max(xp.abs(kernel[middle_y-dy:middle_y+dy+1,middle_x-dx:middle_x+dx+1]*NN))
+            if value > largest: largest = value
+        return largest*self.prefactor*(self.mm.moment_avg**2)
+
+    def set_NN_interaction(self, value):
+        """ Sets <prefactor> such that the nearest-neighbor dipolar interaction energy is <value> J. """
+        self.prefactor = 1 # Because *= does not work if prefactor would be zero
+        self.prefactor *= value/self.get_NN_interaction()
 
 
 class ExchangeEnergy(Energy):
