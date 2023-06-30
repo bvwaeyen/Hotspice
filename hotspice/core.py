@@ -237,6 +237,11 @@ class Magnets(ABC):
     def MCsteps(self): # Number of Monte Carlo steps
         return self.attempted_switches/self.n
 
+    def reset_stats(self):
+        self.t = 0
+        self.switches = 0
+        self.attempted_switches = 0 # This sets MCsteps automatically
+
     @property
     def E(self) -> xp.ndarray: # This could be relatively expensive to calculate, so maybe not ideal
         return sum([energy.E for energy in self._energies])
@@ -592,7 +597,7 @@ class Magnets(ABC):
         return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
-    def progress(self, t_max: float = xp.inf, MCsteps_max: float = 4.):
+    def progress(self, t_max: float = 1, MCsteps_max: float = 4.):
         """ Runs as many self.update steps as is required to progress a certain amount of
             time or Monte Carlo steps (whichever is reached first) into the future.
             @param time [float] (None): The maximum amount of time difference between start and end of this function.
@@ -934,8 +939,16 @@ class DipolarEnergy(Energy):
         #                        (Use the highest nearest-neighbor absolute value for this, because some can be zero e.g. in Pinwheel.)
         #                        (TODO: A complete rework of NN logic would also be quite welcome at this point)
         #       Further steps can then concern themselves with the nonpolynomial fall-off with distance, as the magnets start to see each other more as infinitesimal spins rather than a finite FM geometry.
-        self.prefactor = prefactor
+        self._prefactor = prefactor
         self.decay_exponent = decay_exponent
+    
+    @property
+    def prefactor(self):
+        return self._prefactor
+    @prefactor.setter
+    def prefactor(self, value):
+        self.E *= value/self._prefactor
+        self._prefactor = value
 
     def initialize(self, mm: Magnets):
         self.mm = mm
@@ -1087,9 +1100,8 @@ class DipolarEnergy(Energy):
         return largest*self.prefactor*(self.mm.moment_avg**2)
 
     def set_NN_interaction(self, value):
-        """ Sets <prefactor> such that the nearest-neighbor dipolar interaction energy is <value> J. """
-        self.prefactor = 1 # Because *= does not work if prefactor would be zero
-        self.prefactor *= value/self.get_NN_interaction()
+        """ Sets <prefactor> such that the nearest-neighbor dipolar interaction energy is <value> Joules. """
+        self.prefactor = value/self.get_NN_interaction()
 
 
 class ExchangeEnergy(Energy):

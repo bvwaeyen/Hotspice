@@ -7,13 +7,13 @@ import tkinter.ttk as ttk
 
 from dataclasses import dataclass
 from enum import auto, Enum
-from inpoly import inpoly2
 from matplotlib import cm, colorbar, colormaps, colors, image, quiver
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import MouseButton, MouseEvent
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from matplotlib.patches import Polygon
+from matplotlib.path import Path
 from textwrap import dedent
 from tkinter import messagebox
 from typing import Callable, Literal
@@ -81,7 +81,7 @@ class GUI(ctk.CTk):
 
         ## 1.2) Realtime parameters info panel
         self.parameter_info = ParameterInfo(self, gui=self, width=300)
-        self.parameter_info.grid(row=1, column=0, padx=10, pady=(10, 0), sticky=ctk.NSEW)
+        self.parameter_info.grid(row=1, column=0, padx=10, pady=(20, 10), sticky=ctk.NSEW)
 
         ## 2) View-settings panel (quiver, averaging etc.)
         self.magnetization_view_settings = MagnetizationViewSettingsTabView(self, self.magnetization_view, height=150)
@@ -95,7 +95,7 @@ class GUI(ctk.CTk):
         self.actions_panel.grid_columnconfigure(2, weight=0)
 
         ## 4) ASI-settings panel (update scheme etc.)
-        self.ASI_settings_frame = ASISettingsFrame(self, gui=self, fg_color="red")
+        self.ASI_settings_frame = ASISettingsFrame(self, gui=self, fg_color="#FF7777")
         if self.editable: self.ASI_settings_frame.grid(row=1, column=2, padx=10, pady=(20, 10), sticky=ctk.NSEW)
         self.ASI_settings = self.ASI_settings_frame.settings
 
@@ -159,11 +159,11 @@ class ActionsPanel(ctk.CTkScrollableFrame):
         # Widget definitions and default values
         self.action_progress = ctk.CTkButton(self, text="Progress", command=lambda:self.action('progress', t_max=float(self.action_progress_tmax.get()), MCsteps_max=float(self.action_progress_MCstepsmax.get())))
         sig_progress = inspect.signature(self.mm.progress)
-        action_progress_tmax_values = list(10.**np.arange(-10, 10)) + [1e100, np.inf]
+        action_progress_tmax_values = list(10.**np.arange(-10, 0)) + list(10**np.arange(0, 10)) + [1e100, np.inf]
         self.action_progress_tmax = ttk.Spinbox(self, from_=0, wrap=True, width=15, values=action_progress_tmax_values, textvariable=tk.DoubleVar(value=sig_progress.parameters['t_max'].default))
         self.action_progress_tmax.insert(0, "1")
         action_progress_tmax_label = ctk.CTkLabel(self, text="seconds", anchor=ctk.W)
-        self.action_progress_MCstepsmax = ttk.Spinbox(self, from_=0, wrap=True, values=[1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1, 2, 4, 8, 16, 32, 1001, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 75, 100, 200, 500, 1000], width=6, textvariable=tk.DoubleVar(value=sig_progress.parameters['MCsteps_max'].default))
+        self.action_progress_MCstepsmax = ttk.Spinbox(self, from_=0, wrap=True, values=[1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 75, 100, 200, 500, 1000], width=6, textvariable=tk.DoubleVar(value=sig_progress.parameters['MCsteps_max'].default))
         self.action_progress_MCstepsmax.insert(0, "4")
         action_progress_MCstepsmax_label = ctk.CTkLabel(self, text="MC steps", anchor=ctk.W)
         # Grid geometry manager
@@ -339,7 +339,7 @@ class ParameterInfo(ctk.CTkFrame):
         self.info_attempted_switches_label.grid(row=3, column=1, padx=10, sticky=ctk.W)
         # 4) Switches in the last iteration.
         self.reset_button = ctk.CTkButton(self, text="Reset all values to zero", command=self.reset)
-        self.reset_button.grid(row=4, column=0, columnspan=2, padx=10, pady=0, sticky=ctk.EW)
+        self.reset_button.grid(row=4, column=0, columnspan=2, padx=10, pady=(0, 10), sticky=ctk.EW)
         # Possibly also T_avg etc. in another section if there is room.
         self.update() # To initialize all StringVars in their correct formatting
     
@@ -351,9 +351,7 @@ class ParameterInfo(ctk.CTkFrame):
         self.info_attempted_switches.set(f"({self.mm.attempted_switches:d} sw. attempts)")
     
     def reset(self): # TODO: make this a method of the ASI object itself, now it is quite hacky
-        self.mm.t = 0
-        self.mm.switches = 0
-        self.mm.attempted_switches = 0 # This sets MCsteps automatically
+        self.mm.reset_stats()
         self.update()
 
 
@@ -554,8 +552,9 @@ class MagnetizationView(ctk.CTkFrame):
                     polygon = np.asarray(self.polygon).reshape(-1, 2)
                     xx, yy = np.meshgrid(np.arange(np.min(polygon[:,1]), np.max(polygon[:,1]) + 1), np.arange(np.min(polygon[:,0]), np.max(polygon[:,0]) + 1)) # Tight index-grid surely containing the polygon
                     possible_x, possible_y = xx.reshape(-1), yy.reshape(-1)
-                    in_polygon, on_edge = inpoly2(np.asarray([possible_y, possible_x]).T, polygon)
-                    in_polygon = np.logical_or(in_polygon, on_edge)
+                    possible = np.asarray([possible_y, possible_x]).T
+                    in_polygon = Path(polygon).contains_points(possible, radius=0.5)
+                    in_polygon = in_polygon | Path(polygon).contains_points(possible, radius=-0.5)
                     toggle(possible_x[in_polygon], possible_y[in_polygon], mouse_event=event)
                     self.polygon = []
                     update_polygonplotted()
