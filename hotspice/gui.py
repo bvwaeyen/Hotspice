@@ -345,7 +345,7 @@ class ParameterInfo(ctk.CTkFrame):
     
     def update(self):
         t, tp = appropriate_SIprefix(self.mm.t)
-        self.info_t.set(f"{t:.3f} {tp}s")
+        self.info_t.set(f"{t:.3f} {tp}s" if 0.01 < t < 1000 else f"{self.mm.t:.3e} s")
         self.info_switches.set(f"{self.mm.switches:d}")
         self.info_MCsteps.set(f"{self.mm.MCsteps:.2f}")
         self.info_attempted_switches.set(f"({self.mm.attempted_switches:d} sw. attempts)")

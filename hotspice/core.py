@@ -1104,7 +1104,7 @@ class DipolarEnergy(Energy):
         self.prefactor = value/self.get_NN_interaction()
 
 
-class ExchangeEnergy(Energy):
+class ExchangeEnergy(Energy): # TODO: allow random variation in J, see https://stackoverflow.com/a/73398072 for this kind of convolution
     def __init__(self, J=1):
         self.J = J # [J]
 
