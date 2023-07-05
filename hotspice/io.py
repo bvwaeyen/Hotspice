@@ -2,6 +2,7 @@ import math
 import warnings
 
 from abc import ABC, abstractmethod
+from inspect import isgeneratorfunction
 from typing import Literal
 
 from .ASI import IP_ASI, OOP_Square
@@ -54,14 +55,23 @@ class IntegerDatastream(Datastream):
         if endianness == 'little': bitstring = bitstring[::-1]
         return xp.asarray([int(bit) for bit in bitstring])
 
+class ConstantDatastream(ScalarDatastream):
+    """ A dummy datastream that just returns <constant> all the time. """
+    def __init__(self, constant: float = 1):
+        super().__init__()
+        self.constant = constant
+    def get_next(self, n=1) -> xp.ndarray:
+        return xp.ones(n, dtype=float)*self.constant
 
 class Inputter(ABC):
-    def __init__(self, datastream: Datastream):
-        self.datastream = datastream
+    def __init__(self, datastream: Datastream = None):
+        self.datastream = ConstantDatastream(constant=1) if datastream is None else datastream
     
     def input(self, mm: Magnets, values=None, remove_stimulus=False) -> xp.ndarray:
         """ Inputs one or multiple values as passed to the <values> argument.
             If <values> is not provided, the next value yielded by <self.datastream> is used.
+            NOTE: if self.input_single is a generator, it is just treated as if it were a normal function.
+                  If you want to get the generator behavior of self.input_single, call it directly instead.
         """
         if values is None: values = self.datastream.get_next(n=1)
         values = xp.asarray(values).reshape(-1)
@@ -70,7 +80,12 @@ class Inputter(ABC):
         if isinstance(self.datastream, IntegerDatastream): # If we have integers, we decompose them into bits
             inputs = xp.asarray([self.datastream.as_bits(int(value)) for value in values]).reshape(-1)
 
-        for value in inputs: self.input_single(mm, value)
+        input_single_is_generator = isgeneratorfunction(self.input_single)
+        for value in inputs:
+            result = self.input_single(mm, value)
+            if input_single_is_generator:
+                for _ in result: pass
+
         if remove_stimulus: self.remove_stimulus(mm) # TODO: this might be a big performance impact due to get_energy('Zeeman'), can this lookup be more efficient? (e.g. making Dipolar and Zeeman energies special attributes of the class, and put any other energies in some extra array because they are rarely used?)
         return values
 
@@ -79,7 +94,9 @@ class Inputter(ABC):
 
     @abstractmethod
     def input_single(self, mm: Magnets, value: float|int|bool):
-        """ Applies a certain stimulus onto the <mm> simulation depending on the scalar <value>. """
+        """ Applies a certain stimulus onto the <mm> simulation depending on the scalar <value>.
+            Can be either a normal function or a generator (self.input will act accordingly).
+        """
 
 
 class OutputReader(ABC):
@@ -116,13 +133,6 @@ class OutputReader(ABC):
 ######## Below are subclasses of the superclasses above
 # TODO: class FileDatastream(Datastream) which reads bits from a file? Can use package 'bitstring' for this.
 # TODO: class SemiRepeatingDatastream(Datastream) which has first <n> random bits and then <m> bits which are the same for all runs
-class ConstantDatastream(ScalarDatastream):
-    """ A dummy datastream that just returns <constant> all the time. """
-    def __init__(self, constant=1):
-        super().__init__()
-        self.constant = constant
-    def get_next(self, n=1) -> xp.ndarray:
-        return xp.ones(n, dtype=float)*self.constant
 
 class RandomBinaryDatastream(BinaryDatastream):
     def __init__(self, p0=.5):

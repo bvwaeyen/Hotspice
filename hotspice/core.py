@@ -597,21 +597,30 @@ class Magnets(ABC):
         return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
-    def progress(self, t_max: float = 1, MCsteps_max: float = 4.):
+    def progress(self, t_max: float = 1, MCsteps_max: float = 4., stepwise: bool = False):
+        #! For backwards compatibility, <stepwise> default must be False!
         """ Runs as many self.update steps as is required to progress a certain amount of
             time or Monte Carlo steps (whichever is reached first) into the future.
-            @param time [float] (None): The maximum amount of time difference between start and end of this function.
-            @param MCsteps [float] (4.): The maximum amount of Monte Carlo steps performed during this function.
-            @return [tuple(2)]: the elapsed time and number of performed MC steps during the execution of this function.
+            @param t_max [float] (None): The maximum amount of time difference between start and end of this function.
+            @param MCsteps_max [float] (4.): The maximum amount of Monte Carlo steps performed during this function.
+            @return [tuple(2)|generator]:
+                If <stepwise> is False: tuple (elapsed time, number of MC steps performed) during the execution of this function.
+                If <stepwise> is True: a generator that yields after every self.update() call. Can be used to inspect transients etc.
         """
+        generator = self._progress_stepwise(t_max=t_max, MCsteps_max=MCsteps_max)
+        if stepwise: return generator
+        while True: # If we get here, then stepwise is False so we don't want the generator behavior, so we do next() until the end and return the final value
+            try: next(generator) # Do next() until the generator stops
+            except StopIteration as e: return e.value # And then this is how you can return the 'return' value of a generator as if it were a normal function
+
+    def _progress_stepwise(self, t_max: float = 1, MCsteps_max: float = 4.):
+        """ Generator that forms the foundation of self.progress(). Yields after every self.update(). """
         t_0, MCsteps_0 = self.t, self.MCsteps
         while lower_than(dt := self.t - t_0, t_max) and lower_than(dMCsteps := self.MCsteps - MCsteps_0, MCsteps_max):
-            # progress = max(dt/t_max, dMCsteps/MCsteps_max) # Always < 1
-            if self.params.UPDATE_SCHEME == 'Néel':
-                self.update(t_max=(t_max - dt)) # A max time can be specified
-            else:
-                self.update() # No time
-        return dt, dMCsteps
+            if self.params.UPDATE_SCHEME == 'Néel': self.update(t_max=(t_max - dt)) # A max time can be specified
+            else: self.update() # No time
+            yield
+        return self.t - t_0, self.MCsteps - MCsteps_0
 
     # TODO: clean the minimize(), _minimize_all() and relax() functions (i.e. verbosity and standardize barrier calculation)
     def minimize(self, ignore_barrier=True, verbose=False, _frac=0.3):
