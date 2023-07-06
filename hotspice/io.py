@@ -62,6 +62,8 @@ class ConstantDatastream(ScalarDatastream):
         self.constant = constant
     def get_next(self, n=1) -> xp.ndarray:
         return xp.ones(n, dtype=float)*self.constant
+    def __repr__(self):
+        return f"hotspice.io.ConstantDatastream(constant={self.constant})"
 
 class Inputter(ABC):
     def __init__(self, datastream: Datastream = None):
@@ -141,6 +143,8 @@ class RandomBinaryDatastream(BinaryDatastream):
         """
         self.p0 = p0
         super().__init__()
+    def __repr__(self):
+        return f"hotspice.io.RandomBinaryDatastream(p0={self.p0})"
 
     def get_next(self, n=1) -> xp.ndarray:
         return self.rng.random(size=(n,)) >= self.p0
@@ -152,6 +156,8 @@ class RandomIntegerDatastream(IntegerDatastream):
         self.num_bits = num_bits
         self._max = 2**self.num_bits
         super().__init__()
+    def __repr__(self):
+        return f"hotspice.io.RandomIntegerDatastream(num_bits={self.num_bits})"
 
     @property
     def bits_per_int(self) -> int: return self.num_bits
@@ -172,6 +178,8 @@ class RandomScalarDatastream(ScalarDatastream):
         """ Generates uniform random floats between <low=0> and <high=1>. """
         self.low, self.high = low, high
         super().__init__()
+    def __repr__(self):
+        return f"hotspice.io.RandomScalarDatastream(low={self.low}, high={self.high})"
 
     def get_next(self, n=1) -> xp.ndarray:
         return (self.high - self.low)*self.rng.random(size=(n,)) + self.low

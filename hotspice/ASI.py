@@ -77,13 +77,15 @@ class OOP_Square(OOP_ASI):
     def get_domains(self): # TODO: perhaps introduce this in other ASIs?
         return (((self.ixx + self.iyy) % 2)*2 - 1) == self.m # TODO: get the number of distinct domain possibilities
 
-    def domain_size(self):
+    def domain_sizes(self):
         domains = self.get_domains()
         sizes = []
         for domain in xp.unique(domains):
             array, total_domains = ndimage.label(domains == domain)
             sizes.append(xp.bincount(array.reshape(-1))[1:]) # Discard 1st element because it counts the zeros, which is the other domains
         return xp.concatenate(sizes)
+    def domain_size(self):
+        return xp.mean(self.domain_sizes())
 
 
 class OOP_Triangle(OOP_ASI):

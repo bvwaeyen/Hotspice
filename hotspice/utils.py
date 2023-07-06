@@ -6,8 +6,9 @@ import io
 import json
 import math
 import os
-import pathlib
+import pickle
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -18,6 +19,8 @@ import pandas as pd
 
 from datetime import datetime
 from IPython.terminal.embed import InteractiveShellEmbed
+from matplotlib.figure import Figure
+from pathlib import Path
 from textwrap import dedent, indent
 from typing import Callable, Iterable, Literal, TypeVar
 
@@ -272,7 +275,7 @@ def run_script(script_name, args=None):
     """
     script_name = script_name.strip()
     if not os.path.splitext(script_name)[1]: script_name += '.py'
-    path = pathlib.Path(__file__).parent / "scripts" / script_name
+    path = Path(__file__).parent / "scripts" / script_name
     if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
 
     args = [str(arg) for arg in args]
@@ -328,6 +331,32 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
+def save_results(parameters: dict = None, data=None, figures: Figure|Iterable[Figure] = None) -> str:
+    """ The most basic way of saving results of a simulation.
+    This can save the basic (scalar|str|bool) parameters (with auto-generated metadata) as JSON,
+    the full data (large arrays etc.) as pickle, and Matplotlib figure(s) as pdf.
+        @param parameters [dict] (None): simple key-value pairs that represent simple parameters
+            of the system, i.e. those that can usually be expressed as a scalar value or a string.
+        @param data [Any] (None): will be saved as a pickle file. This is usually a large array,
+            or a dict of arrays, but can really be anything as long as you remember what it represents.
+        @param figures [Figure|Iterable[Figure]] (None): one or more Matplotlib figures that will be
+            saved to pdf file(s).<figures>
+        @return [str]: the output directory. Can be used to save additional things there.
+    """
+    # Make output directory
+    script = Path(inspect.stack()[1].filename) # The caller script, i.e. the one where __name__ == "__main__"
+    outdir = script.parent / (script.stem + '.out') / timestamp()
+    outdir.mkdir(exist_ok=False) # Make directory "caller_script.out/<timestamp>"
+    # Save information
+    shutil.copy2(script, os.path.join(outdir, 'script.py'))
+    json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)
+    pickle.dump(data, open(os.path.join(outdir, 'data.pkl'), 'wb')) #! Must be 'wb' because binary object
+    # Save figure(s)
+    if not isinstance(figures, Iterable): figures = [figures]
+    for i, fig in enumerate(figures):
+        fig.savefig(os.path.join(outdir, f'figure{i}.pdf' if len(figures) > 1 else 'figure.pdf'))
+    return outdir
+
 class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
         """ Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
@@ -345,6 +374,36 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         self.df = df
         self.metadata = metadata
         self.constants = constants
+    
+    @staticmethod
+    def get_simulation_metadata(basic_metadata_dict: dict = None, ignore_keys=()):
+        """ Any keys present in <ignore_keys> will not be automatically added nor removed from <basic_metadata_dict>. """
+        if basic_metadata_dict is None: basic_metadata_dict = {}
+        if not isinstance(basic_metadata_dict, dict): raise ValueError("Metadata must be provided as a dictionary.")
+
+        try:
+            creator_file = os.path.abspath(str(sys.modules['__main__'].__file__))
+            if '\\hotspice\\' in creator_file:
+                creator_file = "..." + creator_file[len(creator_file.split('\\hotspice\\')[0]):]
+        except Exception:
+            creator_file = ''
+        try:
+            gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
+                encoding='utf-8').strip())).to_json(orient='table', index=False))['data']
+            gpu_info = [{key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in d.items()} for d in gpu_info] # Remove spaces around key and value text
+        except Exception:
+            gpu_info = []
+
+        if "description" not in ignore_keys:
+            basic_metadata_dict['description'] = dedent(basic_metadata_dict.get('description', "No custom description available.")).strip()
+        if "datetime" not in ignore_keys: basic_metadata_dict.setdefault('datetime', timestamp())
+        if "author" not in ignore_keys: basic_metadata_dict.setdefault('author', getpass.getuser())
+        if "creator" not in ignore_keys: basic_metadata_dict.setdefault('creator', creator_file)
+        if "simulator" not in ignore_keys: basic_metadata_dict.setdefault('simulator', "Hotspice")
+        if config.USE_GPU and "GPU" not in ignore_keys: basic_metadata_dict.setdefault("GPU", gpu_info)
+        if "hotspice_config" not in ignore_keys: basic_metadata_dict.setdefault('hotspice_config', config.get_dict())
+        return basic_metadata_dict
 
     @property
     def df(self): return self._df
@@ -374,32 +433,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
                 keys 'name', 'compute_cap', 'driver_version', 'memory.total [MiB]', 'timestamp', 'uuid'.
             - 'simulator': "Hotspice", just for clarity. Can include version number when applicable.
         """
-        if value is None: value = {}
-        if not isinstance(value, dict): raise ValueError("Metadata must be provided as a dictionary.")
-
-        value.setdefault('datetime', timestamp())
-        value.setdefault('author', getpass.getuser())
-        try:
-            creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
-            if 'hotspice' in creator_info:
-                creator_info = "...\\" + creator_info[len(creator_info.split('hotspice')[0]):]
-        except Exception:
-            creator_info = ''
-        value.setdefault('creator', creator_info)
-        value.setdefault('simulator', "Hotspice")
-        value.setdefault('description', "No custom description available.")
-        value['description'] = dedent(value['description']).strip()
-        try:
-            gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
-                ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
-                encoding='utf-8').strip())).to_json(orient='table', index=False))['data']
-            gpu_info = [{key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in d.items()} for d in gpu_info] # Remove spaces around key and value text
-        except Exception:
-            gpu_info = []
-        value.setdefault('GPU', gpu_info)
-        value.setdefault('hotspice_config', config.get_dict())
-
-        self._metadata = value
+        self._metadata = self.get_simulation_metadata(value)
         assert isinstance(self._metadata, dict)
 
     @property
