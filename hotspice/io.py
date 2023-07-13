@@ -318,7 +318,7 @@ class PerpFieldInputter(FieldInputter):
 class ClockingFieldInputter(FieldInputter):
     def __init__(self, datastream: BinaryDatastream, magnitude=1, angle=0, spread=math.pi/8., n=2, frequency=1, relax=False):
         """ Applies an external field at <angle> + <spread> rad for 0.5/frequency seconds, then at <angle> - <spread> rad
-        for bit 1. It does the same +180° for bit 0. The idea is that switching cascades are prevented by changing only
+        for bit 0. It does the same +180° for bit 1. The idea is that switching cascades are prevented by changing only
         one sublattice at a time.
         Was not made with <relax> = True in mind and this does not work well.
         """
@@ -328,7 +328,7 @@ class ClockingFieldInputter(FieldInputter):
         super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, frequency=frequency)
 
     def bit_to_angles(self, bit):
-        if bit:
+        if not bit:
             return (self.angle + self.spread, self.angle - self.spread)
         return (self.angle + self.spread + math.pi, self.angle - self.spread + math.pi)
 

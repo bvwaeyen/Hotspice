@@ -13,7 +13,7 @@ T = 1  # deterministic
 E_B = hotspice.utils.eV_to_J(110)  # from Jonathan Maes from other paper
 # PBC = True  # I was unable to get clocking results with a boundary
 PBC = False  # It would be nice if this worked
-pattern = "vortex"
+pattern = "uniform"
 
 # randomness
 randomness = 0.05  # 5% seems to be around the sweet spot. Higher is too many random small domains, lower is too homogenous
@@ -36,7 +36,7 @@ mm.add_energy(zeeman)
 # realtime.run()
 
 # Bits input tester
-bits = 8 * [0] + 8 * [1]
+bits = 8 * [1] + 8 * [0]
 
 datastream = hotspice.io.BinaryListDatastream(bits, periodic=True)
 inputter = hotspice.io.ClockingFieldInputter(datastream, angle=extra_angle)

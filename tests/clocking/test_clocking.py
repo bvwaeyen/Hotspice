@@ -44,7 +44,7 @@ zeeman = hotspice.ZeemanEnergy(magnitude=H, angle=angle)
 mm.add_energy(zeeman)
 
 
-bits = 5 * [0] + 5 * [1]
+bits = 5 * [1] + 5 * [0]
 
 def bit_to_angles(bit):
     if bit:  # 1
