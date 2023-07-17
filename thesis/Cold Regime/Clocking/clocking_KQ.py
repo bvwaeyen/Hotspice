@@ -62,7 +62,7 @@ if make_new_data:
 
             if os.path.exists(directory + filename(B, sample)):
                 print(f"File already exists! Skipping this one!")
-                break
+                continue
 
             experiment.run(input_length=input_length, constant_fraction=constant_fraction, pattern=pattern)  # run
             experiment.to_dataframe().to_json(directory + filename(B, sample))  # save
