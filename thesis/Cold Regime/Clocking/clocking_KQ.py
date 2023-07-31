@@ -2,7 +2,6 @@
 
 import hotspice
 import numpy as np
-import pandas as pd
 import os
 
 # ASI
@@ -13,7 +12,7 @@ E_B = hotspice.utils.eV_to_J(110)  # add randomness per sample
 randomness = 0.05
 T = 1  # cold
 update_scheme = "Néel"
-lattice_angle = 0. * np.pi/180.  # TODO: vary in {0°, 4°, 8°, 12°}
+lattice_angle = 0. * np.pi/180.  # TODO: manually vary in {0°, 4°, 8°, 12°}
 
 mm = hotspice.ASI.IP_Pinwheel(a, n, moment=moment, E_B=E_B, T=T, angle=lattice_angle)
 mm.params.UPDATE_SCHEME = update_scheme
@@ -29,7 +28,7 @@ B_array = np.arange(B_min, B_max + dB, dB) * 1e-3  # in T
 samples = 20  # also determines seed of E_B (and Néel and the KQ Experiments I suppose)
 m = 220  # is total number of spins
 constant_fraction = 0.6  # last 60% of GC is constant
-input_length = 30  # TODO: is this enough? too big?
+input_length = 30  # is this enough? too big? too late now
 pattern = "uniform"
 
 # experimental setup
@@ -47,7 +46,7 @@ def filename(B, sample):
 
 
 # Make new data
-make_new_data = True
+make_new_data = False
 if make_new_data:
     print("Creating new data")
 
@@ -74,6 +73,3 @@ if make_new_data:
             print(f"Done, K={K} G={G} Q={Q}, q = {q}")
 
     print("Done creating data!")
-
-
-# TODO: data analysis
