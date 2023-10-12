@@ -299,7 +299,7 @@ class ActionsPanel(ctk.CTkScrollableFrame):
         if value is not None:
             try: value = float(value)
             except ValueError: print('Hotspice GUI error: Inputter did not receive a valid scalar value.') # Don't throw a real error, we want to keep the GUI running
-        value = self.gui.inputter.input(self.mm, values=value, **kwargs)
+        value = self.gui.inputter.input(self.mm, values=value, **kwargs)[0]
         print(f"Applied input value {value}")
     
     def _action_custom_step(self, n=1, **kwargs):
@@ -944,7 +944,6 @@ class ASISettingsFrame(ctk.CTkFrame):
 
 
 
-# TODO: INPUT: applying a single input value through the Inputter()
 # TODO: VIEW: showing an OutputReader() readout (if an OutputReader was provided, and each node has coordinates)
 #       Could do this using scatter plot, with size determined by nearest output nodes
 #       Other option is to use voronoi diagram, but then I don't know how to color the regions that extend to infinity, plus is probably quite slow to draw 
@@ -956,8 +955,6 @@ class ASISettingsFrame(ctk.CTkFrame):
 #       but then with an InteractiveShell() that has been given the right scope.
 #       After each 'run' button press (i.e. each command), close the popup and redraw the MagnetizationView.
 #       If the return value is not None, display it in a new popup? (has to be big enough to scroll through array output etc.)
-# TODO: VIEW: show the current time, switches, MCsteps etc.
-#       Have a button to reset them to zero
 # TODO: MISC: allow recording what happens to a video
 #       Can have a switch, to toggle adding a new frame every time the plot is updated
 #       Also a manual button

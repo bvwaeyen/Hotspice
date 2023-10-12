@@ -18,7 +18,12 @@ else:
 
 class Datastream(ABC):
     def __init__(self):
-        self.rng = xp.random.default_rng()
+        self.rng = xp.random.default_rng(None) # <seed=None> means a random seed from OS entropy.
+    def reset_rng(self):
+        """ Sets the seed of self.rng to zero, such that the datastream yields consistent values from the start again.
+            NOTE: These sequences are not guaranteed to be the same when using the CPU as compared to the GPU!
+        """
+        self.rng = xp.random.default_rng(0) # Set seed
 
     @abstractmethod
     def get_next(self, n=1) -> xp.ndarray:

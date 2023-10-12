@@ -688,6 +688,12 @@ class Magnets(ABC):
                 self.update_energy(index=indices)
 
     def relax(self, verbose=False, **kwargs):
+        # TODO: Idea for better relaxation: go through all the magnets sequentially (left to right, top to bottom) For each:
+        # 1) Switch it.
+        # 2) If this makes it the magnet with the highest switching energy, then switch it again and go to the next. (This means that it switching will unlikely cause another magnet to flip)
+        # 3) If switching did not make it the magnet with the highest energy, then switch the other one and add all of its neighbors to the 'todo' list of magnets to switch and perform this check onto.
+        # I have not thought much about how this could get stuck in an infinite loop, but I guess if the number of magnets to be checked starts to exceed several times mm.n, then just stop because it is exploding.
+        # If such cases occur, I will perform further case studies to avoid those.
         """ NOTE: this is basically the parallel version of self.minimize().
             Relaxes self.m to a (meta)stable state using multiple self._minimize_all() calls.
             NOTE: it can take a while for large simulations to become fully relaxed.

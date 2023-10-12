@@ -22,7 +22,7 @@ from IPython.terminal.embed import InteractiveShellEmbed
 from matplotlib.figure import Figure
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Callable, Iterable, Literal, TypeVar
+from typing import Any, Callable, Iterable, Literal, TypeVar
 
 from . import config
 if config.USE_GPU:
@@ -243,7 +243,8 @@ def J_to_eV(E: float, /):
     return E/1.602176634e-19
 
 def filter_kwargs(kwargs: dict, func: Callable):
-    return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames}
+    # return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames} # Old version with unintended behavior, I don't think this was used anywhere anymore but I leave it here in case something would break anyway.
+    return {k: v for k, v in kwargs.items() if k in inspect.signature(func).parameters}
 
 
 ## VARIOUS INFORMATION
@@ -331,22 +332,23 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
-def save_results(parameters: dict = None, data=None, figures: Figure|Iterable[Figure] = None) -> str:
-    """ The most basic way of saving results of a simulation.
-    This can save the basic (scalar|str|bool) parameters (with auto-generated metadata) as JSON,
-    the full data (large arrays etc.) as pickle, and Matplotlib figure(s) as pdf.
-        @param parameters [dict] (None): simple key-value pairs that represent simple parameters
-            of the system, i.e. those that can usually be expressed as a scalar value or a string.
-        @param data [Any] (None): will be saved as a pickle file. This is usually a large array,
-            or a dict of arrays, but can really be anything as long as you remember what it represents.
-        @param figures [Figure|Iterable[Figure]] (None): one or more Matplotlib figures that will be
-            saved to pdf file(s).<figures>
-        @return [str]: the output directory. Can be used to save additional things there.
+def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None) -> str:
+    """ The most basic way to consistently save results of a simulation script. This can save the basic
+        parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
+        figure(s) as pdf, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
+        all saved as <script_name.out>/<YYYYMMDDhhmmss>/<data.pkl|figure.pdf|params.json|script.py>.
+            @param parameters [dict] (None): simple key-value pairs that represent simple parameters
+                of the system, i.e. those that can usually be expressed as a scalar value or a string.
+            @param data [Any] (None): will be saved as a pickle file. This is usually a large array,
+                or a dict of arrays, but can really be anything as long as you remember what it represents.
+            @param figures [Figure|Iterable[Figure]] (None): one or more Matplotlib figures that will be
+                saved to pdf file(s).
+            @return [str]: the output directory. Can be used to manually save additional resources there.
     """
     # Make output directory
     script = Path(inspect.stack()[1].filename) # The caller script, i.e. the one where __name__ == "__main__"
     outdir = script.parent / (script.stem + '.out') / timestamp()
-    outdir.mkdir(exist_ok=False) # Make directory "caller_script.out/<timestamp>"
+    outdir.mkdir(exist_ok=False, parents=True) # Make directory "caller_script.out/<timestamp>"
     # Save information
     shutil.copy2(script, os.path.join(outdir, 'script.py'))
     json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)

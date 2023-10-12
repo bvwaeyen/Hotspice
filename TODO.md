@@ -1,5 +1,7 @@
 # TODO
 
+Add GUI in the README.md file
+
 ## Sweeps and metrics
 
 - Sweep:
