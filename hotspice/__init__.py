@@ -1,7 +1,7 @@
 """
 This is the Hotspice package.
 """
-__all__ = ['config', 'utils', 'ASI', 'plottools', 'io', 'experiments']
+__all__ = ['config', 'utils', 'ASI', 'plottools', 'io', 'experiments', 'gui']
 __author__ = "Jonathan Maes"
 __version__ = None
 
@@ -18,4 +18,5 @@ from . import ASI
 from . import plottools
 from . import io
 from . import experiments
+from . import gui
 # from . import poisson #! unfinished module

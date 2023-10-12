@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from matplotlib import cm, widgets
+from matplotlib import cm, colormaps, widgets
 
 from context import hotspice
 if hotspice.config.USE_GPU:
@@ -61,7 +61,7 @@ def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n:int=10000, L:int=
     print(f"avg diff: {xp.mean(xp.abs(E_diff[mm.occupation != 0]))}")
     print(f"max diff: {xp.max(xp.abs(E_diff[mm.occupation != 0]))}")
     
-    cmap = cm.get_cmap('viridis').copy()
+    cmap = colormaps['viridis'].copy()
     hotspice.plottools.init_fonts()
     fig = plt.figure(figsize=(8, 7))
 

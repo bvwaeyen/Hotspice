@@ -3,7 +3,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib import cm, patches
+from matplotlib import cm, colormaps, patches
 from scipy.spatial import distance
 
 from context import hotspice
@@ -116,7 +116,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     print(f"Total number of samples: {total}")
     print(f"Empirical minimal distance between two samples in a single selection: {min_dist:.2f} (r={r})")
     
-    cmap = cm.get_cmap('viridis').copy()
+    cmap = colormaps['viridis'].copy()
     cmap.set_under(color='black')
     hotspice.plottools.init_fonts()
     fig = plt.figure(figsize=(8, 7))

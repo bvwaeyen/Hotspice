@@ -27,9 +27,8 @@ kB = 1.380649e-23
 @dataclass(slots=True)
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are strictly more than <this> switches in a single iteration, a convolution is used, otherwise the energies are just summed.
-    # TODO: THOROUGH ANALYSIS OF REDUCED_KERNEL_SIZE AND TAKE APPROPRIATE MEASURES (e.g. full recalculation every <n> steps)
     REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
-    UPDATE_SCHEME: str = 'Glauber' # Can be any of 'Néel', 'Glauber', 'Wolff'
+    UPDATE_SCHEME: str = 'Néel' # Can be any of 'Néel', 'Glauber', 'Wolff'
     MULTISAMPLING_SCHEME: str = 'grid' # Can be any of 'single', 'grid', 'Poisson', 'cluster'. Only used if UPDATE_SCHEME is 'Glauber'.
 
     def __post_init__(self):
@@ -47,9 +46,7 @@ class Magnets(ABC):
         self, nx: int, ny: int, dx: float, dy: float, *,
         T: Field = 300, E_B: Field = 0., moment: Field = None, Msat: Field = 800e3, V: Field = 2e-22,
         pattern: str = None, energies: tuple = None, PBC: bool = False, angle: float = 0., params: SimParams = None, in_plane: bool = False):
-        """
-            !!! THIS CLASS SHOULD NOT BE INSTANTIATED DIRECTLY, USE AN ASI WRAPPER INSTEAD !!!
-            The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are currently allowed.
+        """ The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are currently allowed.
             The initial configuration of a Magnets geometry consists of 3 parts:
                 1) in_plane: Magnets can be in-plane or out-of-plane: True or False, respectively. Determined by subclassing.
                 2) ASI type: Defined through subclasses (pinwheel, kagome, Ising...). This concerns the layout of spins.
@@ -66,23 +63,21 @@ class Magnets(ABC):
             The parameter <in_plane> should only be used in a super().__init__() call when subclassing this class.
         """
         self.rng = xp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
-        self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass
+        self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass # TODO: find a better way to do this, this is not very user-friendly now
         energies: tuple[Energy] = (DipolarEnergy(),) if energies is None else tuple(energies) # [J] use dipolar energy by default
 
         # Initialize properties that are necessary to access by subsequent method calls
         self._energies = list[Energy]() # Don't manually add anything to this, instead call self.add_energy()
         self.in_plane = in_plane
         self.nx, self.ny = int(nx), int(ny)
-        self.dx, self.dy = float(dx), float(dy)
-        self.xx, self.yy = xp.meshgrid(xp.linspace(0, self.dx*(self.nx-1), self.nx), xp.linspace(0, self.dy*(self.ny-1), self.ny)) # [m]
-        self.index = range(self.xx.size)
         self.ixx, self.iyy = xp.meshgrid(xp.arange(0, self.nx), xp.arange(0, self.ny))
-        self.x_min, self.y_min, self.x_max, self.y_max = float(self.xx[0,0]), float(self.yy[0,0]), float(self.xx[-1,-1]), float(self.yy[-1,-1])
+        self.dx, self.dy = dx, dy
 
         # Main initialization steps to create the geometry
         self.occupation = self._get_occupation().astype(bool).astype(int) # Make sure that it is either 0 or 1
+        self.nonzero = xp.nonzero(self.occupation) # Indices of nonzero elements, precalculated for efficiency
+        self._nonzero_array = xp.asarray(self.nonzero).reshape(2, -1) # Nonzero indices in array form, can be more efficient in some cases
         self.n = int(xp.sum(self.occupation)) # Number of magnets in the simulation
-        self.nonzero = xp.asarray(xp.nonzero(self.occupation)).reshape(2, -1) # Indices of nonzero elements
         if self.n == 0: raise ValueError(f"Can not initialize {full_obj_name(self)} of size {self.nx}x{self.ny}, as this does not contain any spins.")
         if self.in_plane: self._initialize_ip(angle=angle) # Initialize orientation of each magnet
         self.unitcell = self._get_unitcell() # This needs to be after occupation and initialize_ip, and before any defects are introduced
@@ -163,7 +158,7 @@ class Magnets(ABC):
         """
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
         self.angles = (self._get_angles() + angle)*self.occupation
-        self.orientation = xp.zeros(self.xx.shape + (2,))
+        self.orientation = xp.zeros(self.ixx.shape + (2,))
         self.orientation[:,:,0] = xp.cos(self.angles)*self.occupation
         self.orientation[:,:,1] = xp.sin(self.angles)*self.occupation
 
@@ -191,6 +186,12 @@ class Magnets(ABC):
                 self._energies.pop(i)
                 return
         if verbose: warnings.warn(f"There is no '{name}' energy associated with this Magnets object. Valid energies are: {[e.shortname for e in self._energies]}", stacklevel=2)
+
+    def has_energy(self, name: str): # Is basically "self.get_energy(name, verbose=False) is not None"
+        name = name.lower().replace('energy', '')
+        for e in self._energies:
+            if name == e.shortname: return True
+        return False
 
     def get_energy(self, name: str, verbose=True): # This is faster when using self._energies as dict
         """ Returns the specified energy from self._energies.
@@ -235,6 +236,11 @@ class Magnets(ABC):
     @property
     def MCsteps(self): # Number of Monte Carlo steps
         return self.attempted_switches/self.n
+
+    def reset_stats(self):
+        self.t = 0
+        self.switches = 0
+        self.attempted_switches = 0 # This sets MCsteps automatically
 
     @property
     def E(self) -> xp.ndarray: # This could be relatively expensive to calculate, so maybe not ideal
@@ -284,11 +290,33 @@ class Magnets(ABC):
                 self._PBC = False
                 return
         self._PBC = bool(value)
-        if hasattr(self, 'energies'):
-            for energy in self._energies: energy.initialize(self)
+        for energy in self._energies: energy.initialize(self)
+
+    @property
+    def dx(self):
+        """ Spacing between cells along the x-axis, in meters. """
+        return self._dx
+    @dx.setter
+    def dx(self, value: float):
+        self._dx = float(value)
+        self.xx, _ = xp.meshgrid(xp.linspace(0, self._dx*(self.nx-1), self.nx), xp.arange(self.ny))
+        self.x_min, self.x_max = float(self.xx[0,0]), float(self.xx[-1,-1])
+        for energy in self._energies: energy.initialize(self)
+    
+    @property
+    def dy(self):
+        """ Spacing between cells along the y-axis, in meters. """
+        return self._dy
+    @dy.setter
+    def dy(self, value: float):
+        self._dy = float(value)
+        _, self.yy = xp.meshgrid(xp.arange(self.nx), xp.linspace(0, self._dy*(self.ny-1), self.ny))
+        self.y_min, self.y_max = float(self.yy[0,0]), float(self.yy[-1,-1])
+        for energy in self._energies: energy.initialize(self)
 
     @property
     def kBT(self) -> xp.ndarray:
+        """ Array representing the thermal energy k_B*T throughout the system. """
         return kB*self._T
 
     @property
@@ -374,7 +402,7 @@ class Magnets(ABC):
             Strictly speaking, this is the only physically correct sampling scheme.
         """
         idx = np.random.randint(self.n) # MUCH faster than cp.random
-        return self.nonzero[:,idx].reshape(2,-1)
+        return self._nonzero_array[:,idx].reshape(2,-1)
 
     def _select_grid(self, r=None, poisson=None, **kwargs):
         """ Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
@@ -527,7 +555,7 @@ class Magnets(ABC):
         # delta_E = self.switch_energy()
         # barrier = xp.where(delta_E > -2*self.E_B, xp.maximum(delta_E, self.E_B + delta_E/2), delta_E)/self.occupation
         with np.errstate(invalid='ignore', divide='ignore'): # Ignore the divide-by-zero warning that will follow, as it is intended
-            barrier = (self.E_B - self.E)/self.occupation # Divide by occupation to make non-occupied grid cells have infinite barrier
+            barrier = xp.maximum((delta_E := self.switch_energy()), self.E_B + delta_E/2)/self.occupation # To correctly account for the situation where energy barrier disappears
         minBarrier = xp.nanmin(barrier)
         barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
         with np.errstate(over='ignore'): # Ignore overflow warnings in the exponential: such high barriers wouldn't switch anyway
@@ -569,21 +597,30 @@ class Magnets(ABC):
         return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
-    def progress(self, t_max: float = xp.inf, MCsteps_max: float = 4.):
+    def progress(self, t_max: float = 1, MCsteps_max: float = 4., stepwise: bool = False):
+        #! For backwards compatibility, <stepwise> default must be False!
         """ Runs as many self.update steps as is required to progress a certain amount of
             time or Monte Carlo steps (whichever is reached first) into the future.
-            @param time [float] (None): The maximum amount of time difference between start and end of this function.
-            @param MCsteps [float] (4.): The maximum amount of Monte Carlo steps performed during this function.
-            @return [tuple(2)]: the elapsed time and number of performed MC steps during the execution of this function.
+            @param t_max [float] (None): The maximum amount of time difference between start and end of this function.
+            @param MCsteps_max [float] (4.): The maximum amount of Monte Carlo steps performed during this function.
+            @return [tuple(2)|generator]:
+                If <stepwise> is False: tuple (elapsed time, number of MC steps performed) during the execution of this function.
+                If <stepwise> is True: a generator that yields after every self.update() call. Can be used to inspect transients etc.
         """
+        generator = self._progress_stepwise(t_max=t_max, MCsteps_max=MCsteps_max)
+        if stepwise: return generator
+        while True: # If we get here, then stepwise is False so we don't want the generator behavior, so we do next() until the end and return the final value
+            try: next(generator) # Do next() until the generator stops
+            except StopIteration as e: return e.value # And then this is how you can return the 'return' value of a generator as if it were a normal function
+
+    def _progress_stepwise(self, t_max: float = 1, MCsteps_max: float = 4.):
+        """ Generator that forms the foundation of self.progress(). Yields after every self.update(). """
         t_0, MCsteps_0 = self.t, self.MCsteps
         while lower_than(dt := self.t - t_0, t_max) and lower_than(dMCsteps := self.MCsteps - MCsteps_0, MCsteps_max):
-            # progress = max(dt/t_max, dMCsteps/MCsteps_max) # Always < 1
-            if self.params.UPDATE_SCHEME == 'Néel':
-                self.update(t_max=(t_max - dt)) # A max time can be specified
-            else:
-                self.update() # No time
-        return dt, dMCsteps
+            if self.params.UPDATE_SCHEME == 'Néel': self.update(t_max=(t_max - dt)) # A max time can be specified
+            else: self.update() # No time
+            yield
+        return self.t - t_0, self.MCsteps - MCsteps_0
 
     # TODO: clean the minimize(), _minimize_all() and relax() functions (i.e. verbosity and standardize barrier calculation)
     def minimize(self, ignore_barrier=True, verbose=False, _frac=0.3):
@@ -651,6 +688,12 @@ class Magnets(ABC):
                 self.update_energy(index=indices)
 
     def relax(self, verbose=False, **kwargs):
+        # TODO: Idea for better relaxation: go through all the magnets sequentially (left to right, top to bottom) For each:
+        # 1) Switch it.
+        # 2) If this makes it the magnet with the highest switching energy, then switch it again and go to the next. (This means that it switching will unlikely cause another magnet to flip)
+        # 3) If switching did not make it the magnet with the highest energy, then switch the other one and add all of its neighbors to the 'todo' list of magnets to switch and perform this check onto.
+        # I have not thought much about how this could get stuck in an infinite loop, but I guess if the number of magnets to be checked starts to exceed several times mm.n, then just stop because it is exploding.
+        # If such cases occur, I will perform further case studies to avoid those.
         """ NOTE: this is basically the parallel version of self.minimize().
             Relaxes self.m to a (meta)stable state using multiple self._minimize_all() calls.
             NOTE: it can take a while for large simulations to become fully relaxed.
@@ -685,7 +728,7 @@ class Magnets(ABC):
         """ Records E_tot, t, T_avg and m_avg as they were last calculated. This default behavior can be overruled: if
             passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T_avg|m_avg> value(s).
         """
-        self.history.entry()
+        self.history.entry(self)
         if E_tot is not None: self.history.E[-1] = float(E_tot)
         if t is not None: self.history.t[-1] = float(t)
         if T_avg is not None: self.history.T[-1] = float(T_avg)
@@ -741,16 +784,20 @@ class Magnets(ABC):
                 #   <angle> near 0 or math.pi: clockwise/anticlockwise vortex, respectively
                 #   <angle> near math.pi/2 or -math.pi/2: bowtie configuration (top region: up/down, respectively)
                 self.m = xp.ones_like(self.xx)
-                middle = (self.dx*(self.nx-1)/2, self.dy*(self.ny-1)/2)
-                diff_x = self.xx - middle[0]
-                diff_y = self.yy - middle[1]
-                diff_complex = diff_x + 1j*diff_y
-                angle_desired = diff_complex*(-1j+1e-6) # Small offset from 90° to avoid weird boundaries in highly symmetric systems
-                dotprod = angle_desired.real*self.orientation[:,:,0] + angle_desired.imag*self.orientation[:,:,1]
-                dotprod[dotprod == 0] = 1
-                sign = xp.sign(dotprod)
-                occupied = xp.where(self.occupation == 1)
-                self.m[occupied] = sign[occupied]
+                if self.in_plane: # In-plane has a clear 'vortex' meaning
+                    middle = (self.dx*(self.nx-1)/2, self.dy*(self.ny-1)/2)
+                    diff_x = self.xx - middle[0]
+                    diff_y = self.yy - middle[1]
+                    diff_complex = diff_x + 1j*diff_y
+                    angle_desired = diff_complex*(-1j+1e-6) # Small offset from 90° to avoid weird boundaries in highly symmetric systems
+                    dotprod = angle_desired.real*self.orientation[:,:,0] + angle_desired.imag*self.orientation[:,:,1]
+                    dotprod[dotprod == 0] = 1
+                    sign = xp.sign(dotprod)
+                    occupied = xp.where(self.occupation == 1)
+                    self.m[occupied] = sign[occupied]
+                else: # for OOP, 'vortex' means 'up' on one side, 'down' on other side
+                    half_side = xp.where(self.xx >= (self.x_max-self.x_min)/2)
+                    self.m[half_side] *= -1
             case str(unknown_pattern):
                 self.m = self.rng.integers(0, 2, size=self.xx.shape)*2 - 1
                 if unknown_pattern != 'random': warnings.warn(f"Pattern '{unknown_pattern}'' not recognized, defaulting to 'random'.", stacklevel=2)
@@ -896,12 +943,27 @@ class ZeemanEnergy(Energy):
 
 
 class DipolarEnergy(Energy):
-    def __init__(self, prefactor=1):
+    def __init__(self, prefactor: float = 1, decay_exponent: float = -3):
         """ This DipolarEnergy class implements the interaction between the magnets of the simulation themselves.
             It should therefore always be included in the simulations.
             @param prefactor [float] (1): The relative strength of the dipolar interaction.
+            @param decay_exponent [float] (-3): How fast the dipole interaction weakens with distance: DD ∝ 1/r^<decay_exponent>.
         """
-        self.prefactor = prefactor
+        # TODO: a more intricate scaling with distance is needed to incorporate the effect of the magnets not being infinitely small magnetic spins.
+        #       As a first step, a new method DipolarEnergy().scale_NN() can be created, that scales <prefactor> such that NN interactions have a certain energy.
+        #                        (Use the highest nearest-neighbor absolute value for this, because some can be zero e.g. in Pinwheel.)
+        #                        (TODO: A complete rework of NN logic would also be quite welcome at this point)
+        #       Further steps can then concern themselves with the nonpolynomial fall-off with distance, as the magnets start to see each other more as infinitesimal spins rather than a finite FM geometry.
+        self._prefactor = prefactor
+        self.decay_exponent = decay_exponent
+    
+    @property
+    def prefactor(self):
+        return self._prefactor
+    @prefactor.setter
+    def prefactor(self, value):
+        self.E *= value/self._prefactor
+        self._prefactor = value
 
     def initialize(self, mm: Magnets):
         self.mm = mm
@@ -916,7 +978,7 @@ class DipolarEnergy(Energy):
         rr_sq = rrx**2 + rry**2
         rr_sq[0,0] = xp.inf
         rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
-        rr_inv3 = rr_inv**3
+        rr_inv3 = rr_inv**(-self.decay_exponent) # =1/r^3 by default
         rinv3 = mirror4(rr_inv3)
         # Now we determine the normalized rx and ry
         ux = mirror4(rrx*rr_inv, negativex=True)
@@ -988,8 +1050,8 @@ class DipolarEnergy(Energy):
                     partial_m = xp.zeros_like(self.mm.m)
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
 
-                    total_energy = total_energy + partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')*self.mm._momentSq
-        self.E = self.prefactor*total_energy
+                    total_energy += partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid')
+        self.E = self.prefactor*self.mm._momentSq*total_energy
 
     def energy_switch(self, indices2D=None):
         return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]
@@ -1038,8 +1100,26 @@ class DipolarEnergy(Energy):
     def E_tot(self):
         return xp.sum(self.E)/2
 
+    def get_NN_interaction(self):
+        """ An APPROXIMATE value for the nearest-neighbor dipolar interaction energy. """
+        # Approximation: use highest value from all nearest-neighbors in all kernels, and average magnetic moment
+        largest = 0
+        for kernel in self.kernel_unitcell:
+            ny, nx = kernel.shape
+            middle_y, middle_x = ny//2, nx//2
+            NN = self.mm._get_nearest_neighbors()
+            dy, dx = NN.shape
+            dy, dx = dy//2, dx//2
+            value = xp.max(xp.abs(kernel[middle_y-dy:middle_y+dy+1,middle_x-dx:middle_x+dx+1]*NN))
+            if value > largest: largest = value
+        return largest*self.prefactor*(self.mm.moment_avg**2)
 
-class ExchangeEnergy(Energy):
+    def set_NN_interaction(self, value):
+        """ Sets <prefactor> such that the nearest-neighbor dipolar interaction energy is <value> Joules. """
+        self.prefactor = value/self.get_NN_interaction()
+
+
+class ExchangeEnergy(Energy): # TODO: allow random variation in J, see https://stackoverflow.com/a/73398072 for this kind of convolution
     def __init__(self, J=1):
         self.J = J # [J]
 

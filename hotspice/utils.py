@@ -6,8 +6,9 @@ import io
 import json
 import math
 import os
-import pathlib
+import pickle
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -18,8 +19,10 @@ import pandas as pd
 
 from datetime import datetime
 from IPython.terminal.embed import InteractiveShellEmbed
+from matplotlib.figure import Figure
+from pathlib import Path
 from textwrap import dedent, indent
-from typing import Callable, Iterable, Literal, TypeVar
+from typing import Any, Callable, Iterable, Literal, TypeVar
 
 from . import config
 if config.USE_GPU:
@@ -79,7 +82,7 @@ def R_squared(a, b):
         "Task Agnostic Metrics for Reservoir Computing" by Love et al.
     """
     if (var_a := xp.var(a)) == 0 or (var_b := xp.var(b)) == 0: return 0
-    cov = xp.mean((a - xp.mean(a))*(b - xp.mean(b)))
+    cov = xp.mean((a - xp.mean(a))*(b - xp.mean(b))) # Alternative definition of R² divides by N-1 (instead of the implicit N in xp.mean) (in "Numerical simulation of artificial spin ice for reservoir computing")
     return cov**2/var_a/var_b # Same as xp.corrcoef(a, b)[0,1]**2, but faster
 
 def strided(a: xp.ndarray, W: int):
@@ -143,13 +146,17 @@ magnitude_to_SIprefix = {v: k for k, v in SIprefix_to_magnitude.items()}
 def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f', 'p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']=''):
     """ Converts <n> (which already has SI prefix <unit_prefix> for whatever unit it is in)
         to a reasonable number with a new SI prefix. Returns a tuple with (the new scalar values, the new SI prefix).
+        Example: converting 0.0000238 ms would be appropriate_SIprefix(0.0000238, 'm') -> ()
     """
     value = n.min() if isinstance(n, (np.ndarray, xp.ndarray)) else n # To avoid excessive commas, we take min()
-    nearest_magnitude = round(math.log10(value)) + SIprefix_to_magnitude[unit_prefix]
-    used_magnitude = -100 # placeholder
+    if unit_prefix not in SIprefix_to_magnitude.keys(): raise ValueError(f"'{unit_prefix}' is not a supported SI prefix.")
+    offset_magnitude = SIprefix_to_magnitude[unit_prefix]
+    nearest_magnitude = (round(np.log10(abs(value))) if value != 0 else -np.inf) + offset_magnitude
+    nearest_magnitude = np.clip(nearest_magnitude, min(SIprefix_to_magnitude.values()), max(SIprefix_to_magnitude.values())) # Make sure it is in the known range
+    # used_magnitude = -100 # placeholder
     for supported_magnitude in sorted(magnitude_to_SIprefix.keys()):
         if supported_magnitude <= nearest_magnitude: used_magnitude = supported_magnitude
-    return (n/10**used_magnitude, SIprefix_to_magnitude[used_magnitude])
+    return (n/10**(used_magnitude - offset_magnitude), magnitude_to_SIprefix[used_magnitude])
 
 def shell():
     """ Pauses the program and opens an interactive shell where the user
@@ -172,6 +179,29 @@ def shell():
         InteractiveShellEmbed().mainloop(stack_depth=1)
     except (KeyboardInterrupt, SystemExit, EOFError):
         pass
+
+
+## GUI
+def bresenham(start, end):
+    """ Bresenham's Line Generation Algorithm, adapted from https://www.youtube.com/watch?v=yaovJmM-0OM. """
+    x1, y1 = start
+    x2, y2 = end
+    dx, dy = abs(x2 - x1), abs(y2 - y1)
+    line_pixel = [(x1, y1)]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        if (flipped := np.divide(dy, dx) > 1): # Then flip x and y
+            dx, x1, x2, dy, y1, y2 = dy, y1, y2, dx, x1, x2
+
+    x, y, p = x1, y1, 2*dy - dx
+    for _ in range(2, dx + 2):
+        x += 1 if x < x2 else -1
+        if p > 0:
+            y += 1 if y < y2 else -1
+            p += 2*(dy - dx)
+        else:
+            p += 2*dy
+        line_pixel.append((y, x) if flipped else (x, y))
+    return line_pixel
 
 
 ## CONVERSION
@@ -213,7 +243,8 @@ def J_to_eV(E: float, /):
     return E/1.602176634e-19
 
 def filter_kwargs(kwargs: dict, func: Callable):
-    return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames}
+    # return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames} # Old version with unintended behavior, I don't think this was used anywhere anymore but I leave it here in case something would break anyway.
+    return {k: v for k, v in kwargs.items() if k in inspect.signature(func).parameters}
 
 
 ## VARIOUS INFORMATION
@@ -245,8 +276,10 @@ def run_script(script_name, args=None):
     """
     script_name = script_name.strip()
     if not os.path.splitext(script_name)[1]: script_name += '.py'
-    path = pathlib.Path(__file__).parent / "scripts" / script_name
+    path = Path(__file__).parent / "scripts" / script_name
     if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
+
+    args = [str(arg) for arg in args]
     command = ["python", str(path)] + list(args)
     try:
         subprocess.run(command, check=True)
@@ -257,11 +290,13 @@ def run_script(script_name, args=None):
             {colorama.Fore.LIGHTYELLOW_EX}{' '.join(command)}{colorama.Style.RESET_ALL}
         """), stacklevel=2)
 
-def ParallelJobs(sweepscript_path, outdir=None, _ParallelJobs_script_name="ParallelJobs"):
+def ParallelJobs(sweepscript_path, outdir: str = None, iterations: list = None, _ParallelJobs_script_name: str = "ParallelJobs"):
     """ Convenient wrapper around run_script() for the ParallelJobs.py script in particular. """
     args = [sweepscript_path]
     if outdir is not None:
-        args = ['-o', outdir] + args
+        args += ['-o', outdir]
+    if iterations is not None:
+        args += ['-i'] + iterations
     run_script(_ParallelJobs_script_name, args=args)
 
 def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = None, show_device=True):
@@ -297,6 +332,33 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
+def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None) -> str:
+    """ The most basic way to consistently save results of a simulation script. This can save the basic
+        parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
+        figure(s) as pdf, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
+        all saved as <script_name.out>/<YYYYMMDDhhmmss>/<data.pkl|figure.pdf|params.json|script.py>.
+            @param parameters [dict] (None): simple key-value pairs that represent simple parameters
+                of the system, i.e. those that can usually be expressed as a scalar value or a string.
+            @param data [Any] (None): will be saved as a pickle file. This is usually a large array,
+                or a dict of arrays, but can really be anything as long as you remember what it represents.
+            @param figures [Figure|Iterable[Figure]] (None): one or more Matplotlib figures that will be
+                saved to pdf file(s).
+            @return [str]: the output directory. Can be used to manually save additional resources there.
+    """
+    # Make output directory
+    script = Path(inspect.stack()[1].filename) # The caller script, i.e. the one where __name__ == "__main__"
+    outdir = script.parent / (script.stem + '.out') / timestamp()
+    outdir.mkdir(exist_ok=False, parents=True) # Make directory "caller_script.out/<timestamp>"
+    # Save information
+    shutil.copy2(script, os.path.join(outdir, 'script.py'))
+    json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)
+    pickle.dump(data, open(os.path.join(outdir, 'data.pkl'), 'wb')) #! Must be 'wb' because binary object
+    # Save figure(s)
+    if not isinstance(figures, Iterable): figures = [figures]
+    for i, fig in enumerate(figures):
+        fig.savefig(os.path.join(outdir, f'figure{i}.pdf' if len(figures) > 1 else 'figure.pdf'))
+    return outdir
+
 class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
         """ Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
@@ -314,6 +376,36 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         self.df = df
         self.metadata = metadata
         self.constants = constants
+    
+    @staticmethod
+    def get_simulation_metadata(basic_metadata_dict: dict = None, ignore_keys=()):
+        """ Any keys present in <ignore_keys> will not be automatically added nor removed from <basic_metadata_dict>. """
+        if basic_metadata_dict is None: basic_metadata_dict = {}
+        if not isinstance(basic_metadata_dict, dict): raise ValueError("Metadata must be provided as a dictionary.")
+
+        try:
+            creator_file = os.path.abspath(str(sys.modules['__main__'].__file__))
+            if '\\hotspice\\' in creator_file:
+                creator_file = "..." + creator_file[len(creator_file.split('\\hotspice\\')[0]):]
+        except Exception:
+            creator_file = ''
+        try:
+            gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
+                encoding='utf-8').strip())).to_json(orient='table', index=False))['data']
+            gpu_info = [{key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in d.items()} for d in gpu_info] # Remove spaces around key and value text
+        except Exception:
+            gpu_info = []
+
+        if "description" not in ignore_keys:
+            basic_metadata_dict['description'] = dedent(basic_metadata_dict.get('description', "No custom description available.")).strip()
+        if "datetime" not in ignore_keys: basic_metadata_dict.setdefault('datetime', timestamp())
+        if "author" not in ignore_keys: basic_metadata_dict.setdefault('author', getpass.getuser())
+        if "creator" not in ignore_keys: basic_metadata_dict.setdefault('creator', creator_file)
+        if "simulator" not in ignore_keys: basic_metadata_dict.setdefault('simulator', "Hotspice")
+        if config.USE_GPU and "GPU" not in ignore_keys: basic_metadata_dict.setdefault("GPU", gpu_info)
+        if "hotspice_config" not in ignore_keys: basic_metadata_dict.setdefault('hotspice_config', config.get_dict())
+        return basic_metadata_dict
 
     @property
     def df(self): return self._df
@@ -343,32 +435,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
                 keys 'name', 'compute_cap', 'driver_version', 'memory.total [MiB]', 'timestamp', 'uuid'.
             - 'simulator': "Hotspice", just for clarity. Can include version number when applicable.
         """
-        if value is None: value = {}
-        if not isinstance(value, dict): raise ValueError("Metadata must be provided as a dictionary.")
-
-        value.setdefault('datetime', timestamp())
-        value.setdefault('author', getpass.getuser())
-        try:
-            creator_info = os.path.abspath(str(sys.modules['__main__'].__file__))
-            if 'hotspice' in creator_info:
-                creator_info = "...\\" + creator_info[len(creator_info.split('hotspice')[0]):]
-        except Exception:
-            creator_info = ''
-        value.setdefault('creator', creator_info)
-        value.setdefault('simulator', "Hotspice")
-        value.setdefault('description', "No custom description available.")
-        value['description'] = dedent(value['description']).strip()
-        try:
-            gpu_info = json.loads(pd.read_csv(io.StringIO(subprocess.check_output(
-                ["nvidia-smi", "--query-gpu=gpu_name,compute_cap,driver_version,gpu_uuid,memory.total,timestamp", "--format=csv"],
-                encoding='utf-8').strip())).to_json(orient='table', index=False))['data']
-            gpu_info = [{key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in d.items()} for d in gpu_info] # Remove spaces around key and value text
-        except Exception:
-            gpu_info = []
-        value.setdefault('GPU', gpu_info)
-        value.setdefault('hotspice_config', config.get_dict())
-
-        self._metadata = value
+        self._metadata = self.get_simulation_metadata(value)
         assert isinstance(self._metadata, dict)
 
     @property

@@ -75,7 +75,7 @@ The `hotspice.experiments` module contains classes to bundle many input/output r
 
 ### Performing a parameter sweep on multiple GPUs
 
-The `hotspice/scripts/ParallelJobs.py` script can be used to run a `hotspice.experiments.Sweep` on multiple GPUs. This sweep should be defined in a file that follows a structure similar to `examples/SweepKQ_RC_ASI.py`. Running `ParallelJobs.py` can be done
+The `hotspice/scripts/ParallelJobs.py` script can be used to run a `hotspice.experiments.Sweep` on multiple GPUs or CPU cores. This sweep should be defined in a file that follows a structure similar to `examples/SweepKQ_RC_ASI.py`. Running `ParallelJobs.py` can be done
 
 - either from the command line by calling `python ParallelJobs.py <sweep_file>`,
 - or from an interactive python shell by calling `hotspice.utils.ParallelJobs(<sweep_file>)`.
@@ -123,3 +123,4 @@ They all follow the pattern `hotspice.ASI.<class>(a, n, nx=None, ny=None, **kwar
 |---|:---:|---|
 | `OOP_Square` | <img src="./figures/ASI_lattices/OOP_Square_11x11.png" alt="OOP_Square_11x11" width="200"/> | `a` is the distance between nearest neighbors. The occupation is full. |
 | `OOP_Triangle` | <img src="./figures/ASI_lattices/OOP_Triangle_7x4.png" alt="OOP_Triangle_7x4" width="200"/> | `a` is the distance between nearest neighbors. The occupation is 1/2. |
+| `OOP_Honeycomb` | <img src="./figures/ASI_lattices/OOP_Honeycomb_4x7.png" alt="OOP_Honeycomb_4x7" width="200"/> | `a` is the distance between nearest neighbors. The occupation is 2/5. |

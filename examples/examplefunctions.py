@@ -5,7 +5,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib import animation, cm, colors
+from matplotlib import animation, cm, colormaps, colors
 
 try: from context import hotspice
 except ModuleNotFoundError: import hotspice
@@ -100,7 +100,7 @@ def animate_quenching(mm: hotspice.Magnets, animate=1, speed=20, n_sweep=40000, 
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(6, 4.8))
     ax1 = fig.add_subplot(111)
-    cmap = cm.get_cmap('hsv')
+    cmap = colormaps['hsv']
     if mm.in_plane:
         h = ax1.imshow(hotspice.plottools.get_rgb(mm, fill=fill, avg=avg),
                        cmap=cmap, origin='lower', vmin=0, vmax=math.tau, extent=hotspice.plottools._get_averaged_extent(mm, avg))

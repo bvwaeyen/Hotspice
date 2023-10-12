@@ -4,7 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-from matplotlib import cm
+from matplotlib import cm, colormaps
 
 try: from context import hotspice
 except ModuleNotFoundError: import hotspice
@@ -31,7 +31,7 @@ def plot2Dsweep(summary_file, save=True, plot=True, title=None,
     Q = K - G
 
     ## PLOTTING
-    cmap = cm.get_cmap('viridis').copy()
+    cmap = colormaps['viridis'].copy()
     # cmap.set_under(color='black')
     hotspice.plottools.init_fonts()
     fig = plt.figure(figsize=(10, 4))

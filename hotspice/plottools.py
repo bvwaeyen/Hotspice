@@ -8,10 +8,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from enum import Enum
-from matplotlib import cm, colors, patches, widgets
+from matplotlib import cm, colormaps, colors, patches, widgets
 
 from .core import Magnets
-from .utils import asnumpy, SIprefix_to_mul
+from .utils import asnumpy, J_to_eV, SIprefix_to_mul
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -128,10 +128,10 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     useless_magnitudes = xp.where(magnets_in_avg == 0, xp.nan, 1) # No magnet (the NaNs here will be a subset of useless_angles)
     angles_avg *= useless_angles
     magnitudes_avg *= useless_magnitudes
-    if avg == 'triangle':
+    if avg == Average.TRIANGLE:
         angles_avg = angles_avg[1::2,1::2]
         magnitudes_avg = magnitudes_avg[1::2,1::2]
-    elif avg == 'hexagon': # Only keep the centers of hexagons, throw away the rest
+    elif avg == Average.HEXAGON: # Only keep the centers of hexagons, throw away the rest
         angles_avg = angles_avg[::2,::2]
         magnitudes_avg = magnitudes_avg[::2,::2]
         ixx, iyy = xp.meshgrid(xp.arange(0, angles_avg.shape[1]), xp.arange(0, angles_avg.shape[0])) # DO NOT REMOVE THIS, THIS IS NOT THE SAME AS mm.ixx, mm.iyy!
@@ -191,7 +191,7 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
 def get_rgb(*args, **kwargs):
     return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
-def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, unit='µ', figure=None, **figparams):
+def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, unit='µ', figure=None, subtract_barrier=False, in_eV=True, **figparams):
     """ Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
         the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
@@ -207,6 +207,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         @param color_quiver [bool] (True): if True, the quiver plot arrows are colored according to their angle.
         @param unit [str] ('µ'): the symbol of the unit. Automatically converts this to a power of 10 for scaling.
         @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this show_m().
+        @param subtract_barrier [bool] (False): if True, the energy scale displayed is the effective energy barrier.
         @param fontsize_colorbar [int] (10): the font size of the color bar description.
         @param fontsize_axes [int] (10): the font size of the axes labels and titles.
         @param text_averaging [bool] (True): if False, the averaging mask is not stated in the colorbar description.
@@ -223,7 +224,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         show_quiver = False
     unit_factor = SIprefix_to_mul(unit)
     averaged_extent = _get_averaged_extent(mm, avg)/unit_factor # List comp to convert to micrometre
-    full_extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dx/2])/unit_factor
+    full_extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dy/2])/unit_factor
 
     num_plots = 1
     num_plots += 1 if show_energy else 0
@@ -235,7 +236,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
     if figure is not None: fig.clear()
     ax1 = fig.add_subplot(1, num_plots, 1)
     im = get_rgb(mm, m=m, avg=avg, fill=fill)
-    cmap = cm.get_cmap('hsv')
+    cmap = colormaps['hsv']
     if mm.in_plane:
         im1 = ax1.imshow(im, cmap='hsv', origin='lower', vmin=0, vmax=2*math.pi,
                         extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
@@ -256,8 +257,8 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
                  'blue':  [[0.0, b0,  b0],
                            [0.5, 0.0, 0.0],
                            [1.0, b1,  b1]]}
-        newcmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
-        im1 = ax1.imshow(im, cmap=newcmap, origin='lower', vmin=-1, vmax=1,
+        OOPcmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
+        im1 = ax1.imshow(im, cmap=OOPcmap, origin='lower', vmin=-1, vmax=1,
                          extent=averaged_extent, interpolation='antialiased', interpolation_stage='rgba')
         c1 = plt.colorbar(im1)
         c1.ax.get_yaxis().labelpad = 10 + 2*figparams['fontsize_colorbar']
@@ -277,7 +278,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
             ax2.set_xlabel(f"x [{unit}m]")
             ax2.set_ylabel(f"y [{unit}m]")
             axes.append(ax2)
-        nonzero = mm.m.nonzero()
+        nonzero = mm.nonzero
         mx, my = asnumpy(xp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(xp.multiply(m, mm.orientation[:,:,1])[nonzero])
         ax2.quiver(asnumpy(mm.xx[nonzero])/unit_factor, asnumpy(mm.yy[nonzero])/unit_factor, mx/unit_factor, my/unit_factor,
                 color=(cmap((np.arctan2(my, mx)/2/np.pi) % 1) if color_quiver else 'black'),
@@ -286,11 +287,15 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         ax2.set_ylim(full_extent[2:])
     if show_energy:
         ax3 = fig.add_subplot(1, num_plots, num_plots, sharex=ax1, sharey=ax1)
-        im3 = ax3.imshow(asnumpy(xp.where(mm.m != 0, mm.E, xp.nan)), origin='lower',
-                            extent=full_extent, interpolation='antialiased', interpolation_stage='rgba')
+        E = xp.where(mm.m != 0, mm.E, xp.nan)
+        if subtract_barrier: E = mm.E_B - E # Crude approximation of the effective energy barrier for each magnet
+        if in_eV: E = J_to_eV(E)
+        E_unit = 'eV' if in_eV else 'J'
+        im3 = ax3.imshow(asnumpy(E), origin='lower',
+                            extent=full_extent, vmin=(min(0, xp.min(E)) if subtract_barrier else None), interpolation='antialiased', interpolation_stage='rgba')
         c3 = plt.colorbar(im3)
         c3.ax.get_yaxis().labelpad = 15
-        c3.ax.set_ylabel("Local energy [J]", rotation=270, fontsize=figparams['fontsize_colorbar'])
+        c3.ax.set_ylabel(f"Local energy [{E_unit}]" if not subtract_barrier else f"Effective energy barrier [{E_unit}]", rotation=270, fontsize=figparams['fontsize_colorbar'])
         ax3.set_title(r"$E_{int}$")
         ax3.set_xlabel(f"x [{unit}m]")
         ax3.set_ylabel(f"y [{unit}m]")
@@ -304,7 +309,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         update_interactive(fig)
     return fig
 
-def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, scale: float = .8, save: bool = False, save_ext: str = '.pdf'):
+def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_off: float = 1, scale: float = .8, save: bool = False, save_ext: str = '.pdf'):
     """ Shows a minimalistic rendition of the lattice on which the spins are placed.
         @param mm [Magnets]: an instance of the ASI class whose lattice should be plotted.
         @param nx, ny [int] (3): the number of unit cells that will be shown.
@@ -312,7 +317,13 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
         @param scale [float] (.8): how long the shown ellipses are, as a multiple of the distance between nearest neighbors.
         @param save [bool] (False): if True, the figure is saved as "results/lattices/<ASI_name>_<nx>x<ny>.pdf
     """
-    nx, ny = nx*mm.unitcell.x+1, ny*mm.unitcell.y+1
+    len_x = mm.unitcell.x*mm.dx
+    len_y = mm.unitcell.y*mm.dy
+    x_is_longer = len_x > len_y
+    if nx is None: nx = n if x_is_longer else round(n*len_y/len_x)
+    if ny is None: ny = round(nx*len_x/len_y) if x_is_longer else n
+    nx = nx*mm.unitcell.x + 1
+    ny = ny*mm.unitcell.y + 1
     if mm.nx < nx or mm.ny < ny:
         raise ValueError(f"Lattice of {type(mm).__name__} is too small: ({mm.nx}x{mm.ny})<({nx}x{ny}).")
 
@@ -324,11 +335,13 @@ def show_lattice(mm: Magnets, nx: int = 3, ny: int = 3, fall_off: float = 1, sca
     ux, uy = mm.unitcell.x*mm.dx, mm.unitcell.y*mm.dy
 
     figsize = 6
-    fig = plt.figure(figsize=(figsize, figsize*uy*ny/ux/nx))
+    size = mm._get_closest_dist()*scale
+    size_x = (xmax - xmin) + size
+    size_y = (ymax - ymin) + size
+    fig = plt.figure(figsize=(figsize, figsize*size_y/size_x))
     ax = fig.add_subplot(111)
     ax.set_aspect('equal')
     ax.set_axis_off()
-    size = mm._get_closest_dist()*scale
     if mm.in_plane:
         ox = asnumpy(mm.orientation[:,:,0][occupied_indices])
         oy = asnumpy(mm.orientation[:,:,1][occupied_indices])
@@ -477,7 +490,7 @@ def close_interactive(figure=None):
         plt.close()
 
 
-def save_plot(save_path: str, ext=None):
+def save_plot(save_path: str, ext=None, **savefig_kwargs):
     """ <save_path> is a full relative pathname, usually something like
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     """
@@ -489,7 +502,7 @@ def save_plot(save_path: str, ext=None):
         save_path += '.' + ext.removeprefix('.') # This slightly convoluted way allows <ext> to be e.g. '.pdf' but also just 'pdf'
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     try:
-        plt.savefig(save_path)
+        plt.savefig(save_path, **savefig_kwargs)
     except PermissionError:
         warnings.warn(f"Could not save to {save_path}, probably because the file is opened somewhere else.", stacklevel=2)
 

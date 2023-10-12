@@ -29,18 +29,21 @@ if __name__ != "__main__": raise RuntimeError("ParallelJobs.py should only be ru
 
 
 ## Define, parse and clean command-line arguments
-# Usage: python <this_file.py> [-h] [-o [OUTDIR]] [script_path]
-# Note that outdir and script_path are both relative to the current working directory, not to this file!
+# Usage: python <this_file.py> [script_path] [-h] [-o [OUTDIR]] [-i [ITERATIONS_LIST]]
+# Example: python ParallelJobs.py some_script_file.py -i 13 21 34 55 -o "results/some_script_file.out"
+# Note that outdir and script_path are both relative to the current working directory, not to ParallelJobs.py!
 parser = argparse.ArgumentParser(description="Runs the sweep defined in another script on all available GPUs.")
-parser.add_argument('script_path', type=str, nargs='?',
-                    default=os.path.join(os.path.dirname(__file__), "../../examples/SweepKQ_RC_ASI.py"), #! hardcoded paths :(
+parser.add_argument('script_path', type=str,
                     help="The path of the script file containing the parameter sweep to be performed.")
-parser.add_argument('-o', '--outdir', dest='outdir', type=str, nargs='?',
-                    default=None,
+parser.add_argument('-o', '--outdir', nargs='?', 
+                    dest='outdir', type=str, default=None,
                     help="The output directory, relative to the current working directory.")
+parser.add_argument('-i', '--iterations', nargs='*', # '*' creates a list of all 'arguments' that follow after -i, until the next keyword
+                    dest='iterations', type=int, default=None,
+                    help="If specified, only these iterations of the sweep are ran. A space-separated list of integers.")
 args, _ = parser.parse_known_args()
 args.script_path = os.path.abspath(args.script_path) # Make sure the path is ok
-if args.outdir is None: args.outdir = os.path.splitext(args.script_path)[0] + '.out/Sweep' # TODO: check if this works
+if args.outdir is None: args.outdir = os.path.splitext(args.script_path)[0] + '.out/Sweep'
 if not os.path.exists(args.script_path):
     raise ValueError(f"Path '{args.script_path}' provided as cmd argument does not exist.")
 
@@ -69,13 +72,13 @@ if not os.path.exists(outdir): os.makedirs(outdir, exist_ok=True)
 shutil.copy(args.script_path, copied_script_path)
 
 ## Create some global variables/functions for the entire sweep
-num_jobs = len(sweep)
+n_funcs = len(sweep)
 failed = []
 def runner(i):
     device_id = q.get() # ID of GPU or CPU core to be used
     text_core_num = f"GPU{device_id}" if hotspice.config.USE_GPU else f"CPU{device_id}"
     # Run a shell command that runs the relevant python script
-    hotspice.utils.log(f"Attempting to run job #{i} of {num_jobs} on {text_core_num}...", style='header')
+    hotspice.utils.log(f"Attempting to run job #{i} of {n_funcs} on {text_core_num}...", style='header')
     cmd = ["python", copied_script_path, '-o', outdir, str(i)]
     try:
         env = os.environ.copy()
@@ -94,9 +97,11 @@ def runner(i):
 
 
 ## Run the jobs
-cores_text = f"{N_PARALLEL_JOBS} {'G' if hotspice.config.USE_GPU else 'C'}PU{'s' if N_PARALLEL_JOBS > 1 else ''}"
-hotspice.utils.log(f"Running {num_jobs} jobs on {cores_text}...", style='header', show_device=False)
-Parallel(n_jobs=N_PARALLEL_JOBS, backend='threading')(delayed(runner)(i) for i in range(num_jobs))
+iterations = range(n_funcs) if args.iterations is None else args.iterations # Which iterations of the sweep are ran (default: all)
+num_cores = min(N_PARALLEL_JOBS, len(iterations))
+cores_text = f"{num_cores} {'G' if hotspice.config.USE_GPU else 'C'}PU{'s' if num_cores > 1 else ''}"
+hotspice.utils.log(f"Running {len(iterations)} job{'s' if len(iterations) > 1 else ''} on {cores_text}...", style='header', show_device=False)
+Parallel(n_jobs=N_PARALLEL_JOBS, backend='threading')(delayed(runner)(i) for i in iterations)
 
 with open(os.path.abspath(os.path.join(outdir, "README.txt")), 'w') as readme:
     readme.write(f"Failed iterations (flat-index): {failed}")

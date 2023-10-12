@@ -1,5 +1,7 @@
 # TODO
 
+Add GUI in the README.md file
+
 ## Sweeps and metrics
 
 - Sweep:
@@ -11,10 +13,13 @@
 ## Core functionality
 
 1. High priority
-    - [ ] Create an `OOPSquareClockwiseInputter`
     - [ ] Take a look at the `E_B` calculation for Néel, as the current method might not be entirely correct after all.
 
 2. Medium priority
+    - [ ] Dynamically calculate the nearest neighbors, and do this for each position in a unit cell separately.
+    - [ ] In-plane systems could benefit from a better, angle-dependent, `E_barrier` calculation. Currently, the effective energy barrier in the presence of a dipolar or Zeeman interaction is crudely approximated as something like `E_B - switch_energy/2`. There are two ways this can be improved, both of whose effect should be investigated to see if they are worth the trouble.
+        - [ ] The first way is to improve this formula, by using the actual minima and maxima and calculating the effective barrier from them. If I recall correctly, this would not significantly affect the effective barrier as compared to how it is calculated now.
+        - [ ] The second way is to make the `DipolarEnergy` angular dependent, and combining this with the `ZeemanEnergy`'s inherent angular dependence, to create a better effective barrier by taking into account the offset angles of all the sines making up the energy landscape. This should not be too hard to do, but will require a completely different calculation which will certainly affect performance (because we need a separate dipolar kernel for both the x- and y-axes, so everything will take twice as long to calculate).
     - [ ] Improve the output saving with e.g. a `FullOutputReader` etc.
         - [ ] For `TaskAgnosticExperiment`: use the full `mm.m` in `initial_state` and `final_state` for a better `S` calculation (instead of `outputreader.read_state()`).
         - [ ] For `FullOutputReader`, perhaps we could save the full state as bits (`(mm.m + 1)/2`) (with encoding `np.packbits()` and `np.unpackbits()` to `uint8` to save space), but further compression might not be easy because we use JSON.
@@ -22,13 +27,13 @@
     - [ ] Make unit tests
     - [ ] Implement commonly used metrics to compare with theory/experiment (average magnetization and dimensionless amplitude ratio  $\langle m^2 \rangle^2/\langle m^4 \rangle$, correlation e.g. by looking at nearest neighbors minimizing/maximizing dipolar interaction or by looking at the dot/cross(?) product between vectors, susceptibility, width of domains (related to correlation probably)...)
     - [ ] Sort out the AFM-ness and its normalization etc., or even better find new ways to analyze systems with AFM ground state (e.g. Néel vector?)
-    - [ ] Can we come up with some sort of time measure for multiswitching Glauber dynamics?
     - [ ] Make a `get_summary()` method that returns a dict with important parameters of the simulation for easier creation of the "constants" in JSON data files (e.g. average `E_B`, `T`, `moment`...).
 
 3. Low priority
     - [ ] Allow `T=0` for Néel (and Wolff?), though this will require a different `E_B` calculation which has previously led to problems. One option would be to use the alternative calculation only if `T=0`.
     - [ ] Could sparse matrices cause some speedup anywhere, e.g. in `DipolarEnergy`?
-    - [ ] Create a frustrated OOP ASI (e.g. hexagonal close packed, equilateral Cairo...)
+    - [ ] Rename the `OutputReader`s to something else, e.g. `Readout`.
+    - [ ] Create more OOP ASI geometries (Kagome, equilateral Cairo...)
     - [ ] Randomly missing magnets. The only foreseeable issue that could occur with missing spins, is that some `Magnets().select()` samples remain unused, but I could live with that.
         - [ ] An extension of this randomness could be to generate an 'ensemble' of systems, which could be calculated efficiently in a parallel manner on GPU by extending arrays into a third dimension, and then using advanced indexing or some `stride_tricks` to manipulate each 2D slice differently while still being parallel. The issue with this is that this will be a lot of work where not a single slice may be wrong, and that a lot of code will have to be refactored to work with this extra dimension. Currently it seems that only `E_B`, `moment` and `T` should be moved into the 3rd dimension. But selecting magnets will become problematic, as for Glauber this will result in different number of samples in each element of the ensemble (so the indices can no longer be a rectangular array unless padded with e.g. -1), and for Néel this will require an argmin along only two of the three axes. The question is whether this will use more of the GPU at once, or whether this excessive indexing would slow things down more than we gain. There is only one way to find out, I guess, since the proof is in the pudding...
 
