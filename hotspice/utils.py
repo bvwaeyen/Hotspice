@@ -146,7 +146,7 @@ magnitude_to_SIprefix = {v: k for k, v in SIprefix_to_magnitude.items()}
 def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f', 'p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']=''):
     """ Converts <n> (which already has SI prefix <unit_prefix> for whatever unit it is in)
         to a reasonable number with a new SI prefix. Returns a tuple with (the new scalar values, the new SI prefix).
-        Example: converting 0.0000238 ms would be appropriate_SIprefix(0.0000238, 'm') -> ()
+        Example: converting 0.0000238 ms would be appropriate_SIprefix(0.0000238, 'm') -> (23.8, 'n')
     """
     value = n.min() if isinstance(n, (np.ndarray, xp.ndarray)) else n # To avoid excessive commas, we take min()
     if unit_prefix not in SIprefix_to_magnitude.keys(): raise ValueError(f"'{unit_prefix}' is not a supported SI prefix.")
@@ -179,6 +179,15 @@ def shell():
         InteractiveShellEmbed().mainloop(stack_depth=1)
     except (KeyboardInterrupt, SystemExit, EOFError):
         pass
+
+def get_newest_dir(parent: str|Path):
+    times = [(re.sub('.*?([0-9]*)$', r'\1', dirname)[-14:], dirname) for dirname, _, _ in os.walk(parent)]
+    times = [(t, dirname) for t, dirname in times if len(t) >= 14 and t.startswith("20")] # Timestamps in the 21st century
+    times.sort(key=lambda e: e[0])
+    if len(times) == 0: return None
+    time, dirname = times[-1] # The most recent directory
+    # time = datetime.strptime(time, r"%Y%m%d%H%M%S")
+    return os.path.abspath(dirname)
 
 
 ## GUI
