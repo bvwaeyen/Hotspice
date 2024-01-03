@@ -495,7 +495,7 @@ class Magnets(ABC):
     def _select_cluster_exchange(self):
         exchange: ExchangeEnergy = self.get_energy('exchange')
         if exchange is None: raise NotImplementedError("Can not select Wolff cluster if there is no exchange energy in the system.")
-        neighbors = exchange.local_interaction # self._get_nearest_neighbors()
+        neighbors = exchange.local_interaction
         seed = tuple(self._select_single().flat)
         cluster = xp.zeros_like(self.m)
         cluster[seed] = 1

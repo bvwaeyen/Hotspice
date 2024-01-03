@@ -341,7 +341,7 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
-def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None) -> str:
+def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None, outdir: str|Path = None) -> str:
     """ The most basic way to consistently save results of a simulation script. This can save the basic
         parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
         figure(s) as pdf, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
@@ -356,20 +356,21 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
     """
     # Make output directory
     script = Path(inspect.stack()[1].filename) # The caller script, i.e. the one where __name__ == "__main__"
-    outdir = script.parent / (script.stem + '.out') / timestamp()
-    outdir.mkdir(exist_ok=False, parents=True) # Make directory "caller_script.out/<timestamp>"
+    if outdir is None: outdir = script.parent / (script.stem + '.out') / timestamp()
+    Path(outdir).mkdir(exist_ok=True, parents=True) # Make directory "caller_script.out/<timestamp>"
     # Save information
     shutil.copy2(script, os.path.join(outdir, 'script.py'))
-    json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)
-    pickle.dump(data, open(os.path.join(outdir, 'data.pkl'), 'wb')) #! Must be 'wb' because binary object
+    if parameters is not None: json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)
+    if data is not None: pickle.dump(data, open(os.path.join(outdir, 'data.pkl'), 'wb')) #! Must be 'wb' because binary object
     # Save figure(s)
-    if not isinstance(figures, Iterable): figures = [figures]
-    for i, fig in enumerate(figures):
-        fig.savefig(os.path.join(outdir, f'figure{i}.pdf' if len(figures) > 1 else 'figure.pdf'))
+    if figures is not None:
+        if not isinstance(figures, Iterable): figures = [figures]
+        for i, fig in enumerate(figures):
+            fig.savefig(os.path.join(outdir, f'figure{i}.pdf' if len(figures) > 1 else 'figure.pdf'))
     return outdir
 
 class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
-    def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
+    def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None, compact: bool = True):
         """ Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
             Constant columns in <df> are automatically moved to <constants>, and keys present
             in <constants> that are also columns in <df> are removed from <constants>.
@@ -381,11 +382,30 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
                 simulation, e.g. description, author, time... Some fields are automatically
                 generated if they are not present in the dictionary passed to <metadata>.
                 For more details, see the <self.metadata> docstring.
+            @param compact [bool] (False): If True, constant columns in <df> are moved to the <constants>.
         """
+        self._compact = compact
         self.df = df
         self.metadata = metadata
         self.constants = constants
-    
+
+    def compactify(self):
+        """ Moves constant columns in <self.df> to <self.constants>, and removes keys
+            from <self.constants> that are also columns in <self.df>, to prevent ambiguous duplicates.
+        """
+        if not hasattr(self, 'constants') or not hasattr(self, 'df'): return
+        # Move all constant columns in self.df to self.constants
+        for column in self.df:
+            if self.df[column].dtype == 'O': continue # We don't meddle with 'constant' objects of general type in the df.
+            is_constant = ~(self.df[column] != self.df[column].iloc[0]).any()
+            if is_constant:
+                self._constants[column] = self.df[column].iloc[0]
+                self._df = self._df.drop(columns=column)
+        # Remove constants from self.constants that are also column labels in self.df
+        for column in self.df.columns:
+            if column in self.constants.keys():
+                del self._constants[column]
+
     @staticmethod
     def get_simulation_metadata(basic_metadata_dict: dict = None, ignore_keys=()):
         """ Any keys present in <ignore_keys> will not be automatically added nor removed from <basic_metadata_dict>. """
@@ -445,6 +465,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
             - 'simulator': "Hotspice", just for clarity. Can include version number when applicable.
         """
         self._metadata = self.get_simulation_metadata(value)
+        self._check_consistency()
         assert isinstance(self._metadata, dict)
 
     @property
@@ -459,23 +480,10 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         assert isinstance(self._constants, dict)
 
     def _check_consistency(self):
-        """ Moves constant columns in <self.df> to <self.constants>, and removes keys
-            from <self.constants> that are also columns in <self.df>, to prevent ambiguous duplicates.
-            Checks if all keys in <self.constants> and <self.metadata> are strings;
+        """ Checks if all keys in <self.constants> and <self.metadata> are strings,
+            and compactifies this data if necessary and desired (i.e. if self._compact).
         """
-        if hasattr(self, 'constants') and hasattr(self, 'df'):
-            # Move all constant columns in self.df to self.constants
-            for column in self.df:
-                if self.df[column].dtype == 'O': continue # We don't meddle with 'constant' objects of general type in the df.
-                is_constant = ~(self.df[column] != self.df[column].iloc[0]).any()
-                if is_constant:
-                    self._constants[column] = self.df[column].iloc[0]
-                    self._df = self._df.drop(columns=column)
-            # Remove constants from self.constants that are also column labels in self.df
-            for column in self.df.columns:
-                if column in self.constants.keys():
-                    del self._constants[column]
-
+        if self._compact: self.compactify()
         if hasattr(self, 'constants'):
             for key in self.constants.keys():
                 if not isinstance(key, str): raise KeyError("Data.constants keys must be of type string.")

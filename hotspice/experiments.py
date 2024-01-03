@@ -10,9 +10,8 @@ import statsmodels.api as sm
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from matplotlib import cm, colormaps, colors, widgets
+from matplotlib import colorbar, colormaps, widgets
 from scipy.spatial import distance
-from scipy.stats import linregress
 from textwrap import dedent
 from typing import Callable, Iterable, Literal
 
@@ -20,7 +19,7 @@ from .core import Magnets, DipolarEnergy, ZeemanEnergy
 from .ASI import OOP_Square
 from .io import Datastream, ScalarDatastream, IntegerDatastream, BinaryDatastream, Inputter, OutputReader, FieldInputter, RandomScalarDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, save_plot, show_m
-from .utils import appropriate_SIprefix, asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
+from .utils import asnumpy, Data, filter_kwargs, full_obj_name, is_significant, log, R_squared, strided
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -209,7 +208,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
             'E_B': experiment.mm.E_B,
             '_experiment_run_kwargs': run_kwargs
             } | self.constants | vars # (<vars> are variable values in this iteration, so it is ok to put in 'constants')
-        data_i = Data(df_i, metadata=metadata, constants=constants)
+        data_i = Data(df_i, metadata=metadata, constants=constants, compact=False) # Not compact, to avoid missing columns when experiment.load_dataframe()
         if save_dir:
             num_digits = len(str(len(self)-1)) # It is important to include iteration number or other unique identifier in savename (timestamps can be same for different finishing GPU processes)
             # savename = str(self.groups).replace('"', '').replace("'", "") + "_" + str(iteration).zfill(num_digits) # superfluous, one can derive the groups from the file content. Keeping this commented for posterity
@@ -392,9 +391,12 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
                 vmin = params.min_value(data) if isinstance(params.min_value, Callable) else params.min_value
                 vmax = params.max_value(data) if isinstance(params.max_value, Callable) else params.max_value
                 im = ax.pcolormesh(X, Y, Z, cmap=cmap, vmin=vmin, vmax=vmax, shading='flat') # OPT: can use vmin and vmax, but not without a Metric() class, which I think would lead us a bit too far once again
-                c = plt.colorbar(im) # OPT: can use extend='min' for nice triangle at the bottom if range is known
-                # c.ax.yaxis.get_major_locator().set_params(integer=True) # only integer colorbar labels
-                if len(params.contours) > 0: ax.contour(*np.meshgrid(x_vals, y_vals), Z, [c(data) for c in params.contours])
+                c: colorbar.Colorbar = plt.colorbar(im) # OPT: can use extend='min' for nice triangle at the bottom if range is known
+                if params.is_integer: c.ax.yaxis.get_major_locator().set_params(integer=True) # only integer colorbar labels
+                if len(params.contours) > 0:
+                    contours = [contour(data) for contour in params.contours]
+                    ax.contour(*np.meshgrid(x_vals, y_vals), Z, contours, colors='k')
+                    for contour in contours: c.ax.axhline(contour, color='k') # Contour is plotted with colormap colors
         else:
             ax = fig.add_subplot(1, 1, 1)
             for i, params in enumerate(metrics_dict.values()):
@@ -421,19 +423,24 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
 class SweepMetricPlotparams:
     ''' Stores some parameters to correctly plot the metrics belonging to a certain experiment.
         @param full_name [str]: A human-readable name for the metric.
-        @param data_extractor [function]: A function that takes one argument, namely a Data object.
+        @param data_extractor [Callable]: A function that takes one argument, namely a Data object.
             It returns a DataFrame column with the metric. Usually, this will just be a column from Data().df.
             The simplest example of this would be something like "lambda data: data[<column_of_metric>]".
             Combinations of columns are also possible, e.g. "lambda data: data[<some_metric>] - data[<other_metric>]".
-        @param min_value [float] (None): The minimum value that the metric can be.
-        @param max_value [float] (None): The maximum value that the metric can be.
-        If <min_value> or <max_value> are None, the plot is simply scaled to the min/max values throughout the sweep.
+        @param is_integer [bool] (False): True if the metric is integer-valued, otherwise False.
+        The following parameters can (besides scalar values) also be Callable. If so, they take one argument: a Data object.
+        This allows them to be defined relative to the values of other metrics.
+        @param min_value [float|Callable] (None): The minimum value that the metric can be.
+        @param max_value [float|Callable] (None): The maximum value that the metric can be.
+        @param contours [list(Callable)] ([]): Contours will be plotted at these values.
     '''
     full_name: str # e.g.: 'Nonlinearity'
     data_extractor: Callable # e.g.: lambda data: data['NL']
     min_value: float|Callable = None # e.g.: 0 or lambda data: data['NL'].min()
     max_value: float|Callable = None # e.g.: 1 or lambda data: data['NL'].max()
     contours: list[Callable] = field(default_factory=lambda:[]) # e.g.: [lambda data: data['NL'].mean()]
+    is_integer: bool = False
+    lower_is_better: bool = False
 
 
 ######## Below are subclasses of the superclasses above
