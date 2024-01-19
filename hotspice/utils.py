@@ -279,34 +279,35 @@ def timestamp():
 
 
 ## MULTI-GPU UTILITIES
-def run_script(script_name, args=None):
+def run_script(script_name, args=None, repeat: int = 1):
     """ Runs the script <script_name> located in the hotspice/scripts directory.
         Any arguments for the script can be passed as a list to <args>.
     """
-    script_name = script_name.strip()
-    if not os.path.splitext(script_name)[1]: script_name += '.py'
-    path = Path(__file__).parent / "scripts" / script_name
-    if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
+    for _ in range(repeat):
+        script_name = script_name.strip()
+        if not os.path.splitext(script_name)[1]: script_name += '.py'
+        path = Path(__file__).parent / "scripts" / script_name
+        if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
 
-    args = [str(arg) for arg in args]
-    command = ["python", str(path)] + list(args)
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError:
-        warnings.warn(dedent(f"""
-            {colorama.Fore.LIGHTRED_EX}The script {script_name} with arguments {args} could not be run successfully.
-            See a possible error message above for more info. The full command used was:
-            {colorama.Fore.LIGHTYELLOW_EX}{' '.join(command)}{colorama.Style.RESET_ALL}
-        """), stacklevel=2)
+        args = [str(arg) for arg in args]
+        command = ["python", str(path)] + list(args)
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError:
+            warnings.warn(dedent(f"""
+                {colorama.Fore.LIGHTRED_EX}The script {script_name} with arguments {args} could not be run successfully.
+                See a possible error message above for more info. The full command used was:
+                {colorama.Fore.LIGHTYELLOW_EX}{' '.join(command)}{colorama.Style.RESET_ALL}
+            """), stacklevel=2)
 
-def ParallelJobs(sweepscript_path, outdir: str = None, iterations: list = None, _ParallelJobs_script_name: str = "ParallelJobs"):
+def ParallelJobs(sweepscript_path, outdir: str = None, iterations: list = None, repeat: int = 1, _ParallelJobs_script_name: str = "ParallelJobs"):
     """ Convenient wrapper around run_script() for the ParallelJobs.py script in particular. """
     args = [sweepscript_path]
     if outdir is not None:
         args += ['-o', outdir]
     if iterations is not None:
         args += ['-i'] + iterations
-    run_script(_ParallelJobs_script_name, args=args)
+    run_script(_ParallelJobs_script_name, args=args, repeat=repeat)
 
 def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = None, show_device=True):
     """ Can print <message> to console from subprocesses running on a specific GPU or thread.
