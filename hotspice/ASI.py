@@ -63,7 +63,7 @@ class OOP_Square(OOP_ASI):
         return xp.ones_like(self.xx)
 
     def _get_appropriate_avg(self):
-        return 'point'
+        return ['point', 'square', 'crossfour'] # 'triangle' is not horrendous either, but does not make much sense
 
     def _get_AFMmask(self):
         return xp.array([[0, -1], [-1, 2]], dtype='float')/4 # Possible situations: ▚/▞ -> 1, ▀▀/▄▄/█ / █ -> 0.5, ██ -> 0 
@@ -112,7 +112,7 @@ class OOP_Triangle(OOP_ASI):
         return (self.ixx + self.iyy) % 2 == 1
 
     def _get_appropriate_avg(self): # TODO: not so relevant
-        return 'point'
+        return ['point', 'triangle']
 
     def _get_AFMmask(self): # TODO: not so relevant
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
@@ -154,7 +154,7 @@ class OOP_Honeycomb(OOP_ASI):
         return occupation
 
     def _get_appropriate_avg(self): # TODO: not so relevant
-        return 'point'
+        return ['point', 'cross']
 
     def _get_AFMmask(self): # TODO: not so relevant
         return xp.array([[1, 1, 1], [0, 0, 0], [-1, -1, -1]], dtype='float')/4
@@ -194,7 +194,7 @@ class IP_Ising(IP_ASI):
         return xp.ones_like(self.xx)
 
     def _get_appropriate_avg(self):
-        return 'point'
+        return ['point', 'cross', 'squarefour']
 
     def _get_AFMmask(self):
         return xp.array([[1, 1], [-1, -1]])/4
@@ -232,7 +232,7 @@ class IP_Square(IP_ASI):
         return (self.ixx + self.iyy) % 2 == 1
 
     def _get_appropriate_avg(self):
-        return 'cross'
+        return ['point', 'cross', 'squarefour', 'square']
 
     def _get_AFMmask(self):
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
@@ -249,6 +249,9 @@ class IP_Pinwheel(IP_Square):
         """ In-plane ASI similar to IP_Square, but all spins rotated by 45°, hence forming a pinwheel geometry. """
         kwargs['angle'] = kwargs.get('angle', 0) - math.pi/4
         super().__init__(a, n=n, nx=nx, ny=ny, **kwargs)
+
+    def _get_appropriate_avg(self):
+        return ['point', 'cross', 'squarefour']
 
     def _get_groundstate(self):
         return 'uniform' if self.PBC else 'vortex'
@@ -282,7 +285,7 @@ class IP_SquareDiamond(IP_ASI):
         return xp.ones_like(self.xx)
 
     def _get_appropriate_avg(self):
-        return 'squarefour'
+        return ['point', 'squarefour']
 
     def _get_AFMmask(self):
         return xp.array([[0, 1, 0], [-1, 0, -1], [0, 1, 0]], dtype='float')/4
@@ -304,7 +307,7 @@ class IP_PinwheelDiamond(IP_SquareDiamond):
         return 'uniform' if self.PBC else 'vortex'
     
     def _get_appropriate_avg(self):
-        return 'crossfour'
+        return ['point', 'crossfour', 'square']
 
 
 class IP_Kagome(IP_ASI):
@@ -341,7 +344,7 @@ class IP_Kagome(IP_ASI):
         return occupation
 
     def _get_appropriate_avg(self):
-        return 'hexagon'
+        return ['point', 'cross', 'triangle', 'hexagon']
 
     def _get_AFMmask(self):
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
@@ -360,7 +363,7 @@ class IP_Triangle(IP_Kagome):
         super().__init__(a, n=n, nx=nx, ny=ny, **kwargs)
 
     def _get_appropriate_avg(self):
-        return 'triangle'
+        return ['point', 'cross', 'triangle']
 
     def _get_groundstate(self):
         return 'afm'

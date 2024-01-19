@@ -99,6 +99,13 @@ import hotspice # Only import AFTER setting 'HOTSPICE_USE_GPU'!
 
 *Note that the CPU/GPU choice must be made **BEFORE** the `import hotspice` statement* (and can thus be made only once)! <sub><sup>This is because behind-the-scenes, this choice determines which modules are imported by hotspice (either NumPy or CuPy), and it is not possible to re-assign these without significant runtime issues.</sup></sub>
 
+## GUI
+
+A graphical user interface is available for the user to interact with the ASI. The state of the ASI can be displayed in several ways (magnetization, domains, each energy component separately or total energy, effective energy barrier, and various spatially resolved parameters like temperature, anisotropy and magnetic moment).
+The ASI can be changed in realtime using the usual update schemes and initializations, or by directly clicking on the ASI.
+
+![Screenshot of GUI for a Pinwheel ASI with various domains.](./figures/GUI_Pinwheel_squarefour.PNG)
+
 ## Available spin ices
 
 Several predefined geometries are available in hotspice.

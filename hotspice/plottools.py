@@ -70,7 +70,7 @@ class Average(Enum):
                         return average
                 raise ValueError(f"Unsupported averaging mask: {avg}")
             case _ if avg: # If avg is not str() or Average(), but is still truthy
-                return Average.resolve(mm._get_appropriate_avg()) if mm is not None else Average.SQUARE
+                return Average.resolve(mm.get_appropriate_avg()) if mm is not None else Average.SQUARE
             case _: # If avg is falsy
                 return Average.POINT
 

@@ -44,7 +44,7 @@ def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T
     # Set up the figure, the axis, and the plot element we want to animate
     fig = plt.figure(figsize=(10, 6))
     ax1 = fig.add_subplot(211)
-    mask = hotspice.utils.asnumpy(hotspice.plottools.Average.resolve(mm._get_appropriate_avg()).mask)
+    mask = hotspice.utils.asnumpy(hotspice.plottools.Average.resolve(mm.get_appropriate_avg()).mask)
     image = signal.convolve2d(mm.m, xp.asarray(mask), mode='valid', boundary='wrap' if mm.PBC else 'fill')
     h = ax1.imshow(hotspice.utils.asnumpy(image), cmap='gray', origin='lower',
                    vmin=-np.sum(mask), vmax=np.sum(mask), interpolation_stage='rgba', interpolation='antialiased')

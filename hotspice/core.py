@@ -762,6 +762,17 @@ class Magnets(ABC):
         rr = (self.xx**2 + self.yy**2)**(1/2) # This only works if dx, dy is the same for every cell!
         return float(xp.sum(xp.abs(correlation) * rr * rr)/xp.max(xp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
 
+    def get_appropriate_avg(self, n=1):
+        ''' n=0 gives 'point'.
+            n=1,2,3... gives _get_appropriate_avg().
+            n=None gives all allowed values.
+        '''
+        allowed_averages = self._get_appropriate_avg()
+        if isinstance(allowed_averages, str): allowed_averages = [allowed_averages]
+        if 'point' not in [s.lower() for s in allowed_averages]: allowed_averages = ['point'] + allowed_averages
+        if n is None: return allowed_averages
+        return allowed_averages[min(n, len(allowed_averages) - 1)]
+
     ######## Now, some useful functions to overwrite when subclassing this class
     @abstractmethod # Not needed for out-of-plane ASI, but essential for in-plane ASI, therefore abstractmethod anyway
     def _get_angles(self):
@@ -815,7 +826,7 @@ class Magnets(ABC):
         return 'random'
 
     @abstractmethod
-    def _get_nearest_neighbors(self):
+    def _get_nearest_neighbors(self): # TODO: make this automatically calculated and unitcell-dependent
         """ Returns a small mask with the magnet at the center, and 1 at the positions of its nearest neighbors (elsewhere 0). """
         return xp.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]) # Example
 
@@ -950,9 +961,6 @@ class DipolarEnergy(Energy):
             @param decay_exponent [float] (-3): How fast the dipole interaction weakens with distance: DD ∝ 1/r^<decay_exponent>.
         """
         # TODO: a more intricate scaling with distance is needed to incorporate the effect of the magnets not being infinitely small magnetic spins.
-        #       As a first step, a new method DipolarEnergy().scale_NN() can be created, that scales <prefactor> such that NN interactions have a certain energy.
-        #                        (Use the highest nearest-neighbor absolute value for this, because some can be zero e.g. in Pinwheel.)
-        #                        (TODO: A complete rework of NN logic would also be quite welcome at this point)
         #       Further steps can then concern themselves with the nonpolynomial fall-off with distance, as the magnets start to see each other more as infinitesimal spins rather than a finite FM geometry.
         self._prefactor = prefactor
         self.decay_exponent = decay_exponent
