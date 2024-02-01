@@ -37,22 +37,22 @@ class Average(Enum):
           self.mask = xp.asarray(mask, dtype='float')
     
     POINT = [[1]]
-    CROSS = [[0, 1, 0], # For Pinwheel and Square ASI
+    CROSS = [[0, 1, 0], # For IP_Pinwheel and IP_Square ASI
              [1, 0, 1],
              [0, 1, 0]]
     SQUARE = [[1, 1, 1], # Often not very useful, just the same as CROSS in most cases
               [1, 0, 1],
               [1, 1, 1]]
-    CROSSFOUR = [[0, 1, 0], # For PinwheelDiamond and SquareDiamond ASI
+    CROSSFOUR = [[0, 1, 0], # For IP_Pinwheel_LuckyKnot and IP_Square_Open ASI
                  [1, 4, 1],
                  [0, 1, 0]]
     SQUAREFOUR = [[1, 1, 1], # Because nearly all ASIs have cells with 4 neighbors, this can come in handy
                   [1, 4, 1],
                   [1, 1, 1]]
-    HEXAGON = [[0, 1, 0, 1, 0], # For Kagome ASI
+    HEXAGON = [[0, 1, 0, 1, 0], # For IP_Kagome ASI
                [1, 0, 0, 0, 1],
                [0, 1, 0, 1, 0]]
-    TRIANGLE = [[0, 1, 0], # For Triangle ASI
+    TRIANGLE = [[0, 1, 0], # For IP_Triangle ASI
                 [1, 0, 1],
                 [0, 1, 0]]
 

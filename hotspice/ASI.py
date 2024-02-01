@@ -206,7 +206,7 @@ class IP_Ising(IP_ASI):
         return 'uniform'
 
 
-class IP_Square(IP_ASI):
+class IP_Square_Closed(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with the spins placed on, and oriented along, the edges of squares. """
         self.a = a # [m] The side length of the squares (i.e. side length of a unit cell)
@@ -244,7 +244,7 @@ class IP_Square(IP_ASI):
         return 'afm'
 
 
-class IP_Pinwheel(IP_Square):
+class IP_Pinwheel_Diamond(IP_Square_Closed):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI similar to IP_Square, but all spins rotated by 45°, hence forming a pinwheel geometry. """
         kwargs['angle'] = kwargs.get('angle', 0) - math.pi/4
@@ -257,7 +257,8 @@ class IP_Pinwheel(IP_Square):
         return 'uniform' if self.PBC else 'vortex'
 
 
-class IP_SquareDiamond(IP_ASI):
+class IP_Square(IP_Square_Closed): pass # Just an alias for IP_Square
+class IP_Square_Open(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with the spins placed on, and oriented along, the edges of squares.
             The entire domain does not, however, form a square, but rather a 'diamond'.
@@ -296,10 +297,10 @@ class IP_SquareDiamond(IP_ASI):
     def _get_groundstate(self):
         return 'afm'
 
-
-class IP_PinwheelDiamond(IP_SquareDiamond):
+class IP_Pinwheel(IP_Pinwheel_Diamond): pass
+class IP_Pinwheel_LuckyKnot(IP_Square_Open):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        """ In-plane ASI similar to IP_SquareDiamond, but all spins rotated by 45°, hence forming a pinwheel geometry. """
+        """ In-plane ASI similar to IP_Square_Open, but all spins rotated by 45°, hence forming a pinwheel geometry. """
         kwargs['angle'] = kwargs.get('angle', 0) - math.pi/4
         super().__init__(a, n=n, nx=nx, ny=ny, **kwargs)
 
