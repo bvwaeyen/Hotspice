@@ -232,7 +232,7 @@ class IP_Square_Closed(IP_ASI):
         return (self.ixx + self.iyy) % 2 == 1
 
     def _get_appropriate_avg(self):
-        return ['point', 'cross', 'squarefour', 'square']
+        return ['squarefour', 'cross', 'square']
 
     def _get_AFMmask(self):
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
@@ -251,7 +251,7 @@ class IP_Pinwheel_Diamond(IP_Square_Closed):
         super().__init__(a, n=n, nx=nx, ny=ny, **kwargs)
 
     def _get_appropriate_avg(self):
-        return ['point', 'cross', 'squarefour']
+        return ['squarefour', 'cross']
 
     def _get_groundstate(self):
         return 'uniform' if self.PBC else 'vortex'
@@ -286,7 +286,7 @@ class IP_Square_Open(IP_ASI):
         return xp.ones_like(self.xx)
 
     def _get_appropriate_avg(self):
-        return ['point', 'squarefour']
+        return ['squarefour']
 
     def _get_AFMmask(self):
         return xp.array([[0, 1, 0], [-1, 0, -1], [0, 1, 0]], dtype='float')/4
@@ -308,7 +308,7 @@ class IP_Pinwheel_LuckyKnot(IP_Square_Open):
         return 'uniform' if self.PBC else 'vortex'
     
     def _get_appropriate_avg(self):
-        return ['point', 'crossfour', 'square']
+        return ['crossfour', 'square']
 
 
 class IP_Kagome(IP_ASI):

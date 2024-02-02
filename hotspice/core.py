@@ -769,15 +769,16 @@ class Magnets(ABC):
         rr = (self.xx**2 + self.yy**2)**(1/2) # This only works if dx, dy is the same for every cell!
         return float(xp.sum(xp.abs(correlation) * rr * rr)/xp.max(xp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
 
-    def get_appropriate_avg(self, n=1):
-        ''' n=0 gives 'point'.
-            n=1,2,3... gives _get_appropriate_avg().
-            n=None gives all allowed values.
+    def get_appropriate_avg(self, n=0):
+        ''' n=0,1,2,3... gives the n-th recommended averaging mask.
+            n=None gives all allowed values, always including 'point'.
         '''
         allowed_averages = self._get_appropriate_avg()
         if isinstance(allowed_averages, str): allowed_averages = [allowed_averages]
-        if 'point' not in [s.lower() for s in allowed_averages]: allowed_averages = ['point'] + allowed_averages
-        if n is None: return allowed_averages
+        if n is None:
+            if 'point' not in [s.lower() for s in allowed_averages]:
+                allowed_averages = ['point'] + allowed_averages
+            return allowed_averages
         return allowed_averages[min(n, len(allowed_averages) - 1)]
 
     ######## Now, some useful functions to overwrite when subclassing this class
