@@ -2,6 +2,7 @@ import customtkinter as ctk
 import inspect
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 import tkinter as tk
 import tkinter.ttk as ttk
 
@@ -286,11 +287,19 @@ class ActionsPanel(ctk.CTkScrollableFrame):
                 kwargs.setdefault("attempt_freq", self.gui.ASI_settings.attempt_freq)
             case "Glauber":
                 kwargs.setdefault("Q", self.gui.ASI_settings.Q)
+        t = time.perf_counter() + 1
         for _ in range(n):
             self.mm.update(**kwargs)
+            if time.perf_counter() > t:
+                self.gui.redraw()
+                t += 1
     
     def _action_progress(self, t_max=1., MCsteps_max=4., **kwargs):
-        self.mm.progress(t_max=t_max, MCsteps_max=MCsteps_max)
+        t = time.perf_counter() + 1
+        for i, step in enumerate(self.mm.progress(t_max=t_max, MCsteps_max=MCsteps_max, stepwise=True)):
+            if time.perf_counter() > t:
+                self.gui.redraw()
+                t += 1
     
     def _action_initialize(self, pattern='random', **kwargs):
         self.mm.initialize_m(pattern, **kwargs)
@@ -355,7 +364,7 @@ class ParameterInfo(ctk.CTkFrame):
         self.update()
 
 
-class MagnetizationView(ctk.CTkFrame):
+class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and ViewSettings within e.g. one IPython session (not between sessions, don't want to mess with temp files in appdata etc.)
     class DisplayMode(Enum):
         MAGNETIZATION = auto()
         QUIVER = auto()
@@ -628,7 +637,7 @@ class MagnetizationView(ctk.CTkFrame):
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
             case self.DisplayMode.QUIVER:
-                if not self.mm.in_plane: raise ValueError("Can only use DisplayMode.QUIVER for in-plane ASI.")
+                if not self.mm.in_plane: raise ValueError("Can only use DisplayMode.QUIVER for in-plane ASI.") # TODO: draw scatter plot for OOP ASI
                 self.ax.set_title(r"Magnetization $\overrightarrow{m}$")
                 self.content = self.ax.quiver(asnumpy(self.mm.xx[self.mm.nonzero])/self.unit_axes_factor, asnumpy(self.mm.yy[self.mm.nonzero])/self.unit_axes_factor,
                                            np.ones(self.mm.n), np.ones(self.mm.n), color=self.cmap_hsv(np.ones(self.mm.n)), pivot='mid',
@@ -646,7 +655,7 @@ class MagnetizationView(ctk.CTkFrame):
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
                 self.colorbar.ax.set_ylabel("Domain number", rotation=270, fontsize=self.figparams['fontsize_colorbar']) # TODO: use the number of domains as vmax, when that has been implemented in .ASI module
             case self.DisplayMode.ENERGY:
-                self.ax.set_title(r"Local energy $E_{int}$")
+                self.ax.set_title(r"Local energy")
                 self.content = self.ax.imshow(im_placeholder, origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 15

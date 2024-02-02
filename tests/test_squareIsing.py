@@ -13,11 +13,11 @@ from context import hotspice
 
 
 class test_squareIsing:
-    def __init__(self, **kwargs):
+    def __init__(self, size: int = 800):
         self.J = hotspice.kB*300 # This does not matter much, just dont take it too large to prevent float errors
         self.T_lim = [0.9, 1.1] # Relative to T_c
-        self.a = 1 # Lattice spacing, chosen large to get many simultaneous switches, it doesn't matter for exchange energy anyway
-        self.size = kwargs.get('size', 800) # Large to get the most statistically ok behavior
+        self.a = 1 # Lattice spacing, chosen large to get many simultaneous switches in Glauber, exchange energy is NN anyway
+        self.size = size # Large to get the most statistically ok behavior
 
     def test(self, *args, **kwargs):
         self.data = self.test_N_influence(*args, **kwargs)
@@ -26,12 +26,12 @@ class test_squareIsing:
     def T_c(self):
         return 2*self.J/hotspice.kB/math.log(1+math.sqrt(2))
 
-    def test_magnetization(self, T_steps=21, N=1000, verbose=False, plot=True, save=False, reverse=False) -> hotspice.utils.Data:
+    def test_magnetization(self, T_steps=21, N=1000, scheme: Literal['Glauber', 'Néel', 'Wolff'] = 'Glauber', verbose=False, plot=True, save=False, reverse=False) -> hotspice.utils.Data:
         """ Performs a sweep of the temperature in <T_steps> steps. At each step, <N> Magnets.update() calls are performed.
             The final half of these <N> update calls are recorded, from which and their average/stdev of m_avg calculated.
             @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.
         """
-        simparams = hotspice.SimParams(UPDATE_SCHEME='Glauber')
+        simparams = hotspice.SimParams(UPDATE_SCHEME=scheme)
         self.mm = hotspice.ASI.OOP_Square(self.a, self.size, energies=[hotspice.ExchangeEnergy(J=self.J)], PBC=True, pattern=('random' if reverse else 'uniform'), params=simparams)
 
         T_range = np.linspace(self.T_lim[0], self.T_lim[1], T_steps)

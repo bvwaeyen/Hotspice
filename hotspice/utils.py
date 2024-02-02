@@ -28,10 +28,12 @@ from . import config
 if config.USE_GPU:
     import cupy as cp # Only ever try to import cupy if USE_GPU, otherwise we get premature ImportErrors on non-CUDA devices
     import cupy as xp
+    import cupy.typing as xpt
     import cupy.lib.stride_tricks as striding
 else:
     import numpy as cp # We need cp to be defined, so use numpy to be that placeholder as it is the closest module
     import numpy as xp
+    import numpy.typing as xpt
     import numpy.lib.stride_tricks as striding
 
 
@@ -214,7 +216,7 @@ def bresenham(start, end):
 
 
 ## CONVERSION
-Field = TypeVar("Field", int, float, list, np.ndarray, xp.ndarray) # Every type that can be parsed by as_2D_array()
+Field = TypeVar("Field", int, float, list, np.ndarray, xpt.NDArray) # Every type that can be parsed by as_2D_array()
 def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
     """ Converts <value> to a 2D array of shape <shape>. If <value> is scalar, the returned
         array is constant. If <value> is a CuPy or NumPy array with an equal amount of values

@@ -16,9 +16,9 @@ where `hotspice310` is the name of the new environment (because it uses Python 3
 
 ### CuPy
 
-Hotspice relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
+*Note that CuPy will not function properly on systems without CUDA support. On such systems, Hotspice can still be used by only using the CPU as shown in [choosing between GPU or CPU](#choosing-between-gpu-or-cpu).*
 
-Note that CuPy will not function properly on systems without CUDA support. On such systems, Hotspice can still be used by using the CPU as shown in [choosing between GPU or CPU](#choosing-between-gpu-or-cpu).
+Hotspice relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
 
 To [install CuPy](https://docs.cupy.dev/en/stable/install.html) separately, the easiest method is likely to use the following `conda` command, as this automatically installs the appropriate version of the CUDA toolkit:
 

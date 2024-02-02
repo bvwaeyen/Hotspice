@@ -7,12 +7,12 @@ import numpy as np
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from functools import cache
+from functools import lru_cache
 from scipy.spatial import distance
 from textwrap import dedent
 
 from .poisson import PoissonGrid, SequentialPoissonDiskSampling, poisson_disc_samples
-from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, lower_than, mirror4
+from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, lower_than
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -93,6 +93,9 @@ class Magnets(ABC):
         self.t = 0. # [s]
         self.history = History()
         self.switches, self.attempted_switches = 0, 0
+        
+        # Technical utilities
+        self._zeros = xp.zeros_like(self.m)
 
         # Finally initialize the energies (at the end, since they might require self.orientation etc.)
         for energy in energies: self.add_energy(energy)
@@ -162,18 +165,21 @@ class Magnets(ABC):
         self.orientation[:,:,0] = xp.cos(self.angles)*self.occupation
         self.orientation[:,:,1] = xp.sin(self.angles)*self.occupation
 
-    def add_energy(self, energy: 'Energy', verbose=True):
+    def add_energy(self, energy: 'Energy', exist_ok=False, verbose=True):
         """ Adds an Energy object to self._energies. This object is stored under its reduced name,
             e.g. ZeemanEnergy is stored under 'zeeman'.
             @param energy [Energy]: the energy to be added.
+            @param exist_ok [bool] (False): if True, the energy is not added if an energy of its type is already present.
         """
         energy.initialize(self)
         for i, e in enumerate(self._energies):
             if type(e) is type(energy):
+                if exist_ok: return e
                 if verbose: warnings.warn(f"An instance of {type(energy).__name__} was already included in the simulation, and has now been overwritten.", stacklevel=2)
                 self._energies[i] = energy
                 return
         self._energies.append(energy)
+        return energy
 
     def remove_energy(self, name: str, verbose=True): # This is faster when using self._energies as dict
         """ Removes the specified energy from self._energies.
@@ -581,7 +587,7 @@ class Magnets(ABC):
         self.update_energy(index=cluster)
         return cluster
 
-
+    @lru_cache
     def calc_r(self, Q, as_scalar=True) -> float|xp.ndarray:
         """ Calculates the minimal value of r (IN METERS). Considering two nearby sampled magnets, the switching probability
             of the first magnet will depend on the state of the second. For magnets further than <calc_r(Q)> apart, the switching
@@ -597,28 +603,29 @@ class Magnets(ABC):
         return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
-    def progress(self, t_max: float = 1, MCsteps_max: float = 4., stepwise: bool = False):
+    def progress(self, t_max: float = 1, MCsteps_max: float = 4., stepwise: bool = False, **kwargs):
         #! For backwards compatibility, <stepwise> default must be False!
         """ Runs as many self.update steps as is required to progress a certain amount of
             time or Monte Carlo steps (whichever is reached first) into the future.
+            **kwargs get passed to self.update().
             @param t_max [float] (None): The maximum amount of time difference between start and end of this function.
             @param MCsteps_max [float] (4.): The maximum amount of Monte Carlo steps performed during this function.
             @return [tuple(2)|generator]:
                 If <stepwise> is False: tuple (elapsed time, number of MC steps performed) during the execution of this function.
                 If <stepwise> is True: a generator that yields after every self.update() call. Can be used to inspect transients etc.
         """
-        generator = self._progress_stepwise(t_max=t_max, MCsteps_max=MCsteps_max)
+        generator = self._progress_stepwise(t_max=t_max, MCsteps_max=MCsteps_max, **kwargs)
         if stepwise: return generator
         while True: # If we get here, then stepwise is False so we don't want the generator behavior, so we do next() until the end and return the final value
             try: next(generator) # Do next() until the generator stops
             except StopIteration as e: return e.value # And then this is how you can return the 'return' value of a generator as if it were a normal function
 
-    def _progress_stepwise(self, t_max: float = 1, MCsteps_max: float = 4.):
+    def _progress_stepwise(self, t_max: float = 1, MCsteps_max: float = 4., **kwargs):
         """ Generator that forms the foundation of self.progress(). Yields after every self.update(). """
         t_0, MCsteps_0 = self.t, self.MCsteps
         while lower_than(dt := self.t - t_0, t_max) and lower_than(dMCsteps := self.MCsteps - MCsteps_0, MCsteps_max):
-            if self.params.UPDATE_SCHEME == 'Néel': self.update(t_max=(t_max - dt)) # A max time can be specified
-            else: self.update() # No time
+            if self.params.UPDATE_SCHEME == 'Néel': self.update(t_max=(t_max - dt), **kwargs) # A max time can be specified
+            else: self.update(**kwargs) # No time
             yield
         return self.t - t_0, self.MCsteps - MCsteps_0
 
@@ -707,7 +714,7 @@ class Magnets(ABC):
 
         # TODO: use a better stopping criterion than just "oh no we exceeded n_max steps", and remove verbose code when all is fixed
         n, n_max = 0, int(math.sqrt(self.nx**2 + self.ny**2)) # Maximum steps is to get signal across the whole grid
-        previous_states = [self.m.copy(), xp.zeros_like(self.m), xp.zeros_like(self.m)] # Current state, previous, and the one before
+        previous_states = [self.m.copy(), self._zeros, self._zeros] # Current state, previous, and the one before
         switches = self.switches
         while not xp.allclose(previous_states[2], previous_states[0]) and n < n_max: # Loop exits once we detect a 2-cycle, i.e. the only thing happening is some magnets keep switching back and forth
             n += 1

@@ -5,7 +5,7 @@ __all__ = ['config', 'utils', 'ASI', 'plottools', 'io', 'experiments', 'gui']
 __author__ = "Jonathan Maes"
 __version__ = None
 
-# Import config before anything else, just to be sure
+# Import config before anything else, just to be sure that xp is either CuPy or NumPy everywhere as desired
 from . import config
 
 # The following explicit import allows accessing the things in 'core.py' through hotspice.<thing_in_core.py>

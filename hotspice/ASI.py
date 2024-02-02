@@ -30,7 +30,7 @@ class OOP_ASI(Magnets):
         total_NN = signal.convolve2d(self.occupation, NN, mode='same', boundary='wrap' if self.PBC else 'fill')*self.occupation
         neighbors_sign_sum = signal.convolve2d(self.m, NN, mode='same', boundary='wrap' if self.PBC else 'fill')
         valid_positions = xp.where(total_NN != 0)
-        return xp.mean(self.m[valid_positions]*neighbors_sign_sum[valid_positions]/total_NN[valid_positions])
+        return float(xp.mean(self.m[valid_positions]*neighbors_sign_sum[valid_positions]/total_NN[valid_positions]))
 
 class IP_ASI(Magnets):
     """ Generic abstract class for in-plane ASI. """
@@ -257,7 +257,7 @@ class IP_Pinwheel_Diamond(IP_Square_Closed):
         return 'uniform' if self.PBC else 'vortex'
 
 
-class IP_Square(IP_Square_Closed): pass # Just an alias for IP_Square
+class IP_Square(IP_Square_Closed): pass # Just an alias for IP_Square, to follow naming scheme from "Apparent ferromagnetism in the pinwheel artificial spin ice"
 class IP_Square_Open(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with the spins placed on, and oriented along, the edges of squares.
