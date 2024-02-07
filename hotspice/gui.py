@@ -19,10 +19,10 @@ from textwrap import dedent
 from tkinter import messagebox
 from typing import Callable, Literal
 
-from .core import Magnets, DipolarEnergy, ZeemanEnergy, ExchangeEnergy, SimParams
+from .core import Magnets, SimParams
 from .io import Inputter, OutputReader, BinaryDatastream, ScalarDatastream, IntegerDatastream
 from .utils import appropriate_SIprefix, asnumpy, bresenham, J_to_eV, SIprefix_to_mul
-from .plottools import get_rgb, Average, _get_averaged_extent, init_fonts
+from .plottools import get_rgb, Average, _get_averaged_extent
 from . import config
 if config.USE_GPU:
     import cupy as xp

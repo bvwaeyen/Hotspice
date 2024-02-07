@@ -6,7 +6,8 @@ from inspect import isgeneratorfunction
 from typing import Literal
 
 from .ASI import IP_ASI, OOP_Square
-from .core import Magnets, ZeemanEnergy
+from .core import Magnets
+from .energies import ZeemanEnergy
 from .plottools import show_m
 from .utils import log, lower_than
 from . import config

@@ -13,10 +13,8 @@ Add GUI in the README.md file
 ## Core functionality
 
 1. High priority
-    - [ ] Take a look at the `E_B` calculation for Néel, as the current method might not be entirely correct after all.
 
 2. Medium priority
-    - [ ] In-plane systems could benefit from a better, angle-dependent, `E_barrier` calculation. Currently, the effective energy barrier in the presence of a dipolar or Zeeman interaction is crudely approximated as something like `E_B - switch_energy/2`, which only takes into account the intrinsic barrier and the energy difference between initial and final states. It would be more accurate to use something like in [this paper](https://doi.org/10.1088/1367-2630/abe3ad) or [this paper](https://doi.org/10.1103/PhysRevB.102.064410) where the energy of the two states perpendicular to the easy axis is used instead. This can be done by using a second dipolar kernel (for each unitcell spot) where the magnet at that spot is rotated 90 degrees (the direction does not matter because we will just look at the + and - perpendicular directions and take an exponentially weighted minimal value so it does not matter which direction it is except of course for the calculation of the kernel itself). The other energies (zeeman and exchange) are much easier to calculate perpendicularly, but nonetheless we should think about how to do this consistently for all energies (exchange should just be zero, to ignore it, which also makes sense when looking at it from the dot-product point of view). This also avoids messing around with many sines and trying to analytically calculate the maximum.
     - [ ] Make unit tests
     - [ ] Improve the output saving with e.g. a `FullOutputReader` etc. by just using .pkl files instead of that abysmal JSON stuff. The .pkl files should just contain a dictionary with the usual information, but the content of 'data' should be something that is easily loaded and interpreted by the class that generated it.
         - [ ] For `TaskAgnosticExperiment`: use the full `mm.m` in `initial_state` and `final_state` for a better `S` calculation (instead of `outputreader.read_state()`).
@@ -55,7 +53,7 @@ Add GUI in the README.md file
 
 3. Low priority
     - Test physical accuracy of Hotspice
-        - [ ] Angle between 0° and 45° between IP_Square and IP_Pinwheel where AFM alignment changes to uniform and vice versa? Can be useful to compare to experiment
+        - [ ] Angle between 0° and 45° between IP_Square and IP_Pinwheel where AFM alignment changes to uniform and vice versa? Can be useful to compare to experiment and theory
 
 ## Various smaller things that I will probably never come around to doing because all of the above will already take ages to do well
 

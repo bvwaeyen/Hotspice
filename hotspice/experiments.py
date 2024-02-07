@@ -15,8 +15,9 @@ from scipy.spatial import distance
 from textwrap import dedent
 from typing import Callable, Iterable, Literal
 
-from .core import Magnets, DipolarEnergy, ZeemanEnergy
+from .core import Magnets
 from .ASI import OOP_Square
+from .energies import DipolarEnergy, ZeemanEnergy
 from .io import Datastream, ScalarDatastream, IntegerDatastream, BinaryDatastream, Inputter, OutputReader, FieldInputter, RandomScalarDatastream, RegionalOutputReader
 from .plottools import close_interactive, init_interactive, init_fonts, save_plot, show_m
 from .utils import asnumpy, Data, filter_kwargs, full_obj_name, is_significant, log, R_squared, strided

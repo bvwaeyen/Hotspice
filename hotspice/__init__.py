@@ -1,7 +1,7 @@
 """
 This is the Hotspice package.
 """
-__all__ = ['config', 'utils', 'ASI', 'plottools', 'io', 'experiments', 'gui']
+__all__ = ['ASI', 'config', 'energies', 'experiments', 'gui', 'io', 'plottools', 'utils']
 __author__ = "Jonathan Maes"
 __version__ = None
 
@@ -19,4 +19,9 @@ from . import plottools
 from . import io
 from . import experiments
 from . import gui
+from . import energies
 # from . import poisson #! unfinished module
+
+# For backwards compatibility (and ease of use), allow Energy components to be accessed as 'hotspice.ZeemanEnergy' etc.
+__all__.extend(['ZeemanEnergy', 'DipolarEnergy', 'ExchangeEnergy'])
+from .energies import ZeemanEnergy, DipolarEnergy, ExchangeEnergy
