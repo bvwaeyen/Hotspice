@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from typing import Literal
+
 from context import hotspice
 
 
@@ -38,17 +40,22 @@ class test_squareIsing:
         if reverse: T_range = np.flip(T_range)
         m_avg = np.zeros_like(T_range)
         m_std = np.zeros_like(T_range)
+        NN_corr = np.zeros_like(T_range)
+        NN_corr_std = np.zeros_like(T_range)
         for i, T in enumerate(T_range):
             if verbose: print(f"[{i+1}/{T_steps}] N={N}, T = {T:.2f}*T_c (= {T*self.T_c:.0f} K)...")
             self.mm.T = T*self.T_c
-            averages = []
+            averages_m = []
+            corrs = []
             for n in range(N):
                 self.mm.update()
-                if n > N/2: averages.append(abs(self.mm.m_avg))
-            m_avg[i] = np.mean(averages)
-            m_std[i] = np.std(averages)
+                if n > N/2:
+                    averages_m.append(abs(self.mm.m_avg))
+                    corrs.append(self.mm.correlation_NN())
+            m_avg[i], m_std[i] = np.mean(averages_m), np.std(averages_m)
+            NN_corr[i], NN_corr_std[i] = np.mean(corrs), np.std(corrs)
 
-        df = pd.DataFrame({'T': T_range, 'm_avg': m_avg, 'm_std': m_std})
+        df = pd.DataFrame({'T': T_range, 'm_avg': m_avg, 'm_std': m_std, 'NN_corr': NN_corr, 'NN_corr_std': NN_corr_std}) # TODO: add NN correlation or something similar
         metadata = {'description': r"Magnetization of 2D exchange-coupled Ising model near critical temperature."}
         constants = {'nx': self.mm.nx, 'ny': self.mm.ny, 'N': N, 'UPDATE_SCHEME': self.mm.params.UPDATE_SCHEME, 'Tsweep_reverse': reverse}
         data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
@@ -90,8 +97,10 @@ class test_squareIsing:
         hotspice.plottools.init_style()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.errorbar(df['T'], df['m_avg'], yerr=df['m_std'], fmt='o', label="Hotspice")
-        ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label="Theory")
+        ax.errorbar(df['T'], df['m_avg'], yerr=df['m_std'], fmt='o', label=r"$\langle\vec{m}\rangle$ Hotspice")
+        if 'NN_corr' in df: ax.errorbar(df['T'], df['NN_corr'], yerr=df['NN_corr_std'], fmt='^', label="NN correlation Hotspice")
+        theory_T = np.linspace(T_lim[0]-.005, T_lim[1]+.005)
+        ax.plot(theory_T, test_squareIsing.get_m_theory(theory_T), color='black', label=r"$\langle\vec{m}\rangle$ theory")
         ax.legend()
         ax.set_xlabel("Temperature $T/T_c$")
         ax.set_ylabel(r"Magnetization $\langle M \rangle /M_0$")
@@ -113,9 +122,11 @@ class test_squareIsing:
         hotspice.plottools.init_style()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        for N, local_df in df.groupby('N'):
-            ax.errorbar(local_df['T'], local_df['m_avg'], yerr=local_df['m_std'], fmt='o', label=f"N={N}")
-        ax.plot(*test_squareIsing.get_m_theory(T_lim[0]-.005, T_lim[1]+.005), color='black', label="Theory")
+        for i, (N, local_df) in enumerate(df.groupby('N')):
+            ax.errorbar(local_df['T'], local_df['m_avg'], yerr=local_df['m_std'], fmt='o', color=f'C{i}', label=r"$\langle\vec{m}\rangle$" + f" (N={N})")
+            if 'NN_corr' in local_df: ax.errorbar(local_df['T'], local_df['NN_corr'], yerr=local_df['NN_corr_std'], fmt='^', color=f'C{i}', label="NN correlation" + f" (N={N})")
+        theory_T = np.linspace(T_lim[0]-.005, T_lim[1]+.005)
+        ax.plot(theory_T, test_squareIsing.get_m_theory(theory_T), color='black', label=r"$\langle\vec{m}\rangle$ theory")
         ax.legend()
         ax.set_xlabel("Temperature $T/T_c$")
         ax.set_ylabel("Magnetization $\\langle M\\rangle /M_0$")
@@ -130,13 +141,16 @@ class test_squareIsing:
         if show: plt.show()
 
     @staticmethod
-    def get_m_theory(T_min, T_max):
-        m_theory_range = np.linspace(T_min, T_max, 1000)
+    def get_m_theory(T):
         with np.errstate(invalid='ignore'):
-            m_theory = (1-np.sinh(2*(1/2*hotspice.kB*math.log(1+math.sqrt(2)))/hotspice.kB/m_theory_range)**-4)**.125 # J. M. D. Coey, Magnetism and Magnetic Materials (6.33)
-        m_theory[np.isnan(m_theory)] = 0
-        return m_theory_range, m_theory
+            m_theory = (1 - np.sinh(2*(1/2*hotspice.kB*math.log(1 + math.sqrt(2)))/(hotspice.kB*T))**-4)**.125 # J. M. D. Coey, Magnetism and Magnetic Materials (6.33)
+        m_theory[np.isnan(m_theory)] = 0 # Above T_C
+        return m_theory
 
 
 if __name__ == "__main__":
-    test_squareIsing().test(T_steps=21, verbose=True, save=True)
+    # test_squareIsing().test(T_steps=21, verbose=True, save=True)
+    # test_squareIsing().test(T_steps=21, scheme='Wolff', verbose=True, save=True)
+    
+    test_squareIsing(size=800).test(T_steps=21, scheme='Glauber', verbose=True, save=False)
+    # test_squareIsing(size=800).test(T_steps=21, scheme='Glauber', verbose=True, save=True, reverse=True)

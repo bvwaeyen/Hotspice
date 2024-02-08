@@ -18,6 +18,7 @@ class test_dipolarIsing:
         self.T = kwargs.get('T', 100) # Low temperature to avoid paramagnetic state
         self.a = 1e-6 # Lattice spacing
         self.size = kwargs.get('size', 400) # Large to get the most statistically ok behavior
+        self.mm = hotspice.ASI.OOP_Square(self.a, self.size, E_B=0, T=self.T, energies=[hotspice.DipolarEnergy(), hotspice.ExchangeEnergy()], pattern='AFM', PBC=False, params=hotspice.SimParams(UPDATE_SCHEME="Glauber"))
     
     @property
     def dipolar_nearest(self):
@@ -40,24 +41,25 @@ class test_dipolarIsing:
         self.data = self.test_delta_influence(*args, **kwargs)
 
     def test_delta_influence(self, N=2, delta_range=np.arange(0, 4.01, .05), verbose=False, plot=True, save=True):
-        self.mm = hotspice.ASI.OOP_Square(self.a, self.size, E_B=0, T=self.T, energies=[hotspice.DipolarEnergy(), hotspice.ExchangeEnergy()], pattern='AFM', PBC=False)
-        AFMness = np.zeros_like(delta_range)
-        AFMness_std = np.zeros_like(delta_range)
+        NN_corr = np.zeros_like(delta_range)
+        NN_corr_std = np.zeros_like(delta_range)
         for i, delta in enumerate(delta_range):
             if verbose: print(f"[{i+1}/{delta_range.size}] delta = {delta:.2f} ...")
             self.delta = delta # Basically sets the exchange energy in self.mm
             MCsteps0 = self.mm.MCsteps
-            AFMnesses = []
+            NN_corrs = []
             while (progress := (self.mm.MCsteps - MCsteps0)/N) < 1:
                 self.mm.update(Q=0.1)
-                if progress > .5: AFMnesses.append(hotspice.plottools.get_AFMness(self.mm))
+                if progress > .5: NN_corrs.append(self.mm.correlation_NN())
             # if verbose: hotspice.plottools.show_m(self.mm)
             self.mm.relax()
             # if verbose: hotspice.plottools.show_m(self.mm)
-            AFMness[i] = hotspice.plottools.get_AFMness(self.mm) # np.mean(AFMnesses)
-            AFMness_std[i] = np.std(AFMnesses)
+            # AFMness[i] = hotspice.plottools.get_AFMness(self.mm) # np.mean(AFMnesses)
+            NN_corr[i] = np.mean(NN_corrs)
+            # NN_corr[i] = self.mm.correlation_NN() # TODO: why do we do this? What is the point of recording NN_corrs then?
+            NN_corr_std[i] = np.std(NN_corrs)
         
-        df = pd.DataFrame({'delta': delta_range, 'AFMness': AFMness, 'AFMness_std': AFMness_std})
+        df = pd.DataFrame({'delta': delta_range, 'NN_corr': NN_corr, 'NN_corr_std': NN_corr_std})
         metadata = {'description': r"2D Ising model with exchange and dipolar interactions, sweeping $\delta$ as described in `Striped phases in two-dimensional dipolar ferromagnets` by MacIsaac et al."}
         constants = {'nx': self.mm.nx, 'ny': self.mm.ny, 'MCstepsize': N, 'T': self.mm.T_avg}
         data = hotspice.utils.Data(df, metadata=metadata, constants=constants)
@@ -70,9 +72,9 @@ class test_dipolarIsing:
         hotspice.plottools.init_style()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
-        ax.errorbar(df['delta'], df['AFMness'], yerr=df['AFMness_std'], fmt='o', label="Hotspice")
+        ax.errorbar(df['delta'], df['NN_corr'], yerr=df['NN_corr_std'], fmt='o', label="Hotspice")
         ax.set_xlabel(r"$\delta$ (relative exchange/dipolar strength)")
-        ax.set_ylabel('AFM-ness')
+        ax.set_ylabel('Nearest-Neighbor correlation')
         ax.set_xlim([df['delta'].min()-.005, df['delta'].max()+.005])
         ax.set_ylim([ax.get_ylim()[0], 1])
         ax.axvline(0.85, linestyle=':', color='black')
@@ -83,6 +85,16 @@ class test_dipolarIsing:
             hotspice.plottools.save_plot(save, ext='.pdf')
         if show: plt.show()
 
+    def show(self, delta: float = None, N: float = 10):
+        if delta is not None: self.delta = delta
+        MCsteps0 = self.mm.MCsteps
+        while (progress := (self.mm.MCsteps - MCsteps0)/N) < 1:
+            self.mm.update(Q=0.1)
+        hotspice.plottools.show_m(self.mm)
+
 
 if __name__ == "__main__":
-    test_dipolarIsing(size=80).test(verbose=True, save=True)
+    t = test_dipolarIsing(size=400)
+    # t.test(N=2, verbose=True, save=False) # Creates the usual plot of NN correlation as a function of delta.
+    t.show(delta=400, N=50) # Shows the state for a given delta after N MC sweeps.
+    # print(t.mm.correlation_NN())

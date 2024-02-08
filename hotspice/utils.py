@@ -344,7 +344,7 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
-def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None, outdir: str|Path = None) -> str:
+def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None, copy_script: bool = True, outdir: str|Path = None) -> str:
     """ The most basic way to consistently save results of a simulation script. This can save the basic
         parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
         figure(s) as pdf, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
@@ -362,7 +362,7 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
     if outdir is None: outdir = script.parent / (script.stem + '.out') / timestamp()
     Path(outdir).mkdir(exist_ok=True, parents=True) # Make directory "caller_script.out/<timestamp>"
     # Save information
-    shutil.copy2(script, os.path.join(outdir, 'script.py'))
+    if copy_script: shutil.copy2(script, os.path.join(outdir, 'script.py'))
     if parameters is not None: json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)
     if data is not None: pickle.dump(data, open(os.path.join(outdir, 'data.pkl'), 'wb')) #! Must be 'wb' because binary object
     # Save figure(s)
