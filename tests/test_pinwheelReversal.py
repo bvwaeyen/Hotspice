@@ -103,7 +103,7 @@ class test_pinwheelReversal:
         if reduce: df = df.iloc[::math.ceil(N/reduce)]
         M_sat_parallel = df['m_avg'].abs().max() # Assuming that the saturation is achieved somewhere (normally at initialization, so this should be ok)
 
-        hotspice.plottools.init_fonts()
+        hotspice.plottools.init_style()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
         ax.plot(df['H']*1e3, df['m_avg']/M_sat_parallel, linewidth=1, color='black', zorder=-1)

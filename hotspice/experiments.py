@@ -19,7 +19,7 @@ from .core import Magnets
 from .ASI import OOP_Square
 from .energies import DipolarEnergy, ZeemanEnergy
 from .io import Datastream, ScalarDatastream, IntegerDatastream, BinaryDatastream, Inputter, OutputReader, FieldInputter, RandomScalarDatastream, RegionalOutputReader
-from .plottools import close_interactive, init_interactive, init_fonts, save_plot, show_m
+from .plottools import close_interactive, init_interactive, init_style, save_plot, show_m
 from .utils import asnumpy, Data, filter_kwargs, full_obj_name, is_significant, log, R_squared, strided
 from . import config
 if config.USE_GPU:
@@ -354,7 +354,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         ## PLOTTING
         cmap = colormaps['viridis' if colormap is None else colormap].copy()
         # cmap.set_under(color='black')
-        init_fonts()
+        init_style()
 
         if logarithmic_vars is None: logarithmic_vars = ['frequency']
         xscale = 'log' if param_x in logarithmic_vars else 'linear'
@@ -620,7 +620,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
         if verbose:
             if verbose > 1:
-                init_fonts()
+                init_style()
                 init_interactive()
                 fig = None
             log(f"[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...")

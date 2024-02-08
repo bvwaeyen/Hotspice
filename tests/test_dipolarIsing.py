@@ -67,7 +67,7 @@ class test_dipolarIsing:
     
     @staticmethod
     def test_delta_influence_plot(df: pd.DataFrame, save=False, show=True):
-        hotspice.plottools.init_fonts()
+        hotspice.plottools.init_style()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
         ax.errorbar(df['delta'], df['AFMness'], yerr=df['AFMness_std'], fmt='o', label="Hotspice")

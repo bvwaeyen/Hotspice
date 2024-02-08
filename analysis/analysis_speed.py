@@ -52,7 +52,7 @@ def analysis_speed_size(L_range, ASI_type: type[hotspice.Magnets] = hotspice.ASI
 
 
 def analysis_speed_size_plot(df: pd.DataFrame, save=False, show=True):
-    hotspice.plottools.init_fonts()
+    hotspice.plottools.init_style()
     fig = plt.figure(figsize=(5, 5))
     ax1 = fig.add_subplot(111)
     ax2 = ax1.twiny()

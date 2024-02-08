@@ -216,7 +216,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
     figparams.setdefault('fontsize_colorbar', 10)
     figparams.setdefault('fontsize_axes', 10)
     figparams.setdefault('text_averaging', True)
-    init_fonts(small=figparams['fontsize_axes'])
+    init_style(small=figparams['fontsize_axes'])
     if m is None: m = mm.m
     if mm.in_plane:
         show_quiver = mm.n < 1e5 or overlay_quiver # Quiver becomes very slow for more than 100k quivers, so just dont show it then
@@ -444,7 +444,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
     return asnumpy(result)
 
 
-def init_fonts(backend=True, small=10, medium=11, large=12):
+def init_style(backend=True, small=10, medium=11, large=12, style: Literal['default', 'tableau-colorblind10', 'fivethirtyeight'] = "tableau-colorblind10"):
     """ Sets various parameters for consistent plotting across all Hotspice scripts.
         This should be called before instantiating any subplots.
         This should not be called directly by any function in hotspice.plottools itself,
@@ -470,7 +470,13 @@ def init_fonts(backend=True, small=10, medium=11, large=12):
     plt.rc('ytick', labelsize=small)    # fontsize of the tick labels
     plt.rc('legend', fontsize=small)    # legend fontsize
     plt.rc('figure', titlesize=large)  # fontsize of the figure title
+    
+    # Use appropriate style (default is good for colorblindness)
+    plt.style.use(style)
 
+def colorcycle():
+    """ Returns a list of matplotlib colors that I can actually see (C2 and C3 look basically identical). """
+    return ['C0', 'C1', 'C2', 'C6', 'C5', 'C9', 'C3', 'C4', 'C8', 'C7'] # Blue, orange, green, pink, light blue (those are easily distinguishable) and then continue with the cycle
 
 def init_interactive():
     """ Call this once before starting to build an interactive (i.e. real-time updatable) plot. """

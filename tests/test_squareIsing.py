@@ -87,7 +87,7 @@ class test_squareIsing:
         """ If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. """
         T_lim = [df['T'].min(), df['T'].max()]
 
-        hotspice.plottools.init_fonts()
+        hotspice.plottools.init_style()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
         ax.errorbar(df['T'], df['m_avg'], yerr=df['m_std'], fmt='o', label="Hotspice")
@@ -110,7 +110,7 @@ class test_squareIsing:
         """ If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. """
         T_lim = [df['T'].min(), df['T'].max()]
 
-        hotspice.plottools.init_fonts()
+        hotspice.plottools.init_style()
         fig = plt.figure(figsize=(5, 3.5))
         ax = fig.add_subplot(111)
         for N, local_df in df.groupby('N'):
