@@ -9,18 +9,18 @@ import pandas as pd
 import statsmodels.api as sm
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from matplotlib import cm, colormaps, colors, widgets
+from dataclasses import dataclass, field
+from matplotlib import colorbar, colormaps, widgets
 from scipy.spatial import distance
-from scipy.stats import linregress
 from textwrap import dedent
 from typing import Callable, Iterable, Literal
 
-from .core import Magnets, DipolarEnergy, ZeemanEnergy
+from .core import Magnets
 from .ASI import OOP_Square
+from .energies import DipolarEnergy, ZeemanEnergy
 from .io import Datastream, ScalarDatastream, IntegerDatastream, BinaryDatastream, Inputter, OutputReader, FieldInputter, RandomScalarDatastream, RegionalOutputReader
-from .plottools import close_interactive, init_interactive, init_fonts, save_plot, show_m
-from .utils import appropriate_SIprefix, asnumpy, Data, filter_kwargs, full_obj_name, human_sort, is_significant, log, R_squared, strided
+from .plottools import close_interactive, init_interactive, init_style, save_plot, show_m
+from .utils import asnumpy, Data, filter_kwargs, full_obj_name, is_significant, log, R_squared, strided
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -55,7 +55,7 @@ class Experiment(ABC):
         """
     
     @abstractmethod
-    def get_plot_metrics(self) -> dict[str, 'SweepMetricPlotparams']:
+    def get_plot_metrics() -> dict[str, 'SweepMetricPlotparams']:
         """ Returns a dictionary with as many elements as there should be 2D or 1D plots
             in Sweep().plot(). Keys are names of these metrics, values are functions that
             take one argument (a hotspice.utils.Data object, which for this purpose is
@@ -79,7 +79,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
                     The same will go for <res_x> and <res_y> together, but they are independent of <nx> and <ny>.
             @param names [dict[str, str]] (None): a dictionary whose keys are the parameters (i.e. **kwargs names),
                 and whose values are a readable name for said parameter. This is used in self.plot().
-                By default, if a parameter is not present in <names>, the its name in **kwargs is used.
+                By default, if a parameter is not present in <names>, its name in **kwargs is used.
             @param units [dict[str, str]] (None): same as <names>, but now the values are the SI units of the parameter.
                 By default, if a parameter is not present in <units>, its unit is None.
                 Example: names={'a': "Lattice parameter", ...} and units={'a': "m", ...}
@@ -182,15 +182,15 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         return {
             'type': full_obj_name(self),
             'info': self.info,
+            'groups': self.groups,
             'system': {
                 'ASI_type': full_obj_name(self._example_experiment.mm),
                 'datastream': full_obj_name(self._example_experiment.inputter.datastream),
                 'inputter': full_obj_name(self._example_experiment.inputter),
                 'outputreader': full_obj_name(self._example_experiment.outputreader)
             },
-            'paramnames': {paramname: (self.names[paramname], self.units[paramname]) for paramname in self.parameters.keys()},
             'parameters': self.parameters,
-            'groups': self.groups
+            'paramnames': {paramname: (self.names[paramname], self.units[paramname]) for paramname in self.parameters.keys()}
         }
     
     def process_single(self, iteration: int, run_kwargs=None, save_dir: Literal[False]|str = False):
@@ -209,10 +209,11 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
             'E_B': experiment.mm.E_B,
             '_experiment_run_kwargs': run_kwargs
             } | self.constants | vars # (<vars> are variable values in this iteration, so it is ok to put in 'constants')
-        data_i = Data(df_i, metadata=metadata, constants=constants)
+        data_i = Data(df_i, metadata=metadata, constants=constants, compact=False) # Not compact, to avoid missing columns when experiment.load_dataframe()
         if save_dir:
             num_digits = len(str(len(self)-1)) # It is important to include iteration number or other unique identifier in savename (timestamps can be same for different finishing GPU processes)
-            savename = str(self.groups).replace('"', '').replace("'", "") + "_" + str(iteration).zfill(num_digits) # zfill pads with zeros to the left
+            # savename = str(self.groups).replace('"', '').replace("'", "") + "_" + str(iteration).zfill(num_digits) # superfluous, one can derive the groups from the file content. Keeping this commented for posterity
+            savename = str(iteration).zfill(num_digits) # zfill pads with zeros to the left
             saved_path = data_i.save(dir=save_dir, name=savename, timestamp=True)
             log(f"Saved iteration #{iteration} to {saved_path}", style='success')
 
@@ -273,7 +274,10 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         return save if return_savepath else data
     
     # TODO: this function is way too complicated (as usual)
-    def plot(self, summary_files, param_x=None, param_y=None, unit_x=None, unit_y=None, transform_x=None, transform_y=None, name_x=None, name_y=None, scale_x: Literal['log', 'linear', None]=None, scale_y: Literal['log', 'linear', None]=None, title=None, save=True, plot=True, metrics: list[str]=None):
+    def plot(self, summary_files, param_x=None, param_y=None, unit_x=None, unit_y=None, transform_x=None, transform_y=None,
+             transform_z=None, name_x=None, name_y=None, names_z: list|str = None,
+             logarithmic_vars: list[str] = None, colormap: str = None, title=None,
+             save=True, plot=True, metrics: list[str] = None):
         """ Generic function to plot the results of a sweep in a general way.
             @param summary_files [list(str)]: list of path()s to file(s) as generated by Sweep.load_results().
                 If more than one such file is passed on, multiple sweeps' metrics are averaged. This is for example
@@ -292,7 +296,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
             if os.path.isfile(summary_files):
                 summary_files = [summary_files] # We use an iterable of strings, just in case they need to be averaged.
             else: # is dir
-                summary_files = [file for file in os.listdir(summary_files) if (os.path.isfile(file) and file.endswith('.json'))]
+                summary_files = [os.path.join(summary_files, file) for file in os.listdir(summary_files) if (os.path.isfile(os.path.join(summary_files, file)) and file.endswith('.json'))]
 
         ## Default arguments
         colnames = [group[0] for group in self.groups] # For each group, just take the first parameter to show values/name
@@ -344,39 +348,48 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
             for i, metric in enumerate(metrics):
                 all_metrics[i] += np.asarray(metric)
         all_metrics = [metric/len(summary_files) for metric in all_metrics]
+        for i, metric_key in enumerate(metrics_dict.keys()): # Not flawless, but mostly ok when using SweepMetricPlotParams
+            data.df[metric_key] = all_metrics[i].reshape(-1)
 
         ## PLOTTING
-        cmap = colormaps['viridis'].copy()
+        cmap = colormaps['viridis' if colormap is None else colormap].copy()
         # cmap.set_under(color='black')
-        init_fonts()
-        n_plots = len(metrics)
-        fig = plt.figure(figsize=(3.3*n, 3.5))
+        init_style()
 
+        if logarithmic_vars is None: logarithmic_vars = ['frequency']
+        xscale = 'log' if param_x in logarithmic_vars else 'linear'
+        yscale = 'log' if param_y in logarithmic_vars else 'linear'
+
+        corners = lambda arr: np.asarray([(3*arr[0] - arr[1])/2] + [(arr[i+1] + arr[i])/2 for i in range(len(arr)-1)] + [3*arr[-1]/2 - arr[-2]/2])
         if transform_x is not None: x_vals = transform_x(x_vals)
-        x_lims = [(3*x_vals[0] - x_vals[1])/2] + [(x_vals[i+1] + x_vals[i])/2 for i in range(len(x_vals)-1)] + [3*x_vals[-1]/2 - x_vals[-2]/2]
-
+        x_lims = corners(np.log10(x_vals) if xscale == 'log' else x_vals)
+        if xscale == 'log': x_lims = 10**x_lims
         if is_2D:
             if transform_y is not None: y_vals = transform_y(y_vals)
-            y_lims = [(3*y_vals[0] - y_vals[1])/2] + [(y_vals[i+1] + y_vals[i])/2 for i in range(len(y_vals)-1)] + [3*y_vals[-1]/2 - y_vals[-2]/2]
-            X, Y = np.meshgrid(x_vals, y_vals)
+            y_lims = corners(np.log10(y_vals) if yscale == 'log' else y_vals)
+            if yscale == 'log': y_lims = 10**y_lims
 
-        # Check how linear the x and y axes are, to choose if log or linear scale is more appropriate in plots
-        if scale_x is None:
-            x_linearity = abs(linregress(x_vals, range(len(x_vals))).rvalue)
-            xscale = 'linear' if x_linearity > 0.8 else 'log'
-        else: xscale = scale_x
-        if is_2D:
-            if scale_y is None:
-                y_linearity = abs(linregress(y_vals, range(len(y_vals))).rvalue)
-                yscale = 'linear' if y_linearity > 0.8 else 'log'
-            else: yscale = scale_y
+        # If some plots are going to be omitted, then <n> should be recalculated
+        n = sum([not params.omit_if_constant or not np.all(np.isclose(all_metrics[i], all_metrics[i][0,0])) for i, params in enumerate(metrics_dict.values())])
 
         # Plot the metrics
+        fig = plt.figure(figsize=(3.3*n, 3))
         axes = []
         label_x = name_x if unit_x is None else f"{name_x} [{unit_x}]"
+        if names_z is None:
+            names_z = [None]*n
+        elif isinstance(names_z, str): # Just add it at the end
+            names_z = [None]*(n-1) + [names_z]
+        else:
+            names_z = names_z + [None]*(n - len(names_z))
         if is_2D:
             label_y = name_y if unit_y is None else f"{name_y} [{unit_y}]"
+            X, Y = np.meshgrid(x_lims, y_lims)
             for i, params in enumerate(metrics_dict.values()):
+                Z = np.transpose(all_metrics[i])
+                if params.omit_if_constant and np.all(np.isclose(Z, Z[0,0])): continue
+                if transform_z is not None:
+                    Z = transform_z(Z)
                 try:
                     ax = fig.add_subplot(1, n, i+1, sharex=ax, sharey=ax)
                 except NameError:
@@ -385,46 +398,71 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
                 ax.set_xscale(xscale)
                 ax.set_yscale(yscale)
                 ax.set_xlabel(label_x)
-                ax.set_ylabel(label_y)
+                ax.set_xlim(np.min(x_lims), np.max(x_lims))
+                ax.set_ylim(np.min(y_lims), np.max(y_lims))
+                if i == 0: ax.set_ylabel(label_y)
+                else: ax.tick_params('y', labelleft=False) # Only decorate y-axis on leftmost subplot
                 ax.set_title(params.full_name)
-                im = ax.pcolormesh(X, Y, np.transpose(all_metrics[i]), cmap=cmap, vmin=params.min_value, vmax=params.max_value) # OPT: can use vmin and vmax, but not without a Metric() class, which I think would lead us a bit too far once again
-                c = plt.colorbar(im) # OPT: can use extend='min' for nice triangle at the bottom if range is known
-                # c.ax.yaxis.get_major_locator().set_params(integer=True) # only integer colorbar labels
+                vmin = params.min_value(data) if isinstance(params.min_value, Callable) else params.min_value
+                vmax = params.max_value(data) if isinstance(params.max_value, Callable) else params.max_value
+                im = ax.pcolormesh(X, Y, Z, cmap=cmap, vmin=vmin, vmax=vmax, shading='flat') # OPT: can use vmin and vmax, but not without a Metric() class, which I think would lead us a bit too far once again
+                c: colorbar.Colorbar = plt.colorbar(im) # OPT: can use extend='min' for nice triangle at the bottom if range is known
+                if params.is_integer: c.ax.yaxis.get_major_locator().set_params(integer=True) # only integer colorbar labels
+                if len(params.contours) > 0:
+                    contours = [contour(data) for contour in params.contours]
+                    ax.contour(*np.meshgrid(x_vals, y_vals), Z, contours, colors='k')
+                    for contour in contours: c.ax.axhline(contour, color='k') # Contour is plotted with colormap colors
+                if names_z[i] is not None:
+                    c.ax.set_ylabel(names_z[i], rotation=270, labelpad=12)
         else:
             ax = fig.add_subplot(1, 1, 1)
             for i, params in enumerate(metrics_dict.values()):
+                Z = all_metrics[i]
+                if params.omit_if_constant and np.all(np.isclose(Z, Z[0,0])): continue
                 ax.set_xscale(xscale)
                 ax.set_xlabel(label_x)
                 ax.set_ylabel("Reservoir metric")
-                ax.plot(x_vals, all_metrics[i], label=params.full_name)
+                ax.plot(x_vals, Z, label=params.full_name)
 
+        fig.set_size_inches(3.3*len(axes), 3)
         if title is not None: plt.suptitle(title)
         multi = widgets.MultiCursor(fig.canvas, axes, color='black', lw=1, linestyle='dotted', horizOn=True, vertOn=True) # Assign to variable to prevent garbage collection
         plt.gcf().tight_layout()
 
         if save:
-            save_path = os.path.splitext(summary_file)[0]
+            if len(summary_files) > 1:
+                save_path = os.path.splitext(os.path.join(os.path.dirname(summary_files[0]), "averaged"))[0]
+            else:
+                save_path = os.path.splitext(summary_files[0])[0]
             save_plot(save_path, ext='.pdf')
             save_plot(save_path, ext='.png', dpi=200) # Default dpi is 100, so save at higher res
         if plot:
             plt.show()
+        plt.close()
 
 @dataclass
 class SweepMetricPlotparams:
     ''' Stores some parameters to correctly plot the metrics belonging to a certain experiment.
         @param full_name [str]: A human-readable name for the metric.
-        @param data_extractor [function]: A function that takes one argument, namely a Data object.
+        @param data_extractor [Callable]: A function that takes one argument, namely a Data object.
             It returns a DataFrame column with the metric. Usually, this will just be a column from Data().df.
             The simplest example of this would be something like "lambda data: data[<column_of_metric>]".
             Combinations of columns are also possible, e.g. "lambda data: data[<some_metric>] - data[<other_metric>]".
-        @param min_value [float] (None): The minimum value that the metric can be.
-        @param max_value [float] (None): The maximum value that the metric can be.
-        If <min_value> or <max_value> are None, the plot is simply scaled to the min/max values throughout the sweep.
+        @param is_integer [bool] (False): True if the metric is integer-valued, otherwise False.
+        The following parameters can (besides scalar values) also be Callable. If so, they take one argument: a Data object.
+        This allows them to be defined relative to the values of other metrics.
+        @param min_value [float|Callable] (None): The minimum value that the metric can be.
+        @param max_value [float|Callable] (None): The maximum value that the metric can be.
+        @param contours [list(Callable)] ([]): Contours will be plotted at these values.
     '''
     full_name: str # e.g.: 'Nonlinearity'
     data_extractor: Callable # e.g.: lambda data: data['NL']
-    min_value: float = None # e.g.: 0
-    max_value: float = None # e.g.: 1
+    min_value: float|Callable = None # e.g.: 0 or lambda data: data['NL'].min()
+    max_value: float|Callable = None # e.g.: 1 or lambda data: data['NL'].max()
+    contours: list[Callable] = field(default_factory=lambda:[]) # e.g.: [lambda data: data['NL'].mean()]
+    is_integer: bool = False
+    lower_is_better: bool = False
+    omit_if_constant: bool = False
 
 
 ######## Below are subclasses of the superclasses above
@@ -582,7 +620,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         self.mm.initialize_m(self.mm._get_groundstate() if pattern is None else pattern, angle=0)
         if verbose:
             if verbose > 1:
-                init_fonts()
+                init_style()
                 init_interactive()
                 fig = None
             log(f"[0/{N}] Running TaskAgnosticExperiment: relaxing initial state...")

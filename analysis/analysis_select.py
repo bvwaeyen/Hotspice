@@ -118,7 +118,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     
     cmap = colormaps['viridis'].copy()
     cmap.set_under(color='black')
-    hotspice.plottools.init_fonts()
+    hotspice.plottools.init_style()
     fig = plt.figure(figsize=(8, 7))
 
     # PLOT 1: HISTOGRAM OF (NEAREST) NEIGHBORS

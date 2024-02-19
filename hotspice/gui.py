@@ -2,6 +2,7 @@ import customtkinter as ctk
 import inspect
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 import tkinter as tk
 import tkinter.ttk as ttk
 
@@ -18,10 +19,10 @@ from textwrap import dedent
 from tkinter import messagebox
 from typing import Callable, Literal
 
-from .core import Magnets, DipolarEnergy, ZeemanEnergy, ExchangeEnergy, SimParams
+from .core import Magnets, SimParams
 from .io import Inputter, OutputReader, BinaryDatastream, ScalarDatastream, IntegerDatastream
 from .utils import appropriate_SIprefix, asnumpy, bresenham, J_to_eV, SIprefix_to_mul
-from .plottools import get_rgb, Average, _get_averaged_extent, init_fonts
+from .plottools import get_rgb, Average, _get_averaged_extent
 from . import config
 if config.USE_GPU:
     import cupy as xp
@@ -32,7 +33,7 @@ else:
 class GUI(ctk.CTk):
     def __init__(self, mm: Magnets, inputter: Inputter = None, outputreader: OutputReader = None, 
                  custom_step: Callable[['GUI'], None] = None, custom_reset: Callable[['GUI'], None] = None,
-                 editable: bool = True):
+                 editable: bool = True): # TODO: make custom_step (and custom_reset) into dictionaries so we can have more than 1 of them.
         """ <mm>, <inputter> and <outputreader> are typical Magnets, Inputter and OutputReader instances.
             <custom_step> and <custom_reset> are functions that support either 0 or 1 arguments.
                 If they support 1 argument, that argument is supposed to be this GUI object.
@@ -260,7 +261,7 @@ class ActionsPanel(ctk.CTkScrollableFrame):
             columnspan = 1 if self.gui.custom_step is not None else cols
             self.action_customreset.grid(row=row, column=0, columnspan=columnspan, sticky=ctk.EW, padx=10, pady=(10,0))
 
-        # TODO: add actions (minimize(all), relax, initialize with a menu showing options 'uniform', 'AFM', 'random', 'vortex' with additional angle value next to it)
+        # TODO: add minimize(_all) and relax, when they work correctly
 
     def action(self, action: str, **kwargs):
         """ An 'action' is an event that changes the magnetization state, which then needs to be redrawn. """
@@ -286,11 +287,19 @@ class ActionsPanel(ctk.CTkScrollableFrame):
                 kwargs.setdefault("attempt_freq", self.gui.ASI_settings.attempt_freq)
             case "Glauber":
                 kwargs.setdefault("Q", self.gui.ASI_settings.Q)
+        t = time.perf_counter() + 1
         for _ in range(n):
             self.mm.update(**kwargs)
+            if time.perf_counter() > t:
+                self.gui.redraw()
+                t += 1
     
     def _action_progress(self, t_max=1., MCsteps_max=4., **kwargs):
-        self.mm.progress(t_max=t_max, MCsteps_max=MCsteps_max)
+        t = time.perf_counter() + 1
+        for i, step in enumerate(self.mm.progress(t_max=t_max, MCsteps_max=MCsteps_max, stepwise=True)):
+            if time.perf_counter() > t:
+                self.gui.redraw()
+                t += 1
     
     def _action_initialize(self, pattern='random', **kwargs):
         self.mm.initialize_m(pattern, **kwargs)
@@ -350,12 +359,12 @@ class ParameterInfo(ctk.CTkFrame):
         self.info_MCsteps.set(f"{self.mm.MCsteps:.2f}")
         self.info_attempted_switches.set(f"({self.mm.attempted_switches:d} sw. attempts)")
     
-    def reset(self): # TODO: make this a method of the ASI object itself, now it is quite hacky
+    def reset(self):
         self.mm.reset_stats()
         self.update()
 
 
-class MagnetizationView(ctk.CTkFrame):
+class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and ViewSettings within e.g. one IPython session (not between sessions, don't want to mess with temp files in appdata etc.)
     class DisplayMode(Enum):
         MAGNETIZATION = auto()
         QUIVER = auto()
@@ -404,7 +413,6 @@ class MagnetizationView(ctk.CTkFrame):
         self.infobutton.configure(fg='blue',font=('Calibri',14,'bold'))
         self.infobutton.pack(side=ctk.RIGHT, fill=ctk.Y)
         self.canvas.draw()
-        # TODO: add some sidebar or subbar or something where t, MCsteps, (attempted_)switches are shown
         # TODO: possibly also show realtime quantities like correlation_length, m_avg, T_avg, E_B_avg, moment_avg, E_tot etc.
 
         ## Draw DisplayMode-independent elements, like axes, axes labels, etc.
@@ -445,6 +453,14 @@ class MagnetizationView(ctk.CTkFrame):
                             [0.5, 0.0, 0.0],
                             [1.0, b1,  b1]]}
             self.cmap_hsv = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
+        
+        self.energy_names_readable = {
+                'Total': "Total energy",
+                'E_barrier': "Effective energy barrier",
+                'DipolarEnergy': "Dipolar energy",
+                'ZeemanEnergy': "Zeeman energy",
+                'ExchangeEnergy': "Exchange energy"
+            }
         
         ## Draw everything specific to a DisplayMode, default to MAGNETIZATION
         self.change_mode(self.DisplayMode.MAGNETIZATION) # This initializes the contents of the matplotlib plot
@@ -621,7 +637,7 @@ class MagnetizationView(ctk.CTkFrame):
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
             case self.DisplayMode.QUIVER:
-                if not self.mm.in_plane: raise ValueError("Can only use DisplayMode.QUIVER for in-plane ASI.")
+                if not self.mm.in_plane: raise ValueError("Can only use DisplayMode.QUIVER for in-plane ASI.") # TODO: draw scatter plot for OOP ASI
                 self.ax.set_title(r"Magnetization $\overrightarrow{m}$")
                 self.content = self.ax.quiver(asnumpy(self.mm.xx[self.mm.nonzero])/self.unit_axes_factor, asnumpy(self.mm.yy[self.mm.nonzero])/self.unit_axes_factor,
                                            np.ones(self.mm.n), np.ones(self.mm.n), color=self.cmap_hsv(np.ones(self.mm.n)), pivot='mid',
@@ -637,9 +653,9 @@ class MagnetizationView(ctk.CTkFrame):
                 self.content = self.ax.imshow(im_placeholder, cmap=cmap, origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
-                self.colorbar.ax.set_ylabel("Domain number", rotation=270, fontsize=self.figparams['fontsize_colorbar']) # TODO: use the number of domains when that has been implemented in .ASI module
+                self.colorbar.ax.set_ylabel("Domain number", rotation=270, fontsize=self.figparams['fontsize_colorbar']) # TODO: use the number of domains as vmax, when that has been implemented in .ASI module
             case self.DisplayMode.ENERGY:
-                self.ax.set_title(r"Local energy $E_{int}$")
+                self.ax.set_title(r"Local energy")
                 self.content = self.ax.imshow(im_placeholder, origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 15
@@ -707,17 +723,11 @@ class MagnetizationView(ctk.CTkFrame):
             self.content.set_cmap(cmap)
             # Change axes units
             E_unit = 'eV' if in_eV else 'J'
-            colorbar_name = {
-                'Total': "Total energy",
-                'E_barrier': "Effective energy barrier",
-                'DipolarEnergy': "Dipolar energy",
-                'ZeemanEnergy': "Zeeman energy",
-                'ExchangeEnergy': "Exchange energy"
-            }.get(energy_component, "Energy")
+            colorbar_name = self.energy_names_readable.get(energy_component, "Energy")
             self.colorbar.ax.set_ylabel(f"{colorbar_name} [{E_unit}]", rotation=270, fontsize=self.figparams['fontsize_colorbar'])
             match energy_component:
                 case 'Total': self.E = lambda: self.mm.E
-                case 'E_barrier': self.E = lambda: self.mm.E_B - self.mm.E # Crude approximation of the effective energy barrier for each magnet
+                case 'E_barrier': self.E = lambda: xp.maximum((delta_E := self.mm.switch_energy()), self.mm.E_B + delta_E/2) # Crude approximation of the effective energy barrier for each magnet
                 case _:
                     self._displayed_energy = self.mm.get_energy(energy_component)
                     self.E = lambda: self._displayed_energy.E
@@ -735,7 +745,7 @@ class MagnetizationView(ctk.CTkFrame):
             self.content.set_clim(vmin=vmin, vmax=vmax) # (weird bug where only one of the limits gets updated)
         else:
             self.content.set_clim(vmin=min(lims[0], vmin), vmax=max(lims[1], vmax))
-        # TODO: add an option to scale the colorbar to kBT
+        # TODO: add an option to limit the colorbar to only several kBT to actually see what is likely to happen in case of very high/low-energy magnets (which almost always exist)
 
     def _redraw_field(self, settings_changed: bool = False):
         field_type, in_eV = self.settings.field_type, self.settings.in_eV
@@ -785,10 +795,10 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
 
         ## Tab 1: MAGNETIZATION
         self.tab_MAGNETIZATION = self.add(self.mode_to_name[MagnetizationView.DisplayMode.MAGNETIZATION])
-        available_averages = {avg: avg.name.capitalize() for avg in Average}
+        available_averages = {avg: avg.name.capitalize() for avg in [Average.resolve(a) for a in self.mm.get_appropriate_avg(None)]}
         self.option_avg = ctk.CTkOptionMenu(self.tab_MAGNETIZATION, values=list(available_averages.values()), command=self.init_settings_magview)
         self.option_avg.pack(pady=10, padx=10)
-        self.option_avg.set(available_averages[Average.resolve(self.mm._get_appropriate_avg())])
+        self.option_avg.set(available_averages[Average.resolve(self.mm.get_appropriate_avg())])
         self.option_fill = ctk.CTkSwitch(self.tab_MAGNETIZATION, text="Fill", command=self.init_settings_magview)
         self.option_fill.pack(pady=10, padx=10)
         self.option_fill.select() # Set to 'on' by default
@@ -810,15 +820,15 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
 
         ## Tab 4: ENERGY
         self.tab_ENERGY = self.add(self.mode_to_name[MagnetizationView.DisplayMode.ENERGY])
-        self.name_to_energycomponent = {"Effective barrier": 'E_barrier', "Total energy": 'Total'}
-        valid_components = list(self.name_to_energycomponent.keys()) + [e.__class__.__name__ for e in self.mm._energies]
+        available_energies = ["E_barrier", "Total"]
+        valid_components = [self.magviewwidget.energy_names_readable[e] for e in available_energies]
+        valid_components += [e.__class__.__name__ for e in self.mm._energies]
         self.option_energy_component = ctk.CTkOptionMenu(self.tab_ENERGY, values=valid_components, command=self.init_settings_magview)
         self.option_energy_component.pack(pady=10, padx=10)
         self.option_energy_component.set('Total') # Set to 'Total' by default
         self.option_in_eV = ctk.CTkSwitch(self.tab_ENERGY, text="Energy in eV", command=self.init_settings_magview)
         self.option_in_eV.pack(pady=10, padx=10)
         self.option_in_eV.select() # Set to 'on' by default
-        # TODO: change option_subtract_barrier to multibutton with options: E: Zeeman, E: dipolar, (E: exchange), Total interaction energy, Effective barrier
 
         ## Tab 5: FIELD
         self.tab_FIELD = self.add(self.mode_to_name[MagnetizationView.DisplayMode.FIELD])
@@ -834,11 +844,12 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
     def init_settings_magview(self, *args, **kwargs): # Need *args to consistently use this in 'command' parameter of CTk widgets
         """ Call this once at the start, to synchronize the self.magviewwidget.settings with all the buttons in this tabview. """
         option_energy_component = self.option_energy_component.get()
+        name_to_energycomponent = {v: k for k, v in self.magviewwidget.energy_names_readable.items()} # e.g. 'Total Energy' -> 'Total'
         settings = MagnetizationView.ViewSettings(
             avg=self.option_avg.get(),
             fill=self.option_fill.get(),
             color_quiver=self.option_color_quiver.get(),
-            energy_component=self.name_to_energycomponent.get(option_energy_component, option_energy_component),
+            energy_component=name_to_energycomponent.get(option_energy_component, option_energy_component),
             in_eV=self.option_in_eV.get(),
             field_type=self.option_field_type.get()
         )
@@ -852,7 +863,7 @@ class ASISettingsFrame(ctk.CTkFrame):
         t_max: float = 1.
         attempt_freq: float = 1e10
         Q: float = 0.05
-        # TODO: choose grid selection method in Glauber
+        # TODO: allow choosing grid selection method in Glauber
 
         def __post_init__(self):
             self.UPDATE_SCHEME = str(self.UPDATE_SCHEME)

@@ -33,7 +33,7 @@ def plot2Dsweep(summary_file, save=True, plot=True, title=None,
     ## PLOTTING
     cmap = colormaps['viridis'].copy()
     # cmap.set_under(color='black')
-    hotspice.plottools.init_fonts()
+    hotspice.plottools.init_style()
     fig = plt.figure(figsize=(10, 4))
 
     if transform_x is not None: x_vals = transform_x(x_vals)

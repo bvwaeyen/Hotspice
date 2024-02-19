@@ -16,9 +16,9 @@ where `hotspice310` is the name of the new environment (because it uses Python 3
 
 ### CuPy
 
-Hotspice relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
+*Note that CuPy will not function properly on systems without CUDA support. On such systems, Hotspice can still be used by only using the CPU as shown in [choosing between GPU or CPU](#choosing-between-gpu-or-cpu).*
 
-Note that CuPy will not function properly on systems without CUDA support. On such systems, Hotspice can still be used by using the CPU as shown in [choosing between GPU or CPU](#choosing-between-gpu-or-cpu).
+Hotspice relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
 
 To [install CuPy](https://docs.cupy.dev/en/stable/install.html) separately, the easiest method is likely to use the following `conda` command, as this automatically installs the appropriate version of the CUDA toolkit:
 
@@ -99,6 +99,13 @@ import hotspice # Only import AFTER setting 'HOTSPICE_USE_GPU'!
 
 *Note that the CPU/GPU choice must be made **BEFORE** the `import hotspice` statement* (and can thus be made only once)! <sub><sup>This is because behind-the-scenes, this choice determines which modules are imported by hotspice (either NumPy or CuPy), and it is not possible to re-assign these without significant runtime issues.</sup></sub>
 
+## GUI
+
+A graphical user interface is available for the user to interact with the ASI. The state of the ASI can be displayed in several ways (magnetization, domains, each energy component separately or total energy, effective energy barrier, and various spatially resolved parameters like temperature, anisotropy and magnetic moment).
+The ASI can be changed in realtime using the usual update schemes and initializations, or by directly clicking on the ASI.
+
+![Screenshot of GUI for a Pinwheel ASI with various domains.](./figures/GUI_Pinwheel_squarefour.PNG)
+
 ## Available spin ices
 
 Several predefined geometries are available in hotspice.
@@ -110,10 +117,10 @@ They all follow the pattern `hotspice.ASI.<class>(a, n, nx=None, ny=None, **kwar
 | Class | Lattice | Parameters |
 |---|:---:|---|
 | `IP_Ising` | <img src="./figures/ASI_lattices/IP_Ising_8x8.png" alt="IP_Ising_8x8" width="200"/> | `a` is the distance between nearest neighbors. The occupation is full. |
-| `IP_Square` | <img src="./figures/ASI_lattices/IP_Square_5x5.png" alt="IP_Square_5x5" width="200"/> | `a` is the side length of a square, i.e. the side length of a unit cell. The occupation is 1/2. |
-| `IP_Pinwheel` | <img src="./figures/ASI_lattices/IP_Pinwheel_5x5.png" alt="IP_Pinwheel_5x5" width="200"/> | Same as `IP_Square`, but with the easy axis of each magnet rotated 45°. |
-| `IP_SquareDiamond` | <img src="./figures/ASI_lattices/IP_SquareDiamond_4.5x4.5.png" alt="IP_SquareDiamond_4.5x4.5" width="200"/> | Same as `IP_Square`, but the whole grid is rotated 45°, yielding different edges. The occupation is 1. |
-| `IP_PinwheelDiamond` | <img src="./figures/ASI_lattices/IP_PinwheelDiamond_4.5x4.5.png" alt="IP_PinwheelDiamond_4.5x4.5" width="200"/> | Same as `IP_SquareDiamond`, but with the easy axis of each magnet rotated 45°. |
+| `IP_Square` or `IP_Square_Closed` | <img src="./figures/ASI_lattices/IP_Square_5x5.png" alt="IP_Square_5x5" width="200"/> | `a` is the side length of a square, i.e. the side length of a unit cell. The occupation is 1/2. |
+| `IP_Square_Open` | <img src="./figures/ASI_lattices/IP_Square_Open_4.5x4.5.png" alt="IP_Square_Open_4.5x4.5" width="200"/> | Same as `IP_Square`, but with different edges, because the grid as a whole is rotated 45°. The occupation is 1. |
+| `IP_Pinwheel` or `IP_Pinwheel_Diamond` | <img src="./figures/ASI_lattices/IP_Pinwheel_5x5.png" alt="IP_Pinwheel_5x5" width="200"/> | Same as `IP_Square`, but with the easy axis of each magnet rotated 45°. |
+| `IP_Pinwheel_LuckyKnot` | <img src="./figures/ASI_lattices/IP_Pinwheel_LuckyKnot_4.5x4.5.png" alt="IP_Pinwheel_LuckyKnot_4.5x4.5" width="200"/> | Same as `IP_Square_Open`, but with each magnet rotated 45°. |
 | `IP_Kagome` | <img src="./figures/ASI_lattices/IP_Kagome_5x3.png" alt="IP_Kagome_5x3" width="200"/> | `a` is the distance between opposing edges of a hexagon. The occupation is 3/8. |
 | `IP_Triangle` | <img src="./figures/ASI_lattices/IP_Triangle_5x3.png" alt="IP_Triangle_5x3" width="200"/> | Same as `IP_Kagome`, but with all magnets rotated 90°. |
 

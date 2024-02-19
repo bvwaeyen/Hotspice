@@ -67,8 +67,10 @@ for i in range(N_PARALLEL_JOBS): q.put(i)
 
 ## Copy input file to prevent changes during runtime
 outdir = os.path.abspath(args.outdir) + (timestamp := hotspice.utils.timestamp())
+if not os.path.exists(outdir):
+    os.makedirs(outdir, exist_ok=True)
+    print(f"Created output directory '{outdir}'")
 copied_script_path = os.path.join(outdir, f"{os.path.splitext(os.path.basename(args.script_path))[0]}_{timestamp}.py")
-if not os.path.exists(outdir): os.makedirs(outdir, exist_ok=True)
 shutil.copy(args.script_path, copied_script_path)
 
 ## Create some global variables/functions for the entire sweep
@@ -108,7 +110,7 @@ with open(os.path.abspath(os.path.join(outdir, "README.txt")), 'w') as readme:
 
 if len(failed):
     hotspice.utils.log(f"Failed sweep iterations (zero-indexed): {failed}", style='issue', show_device=False)
-else:
+elif len(iterations) == len(sweep):
     hotspice.utils.log(f"Sweep successfully finished. Summarizing results...", style='success', show_device=False)
     try:
         subprocess.run(cmd := ["python", copied_script_path, '-o', outdir], check=True) # To summarize the sweep if all went well

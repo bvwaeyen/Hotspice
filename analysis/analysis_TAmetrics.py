@@ -59,7 +59,7 @@ def analysis_TAmetrics_Nk_plot(df: pd.DataFrame, save=False, show=True):
     MC_grid = df['MC'].values.reshape(-1, k_vals)
     CP_grid = df['CP'].values.reshape(-1, k_vals)
 
-    hotspice.plottools.init_fonts()
+    hotspice.plottools.init_style()
     fig = plt.figure(figsize=(5, 5))
     if k_vals > 1: # use surface plot in 3D
         ax = fig.add_subplot(111, projection='3d')

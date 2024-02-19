@@ -28,10 +28,12 @@ from . import config
 if config.USE_GPU:
     import cupy as cp # Only ever try to import cupy if USE_GPU, otherwise we get premature ImportErrors on non-CUDA devices
     import cupy as xp
+    import cupy.typing as xpt
     import cupy.lib.stride_tricks as striding
 else:
     import numpy as cp # We need cp to be defined, so use numpy to be that placeholder as it is the closest module
     import numpy as xp
+    import numpy.typing as xpt
     import numpy.lib.stride_tricks as striding
 
 
@@ -146,7 +148,7 @@ magnitude_to_SIprefix = {v: k for k, v in SIprefix_to_magnitude.items()}
 def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f', 'p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']=''):
     """ Converts <n> (which already has SI prefix <unit_prefix> for whatever unit it is in)
         to a reasonable number with a new SI prefix. Returns a tuple with (the new scalar values, the new SI prefix).
-        Example: converting 0.0000238 ms would be appropriate_SIprefix(0.0000238, 'm') -> ()
+        Example: converting 0.0000238 ms would be appropriate_SIprefix(0.0000238, 'm') -> (23.8, 'n')
     """
     value = n.min() if isinstance(n, (np.ndarray, xp.ndarray)) else n # To avoid excessive commas, we take min()
     if unit_prefix not in SIprefix_to_magnitude.keys(): raise ValueError(f"'{unit_prefix}' is not a supported SI prefix.")
@@ -180,6 +182,15 @@ def shell():
     except (KeyboardInterrupt, SystemExit, EOFError):
         pass
 
+def get_newest_dir(parent: str|Path):
+    times = [(re.sub('.*?([0-9]*)$', r'\1', dirname)[-14:], dirname) for dirname, _, _ in os.walk(parent)]
+    times = [(t, dirname) for t, dirname in times if len(t) >= 14 and t.startswith("20")] # Timestamps in the 21st century
+    times.sort(key=lambda e: e[0])
+    if len(times) == 0: return None
+    time, dirname = times[-1] # The most recent directory
+    # time = datetime.strptime(time, r"%Y%m%d%H%M%S")
+    return os.path.abspath(dirname)
+
 
 ## GUI
 def bresenham(start, end):
@@ -205,7 +216,7 @@ def bresenham(start, end):
 
 
 ## CONVERSION
-Field = TypeVar("Field", int, float, list, np.ndarray, xp.ndarray) # Every type that can be parsed by as_2D_array()
+Field = TypeVar("Field", int, float, list, np.ndarray, xpt.NDArray) # Every type that can be parsed by as_2D_array()
 def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
     """ Converts <value> to a 2D array of shape <shape>. If <value> is scalar, the returned
         array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
@@ -270,34 +281,35 @@ def timestamp():
 
 
 ## MULTI-GPU UTILITIES
-def run_script(script_name, args=None):
+def run_script(script_name, args=None, repeat: int = 1):
     """ Runs the script <script_name> located in the hotspice/scripts directory.
         Any arguments for the script can be passed as a list to <args>.
     """
-    script_name = script_name.strip()
-    if not os.path.splitext(script_name)[1]: script_name += '.py'
-    path = Path(__file__).parent / "scripts" / script_name
-    if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
+    for _ in range(repeat):
+        script_name = script_name.strip()
+        if not os.path.splitext(script_name)[1]: script_name += '.py'
+        path = Path(__file__).parent / "scripts" / script_name
+        if not os.path.exists(path): raise FileNotFoundError(f"No script with name '{script_name}' was found.")
 
-    args = [str(arg) for arg in args]
-    command = ["python", str(path)] + list(args)
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError:
-        warnings.warn(dedent(f"""
-            {colorama.Fore.LIGHTRED_EX}The script {script_name} with arguments {args} could not be run successfully.
-            See a possible error message above for more info. The full command used was:
-            {colorama.Fore.LIGHTYELLOW_EX}{' '.join(command)}{colorama.Style.RESET_ALL}
-        """), stacklevel=2)
+        args = [str(arg) for arg in args]
+        command = ["python", str(path)] + list(args)
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError:
+            warnings.warn(dedent(f"""
+                {colorama.Fore.LIGHTRED_EX}The script {script_name} with arguments {args} could not be run successfully.
+                See a possible error message above for more info. The full command used was:
+                {colorama.Fore.LIGHTYELLOW_EX}{' '.join(command)}{colorama.Style.RESET_ALL}
+            """), stacklevel=2)
 
-def ParallelJobs(sweepscript_path, outdir: str = None, iterations: list = None, _ParallelJobs_script_name: str = "ParallelJobs"):
+def ParallelJobs(sweepscript_path, outdir: str = None, iterations: list = None, repeat: int = 1, _ParallelJobs_script_name: str = "ParallelJobs"):
     """ Convenient wrapper around run_script() for the ParallelJobs.py script in particular. """
     args = [sweepscript_path]
     if outdir is not None:
         args += ['-o', outdir]
     if iterations is not None:
         args += ['-i'] + iterations
-    run_script(_ParallelJobs_script_name, args=args)
+    run_script(_ParallelJobs_script_name, args=args, repeat=repeat)
 
 def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = None, show_device=True):
     """ Can print <message> to console from subprocesses running on a specific GPU or thread.
@@ -332,7 +344,7 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
-def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None) -> str:
+def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None, copy_script: bool = True, outdir: str|Path = None) -> str:
     """ The most basic way to consistently save results of a simulation script. This can save the basic
         parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
         figure(s) as pdf, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
@@ -347,20 +359,21 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
     """
     # Make output directory
     script = Path(inspect.stack()[1].filename) # The caller script, i.e. the one where __name__ == "__main__"
-    outdir = script.parent / (script.stem + '.out') / timestamp()
-    outdir.mkdir(exist_ok=False, parents=True) # Make directory "caller_script.out/<timestamp>"
+    if outdir is None: outdir = script.parent / (script.stem + '.out') / timestamp()
+    Path(outdir).mkdir(exist_ok=True, parents=True) # Make directory "caller_script.out/<timestamp>"
     # Save information
-    shutil.copy2(script, os.path.join(outdir, 'script.py'))
-    json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)
-    pickle.dump(data, open(os.path.join(outdir, 'data.pkl'), 'wb')) #! Must be 'wb' because binary object
+    if copy_script: shutil.copy2(script, os.path.join(outdir, 'script.py'))
+    if parameters is not None: json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)
+    if data is not None: pickle.dump(data, open(os.path.join(outdir, 'data.pkl'), 'wb')) #! Must be 'wb' because binary object
     # Save figure(s)
-    if not isinstance(figures, Iterable): figures = [figures]
-    for i, fig in enumerate(figures):
-        fig.savefig(os.path.join(outdir, f'figure{i}.pdf' if len(figures) > 1 else 'figure.pdf'))
+    if figures is not None:
+        if not isinstance(figures, Iterable): figures = [figures]
+        for i, fig in enumerate(figures):
+            fig.savefig(os.path.join(outdir, f'figure{i}.pdf' if len(figures) > 1 else 'figure.pdf'))
     return outdir
 
 class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
-    def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None):
+    def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None, compact: bool = True):
         """ Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
             Constant columns in <df> are automatically moved to <constants>, and keys present
             in <constants> that are also columns in <df> are removed from <constants>.
@@ -372,11 +385,30 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
                 simulation, e.g. description, author, time... Some fields are automatically
                 generated if they are not present in the dictionary passed to <metadata>.
                 For more details, see the <self.metadata> docstring.
+            @param compact [bool] (False): If True, constant columns in <df> are moved to the <constants>.
         """
+        self._compact = compact
         self.df = df
         self.metadata = metadata
         self.constants = constants
-    
+
+    def compactify(self):
+        """ Moves constant columns in <self.df> to <self.constants>, and removes keys
+            from <self.constants> that are also columns in <self.df>, to prevent ambiguous duplicates.
+        """
+        if not hasattr(self, 'constants') or not hasattr(self, 'df'): return
+        # Move all constant columns in self.df to self.constants
+        for column in self.df:
+            if self.df[column].dtype == 'O': continue # We don't meddle with 'constant' objects of general type in the df.
+            is_constant = ~(self.df[column] != self.df[column].iloc[0]).any()
+            if is_constant:
+                self._constants[column] = self.df[column].iloc[0]
+                self._df = self._df.drop(columns=column)
+        # Remove constants from self.constants that are also column labels in self.df
+        for column in self.df.columns:
+            if column in self.constants.keys():
+                del self._constants[column]
+
     @staticmethod
     def get_simulation_metadata(basic_metadata_dict: dict = None, ignore_keys=()):
         """ Any keys present in <ignore_keys> will not be automatically added nor removed from <basic_metadata_dict>. """
@@ -436,6 +468,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
             - 'simulator': "Hotspice", just for clarity. Can include version number when applicable.
         """
         self._metadata = self.get_simulation_metadata(value)
+        self._check_consistency()
         assert isinstance(self._metadata, dict)
 
     @property
@@ -450,23 +483,10 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         assert isinstance(self._constants, dict)
 
     def _check_consistency(self):
-        """ Moves constant columns in <self.df> to <self.constants>, and removes keys
-            from <self.constants> that are also columns in <self.df>, to prevent ambiguous duplicates.
-            Checks if all keys in <self.constants> and <self.metadata> are strings;
+        """ Checks if all keys in <self.constants> and <self.metadata> are strings,
+            and compactifies this data if necessary and desired (i.e. if self._compact).
         """
-        if hasattr(self, 'constants') and hasattr(self, 'df'):
-            # Move all constant columns in self.df to self.constants
-            for column in self.df:
-                if self.df[column].dtype == 'O': continue # We don't meddle with 'constant' objects of general type in the df.
-                is_constant = ~(self.df[column] != self.df[column].iloc[0]).any()
-                if is_constant:
-                    self._constants[column] = self.df[column].iloc[0]
-                    self._df = self._df.drop(columns=column)
-            # Remove constants from self.constants that are also column labels in self.df
-            for column in self.df.columns:
-                if column in self.constants.keys():
-                    del self._constants[column]
-
+        if self._compact: self.compactify()
         if hasattr(self, 'constants'):
             for key in self.constants.keys():
                 if not isinstance(key, str): raise KeyError("Data.constants keys must be of type string.")

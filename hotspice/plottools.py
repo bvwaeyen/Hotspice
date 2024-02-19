@@ -9,6 +9,8 @@ import numpy as np
 
 from enum import Enum
 from matplotlib import cm, colormaps, colors, patches, widgets
+from matplotlib.axes import Axes
+from typing import Literal
 
 from .core import Magnets
 from .utils import asnumpy, J_to_eV, SIprefix_to_mul
@@ -37,22 +39,22 @@ class Average(Enum):
           self.mask = xp.asarray(mask, dtype='float')
     
     POINT = [[1]]
-    CROSS = [[0, 1, 0], # For Pinwheel and Square ASI
+    CROSS = [[0, 1, 0], # For IP_Pinwheel and IP_Square ASI
              [1, 0, 1],
              [0, 1, 0]]
     SQUARE = [[1, 1, 1], # Often not very useful, just the same as CROSS in most cases
               [1, 0, 1],
               [1, 1, 1]]
-    CROSSFOUR = [[0, 1, 0], # For PinwheelDiamond and SquareDiamond ASI
+    CROSSFOUR = [[0, 1, 0], # For IP_Pinwheel_LuckyKnot and IP_Square_Open ASI
                  [1, 4, 1],
                  [0, 1, 0]]
     SQUAREFOUR = [[1, 1, 1], # Because nearly all ASIs have cells with 4 neighbors, this can come in handy
                   [1, 4, 1],
                   [1, 1, 1]]
-    HEXAGON = [[0, 1, 0, 1, 0], # For Kagome ASI
+    HEXAGON = [[0, 1, 0, 1, 0], # For IP_Kagome ASI
                [1, 0, 0, 0, 1],
                [0, 1, 0, 1, 0]]
-    TRIANGLE = [[0, 1, 0], # For Triangle ASI
+    TRIANGLE = [[0, 1, 0], # For IP_Triangle ASI
                 [1, 0, 1],
                 [0, 1, 0]]
 
@@ -70,7 +72,7 @@ class Average(Enum):
                         return average
                 raise ValueError(f"Unsupported averaging mask: {avg}")
             case _ if avg: # If avg is not str() or Average(), but is still truthy
-                return Average.resolve(mm._get_appropriate_avg()) if mm is not None else Average.SQUARE
+                return Average.resolve(mm.get_appropriate_avg()) if mm is not None else Average.SQUARE
             case _: # If avg is falsy
                 return Average.POINT
 
@@ -191,6 +193,50 @@ def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=Fa
 def get_rgb(*args, **kwargs):
     return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
+
+def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None, mode: Literal['avg', 'quiver'] = 'quiver', avg: str = None):
+    """ Plots a nicely colored quiver/avg in `ax`, without any axis labels etc. """
+    if m is None: m = mm.m
+    cmap = colormaps['hsv']
+    if not mm.in_plane:
+        r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
+        r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
+        cdict = {'red': [[0.0, r0,  r0], # x, value_left, value_right
+                            [0.5, 0.0, 0.0],
+                            [1.0, r1,  r1]],
+                'green': [[0.0, g0,  g0],
+                            [0.5, 0.0, 0.0],
+                            [1.0, g1,  g1]],
+                'blue':  [[0.0, b0,  b0],
+                            [0.5, 0.0, 0.0],
+                            [1.0, b1,  b1]]}
+        cmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
+
+    match mode.strip().lower():
+        case 'quiver':
+            extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dy/2])
+            nonzero = mm.nonzero
+            if mm.in_plane:
+                mx, my = asnumpy(xp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(xp.multiply(m, mm.orientation[:,:,1])[nonzero])
+                ax.quiver(asnumpy(mm.xx[nonzero]), asnumpy(mm.yy[nonzero]), mx, my, color=cmap((np.arctan2(my, mx)/2/np.pi) % 1),
+                        pivot='mid', scale=1.1/mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
+            else:
+                ax.scatter(asnumpy(mm.xx[nonzero]), asnumpy(mm.yy[nonzero]), color=cmap(m))
+        case 'avg':
+            avg = Average.resolve(True if avg is None else avg, mm)
+            extent = _get_averaged_extent(mm, avg) # List comp to convert to micrometre
+            im = get_rgb(mm, m=m, avg=avg, fill=True)
+            if mm.in_plane:
+                ax.imshow(im, cmap=cmap, origin='lower', vmin=0, vmax=2*math.pi,
+                          extent=extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
+            else:
+                ax.imshow(im, cmap=cmap, origin='lower', vmin=-1, vmax=1,
+                          extent=extent, interpolation='antialiased', interpolation_stage='rgba')
+    ax.set_aspect('equal')
+    ax.set_xlim(extent[:2])
+    ax.set_ylim(extent[2:])
+
+
 def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, unit='µ', figure=None, subtract_barrier=False, in_eV=True, **figparams):
     """ Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
         the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
@@ -216,7 +262,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
     figparams.setdefault('fontsize_colorbar', 10)
     figparams.setdefault('fontsize_axes', 10)
     figparams.setdefault('text_averaging', True)
-    init_fonts(small=figparams['fontsize_axes'])
+    init_style(small=figparams['fontsize_axes'])
     if m is None: m = mm.m
     if mm.in_plane:
         show_quiver = mm.n < 1e5 or overlay_quiver # Quiver becomes very slow for more than 100k quivers, so just dont show it then
@@ -444,7 +490,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
     return asnumpy(result)
 
 
-def init_fonts(backend=True, small=10, medium=11, large=12):
+def init_style(backend=True, small=10, medium=11, large=12, style: Literal['default', 'tableau-colorblind10', 'fivethirtyeight'] = "tableau-colorblind10"):
     """ Sets various parameters for consistent plotting across all Hotspice scripts.
         This should be called before instantiating any subplots.
         This should not be called directly by any function in hotspice.plottools itself,
@@ -470,7 +516,13 @@ def init_fonts(backend=True, small=10, medium=11, large=12):
     plt.rc('ytick', labelsize=small)    # fontsize of the tick labels
     plt.rc('legend', fontsize=small)    # legend fontsize
     plt.rc('figure', titlesize=large)  # fontsize of the figure title
+    
+    # Use appropriate style (default is good for colorblindness)
+    plt.style.use(style)
 
+def colorcycle():
+    """ Returns a list of matplotlib colors that I can actually see (C2 and C3 look basically identical). """
+    return ['C0', 'C1', 'C2', 'C6', 'C5', 'C9', 'C3', 'C4', 'C8', 'C7'] # Blue, orange, green, pink, light blue (those are easily distinguishable) and then continue with the cycle
 
 def init_interactive():
     """ Call this once before starting to build an interactive (i.e. real-time updatable) plot. """

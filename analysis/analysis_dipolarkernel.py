@@ -62,7 +62,7 @@ def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n:int=10000, L:int=
     print(f"max diff: {xp.max(xp.abs(E_diff[mm.occupation != 0]))}")
     
     cmap = colormaps['viridis'].copy()
-    hotspice.plottools.init_fonts()
+    hotspice.plottools.init_style()
     fig = plt.figure(figsize=(8, 7))
 
     # PLOT 1: THE RECALCULATED ENERGY PROFILE
