@@ -589,18 +589,20 @@ class Magnets(ABC):
         with np.errstate(invalid='ignore', divide='ignore'):
             delta_E = self.switch_energy(idx)*(self._occupation_inf if idx is None else self._occupation_inf[idx[0], idx[1]])
             E = -delta_E/2 # Don't use self.E, because that would need additional indexing
-            E_highest_state = xp.abs(E)
             E_B = self.E_B if idx is None else self.E_B[idx[0], idx[1]]
 
         if not self.USE_PERP_ENERGY: # Use simplified calculation, taken from old Néel/Glauber
-            # barrier = xp.maximum(delta_E, E_B + delta_E/2) # THIS FORMULA IS FULLY BACKWARDS COMPATIBLE (pre-2024), BUT IS WRONG (in a sense) FOR E_BARRIER < 0
-            barrier = xp.where(E_B > E_highest_state, E_B - E, delta_E) # This formula correctly accounts for the situation where energy barrier disappears (though one can argue that this is compensating too much since the curvature at the unstable state will not be as large as this)
+            # THERE ARE TWO CHOICES OF FORMULA, DEPENDING ON THE INTERPRETATION OF THE CASE WHERE THE ENERGY BARRIER DISAPPEARS:
+            barrier = xp.maximum(delta_E, E_B - E) # THIS FORMULA IS FULLY BACKWARDS COMPATIBLE (pre-2024), and in a sense uses the 'curvature' of the energy landscape for cases where it is <0
+            # barrier = xp.where(E_B > E_highest_state, E_B - E, delta_E) # This formula has a discontinuity as soon as barrier < 0, because then the opposite state is used (which is always suddenly much lower), thus ensuring that barrierless magnets will always switch before magnets with even the tiniest barrier.
             return barrier if min_only else (barrier, barrier)
         
         E_perp = self.perp_energy(idx) # Better than self.E_perp because this only calculates for relevant idx
         E_total_perp1, E_total_perp2 = E_B + E_perp, E_B - E_perp
-        E_barrier_1 = xp.where(E_total_perp1 > E_highest_state, E_total_perp1 - E, delta_E) # If energy 'barrier' is actually a pit, then take the switch_energy as the 'barrier'. This is allowed because,
-        E_barrier_2 = xp.where(E_total_perp2 > E_highest_state, E_total_perp2 - E, delta_E) # statistically speaking, the magnet will be canted to the lowest energy state most of the time.
+        E_barrier_1 = xp.maximum(delta_E, E_total_perp1 - E)
+        E_barrier_2 = xp.maximum(delta_E, E_total_perp2 - E)
+        # E_barrier_1 = xp.where(E_total_perp1 > E_highest_state, E_total_perp1 - E, delta_E) # If energy 'barrier' is actually a pit, then take the switch_energy as the 'barrier'. This is allowed because,
+        # E_barrier_2 = xp.where(E_total_perp2 > E_highest_state, E_total_perp2 - E, delta_E) # statistically speaking, the magnet will be canted to the lowest energy state most of the time.
         return xp.minimum(E_barrier_1, E_barrier_2) if min_only else (E_barrier_1, E_barrier_2)
 
 

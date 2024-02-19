@@ -21,7 +21,7 @@ def plot(E_B, ext_field, angle, verbose=True):
     maxima = np.where((y > np.roll(y, 1)) & (y > np.roll(y, -1)))
     minima = np.where((y < np.roll(y, 1)) & (y < np.roll(y, -1)))
 
-    p,  = plt.plot(x, y, label=f"{E_B} + {ext_field} ({angle*180/np.pi:.0f}°)")
+    p,  = plt.plot(x, y, label=f"{E_B}eV + {ext_field}T ({angle*180/np.pi:.0f}°)")
     plt.scatter(np.concatenate([x[maxima], x[minima]]), np.concatenate([y[maxima], y[minima]]), color=p.get_color())
     plt.axvline(angle, linewidth=1, color=p.get_color())
 
