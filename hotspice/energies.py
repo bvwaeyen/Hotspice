@@ -188,7 +188,7 @@ class DipolarEnergy(Energy):
             unitcell_o = self.mm.occupation[:self.unitcell.y,:self.unitcell.x]
             toolargematrix_o = xp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
         # Now comes the part where we start splitting the different cells in the unit cells
-        self.kernel_unitcell_indices = -xp.ones((self.unitcell.y, self.unitcell.x), dtype=int) # unitcell (y,x) -> kernel (i)
+        self.kernel_unitcell_indices = -xp.ones((self.unitcell.y, self.unitcell.x), dtype=int) # unitcell (y,x) -> kernel (i). If no magnet present, the kernel index is -1 to indicate this.
         self.kernel_unitcell = []
         self.kernel_perpself_unitcell = [] # Initialize perp regardless of mm.USE_PERP_ENERGY, it only takes some unnecessary memory if it is not needed, initialization is very fast anyway
         self.kernel_perpother_unitcell = []
@@ -279,10 +279,10 @@ class DipolarEnergy(Energy):
                     partial_m = xp.zeros_like(self.mm.m)
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
 
-                    kernel = self.kernel_unitcell[n,:,:]
+                    kernel = self.kernel_unitcell[n,::-1,::-1]
                     total_energy += partial_m*signal.convolve2d(kernel, mmoment, mode='valid') # Could probably be done faster by only convolving the nonzero partial_m elements but this is already fast enough anyway and such slicing is also not free
                     if self.mm.USE_PERP_ENERGY:
-                        kernel_perpself = self.kernel_perpself_unitcell[n,:,:]
+                        kernel_perpself = self.kernel_perpself_unitcell[n,::-1,::-1]
                         total_energy_perp += partial_m*signal.convolve2d(kernel_perpself, mmoment, mode='valid') # NOTE: partial_m is not strictly necessary if 'perependicular' does not necessarily mean '90° counterclockwise'
         self.E = self.prefactor*self.mm.moment*total_energy
         if self.mm.USE_PERP_ENERGY: self.E_perp = self.prefactor*self.mm.moment*total_energy_perp
