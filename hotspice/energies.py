@@ -270,6 +270,7 @@ class DipolarEnergy(Energy):
     def update(self):
         total_energy = xp.zeros_like(self.mm.m)
         if self.mm.USE_PERP_ENERGY: total_energy_perp = xp.zeros_like(self.mm.m)
+        mmoment = self.mm.m*self.mm.moment
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
                 if (n := self.kernel_unitcell_indices[y,x]) < 0:
@@ -279,12 +280,12 @@ class DipolarEnergy(Energy):
                     partial_m[y::self.unitcell.y, x::self.unitcell.x] = self.mm.m[y::self.unitcell.y, x::self.unitcell.x]
 
                     kernel = self.kernel_unitcell[n,:,:]
-                    total_energy += partial_m*signal.convolve2d(kernel, self.mm.m, mode='valid') # Could probably be done faster by only convolving the nonzero partial_m elements but this is already fast enough anyway and such slicing is also not free
+                    total_energy += partial_m*signal.convolve2d(kernel, mmoment, mode='valid') # Could probably be done faster by only convolving the nonzero partial_m elements but this is already fast enough anyway and such slicing is also not free
                     if self.mm.USE_PERP_ENERGY:
                         kernel_perpself = self.kernel_perpself_unitcell[n,:,:]
-                        total_energy_perp += partial_m*signal.convolve2d(kernel_perpself, self.mm.m, mode='valid') # NOTE: partial_m is not strictly necessary if 'perependicular' does not necessarily mean '90° counterclockwise'
-        self.E = self.prefactor*self.mm._momentSq*total_energy # TODO: shouldn't we be multiplying with the moment of magnet 1 and moment of magnet 2 instead of (moment of magnet 1)²? (and fix this for all occurrences of _momentSq, I think _momentSq still stems from an era when _moment was a constant throughout the system.)
-        if self.mm.USE_PERP_ENERGY: self.E_perp = self.prefactor*self.mm._momentSq*total_energy_perp
+                        total_energy_perp += partial_m*signal.convolve2d(kernel_perpself, mmoment, mode='valid') # NOTE: partial_m is not strictly necessary if 'perependicular' does not necessarily mean '90° counterclockwise'
+        self.E = self.prefactor*self.mm.moment*total_energy
+        if self.mm.USE_PERP_ENERGY: self.E_perp = self.prefactor*self.mm.moment*total_energy_perp
 
     def update_single(self, index2D):
         #! Call this AFTER self.mm.m[index2D] has been updated!
@@ -297,17 +298,19 @@ class DipolarEnergy(Energy):
         if n < 0: return # Then there is no magnet there, so nothing happens
         # Multiply with the magnetization
         usefulkernel = self.kernel_unitcell[n,self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-        interaction = self.prefactor*self.mm.m[y, x]*xp.multiply(self.mm.m, usefulkernel)*self.mm._momentSq # TODO: shouldn't we be multiplying with the moment of magnet 1 and moment of magnet 2 instead of (moment of magnet 1)²?
+        mmoment = self.mm.m*self.mm.moment
+        interaction = self.prefactor*mmoment[y, x]*xp.multiply(mmoment, usefulkernel) # TODO: shouldn't we be multiplying with the moment of magnet 1 and moment of magnet 2 instead of (moment of magnet 1)²?
         self.E += 2*interaction
         self.E[y, x] *= -1 # This magnet switched, so all its interactions are inverted
         if self.mm.USE_PERP_ENERGY:
             usefulkernel_perp = self.kernel_perpother_unitcell[n,self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-            interaction_perp = self.prefactor*self.mm.m[y, x]*xp.multiply(self.mm.m, usefulkernel_perp)*self.mm._momentSq
+            interaction_perp = self.prefactor*mmoment[y, x]*xp.multiply(mmoment, usefulkernel_perp)
             self.E_perp += 2*interaction_perp
             self.E_perp[y, x] *= -1 # NOTE: not strictly necessary if 'perpendicular' does not necessarily mean '90° counterclockwise'
 
     def update_multiple(self, indices2D):
         self.E[indices2D[0], indices2D[1]] *= -1
+        mmoment = self.mm.m*self.mm.moment
         if self.mm.USE_PERP_ENERGY: self.E_perp[indices2D[0], indices2D[1]] *= -1 # NOTE: not strictly necessary if 'perpendicular' does not necessarily mean '90° counterclockwise'
         indices2D_unitcell_raveled = (indices2D[1] % self.unitcell.x) + (indices2D[0] % self.unitcell.y)*self.unitcell.x
         binned_unitcell_raveled = xp.bincount(indices2D_unitcell_raveled)
@@ -334,12 +337,12 @@ class DipolarEnergy(Energy):
                 if self.mm.USE_PERP_ENERGY: convolvedkernel_perp = xp.zeros_like(self.mm.m)
                 for j in range(indices2D_here.shape[1]): # Here goes the manual convolution
                     y, x = indices2D_here[0,j], indices2D_here[1,j]
-                    convolvedkernel += self.mm.m[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-                    if self.mm.USE_PERP_ENERGY: convolvedkernel_perp += self.mm.m[y,x]*kernel_perp[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
-            interaction = self.prefactor*xp.multiply(self.mm.m*self.mm._momentSq, convolvedkernel)
+                    convolvedkernel += mmoment[y,x]*kernel[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
+                    if self.mm.USE_PERP_ENERGY: convolvedkernel_perp += mmoment[y,x]*kernel_perp[self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
+            interaction = self.prefactor*xp.multiply(mmoment, convolvedkernel)
             self.E += 2*interaction
             if self.mm.USE_PERP_ENERGY:
-                interaction_perp = self.prefactor*xp.multiply(self.mm.m*self.mm._momentSq, convolvedkernel_perp)
+                interaction_perp = self.prefactor*xp.multiply(mmoment, convolvedkernel_perp)
                 self.E_perp += 2*interaction_perp
 
     @property
