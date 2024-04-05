@@ -194,27 +194,32 @@ def get_rgb(*args, **kwargs):
     return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
 
-def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None, mode: Literal['avg', 'quiver'] = 'quiver', avg: str = None):
+def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None,
+                   mode: Literal['avg', 'quiver'] = 'quiver', avg: str = None, cmap: str = None, scale='µ'):
     """ Plots a nicely colored quiver/avg in `ax`, without any axis labels etc. """
     if m is None: m = mm.m
-    cmap = colormaps['hsv']
-    if not mm.in_plane:
-        r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
-        r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
-        cdict = {'red': [[0.0, r0,  r0], # x, value_left, value_right
-                            [0.5, 0.0, 0.0],
-                            [1.0, r1,  r1]],
-                'green': [[0.0, g0,  g0],
-                            [0.5, 0.0, 0.0],
-                            [1.0, g1,  g1]],
-                'blue':  [[0.0, b0,  b0],
-                            [0.5, 0.0, 0.0],
-                            [1.0, b1,  b1]]}
-        cmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
+    if cmap is None:
+        cmap = colormaps['hsv']
+        if not mm.in_plane:
+            r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
+            r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
+            cdict = {'red': [[0.0, r0,  r0], # x, value_left, value_right
+                                [0.5, 0.0, 0.0],
+                                [1.0, r1,  r1]],
+                    'green': [[0.0, g0,  g0],
+                                [0.5, 0.0, 0.0],
+                                [1.0, g1,  g1]],
+                    'blue':  [[0.0, b0,  b0],
+                                [0.5, 0.0, 0.0],
+                                [1.0, b1,  b1]]}
+            cmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
+    else:
+        cmap = colormaps[cmap]
 
+    scale = SIprefix_to_mul(scale)
     match mode.strip().lower():
         case 'quiver':
-            extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dy/2])
+            extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dy/2])/scale
             nonzero = mm.nonzero
             if mm.in_plane:
                 mx, my = asnumpy(xp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(xp.multiply(m, mm.orientation[:,:,1])[nonzero])
@@ -224,7 +229,7 @@ def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None, mode: Literal['a
                 ax.scatter(asnumpy(mm.xx[nonzero]), asnumpy(mm.yy[nonzero]), color=cmap(m))
         case 'avg':
             avg = Average.resolve(True if avg is None else avg, mm)
-            extent = _get_averaged_extent(mm, avg) # List comp to convert to micrometre
+            extent = _get_averaged_extent(mm, avg)/scale # List comp to convert to micrometre
             im = get_rgb(mm, m=m, avg=avg, fill=True)
             if mm.in_plane:
                 ax.imshow(im, cmap=cmap, origin='lower', vmin=0, vmax=2*math.pi,
@@ -490,7 +495,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
     return asnumpy(result)
 
 
-def init_style(backend=True, small=10, medium=11, large=12, style: Literal['default', 'tableau-colorblind10', 'fivethirtyeight'] = "tableau-colorblind10"):
+def init_style(backend=True, small=10, medium=11, large=12, style: Literal['default', 'tableau-colorblind10', 'fivethirtyeight', 'snooker', 'rainbow'] = "tableau-colorblind10"):
     """ Sets various parameters for consistent plotting across all Hotspice scripts.
         This should be called before instantiating any subplots.
         This should not be called directly by any function in hotspice.plottools itself,
@@ -518,7 +523,12 @@ def init_style(backend=True, small=10, medium=11, large=12, style: Literal['defa
     plt.rc('figure', titlesize=large)  # fontsize of the figure title
     
     # Use appropriate style (default is good for colorblindness)
-    plt.style.use(style)
+    match style:
+        case 'default' | 'tableau-colorblind10' | 'fivethirtyeight':
+            plt.style.use(style)
+        case 'snooker':
+            colors = ["red", "yellow", "green", "brown", "blue", "pink", "black"]
+            matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=colors)
 
 def colorcycle():
     """ Returns a list of matplotlib colors that I can actually see (C2 and C3 look basically identical). """

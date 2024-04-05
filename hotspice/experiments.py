@@ -352,7 +352,8 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
             data.df[metric_key] = all_metrics[i].reshape(-1)
 
         ## PLOTTING
-        cmap = colormaps['viridis' if colormap is None else colormap].copy()
+        if colormap is None: colormap = 'viridis'
+        cmap = colormaps[colormap].copy()
         # cmap.set_under(color='black')
         init_style()
 
@@ -375,7 +376,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         # Plot the metrics
         fig = plt.figure(figsize=(3.3*n, 3))
         axes = []
-        label_x = name_x if unit_x is None else f"{name_x} [{unit_x}]"
+        label_x = name_x if unit_x is None else f"{name_x} ({unit_x})"
         if names_z is None:
             names_z = [None]*n
         elif isinstance(names_z, str): # Just add it at the end
@@ -383,7 +384,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         else:
             names_z = names_z + [None]*(n - len(names_z))
         if is_2D:
-            label_y = name_y if unit_y is None else f"{name_y} [{unit_y}]"
+            label_y = name_y if unit_y is None else f"{name_y} ({unit_y})"
             X, Y = np.meshgrid(x_lims, y_lims)
             for i, params in enumerate(metrics_dict.values()):
                 Z = np.transpose(all_metrics[i])
@@ -435,9 +436,8 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
                 save_path = os.path.splitext(os.path.join(os.path.dirname(summary_files[0]), "averaged"))[0]
             else:
                 save_path = os.path.splitext(summary_files[0])[0]
-            save_plot(save_path, ext='.pdf')
-            save_plot(save_path, ext='.png', dpi=dpi) # Default dpi is 100, so save at higher res
-            save_plot(save_path, ext='.svg')
+            for ext in ('.pdf', '.png', '.svg'):
+                save_plot(save_path, ext=ext, dpi=dpi) # Default dpi is 100, so save at higher res
         if plot:
             plt.show()
         plt.close()

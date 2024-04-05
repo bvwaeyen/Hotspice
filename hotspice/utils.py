@@ -145,9 +145,10 @@ def SIprefix_to_mul(unit: Literal['f', 'p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 
     return 10**SIprefix_to_magnitude[unit]
 
 magnitude_to_SIprefix = {v: k for k, v in SIprefix_to_magnitude.items()}
-def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f', 'p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']=''):
-    """ Converts <n> (which already has SI prefix <unit_prefix> for whatever unit it is in)
+def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f', 'p', 'n', 'µ', 'm', 'c', 'd', '', 'da', 'h', 'k', 'M', 'G', 'T']='', only_thousands=True):
+    """ Converts `n` (which already has SI prefix `unit_prefix` for whatever unit it is in)
         to a reasonable number with a new SI prefix. Returns a tuple with (the new scalar values, the new SI prefix).
+        If `only_thousands` is True (default), then centi, deci, deca and hecto are not used.
         Example: converting 0.0000238 ms would be appropriate_SIprefix(0.0000238, 'm') -> (23.8, 'n')
     """
     value = n.min() if isinstance(n, (np.ndarray, xp.ndarray)) else n # To avoid excessive commas, we take min()
@@ -155,8 +156,9 @@ def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f
     offset_magnitude = SIprefix_to_magnitude[unit_prefix]
     nearest_magnitude = (round(np.log10(abs(value))) if value != 0 else -np.inf) + offset_magnitude
     nearest_magnitude = np.clip(nearest_magnitude, min(SIprefix_to_magnitude.values()), max(SIprefix_to_magnitude.values())) # Make sure it is in the known range
-    # used_magnitude = -100 # placeholder
-    for supported_magnitude in sorted(magnitude_to_SIprefix.keys()):
+    supported_magnitudes = magnitude_to_SIprefix.keys()
+    if only_thousands: supported_magnitudes = [mag for mag in supported_magnitudes if (mag % 3) == 0]
+    for supported_magnitude in sorted(supported_magnitudes):
         if supported_magnitude <= nearest_magnitude: used_magnitude = supported_magnitude
     return (n/10**(used_magnitude - offset_magnitude), magnitude_to_SIprefix[used_magnitude])
 
@@ -369,7 +371,8 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
     if figures is not None:
         if not isinstance(figures, Iterable): figures = [figures]
         for i, fig in enumerate(figures):
-            fig.savefig(os.path.join(outdir, f'figure{i}.pdf' if len(figures) > 1 else 'figure.pdf'))
+            for ext in ('.pdf', '.png', '.svg'):
+                fig.savefig(os.path.join(outdir, f'figure{i if len(figures) > 1 else ""}') + ext, dpi=600)
     return outdir
 
 class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
