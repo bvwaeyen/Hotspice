@@ -323,7 +323,7 @@ class DipolarEnergy(Energy):
             if indices2D_here.shape[1] > self.mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF:
                 ### EITHER WE DO THIS (CONVOLUTION) (starts to be better at approx. 40 simultaneous switches for 41x41 kernel, taking into account the need for complete recalculation every <something> steps, so especially for large T this is good)
                 switched_field = xp.zeros_like(self.mm.m)
-                switched_field[indices2D_here[0], indices2D_here[1]] = self.mm.m[indices2D_here[0], indices2D_here[1]]
+                switched_field[indices2D_here[0], indices2D_here[1]] = mmoment[indices2D_here[0], indices2D_here[1]]
                 k = self.mm.params.REDUCED_KERNEL_SIZE
                 kx, ky = min(k, self.mm.nx-1), min(k, self.mm.ny-1)
                 usefulkernel = kernel[self.mm.ny-1-ky:self.mm.ny+ky, self.mm.nx-1-kx:self.mm.nx+kx] if k else kernel
