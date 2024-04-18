@@ -378,6 +378,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         avg: Average|str = Average.POINT
         fill: bool = True
         color_quiver: bool = True
+        quiver_qty: Literal['spin', 'H_eff'] = 'spin'
         subtract_barrier: bool = True
         energy_component: Literal['Total', 'E_barrier']|str = 'Total'
         in_eV: bool = True
@@ -387,6 +388,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
             self.avg = Average.resolve(self.avg)
             self.fill = bool(self.fill)
             self.color_quiver = bool(self.color_quiver)
+            self.quiver_qty = str(self.quiver_qty)
             self.subtract_barrier = bool(self.subtract_barrier)
             self.energy_component = str(self.energy_component)
             self.in_eV = bool(self.in_eV)
@@ -638,7 +640,6 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
             case self.DisplayMode.QUIVER:
                 if not self.mm.in_plane: raise ValueError("Can only use DisplayMode.QUIVER for in-plane ASI.") # TODO: draw scatter plot for OOP ASI
-                self.ax.set_title(r"Magnetization $\overrightarrow{m}$")
                 self.content = self.ax.quiver(asnumpy(self.mm.xx[self.mm.nonzero])/self.unit_axes_factor, asnumpy(self.mm.yy[self.mm.nonzero])/self.unit_axes_factor,
                                            np.ones(self.mm.n), np.ones(self.mm.n), color=self.cmap_hsv(np.ones(self.mm.n)), pivot='mid',
                                            scale=1.1/self.mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
@@ -700,12 +701,23 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         self.content.set_data(get_rgb(self.mm, m=self.mm.m, avg=avg, fill=fill))
 
     def _redraw_quiver(self, settings_changed: bool = False):
-        color_quiver = self.settings.color_quiver
-        mx, my = asnumpy(xp.multiply(self.mm.m, self.mm.orientation[:,:,0])[self.mm.nonzero]), asnumpy(xp.multiply(self.mm.m, self.mm.orientation[:,:,1])[self.mm.nonzero])
-        self.content.set_UVC(mx/self.unit_axes_factor, my/self.unit_axes_factor)
+        color_quiver, quiver_qty = self.settings.color_quiver, self.settings.quiver_qty
+        if settings_changed: self.quiver_scale = np.inf
+        match quiver_qty:
+            case 'spin':
+                x, y = asnumpy(xp.multiply(self.mm.m, self.mm.orientation[:,:,0])[self.mm.nonzero]), asnumpy(xp.multiply(self.mm.m, self.mm.orientation[:,:,1])[self.mm.nonzero])
+            case 'H_eff':
+                x, y = self.mm.H_eff
+                x, y = asnumpy(x[self.mm.nonzero]), asnumpy(y[self.mm.nonzero])
+                if np.any(x*self.quiver_scale > .8): self.quiver_scale = .8/np.nanmax(x)
+                if np.any(y*self.quiver_scale > .8): self.quiver_scale = .8/np.nanmax(y)
+                x, y = x*self.quiver_scale, y*self.quiver_scale
+        self.content.set_UVC(x/self.unit_axes_factor, y/self.unit_axes_factor)
         if settings_changed:
             self.colorbar.ax.set_visible(color_quiver)
-        colorfield = self.cmap_hsv((np.arctan2(my, mx)/2/np.pi) % 1) if color_quiver else 'black'
+            titles = {'spin': r"Magnetization $\overrightarrow{m}$", 'H_eff': r"Effective field $\overrightarrow{H_\mathrm{eff}}$"}
+            self.ax.set_title(titles.get(quiver_qty, ""))
+        colorfield = self.cmap_hsv((np.arctan2(y, x)/2/np.pi) % 1) if color_quiver else 'black'
         self.content.set_color(colorfield)
 
     def _redraw_domains(self, settings_changed: bool = False):
@@ -811,6 +823,9 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
         self.option_color_quiver = ctk.CTkSwitch(self.tab_QUIVER, text="Color", command=self.init_settings_magview)
         self.option_color_quiver.pack(pady=10, padx=10)
         self.option_color_quiver.select() # Set to 'on' by default
+        self.option_quiver_qty = ctk.CTkOptionMenu(self.tab_QUIVER, values=["spin", "H_eff"], command=self.init_settings_magview)
+        self.option_quiver_qty.pack(pady=10, padx=10)
+        self.option_quiver_qty.set("spin")
 
         ## Tab 3: DOMAINS
         if hasattr(self.mm, 'get_domains'):
@@ -849,6 +864,7 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
             avg=self.option_avg.get(),
             fill=self.option_fill.get(),
             color_quiver=self.option_color_quiver.get(),
+            quiver_qty=self.option_quiver_qty.get(),
             energy_component=name_to_energycomponent.get(option_energy_component, option_energy_component),
             in_eV=self.option_in_eV.get(),
             field_type=self.option_field_type.get()

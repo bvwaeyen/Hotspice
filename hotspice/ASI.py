@@ -232,7 +232,7 @@ class IP_Square_Closed(IP_ASI):
         return (self.ixx + self.iyy) % 2 == 1
 
     def _get_appropriate_avg(self):
-        return ['squarefour', 'cross', 'square']
+        return ['cross', 'square', 'squarefour']
 
     def _get_AFMmask(self):
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
@@ -345,7 +345,7 @@ class IP_Kagome(IP_ASI):
         return occupation
 
     def _get_appropriate_avg(self):
-        return ['point', 'cross', 'triangle', 'hexagon']
+        return ['cross', 'point', 'triangle', 'hexagon']
 
     def _get_AFMmask(self):
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
