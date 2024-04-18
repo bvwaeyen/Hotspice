@@ -42,7 +42,7 @@ def check_repetition(arr, nx: int, ny: int):
     """ Checks if <arr> is periodic with period <nx> along axis=1 and period <ny> along axis=0.
         If there are any further axes (axis=2, axis=3 etc.), the array is simply seen as a
         collection of 2D arrays (along axes 0 and 1), and the total result is only True if all
-        of these are periodic with period <nx> and <ny>
+        of these are periodic with period <nx> and <ny>. # TODO: change all of these <> in docstrings to ``
     """
     extra_dims = [1] * (len(arr.shape) - 2)
     max_y, max_x = arr.shape[:2]
@@ -349,8 +349,8 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None, copy_script: bool = True, outdir: str|Path = None) -> str:
     """ The most basic way to consistently save results of a simulation script. This can save the basic
         parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
-        figure(s) as pdf, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
-        all saved as <script_name.out>/<YYYYMMDDhhmmss>/<data.pkl|figure.pdf|params.json|script.py>.
+        figure(s) as pdf/png/svg, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
+        all saved as <script_name.out>/<YYYYMMDDhhmmss>/<data.pkl|figure.<pdf|png|svg>|params.json|script.py>.
             @param parameters [dict] (None): simple key-value pairs that represent simple parameters
                 of the system, i.e. those that can usually be expressed as a scalar value or a string.
             @param data [Any] (None): will be saved as a pickle file. This is usually a large array,

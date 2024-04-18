@@ -160,7 +160,7 @@ class Magnets(ABC):
 
         self.m = self.m.astype(float) # Need float to multiply correctly with other float arrays
         self.m = xp.sign(self.m) # Put all to -1., 0. or 1.
-        self.m = xp.multiply(self.m, self.occupation)
+        self.m = xp.multiply(self.m, self.occupation) # TODO: make occupation editable to allow dynamic removal of magnets (so have self._occupation and a property with setter that takes care of all that needs to be done)
         self.m[xp.where(self._get_m_uniform() != self._get_m_uniform(angle))] *= -1 # Allow 'rotation' for any kind of initialized state
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
 
@@ -261,10 +261,10 @@ class Magnets(ABC):
     def m_perp_factor(self):
         return self._m_perp_factor
     @m_perp_factor.setter
-    def m_perp_factor(self, value):
+    def m_perp_factor(self, value): # We assume this is not called very often
         if not hasattr(self, '_m_perp_factor'): self._m_perp_factor = 0
         if not isinstance(value, (int, float, bool)): raise ValueError("m_perp_factor must be scalar. It is not currently supported as a 2D array.")
-        if value and not self.in_plane: warnings.warn("You tried to set a nonzero `m_perp_energy`, but since this has no effect for an OOP ASI.")
+        if value and not self.in_plane: warnings.warn("You set a nonzero `m_perp_energy`, but this has no effect for an OOP ASI.")
         USED_PERP_ENERGY = self.USE_PERP_ENERGY
         self._m_perp_factor = float(value)
         if not USED_PERP_ENERGY and self.USE_PERP_ENERGY:

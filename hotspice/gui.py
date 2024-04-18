@@ -74,7 +74,7 @@ class GUI(ctk.CTk):
         self.minsize(min_width, min_height)
         width = (min_width + screen_width)/2
         height = (min_height + screen_height)/2
-        self.geometry(f"{width:.0f}x{height:.0f}+{(screen_width-width)/2:.0f}+{(screen_height - 40 - height)/2:.0f}")
+        self.geometry(f"{width:.0f}x{height:.0f}+{(screen_width-width)/2:.0f}+{(screen_height - 40 - height)/2:.0f}") # TODO: adapt this to self.mm.shape somewhat
 
         ## 1.1) Magnetization view panel
         self.magnetization_view = MagnetizationView(self, gui=self)
@@ -294,9 +294,9 @@ class ActionsPanel(ctk.CTkScrollableFrame):
                 self.gui.redraw()
                 t += 1
     
-    def _action_progress(self, t_max=1., MCsteps_max=4., **kwargs):
+    def _action_progress(self, t_max=1., MCsteps_max=4., **kwargs): # TODO: add a button to stop progress
         t = time.perf_counter() + 1
-        for i, step in enumerate(self.mm.progress(t_max=t_max, MCsteps_max=MCsteps_max, stepwise=True)):
+        for _ in self.mm.progress(t_max=t_max, MCsteps_max=MCsteps_max, stepwise=True):
             if time.perf_counter() > t:
                 self.gui.redraw()
                 t += 1
@@ -352,7 +352,7 @@ class ParameterInfo(ctk.CTkFrame):
         # Possibly also T_avg etc. in another section if there is room.
         self.update() # To initialize all StringVars in their correct formatting
     
-    def update(self):
+    def update(self): # TODO: when progress is running, add a "/ t_max" and "/ MCsteps_max" to this to show how close progress is to finishing.
         t, tp = appropriate_SIprefix(self.mm.t)
         self.info_t.set(f"{t:.3f} {tp}s" if 0.01 < t < 1000 else f"{self.mm.t:.3e} s")
         self.info_switches.set(f"{self.mm.switches:d}")
