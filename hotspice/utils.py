@@ -151,7 +151,7 @@ def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f
         If `only_thousands` is True (default), then centi, deci, deca and hecto are not used.
         Example: converting 0.0000238 ms would be appropriate_SIprefix(0.0000238, 'm') -> (23.8, 'n')
     """
-    value = n.min() if isinstance(n, (np.ndarray, xp.ndarray)) else n # To avoid excessive commas, we take min()
+    value = xp.median(n) if isinstance(n, (np.ndarray, xp.ndarray)) else n # If `n` is a list, the median is usually representative of the timescale
     if unit_prefix not in SIprefix_to_magnitude.keys(): raise ValueError(f"'{unit_prefix}' is not a supported SI prefix.")
     offset_magnitude = SIprefix_to_magnitude[unit_prefix]
     nearest_magnitude = (round(np.log10(abs(value))) if value != 0 else -np.inf) + offset_magnitude
@@ -346,7 +346,7 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
-def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None, copy_script: bool = True, outdir: str|Path = None) -> str:
+def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None, copy_script: bool = True, outdir: str|Path = None, dpi=600) -> str:
     """ The most basic way to consistently save results of a simulation script. This can save the basic
         parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
         figure(s) as pdf/png/svg, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
@@ -357,6 +357,7 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
                 or a dict of arrays, but can really be anything as long as you remember what it represents.
             @param figures [Figure|Iterable[Figure]] (None): one or more Matplotlib figures that will be
                 saved to pdf file(s).
+            @param dpi [float] (600): The resolution at which the figures will be saved.
             @return [str]: the output directory. Can be used to manually save additional resources there.
     """
     # Make output directory
@@ -364,7 +365,9 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
     if outdir is None: outdir = script.parent / (script.stem + '.out') / timestamp()
     Path(outdir).mkdir(exist_ok=True, parents=True) # Make directory "caller_script.out/<timestamp>"
     # Save information
-    if copy_script: shutil.copy2(script, os.path.join(outdir, 'script.py'))
+    if copy_script:
+        try: shutil.copy2(script, os.path.join(outdir, 'script.py'))
+        except shutil.SameFileError: pass
     if parameters is not None: json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)
     if data is not None: pickle.dump(data, open(os.path.join(outdir, 'data.pkl'), 'wb')) #! Must be 'wb' because binary object
     # Save figure(s)
@@ -372,7 +375,7 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
         if not isinstance(figures, Iterable): figures = [figures]
         for i, fig in enumerate(figures):
             for ext in ('.pdf', '.png', '.svg'):
-                fig.savefig(os.path.join(outdir, f'figure{i if len(figures) > 1 else ""}') + ext, dpi=600)
+                fig.savefig(os.path.join(outdir, f'figure{i if len(figures) > 1 else ""}') + ext, dpi=dpi)
     return outdir
 
 class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
