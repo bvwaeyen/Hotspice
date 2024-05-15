@@ -34,11 +34,11 @@ class GUI(ctk.CTk):
     def __init__(self, mm: Magnets, inputter: Inputter = None, outputreader: OutputReader = None, 
                  custom_step: Callable[['GUI'], None] = None, custom_reset: Callable[['GUI'], None] = None,
                  editable: bool = True): # TODO: make custom_step (and custom_reset) into dictionaries so we can have more than 1 of them.
-        """ <mm>, <inputter> and <outputreader> are typical Magnets, Inputter and OutputReader instances.
-            <custom_step> and <custom_reset> are functions that support either 0 or 1 arguments.
+        """ `mm`, `inputter` and `outputreader` are typical Magnets, Inputter and OutputReader instances.
+            `custom_step` and `custom_reset` are functions that support either 0 or 1 arguments.
                 If they support 1 argument, that argument is supposed to be this GUI object.
-                From there <mm>, <inputter> etc. (and everything else) can be accessed.
-            If <editable> is False, no options will appear that can change <mm.m>.
+                From there `mm`, `inputter` etc. (and everything else) can be accessed.
+            If `editable` is False, no options will appear that can change `mm.m`.
         """
         ## Initialize self object and __init__-passed attributes
         super().__init__()
@@ -478,7 +478,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         ## MOUSE AND KEYBOARD CONTROLS
         toolbar_is_in_use = lambda: any([button.var.get() for button in self.toolbar._buttons.values() if isinstance(button, tk.Checkbutton)]) # Only 'Pan' and 'Zoom' buttons are Checkbutton
         def get_idx(mouse_event: MouseEvent):
-            """ Returns: (x, y) integer indices of self.mm.m array where MouseEvent took place.
+            """ Returns: (x, y) integer indices of `self.mm.m` array where `MouseEvent` took place.
                          (None, None) if invalid event or somehow else not intending to change mm.m state.
             """
             if mouse_event.inaxes is not self.ax: return None, None # Only respond to mouse events inside the main drawing area (not e.g. the colorbar)
@@ -489,8 +489,8 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         
         self.last_toggle_index = (0, 0) # (y, x)
         def toggle(indices_x: int|xp.ndarray = None, indices_y: int|xp.ndarray = None, mouse_event: MouseEvent = None):
-            """ Toggles the magnet(s) at self.mm.m[indices_y, indices_x] (and updates all necessary variables along with it).
-                If <mouse_event> is passed as an argument, it is used to determine a more specific action, using filter_indices().
+            """ Toggles the magnet(s) at `self.mm.m[indices_y, indices_x]` (and updates all necessary variables along with it).
+                If `mouse_event` is passed as an argument, it is used to determine a more specific action, using `filter_indices()`.
             """
             if indices_x is None or indices_y is None:
                 if mouse_event is None: return # Then no information was provided for the toggle, so we can't do anything
@@ -504,7 +504,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
             self.redraw(settings_changed=False)
 
         def filter_indices(key: str, indices_x, indices_y): # KEY is a keyboard key, NOT MOUSE
-            """ Only retains the indices of magnets that should be flipped according to <key>. """
+            """ Only retains the indices of magnets that should be flipped according to `key`. """
             if indices_x.size == 0 or key is None: return indices_x, indices_y # No lookup needed
             match key:
                 case 'left' | 'right': # Arrow keys left-right
@@ -790,7 +790,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
 
 
 class MagnetizationViewSettingsTabView(ctk.CTkTabview):
-    """ This thing does not concern itself with the ASI. It only cares about the MagnetizationView. """
+    """ This thing does not concern itself with the ASI. It only cares about the `MagnetizationView`. """
     def __init__(self, master, magnetization_view_widget: MagnetizationView, **kwargs):
         self.name_to_mode = {
             "Magnetization": MagnetizationView.DisplayMode.MAGNETIZATION,
@@ -857,7 +857,7 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
         self.init_settings_magview()
     
     def init_settings_magview(self, *args, **kwargs): # Need *args to consistently use this in 'command' parameter of CTk widgets
-        """ Call this once at the start, to synchronize the self.magviewwidget.settings with all the buttons in this tabview. """
+        """ Call this once at the start, to synchronize the `self.magviewwidget.settings` with all the buttons in this tabview. """
         option_energy_component = self.option_energy_component.get()
         name_to_energycomponent = {v: k for k, v in self.magviewwidget.energy_names_readable.items()} # e.g. 'Total Energy' -> 'Total'
         settings = MagnetizationView.ViewSettings(

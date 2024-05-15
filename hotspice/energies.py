@@ -22,15 +22,15 @@ else:
 class Energy(ABC):
     def __init__(self):
         """ The __init__ method contains all initialization of variables which do not depend
-            on a specific given Magnets() object. It is not required to override this method.
+            on a specific given `Magnets()` object. It is not required to override this method.
         """
         pass
 
     def energy_switch(self, indices2D=None):
-        """ Returns the change in energy experienced by the magnets at <indices2D>, if they were to switch.
+        """ Returns the change in energy experienced by the magnets at `indices2D`, if they were to switch.
             @param indices2D [xp.array(2, -)]: A 2D array with the first row containing the y-coordinates,
                 and the second row containing the corresponding x-coordinates of the sampled magnets.
-            @return [list(N)]: A list containing the local changes in energy for each magnet of <indices2D>, in the same order.
+            @return [list(N)]: A list containing the local changes in energy for each magnet of `indices2D`, in the same order.
         """
         return -2*self.E if indices2D is None else -2*self.E[indices2D[0], indices2D[1]]
 
@@ -56,24 +56,24 @@ class Energy(ABC):
 
     @abstractmethod
     def update_single(self, index2D):
-        """ Updates self.E by only taking into account that a single magnet (at index2D) switched.
+        """ Updates `self.E` by only taking into account that a single magnet (at `index2D`) switched.
             @param index2D [tuple(2)]: A tuple containing two size-1 arrays representing y- and x-index of the switched magnet.
         """
 
     @abstractmethod
     def update_multiple(self, indices2D):
-        """ Updates self.E by only taking into account that some magnets (at indices2D) switched.
-            This seems like it is just multiple times self.update_single(), but sometimes an optimization is possible,
+        """ Updates `self.E` by only taking into account that some magnets (at `indices2D`) switched.
+            This seems like it is just multiple times `self.update_single()`, but sometimes an optimization is possible,
             hence this required alternative function for updating multiple magnets at once.
             @param indices2D [tuple(2)]: A tuple containing two equal-size 1D arrays representing the y- and x-
-                indices of the sampled magnets, such that this tuple can be used directly to index self.E.
+                indices of the sampled magnets, such that this tuple can be used directly to index `self.E`.
         """
 
     @property
     @abstractmethod
     def E_tot(self):
         """ Returns the total energy for this energy contribution. This function is necessary since this is not equal
-            for all energies: e.g. sum(E) in the DipolarEnergy would count each interaction twice, while sum(E) is
+            for all energies: e.g. `sum(E)` in the DipolarEnergy would count each interaction twice, while `sum(E)` is
             correct for ZeemanEnergy.
         """
 
@@ -85,8 +85,8 @@ class Energy(ABC):
 
 class ZeemanEnergy(Energy):
     def __init__(self, magnitude=0, angle=0):
-        """ This ZeemanEnergy class implements the Zeeman energy for a spatially uniform external field, whose magnitude
-            (and angle, if the magnetization is in-plane) can be set using the set_field method.
+        """ This `ZeemanEnergy` class implements the Zeeman energy for a spatially uniform external field, whose magnitude
+            (and `angle`, if the magnetization is in-plane) can be set using the `set_field` method.
             @param magnitude [float] (0): The magnitude of the external field.
             @param angle [float] (0): The angle (in radians) of the external field.
         """
@@ -141,10 +141,10 @@ class ZeemanEnergy(Energy):
 
 class DipolarEnergy(Energy):
     def __init__(self, prefactor: float = 1, decay_exponent: float = -3):
-        """ This DipolarEnergy class implements the interaction between the magnets of the simulation themselves.
+        """ This `DipolarEnergy` class implements the interaction between the magnets of the simulation themselves.
             It should therefore always be included in the simulations.
             @param prefactor [float] (1): The relative strength of the dipolar interaction.
-            @param decay_exponent [float] (-3): How fast the dipole interaction weakens with distance: DD ∝ 1/r^<decay_exponent>.
+            @param decay_exponent [float] (-3): How fast the dipole interaction weakens with distance: DD ∝ 1/r^`decay_exponent`.
         """
         # TODO: a more intricate scaling with distance is needed to incorporate the effect of the magnets not being infinitely small magnetic spins.
         #       Further steps can then concern themselves with the nonpolynomial fall-off with distance, as the magnets start to see each other more as infinitesimal spins rather than a finite FM geometry.
@@ -283,7 +283,7 @@ class DipolarEnergy(Energy):
                     total_energy += partial_m*signal.convolve2d(kernel, mmoment, mode='valid') # Could probably be done faster by only convolving the nonzero partial_m elements but this is already fast enough anyway and such slicing is also not free
                     if self.mm.USE_PERP_ENERGY:
                         kernel_perpself = self.kernel_perpself_unitcell[n,::-1,::-1]
-                        total_energy_perp += partial_m*signal.convolve2d(kernel_perpself, mmoment, mode='valid') # NOTE: partial_m is not strictly necessary if 'perependicular' does not necessarily mean '90° counterclockwise'
+                        total_energy_perp += partial_m*signal.convolve2d(kernel_perpself, mmoment, mode='valid') # NOTE: partial_m is not strictly necessary if 'perpendicular' does not necessarily mean '90° counterclockwise'
         self.E = self.prefactor*self.mm.moment*total_energy
         if self.mm.USE_PERP_ENERGY: self.E_perp = self.prefactor*self.mm.moment*total_energy_perp
 
@@ -299,7 +299,7 @@ class DipolarEnergy(Energy):
         # Multiply with the magnetization
         usefulkernel = self.kernel_unitcell[n,self.mm.ny-1-y:2*self.mm.ny-1-y,self.mm.nx-1-x:2*self.mm.nx-1-x]
         mmoment = self.mm.m*self.mm.moment
-        interaction = self.prefactor*mmoment[y, x]*xp.multiply(mmoment, usefulkernel) # TODO: shouldn't we be multiplying with the moment of magnet 1 and moment of magnet 2 instead of (moment of magnet 1)²?
+        interaction = self.prefactor*mmoment[y, x]*xp.multiply(mmoment, usefulkernel)
         self.E += 2*interaction
         self.E[y, x] *= -1 # This magnet switched, so all its interactions are inverted
         if self.mm.USE_PERP_ENERGY:
@@ -321,7 +321,7 @@ class DipolarEnergy(Energy):
             if self.mm.USE_PERP_ENERGY: kernel_perp = self.kernel_perpother_unitcell[n,:,:]
             indices2D_here = indices2D[:,indices2D_unitcell_raveled == i]
             if indices2D_here.shape[1] > self.mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF:
-                ### EITHER WE DO THIS (CONVOLUTION) (starts to be better at approx. 40 simultaneous switches for 41x41 kernel, taking into account the need for complete recalculation every <something> steps, so especially for large T this is good)
+                ### EITHER WE DO THIS (CONVOLUTION) (starts to be faster at approx. 40 simultaneous switches for 41x41 kernel, so especially for large T this is good)
                 switched_field = xp.zeros_like(self.mm.m)
                 switched_field[indices2D_here[0], indices2D_here[1]] = mmoment[indices2D_here[0], indices2D_here[1]]
                 k = self.mm.params.REDUCED_KERNEL_SIZE
@@ -364,7 +364,7 @@ class DipolarEnergy(Energy):
         return largest*self.prefactor*(self.mm.moment_avg**2)
 
     def set_NN_interaction(self, value):
-        """ Sets <prefactor> such that the nearest-neighbor dipolar interaction energy is <value> Joules. """
+        """ Sets `self.prefactor` such that the nearest-neighbor dipolar interaction energy is `value` Joules. """
         self.prefactor = value/self.get_NN_interaction()
 
 

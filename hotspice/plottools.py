@@ -60,8 +60,8 @@ class Average(Enum):
 
     @classmethod
     def resolve(cls, avg, mm: Magnets=None):
-        """ <avg> can be any of [str], [bool-like], or [Average]. This function will
-            then return the [Average] instance that is most appropriate.
+        """ `avg` can be any of [str], [bool-like], or [`Average`]. This function will
+            then return the [`Average`] instance that is most appropriate.
         """
         match avg:
             case Average():
@@ -89,22 +89,21 @@ def _get_averaged_extent(mm: Magnets, avg):
     return np.array([mm.x_min-mm.dx+movex,mm.x_max-movex+mm.dx,mm.y_min-mm.dy+movey,mm.y_max-movey+mm.dy]) # [m]
 
 def get_m_polar(mm: Magnets, m=None, avg=True):
-    """
-        Returns the magnetization angle and magnitude (can be averaged using the averaging method specified by <avg>).
-        If the local average magnetization is zero, the corresponding angle is NaN.
-        If there are no magnets to average around a given cell, then the angle and magnitude are both NaN.
+    """ Returns the magnetization angle and magnitude (can be averaged using the averaging method specified by `avg`).
+        If the local average magnetization is zero, the corresponding angle is `NaN`.
+        If there are no magnets to average around a given cell, then the angle and magnitude are both `NaN`.
         @param m [2D array] (mm.m): The magnetization profile that should be averaged.
-        @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon':
-            True: automatically determines the appropriate averaging method.
-            False|'point': no averaging at all, just calculates the angle of each individual spin.
-            'cross': averages the spins north, east, south and west of each position.
-            'square': averages the 8 nearest neighbors of each cell.
-            'triangle': averages the three magnets connected to a corner of a hexagon in the kagome geometry.
-            'hexagon:' averages each hexagon in kagome ASI, or each star in triangle ASI.
+        @param avg [str|bool] (True): can be any of:
+            `True`: automatically determines the appropriate averaging method.
+            `False`|`'point'`: no averaging at all, just calculates the angle of each individual spin.
+            `'cross'`: averages the spins north, east, south and west of each position.
+            `'square'`: averages the 8 nearest neighbors of each cell.
+            `'triangle'`: averages the three magnets connected to a corner of a hexagon in the kagome geometry.
+            `'hexagon:'` averages each hexagon in kagome ASI, or each star in triangle ASI.
         @return [(2D np.array, 2D np.array)]: a tuple containing two arrays, namely the (averaged) magnetization
             angle and magnitude, respecively, for each relevant position in the simulation.
-            Angles lay between 0 and 2*pi, magnitudes between 0 and mm.moment.
-            !! This does not necessarily have the same shape as <m> !!
+            Angles lay between 0 and 2π, magnitudes between 0 and `mm.moment`.
+            !! This does not necessarily have the same shape as `m` !!
     """
     if m is None: m = mm.m
     avg = Average.resolve(avg, mm)
@@ -143,7 +142,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     return angles_avg, magnitudes_avg
 
 def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=False, autoscale=True):
-    """ Returns the hsv values for the polar coordinates defined by angles [rad] and magnitudes [A/m]. 
+    """ Returns the hsv values for the polar coordinates defined by `angles` [rad] and `magnitudes` [A/m]. 
         TAKES CUPY/NUMPY ARRAYS AS INPUT, ONLY YIELDS NUMPY ARRAYS AS OUTPUT
         @param angles [2D xp.array()] (None): The averaged angles.
     """
@@ -243,21 +242,21 @@ def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None,
 
 
 def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, unit='µ', figure=None, subtract_barrier=False, in_eV=True, **figparams):
-    """ Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
-        the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
+    """ Shows two (or three if `show_energy` is True) figures displaying the direction of each spin: one showing
+        the (locally averaged) angles, another quiver plot showing the actual vectors. If `show_energy` is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
         @param m [2D array] (mm.m): the direction (+1 or -1) of each spin on the geometry. Default is the current
             magnetization profile. This is useful if some magnetization profiles have been saved manually, while 
-            mm.update() has been called since: one can then pass these saved profiles as the <m> parameter to
-            draw them onto the geometry stored in <mm>.
-        @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon'.
-        @param figscale [float] (1): the figure is 3*<figscale> inches high. The width scales similarly. 
+            `mm.update()` has been called since: one can then pass these saved profiles as the `m` parameter to
+            draw them onto the geometry stored in `mm`.
+        @param avg [str|bool] (True): can be any of `True`, `False`, `'point'`, `'cross'`, `'square'`, `'triangle'`, `'hexagon'`.
+        @param figscale [float] (1): the figure is `3*figscale` inches high. The width scales similarly. 
         @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
         @param overlay_quiver [bool] (False): if True, the quiver plot is shown overlaid on the color average plot.
         @param color_quiver [bool] (True): if True, the quiver plot arrows are colored according to their angle.
         @param unit [str] ('µ'): the symbol of the unit. Automatically converts this to a power of 10 for scaling.
-        @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this show_m().
+        @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this `show_m()`.
         @param subtract_barrier [bool] (False): if True, the energy scale displayed is the effective energy barrier.
         @param fontsize_colorbar [int] (10): the font size of the color bar description.
         @param fontsize_axes [int] (10): the font size of the axes labels and titles.
@@ -414,9 +413,9 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
     plt.show()
 
 def show_history(mm: Magnets, *, y_quantity=None, y_label="Average magnetization"):
-    """ Plots <y_quantity> (default: average magnetization (mm.history.m)) and total energy (mm.history.E)
-        as a function of either the time or the temperature: if the temperature (mm.history.T) is constant, 
-        then the x-axis will represent the time (mm.history.t), otherwise it represents the temperature.
+    """ Plots `y_quantity` (default: average magnetization (`mm.history.m`)) and total energy (`mm.history.E`)
+        as a function of either the time or the temperature: if the temperature (`mm.history.T`) is constant, 
+        then the x-axis will represent the time (`mm.history.t`), otherwise it represents the temperature.
         @param y_quantity [1D array] (mm.m): The quantity to be plotted as a function of T or t.
         @param y_label [str] ("Average magnetization"): The y-axis label in the plot.
     """
@@ -441,7 +440,7 @@ def show_history(mm: Magnets, *, y_quantity=None, y_label="Average magnetization
     plt.show()
 
 def get_AFMness(mm: Magnets, AFM_mask=None):
-    """ Returns the average AFM-ness of mm.m at the current time step, normalized to 1.
+    """ Returns the average AFM-ness of `mm.m` at the current time step, normalized to 1.
         For a perfectly uniform configuration this is 0, while for random it is 0.375.
         Note that the boundaries are not taken into account for the normalization, so the
         AFM-ness will often be slightly lower than the ideal values mentioned above.
@@ -456,13 +455,13 @@ def get_AFMness(mm: Magnets, AFM_mask=None):
 def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False): # TODO: this is quite messy because we are working with color here instead of angles/magnitudes
     """ THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
         THIS FUNCTION OPERATES ON HSV VALUES, AND RETURNS HSV AS WELL!!! NOT RGB HERE!
-        The 2D array <replaceable> is True at the positions of hsv which can be overwritten by this function.
-        The 3D array <hsv> has the same first two dimensions as <replaceable>, with the third dimension having size 3 (h, s, v).
+        The 2D array `replaceable` is True at the positions of hsv which can be overwritten by this function.
+        The 3D array `hsv` has the same first two dimensions as `replaceable`, with the third dimension having size 3 (h, s, v).
         Then this function overwrites the replaceables with the surrounding values at the nearest neighbors (cross neighbors ⁛),
         but only if all those neighbors are equal. This is useful for very large simulations where each cell
         occupies less than 1 pixel when plotted: by removing the replaceables, visual issues can be prevented.
         @param fillblack [bool] (False): If True, white pixels next to black pixels are colored black regardless of other neighbors.
-        @param fillwhite [bool] (False): If True, white pixels are colored in using the Average.SQUAREFULL rule.
+        @param fillwhite [bool] (False): If True, white pixels are colored in using the `Average.SQUAREFULL` rule.
         @return [2D np.array]: The interpolated array.
     """
     if hsv.shape[0] < 2 or hsv.shape[1] < 2: return hsv
@@ -498,7 +497,7 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
 def init_style(backend=True, small=10, medium=11, large=12, style: Literal['default', 'tableau-colorblind10', 'fivethirtyeight', 'snooker', 'rainbow'] = "tableau-colorblind10"):
     """ Sets various parameters for consistent plotting across all Hotspice scripts.
         This should be called before instantiating any subplots.
-        This should not be called directly by any function in hotspice.plottools itself,
+        This should not be called directly by any function in `hotspice.plottools` itself,
         only by higher-level scripts (e.g. examples, analyses, tests...) which can
         then decide for themselves whether or not to use these standardized settings.
         @param backend [bool] (True): if True, the tkinter backend is activated. This
@@ -553,7 +552,7 @@ def close_interactive(figure=None):
 
 
 def save_plot(save_path: str, ext=None, **savefig_kwargs):
-    """ <save_path> is a full relative pathname, usually something like
+    """ `save_path` is a full relative pathname, usually something like
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     """
     if ext is not None: # Then a specific extension was requested, to override the one in save_path

@@ -39,10 +39,10 @@ else:
 
 ## ARRAY MANIPULATIONS/OPERATIONS
 def check_repetition(arr, nx: int, ny: int):
-    """ Checks if <arr> is periodic with period <nx> along axis=1 and period <ny> along axis=0.
+    """ Checks if `arr` is periodic with period `nx` along axis=1 and period `ny` along axis=0.
         If there are any further axes (axis=2, axis=3 etc.), the array is simply seen as a
         collection of 2D arrays (along axes 0 and 1), and the total result is only True if all
-        of these are periodic with period <nx> and <ny>. # TODO: change all of these <> in docstrings to ``
+        of these are periodic with period `nx` and `ny`.
     """
     extra_dims = [1] * (len(arr.shape) - 2)
     max_y, max_x = arr.shape[:2]
@@ -65,9 +65,9 @@ def check_repetition(arr, nx: int, ny: int):
     return True
 
 def mirror4(arr, /, *, negativex=False, negativey=False):
-    """ Mirrors the 2D array <arr> along some of the edges, in such a manner that the
+    """ Mirrors the 2D array `arr` along some of the edges, in such a manner that the
         original element at [0,0] ends up in the middle of the returned array.
-        Hence, if <arr> has shape (a, b), the returned array has shape (2*a - 1, 2*b - 1).
+        Hence, if `arr` has shape (a, b), the returned array has shape (2*a - 1, 2*b - 1).
     """
     ny, nx = arr.shape
     arr4 = xp.zeros((2*ny-1, 2*nx-1))
@@ -80,7 +80,7 @@ def mirror4(arr, /, *, negativex=False, negativey=False):
     return arr4
 
 def R_squared(a, b):
-    """ Returns the R² metric between two 1D arrays <a> and <b> as defined in
+    """ Returns the R² metric between two 1D arrays `a` and `b` as defined in
         "Task Agnostic Metrics for Reservoir Computing" by Love et al.
     """
     if (var_a := xp.var(a)) == 0 or (var_b := xp.var(b)) == 0: return 0
@@ -88,27 +88,27 @@ def R_squared(a, b):
     return cov**2/var_a/var_b # Same as xp.corrcoef(a, b)[0,1]**2, but faster
 
 def strided(a: xp.ndarray, W: int):
-    """ <a> is a 1D array, which gets expanded into 2D shape (a.size, W) where every row
-        is a successively shifted version of the original <a>:
-        the first row is [a[0], NaN, NaN, ...] with total length <W>.
-        The second row is [a[1], a[0], NaN, ...], and this continues until <a> is exhausted.
+    """ `a` is a 1D array, which gets expanded into 2D shape (`a.size`, `W`) where every row
+        is a successively shifted version of the original `a`:
+        the first row is [a[0], NaN, NaN, ...] with total length `W`.
+        The second row is [a[1], a[0], NaN, ...], and this continues until `a` is exhausted.
         
         NOTE: the returned array is only a view, hence it is quite fast but care has to be
                 taken when editing the array; e.g. editing one element directly changes the
-                corresponding value in <a>, resulting in a whole diagonal being changed at once.
+                corresponding value in `a`, resulting in a whole diagonal being changed at once.
     """
     a_ext = xp.concatenate((xp.full(W - 1, xp.nan), a))
     n = a_ext.strides[0]
     return striding.as_strided(a_ext[W - 1:], shape=(a.size, W), strides=(n, -n))
 
 def lower_than(x, y, rtol=1e-10):
-    """ Returns False if <x> is very close (within relative tolerance <rtol>) or greater than <y>. """
+    """ Returns False if `x` is very close (within relative tolerance `rtol`) or greater than `y`. """
     return x < y and not xp.isclose(x, y, atol=0, rtol=rtol)
 
 
 ## EASE-OF-USE UTILITIES (e.g. for printing)
 def human_sort(text):
-    """ To sort a <list> of strings in human order, use <list>.sort(key=hotspice.utils.human_sort).
+    """ To sort a list `l` of strings in human order, use `l.sort(key=hotspice.utils.human_sort)`.
         Human order means that if there are numbers in the strings, they are treated as numbers,
         such that e.g. 10 will come after 2, which is not the case with a naive sort.
     """
@@ -116,16 +116,16 @@ def human_sort(text):
     return [atoi(c) for c in re.split(r'(\d+)', text)]
 
 def is_significant(i: int, N: int, order: float=1) -> bool:
-    """ Returns True if <i> iterations is an 'important' milestone if there are <N> in total.
+    """ Returns True if `i` iterations is an 'important' milestone if there are `N` in total.
         Useful for verbose print statements in long simulations.
         @param i [int]: the index of the current iteration (starting at 0)
         @param N [int]: the total number of iterations
         @param order [float]: strictly speaking this can be any float, but integers work best.
-            Basically, approximately <10**order> values of i (equally spaced) will yield True.
+            Basically, approximately `10**order` values of `i` (equally spaced) will yield True.
             An example can be useful to illustrate the behavior of this parameter:
-                If N=1000 and order=0, True will be returned if i = 0 or 999,
-                while for order=1 any of i = 0, 99, 199, 299, ..., 999 yield True.
-                A float example: for order=0.6 only i = 0, 251, 502, 753, 999 yield True.
+                If `N=1000` and `order=0`, True will be returned if `i == 0` or `i == 999`,
+                while for `order=1` any of `i == 0, 99, 199, 299, ..., 999` yield True.
+                A float example: for `order=0.6` only `i == 0, 251, 502, 753, 999` yield True.
     """
     if (i + 1) % 10**(math.floor(math.log10(N))-order) < 1:
         return True
@@ -149,7 +149,7 @@ def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f
     """ Converts `n` (which already has SI prefix `unit_prefix` for whatever unit it is in)
         to a reasonable number with a new SI prefix. Returns a tuple with (the new scalar values, the new SI prefix).
         If `only_thousands` is True (default), then centi, deci, deca and hecto are not used.
-        Example: converting 0.0000238 ms would be appropriate_SIprefix(0.0000238, 'm') -> (23.8, 'n')
+        Example: converting 0.0000238 ms would be `appropriate_SIprefix(0.0000238, 'm')` -> `(23.8, 'n')`
     """
     value = xp.median(n) if isinstance(n, (np.ndarray, xp.ndarray)) else n # If `n` is a list, the median is usually representative of the timescale
     if unit_prefix not in SIprefix_to_magnitude.keys(): raise ValueError(f"'{unit_prefix}' is not a supported SI prefix.")
@@ -165,9 +165,9 @@ def appropriate_SIprefix(n: float|np.ndarray|xp.ndarray, unit_prefix: Literal['f
 def shell():
     """ Pauses the program and opens an interactive shell where the user
         can enter statements or expressions to inspect the scope in which
-        shell() was called. Write "exit()" to terminate this shell.
-        Using Ctrl+C will stop the entire program, not just this function
-        (this is due to a bug in the scipy library).
+        `shell()` was called. Write `exit()` to terminate this shell.
+        NOTE: Using Ctrl+C will stop the entire program, not just this
+        function (this is due to a bug in the scipy library).
     """
     try:
         caller = inspect.getframeinfo(inspect.stack()[1][0])
@@ -220,12 +220,12 @@ def bresenham(start, end):
 ## CONVERSION
 Field = TypeVar("Field", int, float, list, np.ndarray, xpt.NDArray) # Every type that can be parsed by as_2D_array()
 def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
-    """ Converts <value> to a 2D array of shape <shape>. If <value> is scalar, the returned
-        array is constant. If <value> is a CuPy or NumPy array with an equal amount of values
-        as fit in <shape>, the returned array is the reshaped version of <value> to fit <shape>.
-        Either a CuPy or NumPy array is returned, depending on config.USE_GPU.
+    """ Converts `value` to a 2D array of shape `shape`. If `value` is scalar, the returned
+        array is constant. If `value` is a CuPy or NumPy array with an equal amount of values
+        as fit in `shape`, the returned array is the reshaped version of `value` to fit `shape`.
+        Either a CuPy or NumPy array is returned, depending on `config.USE_GPU`.
     """
-    is_scalar = True # Determine if <value> is scalar-like...
+    is_scalar = True # Determine if `value` is scalar-like...
     if isinstance(value, list):
         try:
             value = xp.asarray(value, dtype=float)
@@ -242,7 +242,7 @@ def as_2D_array(value: Field, shape: tuple) -> xp.ndarray:
         return xp.asarray(value).reshape(shape)
 
 def asnumpy(array: xp.ndarray) -> np.ndarray:
-    """ Converts the CuPy/NumPy <array> to a NumPy array, which is necessary for e.g. matplotlib. """
+    """ Converts the CuPy/NumPy `array` to a NumPy array, which is necessary for e.g. matplotlib. """
     if not config.USE_GPU: # Not very clean if-else statement but oh well
         return np.asarray(array) # Then CuPy doesn't exist, so no other options than to try np.asarray
     elif isinstance(array, cp.ndarray):
@@ -283,9 +283,9 @@ def timestamp():
 
 
 ## MULTI-GPU UTILITIES
-def run_script(script_name, args=None, repeat: int = 1):
-    """ Runs the script <script_name> located in the hotspice/scripts directory.
-        Any arguments for the script can be passed as a list to <args>.
+def run_script(script_name, args: list = None, repeat: int = 1):
+    """ Runs the script `script_name` located in the `hotspice/scripts` directory.
+        Any arguments for the script can be passed as a list to `args`.
     """
     for _ in range(repeat):
         script_name = script_name.strip()
@@ -305,7 +305,7 @@ def run_script(script_name, args=None, repeat: int = 1):
             """), stacklevel=2)
 
 def ParallelJobs(sweepscript_path, outdir: str = None, iterations: list = None, repeat: int = 1, _ParallelJobs_script_name: str = "ParallelJobs"):
-    """ Convenient wrapper around run_script() for the ParallelJobs.py script in particular. """
+    """ Convenient wrapper around `run_script()` for the `ParallelJobs.py` script in particular. """
     args = [sweepscript_path]
     if outdir is not None:
         args += ['-o', outdir]
@@ -314,10 +314,10 @@ def ParallelJobs(sweepscript_path, outdir: str = None, iterations: list = None, 
     run_script(_ParallelJobs_script_name, args=args, repeat=repeat)
 
 def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = None, show_device=True):
-    """ Can print <message> to console from subprocesses running on a specific GPU or thread.
-        The <device_id> (currently used GPU/CPU core) is printed in front of the message, if <show_device> is True.
-        <style> specifies the color of the message (default None=white), and can be any of:
-            'issue' (red), 'success' (green), 'header' (blue).
+    """ Can print `message` to console from subprocesses running on a specific GPU or thread.
+        The `device_id` (currently used GPU/CPU core) is printed in front of the message, if `show_device` is True.
+        `style` specifies the color of the message (default `None` is white), and can be any of:
+            `'issue'` (red), `'success'` (green), `'header'` (blue).
     """
     if device_id is None:
         device_id = 0 if config.USE_GPU else config.DEVICE_ID
@@ -380,18 +380,18 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
 
 class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None, compact: bool = True):
-        """ Stores the Pandas dataframe <df> with appropriate metadata and optional constants.
-            Constant columns in <df> are automatically moved to <constants>, and keys present
-            in <constants> that are also columns in <df> are removed from <constants>.
+        """ Stores the Pandas dataframe `df` with appropriate metadata and optional constants.
+            Constant columns in `df` are automatically moved to `constants`, and keys present
+            in `constants` that are also columns in `df` are removed from `constants`.
             @param df [pandas.DataFrame]: the dataframe to be stored.
             @param constants [dict] ({}): used to store constants such that they needn't be
                 repeated in every row of the dataframe, e.g. cell size, temperature...
                 These constants can be scalars, strings or CuPy/NumPy arrays.
             @param metadata [dict] ({}): used to store additional information about the
                 simulation, e.g. description, author, time... Some fields are automatically
-                generated if they are not present in the dictionary passed to <metadata>.
-                For more details, see the <self.metadata> docstring.
-            @param compact [bool] (False): If True, constant columns in <df> are moved to the <constants>.
+                generated if they are not present in the dictionary passed to `metadata`.
+                For more details, see the `self.metadata` docstring.
+            @param compact [bool] (False): If True, constant columns in `df` are moved to the `constants`.
         """
         self._compact = compact
         self.df = df
@@ -399,8 +399,8 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         self.constants = constants
 
     def compactify(self):
-        """ Moves constant columns in <self.df> to <self.constants>, and removes keys
-            from <self.constants> that are also columns in <self.df>, to prevent ambiguous duplicates.
+        """ Moves constant columns in `self.df` to `self.constants`, and removes keys
+            from `self.constants` that are also columns in `self.df`, to prevent ambiguous duplicates.
         """
         if not hasattr(self, 'constants') or not hasattr(self, 'df'): return
         # Move all constant columns in self.df to self.constants
@@ -417,7 +417,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
 
     @staticmethod
     def get_simulation_metadata(basic_metadata_dict: dict = None, ignore_keys=()):
-        """ Any keys present in <ignore_keys> will not be automatically added nor removed from <basic_metadata_dict>. """
+        """ Any keys present in `ignore_keys` will not be automatically added nor removed from `basic_metadata_dict`. """
         if basic_metadata_dict is None: basic_metadata_dict = {}
         if not isinstance(basic_metadata_dict, dict): raise ValueError("Metadata must be provided as a dictionary.")
 
@@ -449,7 +449,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
     def df(self): return self._df
     @df.setter
     def df(self, value: pd.DataFrame):
-        """ The Pandas DataFrame containing the bulk of the data. """
+        """ The Pandas `DataFrame` containing the bulk of the data. """
         if not isinstance(value, pd.DataFrame):
             try: # Then assume <value> is a JSON-parseable object
                 value = pd.read_json(json.dumps(value), orient='split') 
@@ -463,10 +463,10 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
     def metadata(self): return self._metadata
     @metadata.setter
     def metadata(self, value: dict):
-        """ All keys in <value> are stored without modification, and the following keys are
-            automatically added if they are not provided in <value>:
+        """ All keys in `value` are stored without modification, and the following keys are
+            automatically added if they are not provided in `value`:
             - 'author': name of the author (default: login name of user on the computer)
-            - 'creator': main file responsible for creating the data (default: path of the __main__ module in the session)
+            - 'creator': main file responsible for creating the data (default: path of the `__main__` module in the session)
             - 'datetime': a string representing the UTC time in "yyyymmddHHMMSS" format
             - 'description': a (small) description of what the data represents
             - 'GPU': a list of dicts representing the NVIDIA GPUs used for the simulation. Each dict contains
@@ -481,7 +481,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
     def constants(self): return self._constants
     @constants.setter
     def constants(self, value: dict):
-        """ Names and values of parameters which are constant throughout all entries in <self.df>. """
+        """ Names and values of parameters which are constant throughout all entries in `self.df`. """
         if value is None: value = {}
         if not isinstance(value, dict): raise ValueError("Constants must be provided as a dictionary.")
         self._constants = value
@@ -489,8 +489,8 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         assert isinstance(self._constants, dict)
 
     def _check_consistency(self):
-        """ Checks if all keys in <self.constants> and <self.metadata> are strings,
-            and compactifies this data if necessary and desired (i.e. if self._compact).
+        """ Checks if all keys in `self.constants` and `self.metadata` are strings,
+            and compactifies this data if necessary and desired (i.e. if `self._compact`).
         """
         if self._compact: self.compactify()
         if hasattr(self, 'constants'):
@@ -502,11 +502,11 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
 
     def save(self, dir: str = None, name: str = None, *, timestamp=True): # TODO: DO THE CONVERSION OF COLUMNS TO CONSTANTS ETC. HERE AND ONLY HERE. EXPAND THEM UPON OPENING SUCH FILES. THIS MEMORY-EFFICIENCY-IMPROVEMENT IS CAUSING TOO MUCH TROUBLE EVERYWHERE IF WE DO IT ON-THE-FLY IN THE PROPERTIES
         # TODO: do we even need this conversion at all? It has only caused more headaches than it has saved memory/storage
-        """ Saves the currently stored data (<self.df>, <self.constants> and <self.metadata>)
+        """ Saves the currently stored data (`self.df`, `self.constants` and `self.metadata`)
             to a JSON file, with path "<dir>/<name>_<yyyymmddHHMMSS>.json". The automatically
-            added timestamp in the filename can be disabled by passing <timestamp=False>.
+            added timestamp in the filename can be disabled by passing `timestamp=False`.
             The JSON file contains three top-level objects: 'metadata', 'constants' and 'data',
-            where 'data' stores a JSON 'table' representation of the Pandas DataFrame <self.df>.
+            where 'data' stores a JSON 'table' representation of the Pandas dataframe `self.df`.
 
             @param dir [str] ('hotspice_results'): the directory to create the .json file in.
             @param name [str] ('hotspice_simulation'): this text is used as the start of the filename.
@@ -541,7 +541,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
     @staticmethod
     def load(JSON): # TODO: improve the error handling here so a caller of load() can see what is going on
         """ Reads a JSON-parseable object containing previously generated Hotspice data, and returns its
-            contents as Data object.
+            contents as `Data` object.
             @param JSON: a parseable object resembling JSON data, can be any of: 
                 Data() object, valid dict(), JSON string, file-like object, string representing a file path.
             @return [Data]: a Data object containing the information from <JSON>.
@@ -570,9 +570,9 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
 
     @staticmethod
     def load_collection(collection: str|Iterable, verbose=False):
-        """ Combines all the JSON data in <collection>, which can either be a:
+        """ Combines all the JSON data in `collection`, which can either be a:
             - string representing a directory path, containing many similar .json files
-            - iterable containing many Data objects, each representing a bunch of similar data
+            - iterable containing many `Data` objects, each representing a bunch of similar data
             The idea is that these different chunks of data have a certain overlap, e.g. that
             most of their constants/columns are the same, with only a few varying between them.
             NOTE: arrays as constants are ignored in the comparison.
@@ -636,7 +636,7 @@ class Data: # TODO: make a get_column() function that returns (one or multiple) 
         )
 
     def __getitem__(self, item: str):
-        """ Returns the full column of <param_name>, even if it is in self.constants. Usage: data[item]. """
+        """ Returns the full column of `param_name`, even if it is in `self.constants`. Usage: data[`item`]. """
         if item in self.df:
             return self.df[item]
         if item in self.constants:
@@ -651,7 +651,7 @@ class _CompactJSONEncoder(json.JSONEncoder):
         self.indentation_level = 0
 
     def encode(self, o):
-        """ Encode JSON object <o> with respect to single line lists. """
+        """ Encode JSON object `o` with respect to single line lists. """
         if isinstance(o, (np.ndarray, xp.ndarray)):
             o = o.tolist()
         if isinstance(o, (list, tuple)):

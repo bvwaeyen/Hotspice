@@ -21,14 +21,14 @@ class Datastream(ABC):
     def __init__(self):
         self.rng = xp.random.default_rng(None) # <seed=None> means a random seed from OS entropy.
     def reset_rng(self):
-        """ Sets the seed of self.rng to zero, such that the datastream yields consistent values from the start again.
+        """ Sets the seed of `self.rng` to zero, such that the datastream yields consistent values from the start again.
             NOTE: These sequences are not guaranteed to be the same when using the CPU as compared to the GPU!
         """
         self.rng = xp.random.default_rng(0) # Set seed
 
     @abstractmethod
     def get_next(self, n=1) -> xp.ndarray:
-        """ Calling this method returns an array containing exactly <n> (default: 1) scalar values of a certain type. """
+        """ Calling this method returns an array containing exactly `n` (default: 1) scalar values of a certain type. """
 
     @property
     @abstractmethod
@@ -54,15 +54,14 @@ class IntegerDatastream(Datastream):
 
     def as_bits(self, integer: int, endianness: Literal['little', 'big'] = 'little') -> xp.ndarray:
         """ For our RC purposes, little-endian is preferred, because nearby integers will have similar final bits.
-            This should allow for easier training for the estimators in TaskAgnosticExperiment.
-            When subclassing, one can extend this method 
+            This should allow for easier training for the estimators in `TaskAgnosticExperiment`.
         """
         bitstring = bin(integer)[2:].zfill(self.bits_per_int) # Slice from 2 to remove '0b', zfill to left-pad with zeros 
         if endianness == 'little': bitstring = bitstring[::-1]
         return xp.asarray([int(bit) for bit in bitstring])
 
 class ConstantDatastream(ScalarDatastream):
-    """ A dummy datastream that just returns <constant> all the time. """
+    """ A dummy datastream that just returns `constant` all the time. """
     def __init__(self, constant: float = 1):
         super().__init__()
         self.constant = constant
@@ -76,10 +75,10 @@ class Inputter(ABC):
         self.datastream = ConstantDatastream(constant=1) if datastream is None else datastream
     
     def input(self, mm: Magnets, values=None, remove_stimulus=False) -> xp.ndarray:
-        """ Inputs one or multiple values as passed to the <values> argument.
-            If <values> is not provided, the next value yielded by <self.datastream> is used.
-            NOTE: if self.input_single is a generator, it is just treated as if it were a normal function.
-                  If you want to get the generator behavior of self.input_single, call it directly instead.
+        """ Inputs one or multiple values as passed to the `values` argument.
+            If `values` is not provided, the next value yielded by `self.datastream` is used.
+            NOTE: if `self.input_single` is a generator, it is just treated as if it were a normal function.
+                  If you want to get the generator behavior of `self.input_single`, call it directly instead.
         """
         if values is None: values = self.datastream.get_next(n=1)
         values = xp.asarray(values).reshape(-1)
@@ -102,8 +101,8 @@ class Inputter(ABC):
 
     @abstractmethod
     def input_single(self, mm: Magnets, value: float|int|bool):
-        """ Applies a certain stimulus onto the <mm> simulation depending on the scalar <value>.
-            Can be either a normal function or a generator (self.input will act accordingly).
+        """ Applies a certain stimulus onto the `mm` simulation depending on the scalar `value`.
+            Can be either a normal function or a generator (`self.input` will act accordingly).
         """
 
 
@@ -113,15 +112,15 @@ class OutputReader(ABC):
         if mm is not None: self.configure_for(mm)
 
     def configure_for(self, mm: Magnets):
-        """ Subclassing this method is optional. When called, some properties of this OutputReader object
-            are initialized, which depend on the Magnets object <mm>.
+        """ Subclassing this method is optional. When called, some properties of this `OutputReader` object
+            are initialized, which depend on the Magnets object `mm`.
         """
         self.mm = mm
 
     @abstractmethod
     def read_state(self, mm: Magnets = None) -> xp.ndarray:
-        """ Reads the current state of the <mm> simulation in some way.
-            Sets <self.state>, and returns <self.state>.
+        """ Reads the current state of the `mm` simulation in some way.
+            Sets `self.state`, and returns `self.state`.
         """
         if (mm is not None) and (mm is not self.mm): self.configure_for(mm)
 
@@ -133,7 +132,7 @@ class OutputReader(ABC):
     @property
     def node_coords(self) -> xp.ndarray: # Needed for Memory Capacity in TaskAgnosticExperiment, as well as squinting
         """ An Nx2 array, where each row contains representative coordinates for all output values
-            in self.read_state(). The first column contains x-coordinates, the second contains y.
+            in `self.read_state()`. The first column contains x-coordinates, the second contains y.
         """
         return self._node_coords
 
@@ -144,7 +143,7 @@ class OutputReader(ABC):
 
 class RandomBinaryDatastream(BinaryDatastream):
     def __init__(self, p0=.5):
-        """ Generates random bits, with <p0> probability of getting 0, and 1-<p0> probability of getting 1.
+        """ Generates random bits, with `p0` probability of getting 0, and `1-p0` probability of getting 1.
             @param p0 [float] (0.5): the probability of 0 when generating a random bit.
         """
         self.p0 = p0
@@ -156,7 +155,7 @@ class RandomBinaryDatastream(BinaryDatastream):
         return self.rng.random(size=(n,)) >= self.p0
 
 class RandomIntegerDatastream(IntegerDatastream):
-    """ Generates random integers uniformly distributed from 0 up to and including 2**<num_bytes> - 1. """
+    """ Generates random integers uniformly distributed from 0 up to and including `2**num_bytes - 1`. """
     def __init__(self, num_bits: int = 8):
         if not isinstance(num_bits, int): raise ValueError("Number of bits per 'byte' in RandomUniformByteDatastream must be of type <int>.")
         self.num_bits = num_bits
@@ -173,7 +172,7 @@ class RandomIntegerDatastream(IntegerDatastream):
 
     def as_bits(self, integer: int, endianness: Literal['little', 'big'] = 'little') -> xp.ndarray:
         """ For our RC purposes, little-endian is preferred, because nearby integers will have similar final bits.
-            This should allow for easier training for the estimators in TaskAgnosticExperiment.
+            This should allow for easier training for the estimators in `TaskAgnosticExperiment`.
         """
         bitstring = bin(integer)[2:].zfill(self.num_bits) # Slice from 2 to remove '0b', zfill to left-pad with zeros 
         if endianness == 'little': bitstring = bitstring[::-1]
@@ -181,7 +180,7 @@ class RandomIntegerDatastream(IntegerDatastream):
 
 class RandomScalarDatastream(ScalarDatastream):
     def __init__(self, low=0, high=1):
-        """ Generates uniform random floats between <low=0> and <high=1>. """
+        """ Generates uniform random floats between `low=0` and `high=1`. """
         self.low, self.high = low, high
         super().__init__()
     def __repr__(self):
@@ -193,11 +192,11 @@ class RandomScalarDatastream(ScalarDatastream):
 
 class FieldInputter(Inputter):
     def __init__(self, datastream: Datastream, magnitude=1, angle=0, n=2, sine=False, frequency=1, half_period=True):
-        """ Applies an external field at <angle> rad, whose magnitude is <magnitude>*<datastream.get_next()>.
-            <frequency> specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
-            If <sine> is True, the field magnitude follows a full sinusoidal period for each input bit.
-            If <half_period> is True, only the first half-period ⏜ of the sine is used, otherwise the full ∿ period.
-            At most <n> Monte Carlo steps will be performed.
+        """ Applies an external field at `angle` rad, whose magnitude is `magnitude*datastream.get_next()`.
+            `frequency` specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
+            If `sine` is True, the field magnitude follows a full sinusoidal period for each input bit.
+            If `half_period` is True, only the first half-period (⏜) of the sine is used, otherwise the full period (∿).
+            At most `n` Monte Carlo steps will be performed.
             NOTE: this class is ancient and might not work correctly.
         """
         super().__init__(datastream)
@@ -242,12 +241,12 @@ class FieldInputter(Inputter):
 
 class FieldInputterBinary(FieldInputter):
     def __init__(self, datastream: Datastream, magnitudes: tuple = (.8, 1), **kwargs):
-        """ Exactly the same as FieldInputter, but if <datastream> yields 0 then a field with
-            magnitude <magnitudes[0]> is applied, otherwise <magnitudes[1]>.
-            Using <sine=<frequency[Hz]>> yields behavior as in "Computation in artificial spin ice" by Jensen et al.
+        """ Exactly the same as `FieldInputter`, but if `datastream` yields 0 then a field with
+            magnitude `magnitudes[0]` is applied, otherwise `magnitudes[1]`.
+            Using `sine=<frequency[Hz]>` yields behavior as in "Computation in artificial spin ice" by Jensen et al.
             Differing attributes compared to FieldInputter:
-                <self.magnitude> is set to <magnitudes[1]>
-                <self.magnitude_ratio> is used to store the ratio <magnitudes[0]/magnitudes[1]>.
+                `self.magnitude` is set to `magnitudes[1]`
+                `self.magnitude_ratio` is used to store the ratio `magnitudes[0]/magnitudes[1]`.
             NOTE: this class is ancient and might not work correctly.
         """
         self.magnitude_ratio = magnitudes[0]/magnitudes[1]
@@ -260,9 +259,9 @@ class FieldInputterBinary(FieldInputter):
 class PerpFieldInputter(FieldInputter):
     def __init__(self, datastream: BinaryDatastream, magnitude=1, angle=0, n=2, relax=True, frequency=1, **kwargs):
         """ Applies an external field, whose angle depends on the bit that is being applied:
-            the bit '0' corresponds to an angle of <phi> radians, the bit '1' to <phi>+pi/2 radians.
+            the bit '0' corresponds to an angle of `phi` radians, the bit '1' to `phi + pi/2` radians.
             Also works for continuous numbers, resulting in intermediate angles, but this is not the intended use.
-            For more information about the kwargs, see FieldInputter.
+            For more information about the `kwargs`, see `FieldInputter`.
             NOTE: this class is ancient and might not work correctly.
         """
         self.relax = relax
@@ -315,7 +314,7 @@ class FullOutputReader(OutputReader):
     def __init__(self, mm: Magnets = None):
         """ Reads the full state of the ASI. Ignores empty cells.
             By reading the full state, we allow for squinting afterwards. How exactly to do this, is a # TODO point.
-            @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+            @param mm [hotspice.Magnets] (None): if specified, this `OutputReader` automatically calls `self.configure_for(mm)`.
             NOTE: this class is ancient and might not work correctly.
         """
         super().__init__(mm)
@@ -338,7 +337,7 @@ class RegionalOutputReader(OutputReader):
         """ Reads the current state of the ASI with a certain level of detail.
             @param nx [int]: number of averaging bins in the x-direction.
             @param ny [int]: number of averaging bins in the y-direction.
-            @param mm [hotspice.Magnets] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
+            @param mm [hotspice.Magnets] (None): if specified, this `OutputReader` automatically calls `self.configure_for(mm)`.
         """
         self.nx, self.ny = nx, ny
         self.n_regions = self.nx*self.ny
@@ -383,10 +382,10 @@ class RegionalOutputReader(OutputReader):
 class OOPSquareChessFieldInputter(Inputter):
     def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
         """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external
-            field for each magnet, with magnitude <magnitude>*<datastream.get_next()>.
-            A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
-            <frequency> specifies the frequency [Hz] at which bits are being applied to the system, if it is nonzero.
-            At most <n> Monte Carlo steps will be performed for a single input bit.
+            field for each magnet, with magnitude `magnitude*datastream.get_next()`.
+            A checkerboard pattern is used to break symmetry between the two ground states of `OOP_Square` ASI.
+            `frequency` specifies the frequency [Hz] at which bits are being applied to the system, if it is nonzero.
+            At most `n` Monte Carlo steps will be performed for a single input bit.
         """
         super().__init__(datastream)
         self.magnitude = magnitude
@@ -404,13 +403,13 @@ class OOPSquareChessFieldInputter(Inputter):
 
 class OOPSquareChessOutputReader(OutputReader):
     def __init__(self, nx: int, ny: int, mm: OOP_Square = None):
-        """ This is a RegionalOutputReader optimized for OOP_Square ASI.
-            Since OOP_Square has two degenerate AFM ground states, the averaging takes place
+        """ This is a `RegionalOutputReader` optimized for `OOP_Square` ASI.
+            Since `OOP_Square` has two degenerate AFM ground states, the averaging takes place
             using an AFM mask, such that they can be distinguished and domain walls can be identified.
             @param nx [int]: number of averaging bins in the x-direction.
             @param ny [int]: number of averaging bins in the y-direction.
-            @param mm [hotspice.ASI.OOP_Square] (None): if specified, this OutputReader automatically calls self.configure_for(mm).
-                Otherwise, the user will have to call configure_for() separately after initializing the class instance.
+            @param mm [hotspice.ASI.OOP_Square] (None): if specified, this `OutputReader` automatically calls `self.configure_for(mm)`.
+                Otherwise, the user will have to call `configure_for()` separately after initializing the class instance.
         """
         self.nx, self.ny = int(nx), int(ny)
         super().__init__(mm)
@@ -451,8 +450,8 @@ class OOPSquareClockwiseInputter(Inputter):
         """ Applies an external stimulus in a clockwise manner in 4 substeps.
             In each substep, one quarter of all magnets is positively biased, while another quarter is negatively biased,
             and the other half is not stimulated at all. TODO: complete this description
-            <frequency> specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
-            At most <n> Monte Carlo steps will be performed for a single input bit.
+            `frequency` specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
+            At most `n` Monte Carlo steps will be performed for a single input bit.
             NOTE: This inputter will probalby work best with Néel update scheme.
         """
         super().__init__(datastream)
@@ -461,8 +460,8 @@ class OOPSquareClockwiseInputter(Inputter):
         self.frequency = frequency # The min. frequency the bits are applied at, if the time is known (i.e. Néel scheme is used)
 
     def input_single(self, mm: OOP_Square, value: bool|int):
-        """ Performs an input corresponding to <value> (generated using <self.datastream>)
-            into the <mm> simulation, and returns this <value>.
+        """ Performs an input corresponding to `value` (generated using `self.datastream`)
+            into the `mm` simulation, and returns this `value`.
         """
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
         if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
@@ -482,17 +481,17 @@ class OOPSquareClockwiseInputter(Inputter):
 class OOPSquareChessStepsInputter(Inputter):
     def __init__(self, datastream: Datastream, magnitude: float = 1., magnitude_range: float = 0., transition_range: float = 1., n: float = 4., frequency: float = 1.):
         """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external field for each magnet.
-            A checkerboard pattern is used to break symmetry between the two ground states of OOP_Square ASI.
-            NOTE: the difference between this and an OOPSquareChessFieldInputter is that this inputter
+            A checkerboard pattern is used to break symmetry between the two ground states of `OOP_Square` ASI.
+            NOTE: the difference between this and an `OOPSquareChessFieldInputter` is that this inputter
                   performs the input in 2 separate steps, where in each step half of the checkerboard pattern
                   is addressed, which should prevent domain walls from propagating all the way to saturation.
-            @param n [float] (4.): At most <n> Monte Carlo steps will be performed for a single input bit.
+            @param n [float] (4.): At most `n` Monte Carlo steps will be performed for a single input bit.
             @param frequency [float] (1.): The frequency at which bits are being applied to the system, if it is nonzero.
 
-            The datastream-to-field relationship is piecewise linear (see self.val_to_mag_piecewiselinear):
+            The datastream-to-field relationship is piecewise linear (see `self.val_to_mag_piecewiselinear`):
             @param magnitude [float] (1.): The absolute value of the external field magnitude for an input of 0 (-) or 1 (+).
-            @param magnitude_range [float] (0.): The difference in magnitude between input <0> and <0.5-transition_range/2>.
-            @param transition_range [float] (1.): A region of size <transition_range> around 0.5 separates the + and - magnitude regimes.
+            @param magnitude_range [float] (0.): The difference in magnitude between input `0` and `0.5 - transition_range/2`.
+            @param transition_range [float] (1.): A region of size `transition_range` around 0.5 separates the + and - magnitude regimes.
         """
         super().__init__(datastream)
         self.magnitude, self.magnitude_range, self.transition_range = magnitude, magnitude_range, transition_range
@@ -522,10 +521,10 @@ class OOPSquareChessStepsInputter(Inputter):
     
     def _val_to_mag_piecewiselinear(self, value: float):
         """ A piecewise linear function between
-            (0, -magnitude),
-            (0.5 - transition_range/2, -magnitude + magnitude_range),
-            (0.5 + transition_range/2, magnitude - magnitude_range) and
-            (1, magnitude).
+            (0, -`magnitude`),
+            (0.5 - `transition_range`/2, -`magnitude` + `magnitude_range`),
+            (0.5 + `transition_range`/2, `magnitude` - `magnitude_range`) and
+            (1, `magnitude`).
         """
         s = 0.5 - self.transition_range/2
         if value < s:
@@ -540,13 +539,13 @@ class OOPSquareChessSOTStepsInputter(Inputter):
         """ Tries to model the SOT as a reduction in energy barrier of the magnets.
             The question is then, how one should define a bit 0 or 1, or any value in between if we want analog input.
             One option is to use an external field whose strength determines the value, just as was the case in the
-            OOPSquareChessStepsInputter (with magnitude <magnitude>*<datastream.get_next()>). This can be done without
+            `OOPSquareChessStepsInputter` (with magnitude `magnitude*datastream.get_next()`). This can be done without
             a weird transfer function as the ASI is thermally active, I suppose.
             Another option is to vary the strength of the SOT, however it is not entirely clear what the effect of this is.
             I doubt it could be modeled as a smaller or larger reduction in the energy barrier. 
             A checkerboard pattern is used to make sure domain walls only move one step at a time.
-            <frequency> specifies the frequency [Hz] at which bits are being applied to the system, if it is nonzero.
-            At most <n> Monte Carlo steps will be performed for a single input bit.
+            `frequency` specifies the frequency [Hz] at which bits are being applied to the system, if it is nonzero.
+            At most `n` Monte Carlo steps will be performed for a single input bit.
         """
         super().__init__(datastream)
         self.magnitude = magnitude

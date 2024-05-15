@@ -13,12 +13,13 @@ else:
     import numpy as xp
 
 
-def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n:int=10000, L:int=400, Lx:int=None, Ly:int=None, cutoff=16, pattern:str=None, plot:bool=True, save:bool=False):
+def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n: int = 10000, L: int = 400, Lx: int = None, Ly: int = None,
+                                  cutoff: int = 16, pattern: str = None, plot: bool = True, save: bool = False):
     """ In this analysis, the difference between using either a truncated hotspice.DipolarEnergy() kernel,
         or using the full dipolar kernel, is analyzed.
         
         @param n [int] (10000): the number of times the energy is updated using a reduced kernel.
-        @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify <L> for square domain.
+        @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify `L` for square domain.
         @param cutoff [int] (16): the size of the reduced kernel. TODO: could it be interesting to sweep this?
     """
     if mm is None: mm = hotspice.ASI.OOP_Square(1e-6, nx=(Lx or L), ny=(Ly or L), PBC=True)
@@ -41,14 +42,14 @@ def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n:int=10000, L:int=
             mm.update()
         steps_done = next_stop
 
-        E_incremented = mm.get_energy('dipolar').E.copy() # The approximative kernel after <n> runs
+        E_incremented = mm.get_energy('dipolar').E.copy() # The approximative kernel after `n` runs
         mm.get_energy('dipolar').update() # Completely recalculate the dipolar energy from scratch
         E_recalculated = mm.get_energy('dipolar').E.copy()
         E_diff = E_recalculated - E_incremented
         E_absdiff = xp.abs(E_diff)
         absdiff_avg[i] = xp.mean(E_absdiff)
         absdiff_max[i] = xp.max(E_absdiff)
-        cutoffs[i] = cutoff # This is here in case we want to sweep <cutoff>
+        cutoffs[i] = cutoff # This is here in case we want to sweep `cutoff`
         switches[i] = mm.switches
         mm.get_energy('dipolar').E = E_incremented
     t = time.perf_counter() - t

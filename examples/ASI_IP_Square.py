@@ -21,7 +21,7 @@ print(f"Initialization time: {time.perf_counter() - t} seconds.")
 
 
 def animate_temp_rise(mm: hotspice.Magnets, animate=1, speed=100, T_step=0.05, T_max=600):
-    """ Shows an animation of increasing the temperature gradually from 0 to <T_max>, which could reveal
+    """ Shows an animation of increasing the temperature gradually from 0 to `T_max`, which could reveal
         information about the Néel temperature. Caution has to be taken, however, not to increase the 
         temperature too fast, as otherwise the phase transitions will lag behind anyway. The dotted horizontal
         line indicates the AFM-ness of a perfectly random state.

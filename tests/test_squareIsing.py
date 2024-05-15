@@ -29,8 +29,8 @@ class test_squareIsing:
         return 2*self.J/hotspice.kB/math.log(1+math.sqrt(2))
 
     def test_magnetization(self, T_steps=21, N=1000, scheme: Literal['Glauber', 'Néel', 'Wolff'] = 'Glauber', verbose=False, plot=True, save=False, reverse=False) -> hotspice.utils.Data:
-        """ Performs a sweep of the temperature in <T_steps> steps. At each step, <N> Magnets.update() calls are performed.
-            The final half of these <N> update calls are recorded, from which and their average/stdev of m_avg calculated.
+        """ Performs a sweep of the temperature in `T_steps` steps. At each step, `N` calls of `Magnets.update()` are performed.
+            The final half of these `N` update calls are recorded, from which and their average/stdev of m_avg calculated.
             @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.
         """
         simparams = hotspice.SimParams(UPDATE_SCHEME=scheme)
@@ -68,8 +68,8 @@ class test_squareIsing:
         return data
     
     def test_N_influence(self, *args, plot=True, save=True, **kwargs):
-        """ Tests the influence of <N> (the number of iterations per value of T) on m_avg.
-            Any arguments (not 'N') passed to this function are passed through to test_magnetization().
+        """ Tests the influence of `N` (the number of iterations per value of T) on m_avg.
+            Any arguments (not 'N') passed to this function are passed through to `test_magnetization()`.
         """
         df = pd.DataFrame()
 
@@ -91,7 +91,7 @@ class test_squareIsing:
 
     @staticmethod
     def test_magnetization_plot(df: pd.DataFrame, save=False, show=True):
-        """ If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. """
+        """ If `save` is bool, the filename is automatically generated. If `save` is str, it is used as filename. """
         T_lim = [df['T'].min(), df['T'].max()]
 
         hotspice.plottools.init_style()
@@ -116,7 +116,7 @@ class test_squareIsing:
 
     @staticmethod
     def test_N_influence_plot(df: pd.DataFrame, save=False, show=True):
-        """ If <save> is bool, the filename is automatically generated. If <save> is str, it is used as filename. """
+        """ If `save` is bool, the filename is automatically generated. If `save` is str, it is used as filename. """
         T_lim = [df['T'].min(), df['T'].max()]
 
         hotspice.plottools.init_style()

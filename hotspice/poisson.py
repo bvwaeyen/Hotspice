@@ -16,9 +16,9 @@ from typing import Callable
 
 
 def PoissonGrid(nx: int, ny: int, k=10):
-    """ Selects non-adjacent cells (neither diagonally nor orthogonally) in an <nx> x <ny> periodic grid.
-        The cell at (0, 0) is always chosen: additional randomization should be performed by _select_grid().
-        (this is basically an optimized version of poisson_disc_samples() for choosing supercells specifically)
+    """ Selects non-adjacent cells (neither diagonally nor orthogonally) in an `nx` x `ny` periodic grid.
+        The cell at (0, 0) is always chosen: additional randomization should be performed by `_select_grid()`.
+        (this is basically an optimized version of `poisson_disc_samples()` for choosing supercells specifically)
         Inspired by https://github.com/emulbreh/bridson/blob/master/bridson/__init__.py.
     """
     grid = np.zeros((nx, ny))
@@ -54,8 +54,8 @@ def PoissonGrid(nx: int, ny: int, k=10):
 
 
 def distSqPBC(w: float, h: float, positions: np.ndarray):
-    """ Determines the squared distance between the two positions in <positions>,
-        taking into account periodic boundaries between x=[0, w] and y=[0, h].
+    """ Determines the squared distance between the two positions in `positions`,
+        taking into account periodic boundaries between x=[0, `w`] and y=[0, `h`].
         Adapted from https://yangyushi.github.io/science/2020/11/02/pbc_py.html.
         @param positions [array(2,2)]: 2x2 NumPy array, format [[x0, y0], [x1, y1]]
         @return [float]: the distance between these points, squared.
@@ -70,8 +70,8 @@ def distSqPBC(w: float, h: float, positions: np.ndarray):
 
 
 def poisson_disc_samples(width, height, r, k=5, random: Callable = np.random.random, PBC=True):
-    """ Performs Poisson disk sampling in the box (width, height) with minimal
-        distance between samples <r>. Only deviation from normal Poisson disk
+    """ Performs Poisson disk sampling in the box (`width`, `height`) with minimal
+        distance between samples `r`. Only deviation from normal Poisson disk
         sampling, is that all points are at integer locations.
     """
     r += 1
