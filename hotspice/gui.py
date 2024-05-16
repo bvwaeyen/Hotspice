@@ -381,6 +381,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         quiver_qty: Literal['spin', 'H_eff'] = 'spin'
         subtract_barrier: bool = True
         energy_component: Literal['Total', 'E_barrier']|str = 'Total'
+        energy_perp: bool = False
         in_eV: bool = True
         field_type: Literal['E_B', 'T', 'moment'] = 'E_B'
 
@@ -391,6 +392,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
             self.quiver_qty = str(self.quiver_qty)
             self.subtract_barrier = bool(self.subtract_barrier)
             self.energy_component = str(self.energy_component)
+            self.energy_perp = bool(self.energy_perp)
             self.in_eV = bool(self.in_eV)
             self.field_type = str(self.field_type)
             if self.field_type not in self.available_field_types: raise ValueError(f"<field_type> can only be any of {self.available_field_types}.")
@@ -728,26 +730,30 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         self.content.set_clim(vmin=min(lims[0], xp.nanmin(domains)), vmax=max(lims[1], xp.nanmax(domains)))
 
     def _redraw_energy(self, settings_changed: bool = False):
-        energy_component, in_eV = self.settings.energy_component, self.settings.in_eV
+        energy_component, in_eV, perp = self.settings.energy_component, self.settings.in_eV, self.settings.energy_perp
+        symmetric_energies = ['E_barrier'] # These get a symmetric colormap centred at 0, like 'seismic'
         if settings_changed:
             # Update colormap
-            cmap = 'seismic' if energy_component == 'E_barrier' else 'inferno' # TODO: select good colormaps and limits for this, perhaps scaled by kBT?
+            cmap = 'seismic' if energy_component in symmetric_energies else 'inferno'
             self.content.set_cmap(cmap)
             # Change axes units
             E_unit = 'eV' if in_eV else 'J'
             colorbar_name = self.energy_names_readable.get(energy_component, "Energy")
             self.colorbar.ax.set_ylabel(f"{colorbar_name} [{E_unit}]", rotation=270, fontsize=self.figparams['fontsize_colorbar'])
             match energy_component:
-                case 'Total': self.E = lambda: self.mm.E
-                case 'E_barrier': self.E = lambda: xp.maximum((delta_E := self.mm.switch_energy()), self.mm.E_B + delta_E/2) # Crude approximation of the effective energy barrier for each magnet
+                case 'Total': self.E = (lambda: self.mm.E_perp) if perp else (lambda: self.mm.E)
+                case 'E_barrier': self.E = lambda: self.mm.E_barrier(min_only=True)
                 case _:
                     self._displayed_energy = self.mm.get_energy(energy_component)
-                    self.E = lambda: self._displayed_energy.E
+                    if self._displayed_energy is None: self.E = lambda: self.mm._zeros*xp.nan
+                    else:
+                        if perp: self.E = lambda: self._displayed_energy.E_perp
+                        else: self.E = lambda: self._displayed_energy.E
         E = xp.where(self.mm.m != 0, self.E(), xp.nan) # Change empty spots to NaN
         if in_eV: E = J_to_eV(E)
         self.content.set_data(asnumpy(E))
         lims = self.content.get_clim()
-        if energy_component == 'E_barrier':
+        if energy_component in symmetric_energies:
             maxabs = max(abs(xp.nanmin(E)), abs(xp.nanmax(E)))
             vmin, vmax = -maxabs, maxabs
         else:
@@ -841,6 +847,9 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
         self.option_energy_component = ctk.CTkOptionMenu(self.tab_ENERGY, values=valid_components, command=self.init_settings_magview)
         self.option_energy_component.pack(pady=10, padx=10)
         self.option_energy_component.set('Total') # Set to 'Total' by default
+        self.option_perp = ctk.CTkSwitch(self.tab_ENERGY, text="Show perpendicular component", command=self.init_settings_magview)
+        if self.mm.USE_PERP_ENERGY: self.option_perp.pack() # Only show this button if USE_PERP_ENERGY
+        self.option_perp.deselect() # Set to 'off' by default
         self.option_in_eV = ctk.CTkSwitch(self.tab_ENERGY, text="Energy in eV", command=self.init_settings_magview)
         self.option_in_eV.pack(pady=10, padx=10)
         self.option_in_eV.select() # Set to 'on' by default
@@ -866,6 +875,7 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
             color_quiver=self.option_color_quiver.get(),
             quiver_qty=self.option_quiver_qty.get(),
             energy_component=name_to_energycomponent.get(option_energy_component, option_energy_component),
+            energy_perp=self.option_perp.get(),
             in_eV=self.option_in_eV.get(),
             field_type=self.option_field_type.get()
         )
@@ -910,7 +920,7 @@ class ASISettingsFrame(ctk.CTkFrame):
         self.Néel.grid_columnconfigure(1, weight=1)
         Néel_tmax_values = list(10.**np.arange(-10, 10)) + [1e100, np.inf]
         self.Néel_t_max_var = tk.DoubleVar()
-        self.Néel_t_max = ttk.Spinbox(self.Néel, width=15, command=lambda: self.change_setting('t_max', float(self.Néel_t_max.get())), values=Néel_tmax_values, textvariable=self.Néel_t_max_var)
+        self.Néel_t_max = ttk.Spinbox(self.Néel, width=15, command=lambda: self.change_setting('t_max', float(self.Néel_t_max_var.get())), values=Néel_tmax_values, textvariable=self.Néel_t_max_var)
         self.Néel_t_max.grid(row=0, column=1, padx=10, sticky=ctk.W)
         self.Néel_t_max_text = ctk.CTkLabel(self.Néel, text="t_max [s]: ", anchor=ctk.E)
         self.Néel_t_max_text.grid(row=0, column=0, sticky=ctk.E)
