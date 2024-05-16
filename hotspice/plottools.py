@@ -194,26 +194,22 @@ def get_rgb(*args, **kwargs):
 
 
 def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None,
-                   mode: Literal['avg', 'quiver'] = 'quiver', avg: str = None, cmap: str = None, scale='µ'):
-    """ Plots a nicely colored quiver/avg in `ax`, without any axis labels etc. """
+                   mode: Literal['avg', 'quiver'] = 'quiver', avg: str = None, cmap: str = 'hsv', scale: str = 'µ'):
+    """ Plots a nicely colored quiver/avg in `ax`, without any axis labels etc.
+        @param `cmap` [str] (hsv): the colormap to indicate the magnetization direction.
+            For an OOP ASI: `cmap(0)` is used for spin 'down' and `cmap(1)` for spin 'up',
+            unless the colormap is cyclic: then `cmap(0)` is 'up' and `cmap(0.5)` is 'down'.
+            (NOTE: when using `mode='avg'` for IP ASI, the colormap is always HSV.)
+    """
     if m is None: m = mm.m
-    if cmap is None:
-        cmap = colormaps['hsv']
-        if not mm.in_plane:
-            r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
-            r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
-            cdict = {'red': [[0.0, r0,  r0], # x, value_left, value_right
-                                [0.5, 0.0, 0.0],
-                                [1.0, r1,  r1]],
-                    'green': [[0.0, g0,  g0],
-                                [0.5, 0.0, 0.0],
-                                [1.0, g1,  g1]],
-                    'blue':  [[0.0, b0,  b0],
-                                [0.5, 0.0, 0.0],
-                                [1.0, b1,  b1]]}
-            cmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
-    else:
-        cmap = colormaps[cmap]
+    cmap = colormaps[cmap]
+    if not mm.in_plane and cmap.name in ['hsv', 'twilight', 'twilight_shifted']: # Only do this for cyclic colormaps.
+        r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
+        r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
+        cdict = {'red':  [(0.0, r0,  r0), (0.5, 0.0, 0.0), (1.0, r1,  r1)], # tuples of (x, red_left, red_right)
+                'green': [(0.0, g0,  g0), (0.5, 0.0, 0.0), (1.0, g1,  g1)], # tuples of (x, green_left, green_right)
+                'blue':  [(0.0, b0,  b0), (0.5, 0.0, 0.0), (1.0, b1,  b1)]} # tuples of (x, blue_left, blue_right)
+        cmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
 
     scale = SIprefix_to_mul(scale)
     match mode.strip().lower():
@@ -229,12 +225,12 @@ def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None,
         case 'avg':
             avg = Average.resolve(True if avg is None else avg, mm)
             extent = _get_averaged_extent(mm, avg)/scale # List comp to convert to micrometre
-            im = get_rgb(mm, m=m, avg=avg, fill=True)
-            if mm.in_plane:
+            if mm.in_plane: # TODO: allow custom colormaps for in-plane with avg='avg'
+                im = get_rgb(mm, m=m, avg=avg, fill=True)
                 ax.imshow(im, cmap=cmap, origin='lower', vmin=0, vmax=2*math.pi,
                           extent=extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
             else:
-                ax.imshow(im, cmap=cmap, origin='lower', vmin=-1, vmax=1,
+                ax.imshow(m, cmap=cmap, origin='lower', vmin=-1, vmax=1,
                           extent=extent, interpolation='antialiased', interpolation_stage='rgba')
     ax.set_aspect('equal')
     ax.set_xlim(extent[:2])
