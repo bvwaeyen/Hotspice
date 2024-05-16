@@ -48,6 +48,7 @@ class Magnets(ABC):
         T: Field = 300, E_B: Field = 0., moment: Field = None, Msat: Field = 800e3, V: Field = 2e-22,
         pattern: str = None, energies: tuple['Energy'] = None,
         PBC: bool = False, m_perp_factor: float = None,
+        major_axis: float = 0, minor_axis: float = None,
         angle: float = 0., params: SimParams = None, in_plane: bool = False):
         """ The position of magnets is specified using `nx`, `ny`, `dx` and `dy`. Only rectilinear grids are currently allowed.
             The initial configuration of a `Magnets` geometry consists of 3 parts:
@@ -61,6 +62,9 @@ class Magnets(ABC):
                 varying (by passing them as a shape (`nx`, `ny`) array).
             The magnetic moment can either be specified using the 2 arguments `Msat` (default 800e3 A/m) and `V` (default 2e-22 m³),
                 or directly by passing a value to `moment`. The argument `moment` takes precedence over `Msat` and `V`.
+            Corrections to the Ising approximation can be applied using `major_axis` and `minor_axis`: when nonzero,
+                the dipole interaction will consider the magnets to be ellipses with these major/minor axes.
+                If only `major_axis` is specified, the magnet is assumed to be round with radius `major_axis/2`.
             To enable periodic boundary conditions (default: disabled), pass `PBC=True`.
             To add an extra rotation to all spins in addition to `self._get_angles()`, pass `angle` as a float (in radians).
             The parameter `in_plane` should only be used in a `super().__init__()` call when subclassing this class.
@@ -93,6 +97,8 @@ class Magnets(ABC):
         self.E_B = E_B # [J]
         self.moment = Msat*V if moment is None else moment # [Am²] moment is saturation magnetization multiplied by volume
         self.m_perp_factor = in_plane if m_perp_factor is None else m_perp_factor
+        self.major_axis = major_axis
+        self.minor_axis = major_axis if minor_axis is None else minor_axis # Shorthand: `minor_axis or major_axis`
 
         # History
         self.t = 0. # [s]

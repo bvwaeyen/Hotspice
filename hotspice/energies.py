@@ -161,18 +161,25 @@ class DipolarEnergy(Energy):
         self._prefactor = value
 
     def _initialize(self):
+        """ When `self.mm` has nonzero `major_axis` and `minor_axis`, the magnet
+            is assumed to be elliptical, and the approximation presented in
+                Politi, P., & Pini, M. G. (2002). Dipolar interaction between two-
+                dimensional magnetic particles. Physical Review B, 66(21), 214414.
+            is used to emulate the finite size of nanomagnets.
+        """
         self.unitcell = self.mm.unitcell
+        I = (self.mm.major_axis**2 + self.mm.minor_axis**2)/16 # "Moment of inertia" to emulate finite size of magnets
         
         # Let us first make the four-mirrored distance matrix rinv3
         # WARN: this four-mirrored technique only works if (dx, dy) is the same for every cell everywhere!
         # This could be generalized by calculating a separate rrx and rry for each magnet in a unit cell similar to toolargematrix_o{x,y}
-        rrx = self.mm.xx - self.mm.xx[0,0]
-        rry = self.mm.yy - self.mm.yy[0,0]
+        rrx = xp.maximum(self.mm.xx - self.mm.xx[0,0], 0)
+        rry = xp.maximum(self.mm.yy - self.mm.yy[0,0], 0)
         rr_sq = rrx**2 + rry**2
         rr_sq[0,0] = xp.inf
         rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
-        rr_inv3 = rr_inv**(-self.decay_exponent) # =1/r^3 by default
-        rinv3 = mirror4(rr_inv3)
+        rinv3 = mirror4(rr_inv**(-self.decay_exponent)) # = 1/r^3 by default
+        rinv5 = mirror4(rr_inv**(-self.decay_exponent + 2)) # = 1/r^5 by default
         # Now we determine the normalized rx and ry
         ux = mirror4(rrx*rr_inv, negativex=True)
         uy = mirror4(rry*rr_inv, negativey=True)
@@ -182,11 +189,8 @@ class DipolarEnergy(Energy):
         if self.mm.in_plane:
             unitcell_ox = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,0]
             unitcell_oy = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,1]
-            toolargematrix_ox = xp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
-            toolargematrix_oy = xp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
         else:
             unitcell_o = self.mm.occupation[:self.unitcell.y,:self.unitcell.x]
-            toolargematrix_o = xp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
         # Now comes the part where we start splitting the different cells in the unit cells
         self.kernel_unitcell_indices = -xp.ones((self.unitcell.y, self.unitcell.x), dtype=int) # unitcell (y,x) -> kernel (i). If no magnet present, the kernel index is -1 to indicate this.
         self.kernel_unitcell = []
@@ -196,36 +200,35 @@ class DipolarEnergy(Energy):
             for x in range(self.unitcell.x):
                 ## NORMAL KERNEL
                 if self.mm.in_plane:
-                    ox1, oy1 = unitcell_ox[y,x], unitcell_oy[y,x] # Scalars
-                    if ox1 == oy1 == 0:
-                        continue # Empty cell in the unit cell, so keep self.kernel_unitcell[y][x] equal to None
+                    if (ox1 := unitcell_ox[y,x]) == (oy1 := unitcell_oy[y,x]) == 0:
+                        continue # Empty cell in the unit cell, so don't store a kernel
+                    toolargematrix_ox = xp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
+                    toolargematrix_oy = xp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
                     # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
                     slice_startx = (self.unitcell.x - ((self.mm.nx-1) % self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
                     slice_starty = (self.unitcell.y - ((self.mm.ny-1) % self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
                     ox2 = toolargematrix_ox[slice_starty:slice_starty+2*self.mm.ny-1,slice_startx:slice_startx+2*self.mm.nx-1]
                     oy2 = toolargematrix_oy[slice_starty:slice_starty+2*self.mm.ny-1,slice_startx:slice_startx+2*self.mm.nx-1]
-                    kernel1 = ox1*ox2*(3*ux**2 - 1)
-                    kernel2 = oy1*oy2*(3*uy**2 - 1)
-                    kernel3 = 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
-                    kernel = -(kernel1 + kernel2 + kernel3)*rinv3
+                    k = ox1*ox2*(3*ux**2 - 1) + oy1*oy2*(3*uy**2 - 1) + 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
+                    k_correction = ox1*ox2*(5*ux**2 - 1) + oy1*oy2*(5*uy**2 - 1) + 5*(ux*uy)*(ox1*oy2 + oy1*ox2) # Add finite-size correction
+                    kernel = -rinv3*k - 3*I/2*rinv5*k_correction
                 else:
-                    o1 = unitcell_o[y,x] # occupation of cell 1
-                    if o1 == 0:
-                        continue # Empty cell in the unit cell, so keep self.kernel_unitcell[y][x] equal to None
+                    if unitcell_o[y,x] == 0:
+                        continue # Empty cell in the unit cell, so don't store a kernel
+                    toolargematrix_o = xp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
                     # Get the useful part of toolargematrix_o for this (x,y) in the unit cell
                     slice_startx = (self.unitcell.x - ((self.mm.nx-1) % self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
                     slice_starty = (self.unitcell.y - ((self.mm.ny-1) % self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
                     o2 = toolargematrix_o[slice_starty:slice_starty+2*self.mm.ny-1,slice_startx:slice_startx+2*self.mm.nx-1]
-                    kernel = o2*rinv3 # 'kernel' for out-of-plane is very simple
+                    kernel = o2*(rinv3 + 9*I/2*rinv5) # 'kernel' for out-of-plane: 1/r³ plus correction for finite size
                 
                 ## PERPENDICULAR KERNEL SELF (so the magnet in the center of the kernel is 'perpendicular')
                 if self.mm.in_plane: # "Perpendicular" is defined as rotated 90° counterclockwise (mathematical positive direction). AFAIK, this is only important here and nowhere else.
                     ox1_perp, oy1_perp = -oy1, ox1
                     # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
-                    kernel1_perpself = ox1_perp*ox2*(3*ux**2 - 1)
-                    kernel2_perpself = oy1_perp*oy2*(3*uy**2 - 1)
-                    kernel3_perpself = 3*(ux*uy)*(ox1_perp*oy2 + oy1_perp*ox2)
-                    kernel_perpself = -(kernel1_perpself + kernel2_perpself + kernel3_perpself)*rinv3
+                    k_perpself = ox1_perp*ox2*(3*ux**2 - 1) + oy1_perp*oy2*(3*uy**2 - 1) + 3*(ux*uy)*(ox1_perp*oy2 + oy1_perp*ox2)
+                    k_correction_perpself = ox1_perp*ox2*(5*ux**2 - 1) + oy1_perp*oy2*(5*uy**2 - 1) + 5*(ux*uy)*(ox1_perp*oy2 + oy1_perp*ox2) # Add finite-size correction
+                    kernel_perpself = -rinv3*k_perpself - 3*I/2*rinv5*k_correction_perpself
                 else:
                     kernel_perpself = np.zeros_like(kernel) # Perpendicular magnetization in OOP ASI is always zero-energy due to symmetry
 
@@ -233,10 +236,9 @@ class DipolarEnergy(Energy):
                 if self.mm.in_plane:
                     ox2_perp, oy2_perp = -oy2, ox2
                     # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
-                    kernel1_perpother = ox1*ox2_perp*(3*ux**2 - 1)
-                    kernel2_perpother = oy1*oy2_perp*(3*uy**2 - 1)
-                    kernel3_perpother = 3*(ux*uy)*(ox1*oy2_perp + oy1*ox2_perp)
-                    kernel_perpother = -(kernel1_perpother + kernel2_perpother + kernel3_perpother)*rinv3
+                    k_perpother = ox1*ox2_perp*(3*ux**2 - 1) + oy1*oy2_perp*(3*uy**2 - 1) + 3*(ux*uy)*(ox1*oy2_perp + oy1*ox2_perp)
+                    k_correction_perpother = ox1*ox2_perp*(5*ux**2 - 1) + oy1*oy2_perp*(5*uy**2 - 1) + 5*(ux*uy)*(ox1*oy2_perp + oy1*ox2_perp) # Add finite-size correction
+                    kernel_perpother = -rinv3*k_perpother - 3*I/2*rinv5*k_correction_perpother
                 else:
                     kernel_perpother = np.zeros_like(kernel) # Perpendicular magnetization in OOP ASI is always zero-energy due to symmetry
 
