@@ -25,8 +25,11 @@ class OOP_ASI(Magnets):
         # This abstract method is irrelevant for OOP ASI, so just return NaNs.
         return xp.nan*xp.zeros_like(self.ixx)
 
-    def correlation_NN(self): # Basically <S_i S_{i+1}>
-        NN = self._get_nearest_neighbors()
+    def correlation_NN(self, NN=None): # Basically <S_i S_{i+1}>
+        """ `NN` can be used to set a different NN mask (default: `self._get_nearest_neighbors()`),
+            for example in subclasses for further-NN implementations.
+        """
+        if NN is None: NN = self._get_nearest_neighbors()
         total_NN = signal.convolve2d(self.occupation, NN, mode='same', boundary='wrap' if self.PBC else 'fill')*self.occupation
         neighbors_sign_sum = signal.convolve2d(self.m, NN, mode='same', boundary='wrap' if self.PBC else 'fill')
         valid_positions = xp.where(total_NN != 0)
@@ -86,6 +89,15 @@ class OOP_Square(OOP_ASI):
         return xp.concatenate(sizes)
     def domain_size(self):
         return xp.mean(self.domain_sizes())
+    
+    def correlation_NN(self, N=1): # Basically <S_i S_{i+1}>
+        """ Calculates the correlation with the `N`-th nearest neighbor (average over the system). """
+        if not isinstance(N, int) and not (1 <= N <= 3): raise ValueError("Can only calculate NN correlation up to third-nearest neighbor")
+        match N:
+            case 1: NN = None
+            case 2: NN = xp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
+            case 3: NN = xp.array([[0, 0, 1, 0, 0], [0, 0, 0, 0, 0], [1, 0, 0, 0, 1], [0, 0, 0, 0, 0], [0, 0, 1, 0, 0]])
+        return super().correlation_NN(NN=NN)
 
 
 class OOP_Triangle(OOP_ASI):
