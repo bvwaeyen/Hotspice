@@ -368,3 +368,89 @@ class IP_Triangle(IP_Kagome):
 
     def _get_groundstate(self):
         return 'afm'
+
+
+# DIEGO STUFF
+class IP_Square_vert(IP_ASI):
+    def __init__(self, s: float, l: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
+        """ In-plane ASI with the spins placed on, and oriented along, the edges of squares. """
+        a = s+l
+        self.a = a  # [m] The side length of the squares (i.e. side length of a unit cell)
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx, dy = kwargs.pop('dx', a / 2), kwargs.pop('dy', a / 2)
+        super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
+
+    def _set_m(self, pattern: str):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = ((self.ixx - self.iyy) // 2 % 2) * 2 - 1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_angles(self):
+        angles = xp.zeros_like(self.xx)
+        angles[self.iyy % 2 == 0] = math.pi / 2
+        return angles
+
+    def _get_occupation(self):
+        return (self.ixx + self.iyy) % 2 == 1
+
+    def _get_appropriate_avg(self):
+        return ['squarefour', 'cross', 'square']
+
+    def _get_AFMmask(self):
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float') / 4
+
+    def _get_nearest_neighbors(self):
+        return xp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
+
+    def _get_groundstate(self):
+        return 'afm'
+
+
+class IP_Kagome_vert(IP_ASI):
+    def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
+        """ In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. """
+        self.a = a  # [m] The distance between opposing sides of a hexagon
+        if nx is None: nx = n
+        if ny is None:
+            ny = int(nx / math.sqrt(3)) // 4 * 4  # Try to make the domain reasonably square-shaped
+            if not kwargs.get('PBC', False): ny -= 1  # Remove dangling spins if no PBC
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx = kwargs.pop('dx', a / 4)
+        dy = kwargs.pop('dy', math.sqrt(3) * dx)
+        super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
+
+    def _set_m(self, pattern: str, angle=None):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = xp.ones_like(self.ixx)
+                self.m[(self.ixx + self.iyy) % 4 == 3] *= -1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_angles(self):
+        angles = xp.ones_like(self.xx) * math.pi / 2
+        angles[((self.ixx - (self.iyy+2)) % 4 == 1) & (self.ixx % 2 == 1)] = -math.pi / 6
+        angles[((self.ixx + (self.iyy+2)) % 4 == 3) & (self.ixx % 2 == 1)] = math.pi / 6
+        return angles
+
+    def _get_occupation(self):
+        occupation = xp.zeros_like(self.xx)
+        occupation[(self.ixx + (self.iyy+2)) % 4 == 1] = 1  # One bunch of diagonals \
+        occupation[(self.ixx - (self.iyy+2)) % 4 == 3] = 1  # Other bunch of diagonals /
+        return occupation
+
+    def _get_appropriate_avg(self):
+        return ['point', 'cross', 'triangle', 'hexagon']
+
+    def _get_AFMmask(self):
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float') / 4
+
+    def _get_nearest_neighbors(self):
+        return xp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]])
+
+    def _get_groundstate(self):
+        return 'uniform'
