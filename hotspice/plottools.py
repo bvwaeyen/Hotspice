@@ -559,5 +559,37 @@ def save_plot(save_path: str, ext=None, **savefig_kwargs):
         warnings.warn(f"Could not save to {save_path}, probably because the file is opened somewhere else.", stacklevel=2)
 
 
+# Diego made this function (plot_monopoles)
+def plot_monopoles(mm, d=200e-9):
+    charges_xx_plot = np.zeros((mm.ny, mm.nx, 2))
+    charges_yy_plot = np.zeros((mm.ny, mm.nx, 2))
+    charges_xx_plot[:, :, 0] = (mm.xx + d / 2 * xp.cos(mm.original_angles)) * mm.occupation  # Positions
+    charges_xx_plot[:, :, 1] = (mm.xx - d / 2 * xp.cos(mm.original_angles)) * mm.occupation
+    charges_yy_plot[:, :, 0] = (mm.yy + d / 2 * xp.sin(mm.original_angles)) * mm.occupation
+    charges_yy_plot[:, :, 1] = (mm.yy - d / 2 * xp.sin(mm.original_angles)) * mm.occupation
+
+    for i, row in enumerate(mm.m):
+        for j, val in enumerate(row):
+            if val == 0:  # Does not exist
+                charges_xx_plot[i, j] = np.nan
+                charges_yy_plot[i, j] = np.nan
+            elif val == -1:  # Switch positions
+                x0, y0, x1, y1 = charges_xx_plot[i, j, 0], charges_yy_plot[i, j, 0], charges_xx_plot[i, j, 1], charges_yy_plot[i, j, 1]
+                charges_xx_plot[i, j, 0] = x1
+                charges_yy_plot[i, j, 0] = y1
+                charges_xx_plot[i, j, 1] = x0
+                charges_yy_plot[i, j, 1] = y0
+    plt.scatter(charges_xx_plot[:, :, 0], charges_yy_plot[:, :, 0], color='red', zorder=2)
+    plt.scatter(charges_xx_plot[:, :, 1], charges_yy_plot[:, :, 1], color='blue', zorder=2)
+    for i, row in enumerate(mm.m):
+        for j, val in enumerate(row):
+            plt.plot([charges_xx_plot[i,j,0], charges_xx_plot[i,j,1]], [charges_yy_plot[i,j,0], charges_yy_plot[i,j,1]], color='black', zorder=1)
+
+    ax = plt.gca()
+    ax.set_aspect('equal', adjustable='box')
+    plt.xlabel("x [m]")
+    plt.ylabel("y [m]")
+    plt.show()
+
 if __name__ == "__main__":
     print(Average.TRIANGLE.mask)
