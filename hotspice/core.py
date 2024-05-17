@@ -171,10 +171,11 @@ class Magnets(ABC):
                 the system will be rotated, i.e. in addition to self._get_angles().
         """
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
-        self.angles = (self._get_angles() + angle)*self.occupation
-        self.orientation = xp.zeros(self.ixx.shape + (2,))
-        self.orientation[:,:,0] = xp.cos(self.angles)*self.occupation
-        self.orientation[:,:,1] = xp.sin(self.angles)*self.occupation
+        self.original_angles = self._get_angles() + angle
+        self.angles = self.original_angles * self.occupation
+        self.orientation = xp.zeros(self.xx.shape + (2,))
+        self.orientation[:, :, 0] = xp.cos(self.angles) * self.occupation
+        self.orientation[:, :, 1] = xp.sin(self.angles) * self.occupation
 
     def add_energy(self, energy: 'Energy', exist_ok=False, verbose=True):
         """ Adds an Energy object to self._energies. This object is stored under its reduced name,
