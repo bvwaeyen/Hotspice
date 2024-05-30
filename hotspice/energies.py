@@ -170,19 +170,6 @@ class DipolarEnergy(Energy):
         self.unitcell = self.mm.unitcell
         I = (self.mm.major_axis**2 + self.mm.minor_axis**2)/16 # "Moment of inertia" to emulate finite size of magnets
         
-        # Let us first make the four-mirrored distance matrix rinv3
-        # WARN: this four-mirrored technique only works if (dx, dy) is the same for every cell everywhere!
-        # This could be generalized by calculating a separate rrx and rry for each magnet in a unit cell similar to toolargematrix_o{x,y}
-        rrx = xp.maximum(self.mm.xx - self.mm.xx[0,0], 0)
-        rry = xp.maximum(self.mm.yy - self.mm.yy[0,0], 0)
-        rr_sq = rrx**2 + rry**2
-        rr_sq[0,0] = xp.inf
-        rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
-        rinv3 = mirror4(rr_inv**(-self.decay_exponent)) # = 1/r^3 by default
-        rinv5 = mirror4(rr_inv**(-self.decay_exponent + 2)) # = 1/r^5 by default
-        # Now we determine the normalized rx and ry
-        ux = mirror4(rrx*rr_inv, negativex=True)
-        uy = mirror4(rry*rr_inv, negativey=True)
         # Now we initialize the full ox
         num_unitcells_x = 2*math.ceil(self.mm.nx/self.unitcell.x) + 1
         num_unitcells_y = 2*math.ceil(self.mm.ny/self.unitcell.y) + 1
@@ -191,6 +178,9 @@ class DipolarEnergy(Energy):
             unitcell_oy = self.mm.orientation[:self.unitcell.y,:self.unitcell.x,1]
         else:
             unitcell_o = self.mm.occupation[:self.unitcell.y,:self.unitcell.x]
+        unitcell_dx, unitcell_dy = xp.meshgrid(self.mm.dx[:self.unitcell.x], self.mm.dy[:self.unitcell.y]) # TODO: there is an issue with dx/dy having length nx-1/ny-1
+        tlm_dx = xp.tile(unitcell_dx, (num_unitcells_y, num_unitcells_x))
+        tlm_dy = xp.tile(unitcell_dy, (num_unitcells_y, num_unitcells_x))
         # Now comes the part where we start splitting the different cells in the unit cells
         self.kernel_unitcell_indices = -xp.ones((self.unitcell.y, self.unitcell.x), dtype=int) # unitcell (y,x) -> kernel (i). If no magnet present, the kernel index is -1 to indicate this.
         self.kernel_unitcell = []
@@ -198,28 +188,42 @@ class DipolarEnergy(Energy):
         self.kernel_perpother_unitcell = []
         for y in range(self.unitcell.y):
             for x in range(self.unitcell.x):
+                # Slices for slicing "toolargematrix"es (tlm). These are (num_unitcells_x, num_unitcells_y) arrays of tiled unitcells.
+                slice_startx = (self.unitcell.x - ((self.mm.nx-1) % self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
+                slice_starty = (self.unitcell.y - ((self.mm.ny-1) % self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
+                tlm_slice = np.s_[slice_starty:slice_starty+2*self.mm.ny-1,slice_startx:slice_startx+2*self.mm.nx-1]
+                
+                ## DETERMINE DISTANCES
+                # The unitcell's dx and dy
+                dx, dy = tlm_dx[tlm_slice], tlm_dy[tlm_slice]
+                xx, yy = xp.cumsum(dx, axis=1), xp.cumsum(dy, axis=0) # The central magnet in this whole matrix is the one we are interested in. Therefore...
+                rrx = xx - xx[0,self.mm.nx - 1]
+                rry = yy - yy[self.mm.ny - 1,0]
+                
+                # Let us first make the four-mirrored distance matrix rinv3
+                rr_sq = rrx**2 + rry**2
+                rr_sq[self.mm.ny - 1,self.mm.nx - 1] = xp.inf
+                rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
+                rinv3 = rr_inv**(-self.decay_exponent) # = 1/r^3 by default
+                rinv5 = rr_inv**(-self.decay_exponent + 2) # = 1/r^5 by default
+                # Now we determine the normalized rx and ry
+                ux = xp.abs(rrx*rr_inv)
+                uy = xp.abs(rry*rr_inv)
                 ## NORMAL KERNEL
                 if self.mm.in_plane:
                     if (ox1 := unitcell_ox[y,x]) == (oy1 := unitcell_oy[y,x]) == 0:
                         continue # Empty cell in the unit cell, so don't store a kernel
-                    toolargematrix_ox = xp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
-                    toolargematrix_oy = xp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
-                    # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
-                    slice_startx = (self.unitcell.x - ((self.mm.nx-1) % self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
-                    slice_starty = (self.unitcell.y - ((self.mm.ny-1) % self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
-                    ox2 = toolargematrix_ox[slice_starty:slice_starty+2*self.mm.ny-1,slice_startx:slice_startx+2*self.mm.nx-1]
-                    oy2 = toolargematrix_oy[slice_starty:slice_starty+2*self.mm.ny-1,slice_startx:slice_startx+2*self.mm.nx-1]
+                    tlm_ox = xp.tile(unitcell_ox, (num_unitcells_y, num_unitcells_x)) # This is the maximum that we can ever need (this maximum
+                    tlm_oy = xp.tile(unitcell_oy, (num_unitcells_y, num_unitcells_x)) # occurs when the simulation does not cut off any unit cells)
+                    ox2, oy2 = tlm_ox[tlm_slice], tlm_oy[tlm_slice] # Get the useful part of toolargematrix_o{x,y} for this (x,y) in the unit cell
                     k = ox1*ox2*(3*ux**2 - 1) + oy1*oy2*(3*uy**2 - 1) + 3*(ux*uy)*(ox1*oy2 + oy1*ox2)
                     k_correction = ox1*ox2*(5*ux**2 - 1) + oy1*oy2*(5*uy**2 - 1) + 5*(ux*uy)*(ox1*oy2 + oy1*ox2) # Add finite-size correction
                     kernel = -rinv3*k - 3*I/2*rinv5*k_correction
                 else:
                     if unitcell_o[y,x] == 0:
                         continue # Empty cell in the unit cell, so don't store a kernel
-                    toolargematrix_o = xp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
-                    # Get the useful part of toolargematrix_o for this (x,y) in the unit cell
-                    slice_startx = (self.unitcell.x - ((self.mm.nx-1) % self.unitcell.x) + x) % self.unitcell.x # Final % not strictly necessary because
-                    slice_starty = (self.unitcell.y - ((self.mm.ny-1) % self.unitcell.y) + y) % self.unitcell.y # toolargematrix_o{x,y} large enough anyway
-                    o2 = toolargematrix_o[slice_starty:slice_starty+2*self.mm.ny-1,slice_startx:slice_startx+2*self.mm.nx-1]
+                    tlm_o = xp.tile(unitcell_o, (num_unitcells_y, num_unitcells_x)).astype(float)
+                    o2 = tlm_o[tlm_slice] # Get the useful part of toolargematrix_o for this (x,y) in the unit cell
                     kernel = o2*(rinv3 + 9*I/2*rinv5) # 'kernel' for out-of-plane: 1/r³ plus correction for finite size
                 
                 ## PERPENDICULAR KERNEL SELF (so the magnet in the center of the kernel is 'perpendicular')

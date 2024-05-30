@@ -12,7 +12,7 @@ m = 1.1278401e-15
 for nx in range(5, 11): # Test various system sizes (and then trim to 1 hexagon)
     for ny in range(3, 11):
         ## Create 1 kagome hexagon
-        mm = hotspice.ASI.IP_Kagome(a := (l+2*s)/np.tan(30*np.pi/180), nx=5, ny=3, moment=m, energies=[dd_energy := hotspice.energies.DipolarEnergy()], T=300, m_perp_factor=0, PBC=False)
+        mm = hotspice.ASI.IP_Kagome(a := (l+2*s)/np.tan(30*np.pi/180), nx=nx, ny=ny, moment=m, energies=[dd_energy := hotspice.energies.DipolarEnergy()], T=300, m_perp_factor=0, PBC=False)
         mm.m[(0,0,1),(1,3,4)] *= -1 # Vortex
         mm.occupation[3:,:] = mm.m[3:,:] = 0 # Remove magnets if ny > 3
         mm.occupation[:,5:] = mm.m[:,5:] = 0 # Remove magnets if nx > 5

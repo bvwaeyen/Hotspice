@@ -82,11 +82,11 @@ def _get_averaged_extent(mm: Magnets, avg):
     """ Returns the extent (in meters) that can be used in imshow when plotting an averaged quantity. """
     avg = Average.resolve(avg, mm)
     mask = avg.mask
-    if mm.PBC:
-        movex, movey = 0.5*mm.dx, 0.5*mm.dy
+    if mm.PBC: # TODO: the movex and movey are calculated incorrectly here. Should just move to pcolormesh instead of imshow in general.
+        movex, movey = 0.5*mm.dx[-1], 0.5*mm.dy[-1]
     else:
-        movex, movey = mask.shape[1]/2*mm.dx, mask.shape[0]/2*mm.dy # The averaged imshow should be displaced by this much
-    return np.array([mm.x_min-mm.dx+movex,mm.x_max-movex+mm.dx,mm.y_min-mm.dy+movey,mm.y_max-movey+mm.dy]) # [m]
+        movex, movey = mask.shape[1]/2*mm.dx[-1], mask.shape[0]/2*mm.dy[-1] # The averaged imshow should be displaced by this much
+    return np.array([mm.x_min-mm.dx[-1]+movex, mm.x_max-movex+mm.dx[-1], mm.y_min-mm.dy[-1]+movey, mm.y_max-movey+mm.dy[-1]]) # [m]
 
 def get_m_polar(mm: Magnets, m=None, avg=True):
     """ Returns the magnetization angle and magnitude (can be averaged using the averaging method specified by `avg`).
@@ -214,7 +214,7 @@ def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None,
     scale = SIprefix_to_mul(scale)
     match mode.strip().lower():
         case 'quiver':
-            extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dy/2])/scale
+            extent = np.array([mm.x_min-mm.dx[-1]/2, mm.x_max+mm.dx[-1]/2, mm.y_min-mm.dy[-1]/2, mm.y_max+mm.dy[-1]/2])/scale
             nonzero = mm.nonzero
             if mm.in_plane:
                 mx, my = asnumpy(xp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(xp.multiply(m, mm.orientation[:,:,1])[nonzero])
@@ -270,7 +270,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         show_quiver = False
     unit_factor = SIprefix_to_mul(unit)
     averaged_extent = _get_averaged_extent(mm, avg)/unit_factor # List comp to convert to micrometre
-    full_extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dy/2])/unit_factor
+    full_extent = np.array([mm.x_min-mm.dx[-1]/2, mm.x_max+mm.dx[-1]/2, mm.y_min-mm.dy[-1]/2, mm.y_max+mm.dy[-1]/2])/unit_factor
 
     num_plots = 1
     num_plots += 1 if show_energy else 0
@@ -363,8 +363,8 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
         @param scale [float] (.8): how long the shown ellipses are, as a multiple of the distance between nearest neighbors.
         @param save [bool] (False): if True, the figure is saved as "results/lattices/<ASI_name>_<nx>x<ny>.pdf
     """
-    len_x = mm.unitcell.x*mm.dx
-    len_y = mm.unitcell.y*mm.dy
+    len_x = xp.sum(mm.dx[:mm.unitcell.x])
+    len_y = xp.sum(mm.dy[:mm.unitcell.y])
     x_is_longer = len_x > len_y
     if nx is None: nx = n if x_is_longer else round(n*len_y/len_x)
     if ny is None: ny = round(nx*len_x/len_y) if x_is_longer else n
@@ -378,7 +378,6 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
     positions_x = asnumpy(mm.xx[occupied_indices])
     positions_y = asnumpy(mm.yy[occupied_indices])
     xmin, xmax, ymin, ymax = positions_x.min(), positions_x.max(), positions_y.min(), positions_y.max()
-    ux, uy = mm.unitcell.x*mm.dx, mm.unitcell.y*mm.dy
 
     figsize = 6
     size = mm._get_closest_dist()*scale
@@ -397,7 +396,7 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
 
     for i in range(positions_x.size):
         px, py = positions_x[i], positions_y[i]
-        edgedist = min([(px-xmin)/ux, (xmax-px)/ux, (py-ymin)/uy, (ymax-py)/uy, fall_off])/fall_off # Normalized distance to edge of figure (between 0 and 1)
+        edgedist = min([(px-xmin)/len_x, (xmax-px)/len_x, (py-ymin)/len_y, (ymax-py)/len_y, fall_off])/fall_off # Normalized distance to edge of figure (between 0 and 1)
         alpha = max(edgedist, 0.1)
         ax.add_artist(patches.Ellipse((px, py), size, (size/2 if mm.in_plane else size), angle=angles[i], alpha=alpha, ec=None))
     ax.set_xlim(xmin-size/2, xmax+size/2)

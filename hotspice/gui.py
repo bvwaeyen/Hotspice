@@ -423,10 +423,10 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         self.settings = MagnetizationView.ViewSettings()
         self.unit_axes = 'µ'
         self.unit_axes_factor = SIprefix_to_mul(self.unit_axes)
-        self.full_extent = np.array([self.mm.x_min - self.mm.dx/2,
-                                     self.mm.x_max + self.mm.dx/2,
-                                     self.mm.y_min - self.mm.dy/2,
-                                     self.mm.y_max + self.mm.dy/2]
+        self.full_extent = np.array([self.mm.x_min - self.mm.dx[-1]/2,
+                                     self.mm.x_max + self.mm.dx[-1]/2,
+                                     self.mm.y_min - self.mm.dy[-1]/2,
+                                     self.mm.y_max + self.mm.dy[-1]/2]
                                     )/self.unit_axes_factor
         self.ax: Axes = self.figure.add_subplot(111)
         self.ax_aspect = 'auto' if self.mm.nx == 1 or self.mm.ny == 1 else 'equal'
@@ -485,8 +485,8 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
             """
             if mouse_event.inaxes is not self.ax: return None, None # Only respond to mouse events inside the main drawing area (not e.g. the colorbar)
             if toolbar_is_in_use(): return None, None # Do not change magnets when the user wants to Pan or Zoom
-            idx_x = int(xp.argmin(xp.abs(mouse_event.xdata*self.unit_axes_factor - self.mm.xx[0,:].reshape(-1))))
-            idx_y = int(xp.argmin(xp.abs(mouse_event.ydata*self.unit_axes_factor - self.mm.yy[:,0].reshape(-1))))
+            idx_x = int(xp.argmin(xp.abs(mouse_event.xdata*self.unit_axes_factor - self.mm.x)))
+            idx_y = int(xp.argmin(xp.abs(mouse_event.ydata*self.unit_axes_factor - self.mm.y)))
             return idx_x, idx_y
         
         self.last_toggle_index = (0, 0) # (y, x)
@@ -537,8 +537,8 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         def update_polygonplotted():
             polygon = np.asarray(self.polygon).reshape(-1, 2)
             if polygon.size > 0:
-                x = self.mm.xx[0, polygon.T[1]]/self.unit_axes_factor
-                y = self.mm.yy[polygon.T[0], 0]/self.unit_axes_factor
+                x = self.mm.x[polygon.T[1]]/self.unit_axes_factor
+                y = self.mm.y[polygon.T[0]]/self.unit_axes_factor
                 self.polygonplotted.set_xy(np.asarray([asnumpy(x), asnumpy(y)]).T)
             else:
                 self.polygonplotted.set_xy([(0, 0)])
@@ -653,7 +653,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
                 self.ax.set_title(r"Domains")
                 cmap = colormaps['Greys'].copy()
                 cmap.set_bad(color='#FFAAAA')
-                self.content = self.ax.imshow(im_placeholder, cmap=cmap, origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
+                self.content = self.ax.imshow(im_placeholder, cmap=cmap, origin='lower', extent=self.full_extent, vmin=0, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
                 self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
                 self.colorbar.ax.set_ylabel("Domain number", rotation=270, fontsize=self.figparams['fontsize_colorbar']) # TODO: use the number of domains as vmax, when that has been implemented in .ASI module

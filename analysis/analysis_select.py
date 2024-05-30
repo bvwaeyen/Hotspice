@@ -158,7 +158,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     im2 = ax2.imshow(data2, vmin=1e-10, vmax=max(2e-10, np.max(data2)), extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='nearest', cmap=cmap)
     ax2.set_title("Prob. dens. of neighbors\naround any sample")
     ax2.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
-    ax2.add_patch(patches.Ellipse((0, 0), 2*r/mm.dx, 2*r/mm.dy, linewidth=1, fill=False, color='white', linestyle=':'))
+    ax2.add_patch(patches.Ellipse((0, 0), 2*r/xp.min(mm.dx), 2*r/xp.min(mm.dy), linewidth=1, fill=False, color='white', linestyle=':'))
     plt.colorbar(im2, extend='min')
 
     # PLOT 3: PROBABILITY OF CHOOSING EACH CELL

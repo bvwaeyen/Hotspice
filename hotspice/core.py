@@ -44,11 +44,11 @@ class SimParams:
 
 class Magnets(ABC):
     def __init__(
-        self, nx: int, ny: int, dx: float, dy: float, *,
+        self, nx: int, ny: int, dx: float|Field, dy: float|Field, *,
         T: Field = 300, E_B: Field = 0., moment: Field = None, Msat: Field = 800e3, V: Field = 2e-22,
         pattern: str = None, energies: tuple['Energy'] = None,
         PBC: bool = False, m_perp_factor: float = None,
-        major_axis: float = 0, minor_axis: float = None,
+        major_axis: float = 0, minor_axis: float = None, # Ellipse shape is constant throughout the array because it is baked into the dipolar kernel.
         angle: float = 0., params: SimParams = None, in_plane: bool = False):
         """ The position of magnets is specified using `nx`, `ny`, `dx` and `dy`. Only rectilinear grids are currently allowed.
             The initial configuration of a `Magnets` geometry consists of 3 parts:
@@ -136,15 +136,12 @@ class Magnets(ABC):
             Only works for square-lattice unit cells. # TODO: allow manual assignment of more complex unit cells
             @param max_cell [int] (100): Only unitcells with ux+uy < `max_cell` are considered for performance reasons.
         """
+        dx, dy = self.dx.reshape(1, -1), self.dy.reshape(-1, 1)
         for n in range(1, min(self.nx + self.ny + 1, max_cell + 1)): # Test possible unit cells in a triangle-like manner: (1,1), (2,1), (1,2), (3,1), (2,2), (1,3), ...
-            for i in range(max(0, n - self.nx) + 1, min(n, self.ny) + 1): # Don't test unit cells larger than the domain
-                ux = n - i + 1
-                uy = i
-                if self.in_plane:
-                    if check_repetition(self.orientation, ux, uy):
-                        return Unitcell(ux, uy)
-                else:
-                    if check_repetition(self.occupation, ux, uy):
+            for uy in range(max(0, n - self.nx) + 1, min(n, self.ny) + 1): # Don't test unit cells larger than the domain
+                ux = n - uy + 1
+                if check_repetition(self.orientation if self.in_plane else self.occupation, ux, uy):
+                    if check_repetition(dx, ux, 1) and check_repetition(dy, 1, uy):
                         return Unitcell(ux, uy)
         warnings.warn(dedent(f"""
             Could not detect a reasonably sized unit cell. Defaulting to entire domain {self.nx}x{self.ny}.
@@ -366,9 +363,11 @@ class Magnets(ABC):
         return self._dx
     @dx.setter
     def dx(self, value: float):
-        self._dx = float(value)
-        self.xx, _ = xp.meshgrid(xp.linspace(0, self._dx*(self.nx-1), self.nx), xp.arange(self.ny))
-        self.x_min, self.x_max = float(self.xx[0,0]), float(self.xx[-1,-1])
+        value = xp.asarray(value).reshape(-1)
+        self._dx = xp.tile(value, math.ceil(self.nx/value.size))[:self.nx]
+        self.x = xp.cumsum(self._dx) - self._dx[0]
+        self.xx, _ = xp.meshgrid(self.x, xp.empty(self.ny))
+        self.x_min, self.x_max = float(self.x[0]), float(self.x[-1])
         for energy in self._energies: energy.initialize(self)
     
     @property
@@ -377,9 +376,11 @@ class Magnets(ABC):
         return self._dy
     @dy.setter
     def dy(self, value: float):
-        self._dy = float(value)
-        _, self.yy = xp.meshgrid(xp.arange(self.nx), xp.linspace(0, self._dy*(self.ny-1), self.ny))
-        self.y_min, self.y_max = float(self.yy[0,0]), float(self.yy[-1,-1])
+        value = xp.asarray(value).reshape(-1)
+        self._dy = xp.tile(value, math.ceil(self.ny/value.size))[:self.ny]
+        self.y = xp.cumsum(self._dy) - self._dy[0]
+        _, self.yy = xp.meshgrid(xp.empty(self.nx), self.y)
+        self.y_min, self.y_max = float(self.y[0]), float(self.y[-1])
         for energy in self._energies: energy.initialize(self)
 
     @property
@@ -423,13 +424,11 @@ class Magnets(ABC):
                 otherwise it is in the usual lower left corner.
             @param crystalunits [bool] (False): if True, x and y are assumed to be a number of cells instead of a distance in meters (but still float).
         """
-        if center:
-            xx = self.xx + self.dx*self.nx/2
-            yy = self.yy + self.dy*self.ny/2
-        else:
-            xx, yy = self.xx, self.yy
-        if crystalunits: xx, yy = xx/self.dx, xx/self.dy
-        self._T = f(xx, yy)
+        xx = self.ixx if crystalunits else self.xx
+        yy = self.iyy if crystalunits else self.yy
+        len_x = self.nx - 1 if crystalunits else self.x_max - self.x_min
+        len_y = self.ny - 1 if crystalunits else self.y_max - self.y_min
+        self._T = f(xx - center*len_x/2, yy - center*len_y/2)
 
 
     def select(self, **kwargs):
@@ -485,7 +484,7 @@ class Magnets(ABC):
         if r is None: r = self.calc_r(0.01)
         # if poisson is None: poisson = (15*r)**2 < self.nx*self.ny # use poisson supercells only if there are not too many supercells
         if poisson is None: poisson = False # TODO: when parallel Poisson is implemented, uncomment the line above etc.
-        Rx, Ry = math.ceil(r/self.dx) - 1, math.ceil(r/self.dy) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
+        Rx, Ry = math.ceil(r/xp.min(self.dx)) - 1, math.ceil(r/xp.min(self.dy)) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
         Rx, Ry = self.unitcell.x*math.ceil(Rx/self.unitcell.x), self.unitcell.y*math.ceil(Ry/self.unitcell.y) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
         Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
         Rx, Ry = max(Rx, 1 if poisson else 2), max(Ry, 1 if poisson else 2) # Also don't take too small, too much randomness could be removed, resulting in nonphysical behavior
@@ -539,9 +538,13 @@ class Magnets(ABC):
     def _select_Poisson(self, r=None, **kwargs): # WARN: does not take occupation into account, so preferably only use on OOP_Square/IP_Ising!
         if r is None: r = self.calc_r(0.01)
 
-        # p = SequentialPoissonDiskSampling(self.ny*self.dy, self.nx*self.dx, r, tries=1).fill()
-        p = poisson_disc_samples(self.ny*self.dy, self.nx*self.dx, r, k=4)
-        points = (np.array(p)/self.dx).astype(int)
+        # p = SequentialPoissonDiskSampling(self.y_max, self.x_max, r, tries=1).fill()
+        p = np.asarray(poisson_disc_samples(self.y_max, self.x_max, r, k=4))
+        
+        def nearest_grid_indices(grid_1D, coords_1D): # TODO: this method is flawed because if some dx are very small they will almost never be visited
+            return np.abs(grid_1D[:, np.newaxis] - coords_1D).argmin(axis=0)
+        points = np.column_stack((nearest_grid_indices(self.x, p[:,0] + self.x_min),
+                                  nearest_grid_indices(self.y, p[:,1] + self.y_min)))
         return xp.asarray(points.T)
 
     def _select_cluster(self, **kwargs):
@@ -698,7 +701,7 @@ class Magnets(ABC):
                 switching probabilities is to be less than `Q`.
         """
         r = (8e-7*self._momentSq/(Q*self.kBT))**(1/3)
-        r = xp.clip(r, 0, self.nx*self.dx + self.ny*self.dy) # If T=0, we clip the infinite r back to a high value nx*dx+ny*dy which is slightly larger than the simulation
+        r = xp.clip(r, 0, (self.x_max - self.x_min) + (self.y_max - self.y_min)) # If T=0, we clip the infinite r back to a high value nx*dx+ny*dy which is slightly larger than the simulation
         return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
@@ -840,7 +843,7 @@ class Magnets(ABC):
         if T_avg is not None: self.history.T[-1] = float(T_avg)
         if m_avg is not None: self.history.m[-1] = float(m_avg)
 
-
+    # TODO: improve these autocorrelation and correlation length functions to take into account the non-uniform dx and dy
     def autocorrelation(self, *, normalize=True):
         """ In case of a 2D signal, this basically calculates the autocorrelation of the
             `self.m` matrix, while taking into account `self.orientation` for the in-plane case.
@@ -857,15 +860,16 @@ class Magnets(ABC):
             corr = signal.correlate2d(self.m, self.m, boundary=boundary)
 
         if normalize:
-            corr_norm = signal.correlate2d(xp.ones_like(self.m), xp.ones_like(self.m), boundary=boundary) # Is this necessary? (this is number of occurences of each cell in correlation sum)
-            corr = corr*self.m.size/self.n/corr_norm # Put between 0 and 1
+            ones = xp.ones_like(self.m)
+            corr_norm = signal.correlate2d(ones, ones, boundary=boundary) # Is this necessary? (this is number of occurences of each cell in correlation sum)
+            corr *= self.m.size/self.n/corr_norm # Put between 0 and 1
         
         return corr[(self.ny-1):(2*self.ny-1),(self.nx-1):(2*self.nx-1)]**2
 
     def correlation_length(self, correlation=None):
         if correlation is None: correlation = self.autocorrelation()
         # First calculate the distance between all spins in the simulation.
-        rr = (self.xx**2 + self.yy**2)**(1/2) # This only works if dx, dy is the same for every cell!
+        rr = (self.xx**2 + self.yy**2)**(1/2) # TODO: This only works correctly if dx, dy is the same for every cell!
         return float(xp.sum(xp.abs(correlation) * rr * rr)/xp.max(xp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
 
     def get_appropriate_avg(self, n=0):
@@ -903,9 +907,8 @@ class Magnets(ABC):
                 #   <angle> near math.pi/2 or -math.pi/2: bowtie configuration (top region: up/down, respectively)
                 self.m = xp.ones_like(self.xx)
                 if self.in_plane: # In-plane has a clear 'vortex' meaning
-                    middle = (self.dx*(self.nx-1)/2, self.dy*(self.ny-1)/2)
-                    diff_x = self.xx - middle[0]
-                    diff_y = self.yy - middle[1]
+                    diff_x = self.xx - (self.x_max - self.x_min)/2
+                    diff_y = self.yy - (self.y_max - self.y_min)/2
                     diff_complex = diff_x + 1j*diff_y
                     angle_desired = diff_complex*(-1j+1e-6) # Small offset from 90° to avoid weird boundaries in highly symmetric systems
                     dotprod = angle_desired.real*self.orientation[:,:,0] + angle_desired.imag*self.orientation[:,:,1]
@@ -914,7 +917,7 @@ class Magnets(ABC):
                     occupied = xp.where(self.occupation == 1)
                     self.m[occupied] = sign[occupied]
                 else: # for OOP, 'vortex' means 'up' on one side, 'down' on other side
-                    half_side = xp.where(self.xx >= (self.x_max-self.x_min)/2)
+                    half_side = xp.where(self.xx >= (self.x_max - self.x_min)/2)
                     self.m[half_side] *= -1
             case str(unknown_pattern):
                 self.m = self.rng.integers(0, 2, size=self.xx.shape)*2 - 1
