@@ -82,11 +82,12 @@ def _get_averaged_extent(mm: Magnets, avg):
     """ Returns the extent (in meters) that can be used in imshow when plotting an averaged quantity. """
     avg = Average.resolve(avg, mm)
     mask = avg.mask
+    margin_x, margin_y = asnumpy(mm.dx[-1]), asnumpy(mm.dy[-1])
     if mm.PBC: # TODO: the movex and movey are calculated incorrectly here. Should just move to pcolormesh instead of imshow in general.
-        movex, movey = 0.5*mm.dx[-1], 0.5*mm.dy[-1]
+        movex, movey = 0.5*margin_x, 0.5*margin_y
     else:
-        movex, movey = mask.shape[1]/2*mm.dx[-1], mask.shape[0]/2*mm.dy[-1] # The averaged imshow should be displaced by this much
-    return np.array([mm.x_min-mm.dx[-1]+movex, mm.x_max-movex+mm.dx[-1], mm.y_min-mm.dy[-1]+movey, mm.y_max-movey+mm.dy[-1]]) # [m]
+        movex, movey = mask.shape[1]/2*margin_x, mask.shape[0]/2*margin_y # The averaged imshow should be displaced by this much
+    return np.array([mm.x_min-margin_x+movex, mm.x_max-movex+margin_x, mm.y_min-margin_y+movey, mm.y_max-movey+margin_y]) # [m]
 
 def get_m_polar(mm: Magnets, m=None, avg=True):
     """ Returns the magnetization angle and magnitude (can be averaged using the averaging method specified by `avg`).
@@ -270,7 +271,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         show_quiver = False
     unit_factor = SIprefix_to_mul(unit)
     averaged_extent = _get_averaged_extent(mm, avg)/unit_factor # List comp to convert to micrometre
-    full_extent = np.array([mm.x_min-mm.dx[-1]/2, mm.x_max+mm.dx[-1]/2, mm.y_min-mm.dy[-1]/2, mm.y_max+mm.dy[-1]/2])/unit_factor
+    full_extent = _get_averaged_extent(mm, "point")/unit_factor
 
     num_plots = 1
     num_plots += 1 if show_energy else 0
@@ -397,7 +398,7 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
     for i in range(positions_x.size):
         px, py = positions_x[i], positions_y[i]
         edgedist = min([(px-xmin)/len_x, (xmax-px)/len_x, (py-ymin)/len_y, (ymax-py)/len_y, fall_off])/fall_off # Normalized distance to edge of figure (between 0 and 1)
-        alpha = max(edgedist, 0.1)
+        alpha = max(float(edgedist), 0.1)
         ax.add_artist(patches.Ellipse((px, py), size, (size/2 if mm.in_plane else size), angle=angles[i], alpha=alpha, ec=None))
     ax.set_xlim(xmin-size/2, xmax+size/2)
     ax.set_ylim(ymin-size/2, ymax+size/2)

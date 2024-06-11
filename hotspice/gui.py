@@ -423,11 +423,11 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         self.settings = MagnetizationView.ViewSettings()
         self.unit_axes = 'µ'
         self.unit_axes_factor = SIprefix_to_mul(self.unit_axes)
-        self.full_extent = np.array([self.mm.x_min - self.mm.dx[-1]/2,
-                                     self.mm.x_max + self.mm.dx[-1]/2,
-                                     self.mm.y_min - self.mm.dy[-1]/2,
-                                     self.mm.y_max + self.mm.dy[-1]/2]
-                                    )/self.unit_axes_factor
+        self.full_extent = [self.mm.x_min - self.mm.dx[-1]/2,
+                            self.mm.x_max + self.mm.dx[-1]/2,
+                            self.mm.y_min - self.mm.dy[-1]/2,
+                            self.mm.y_max + self.mm.dy[-1]/2]
+        self.full_extent = np.array([asnumpy(i) for i in self.full_extent])/self.unit_axes_factor
         self.ax: Axes = self.figure.add_subplot(111)
         self.ax_aspect = 'auto' if self.mm.nx == 1 or self.mm.ny == 1 else 'equal'
         self.ax.set_aspect(self.ax_aspect)

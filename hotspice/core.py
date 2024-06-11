@@ -365,7 +365,8 @@ class Magnets(ABC):
     def dx(self, value: float):
         value = xp.asarray(value).reshape(-1)
         self._dx = xp.tile(value, math.ceil(self.nx/value.size))[:self.nx]
-        self.x = xp.cumsum(self._dx) - self._dx[0]
+        self.x = xp.zeros(self.nx)
+        self.x[1:] = xp.cumsum(self._dx)[:-1]
         self.xx, _ = xp.meshgrid(self.x, xp.empty(self.ny))
         self.x_min, self.x_max = float(self.x[0]), float(self.x[-1])
         for energy in self._energies: energy.initialize(self)
@@ -378,7 +379,8 @@ class Magnets(ABC):
     def dy(self, value: float):
         value = xp.asarray(value).reshape(-1)
         self._dy = xp.tile(value, math.ceil(self.ny/value.size))[:self.ny]
-        self.y = xp.cumsum(self._dy) - self._dy[0]
+        self.y = xp.zeros(self.ny)
+        self.y[1:] = xp.cumsum(self._dy)[:-1]
         _, self.yy = xp.meshgrid(xp.empty(self.nx), self.y)
         self.y_min, self.y_max = float(self.y[0]), float(self.y[-1])
         for energy in self._energies: energy.initialize(self)
