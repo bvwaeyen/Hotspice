@@ -182,6 +182,50 @@ class OOP_Honeycomb(OOP_ASI):
         return (sublattice == self.m).astype(int)
 
 
+class OOP_Cairo(OOP_ASI):
+    def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, beta: float = None, offset_factor: float = 1., **kwargs):
+        """ In-plane ASI with all spins placed on the edges of the equilateral Cairo tiling.
+            NOTE: `dx` and `dy` can not be specified spearately, all is controlled by `a` and `beta`.
+            `offset_factor` can be used to offset the magnets to make the 4-vertices and 3-vertices look less unbalanced.
+                The nicest shape is achieved for `offset_factor=1.2`.
+        """
+        self.a = a # [m] The side length of the pentagons
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        
+        self.beta = math.pi/4 + math.acos(math.sqrt(2)/4) if beta is None else beta
+        dx = dy = [-a*math.cos(self.beta),a/2,a/2,-a*math.cos(self.beta)]
+        super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
+
+    def _set_m(self, pattern: str, angle=None):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = xp.ones_like(self.ixx)
+                self.m[(self.ixx + self.iyy) % 5 == 1] *= -1
+                self.m[(self.ixx + self.iyy) % 5 == 3] *= -1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_occupation(self):
+        occupation = xp.zeros_like(self.xx)
+        for x, y in [(0,0), (0,4), (1,2), (2,5), (2,7), (3,2), (4,0), (4,4), (5,6), (6,1), (6,3), (7,6)]:
+            occupation[y::8,x::8] = 1
+        return occupation
+
+    def _get_appropriate_avg(self):
+        return ['point']
+
+    def _get_AFMmask(self):
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+
+    def _get_nearest_neighbors(self):
+        return xp.array([[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]])
+
+    def _get_groundstate(self):
+        return 'afm'
+
+
 class IP_Ising(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with all spins on a square grid, all pointing in the same direction. """
@@ -395,7 +439,6 @@ class IP_Cairo(IP_ASI):
         if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
         
         self.beta = math.pi/4 + math.acos(math.sqrt(2)/4) if beta is None else beta
-        offset_factor = 1 # Can be used to offset the magnets to make the 4-vertices and 3-vertices look less unbalanced
         dxPQ = dyRS = a/2*math.sin(self.beta)
         dxQR = dxPQ - a/2*math.cos(self.beta)
         dxRS = dyPQ = math.sin(math.pi/2 - self.beta)*a + math.cos(math.pi/2 - self.beta)*a - a/2*math.cos(self.beta)
@@ -436,7 +479,7 @@ class IP_Cairo(IP_ASI):
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
 
     def _get_nearest_neighbors(self):
-        return xp.array([[0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0]]) # TODO
+        return xp.array([[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]])
 
     def _get_groundstate(self):
-        return 'uniform'
+        return 'afm'

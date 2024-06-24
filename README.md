@@ -116,18 +116,20 @@ They all follow the pattern `hotspice.ASI.<class>(a, n, nx=None, ny=None, **kwar
 
 | Class | Lattice | Parameters |
 |---|:---:|---|
-| `IP_Ising` | <img src="./figures/ASI_lattices/IP_Ising_8x8.png" alt="IP_Ising_8x8" width="200"/> | `a` is the distance between nearest neighbors. The occupation is full. |
-| `IP_Square` or `IP_Square_Closed` | <img src="./figures/ASI_lattices/IP_Square_5x5.png" alt="IP_Square_5x5" width="200"/> | `a` is the side length of a square, i.e. the side length of a unit cell. The occupation is 1/2. |
-| `IP_Square_Open` | <img src="./figures/ASI_lattices/IP_Square_Open_4.5x4.5.png" alt="IP_Square_Open_4.5x4.5" width="200"/> | Same as `IP_Square`, but with different edges, because the grid as a whole is rotated 45°. The occupation is 1. |
-| `IP_Pinwheel` or `IP_Pinwheel_Diamond` | <img src="./figures/ASI_lattices/IP_Pinwheel_5x5.png" alt="IP_Pinwheel_5x5" width="200"/> | Same as `IP_Square`, but with the easy axis of each magnet rotated 45°. |
+| `IP_Ising` | <img src="./figures/ASI_lattices/IP_Ising_8x8.png" alt="IP_Ising_8x8" width="200"/> | `a` is the distance between nearest neighbors. Full occupation. |
+| `IP_Square` or `IP_Square_Closed` | <img src="./figures/ASI_lattices/IP_Square_5x5.png" alt="IP_Square_5x5" width="200"/> | `a` is the side length of a square, i.e. the side length of a unit cell. 1/2 occupation. |
+| `IP_Square_Open` | <img src="./figures/ASI_lattices/IP_Square_Open_4.5x4.5.png" alt="IP_Square_Open_4.5x4.5" width="200"/> | Same as `IP_Square`, but with different edges, because the grid as a whole is rotated 45°. Full occupation. |
+| `IP_Pinwheel` or `IP_Pinwheel_Diamond` | <img src="./figures/ASI_lattices/IP_Pinwheel_5x5.png" alt="IP_Pinwheel_5x5" width="200"/> | Same as `IP_Square`, but with each magnet rotated 45°. |
 | `IP_Pinwheel_LuckyKnot` | <img src="./figures/ASI_lattices/IP_Pinwheel_LuckyKnot_4.5x4.5.png" alt="IP_Pinwheel_LuckyKnot_4.5x4.5" width="200"/> | Same as `IP_Square_Open`, but with each magnet rotated 45°. |
-| `IP_Kagome` | <img src="./figures/ASI_lattices/IP_Kagome_5x3.png" alt="IP_Kagome_5x3" width="200"/> | `a` is the distance between opposing edges of a hexagon. The occupation is 3/8. |
+| `IP_Kagome` | <img src="./figures/ASI_lattices/IP_Kagome_5x3.png" alt="IP_Kagome_5x3" width="200"/> | `a` is the distance between opposing edges of a hexagon. 3/8 occupation. |
 | `IP_Triangle` | <img src="./figures/ASI_lattices/IP_Triangle_5x3.png" alt="IP_Triangle_5x3" width="200"/> | Same as `IP_Kagome`, but with all magnets rotated 90°. |
+| `IP_Cairo` | <img src="./figures/ASI_lattices/IP_Cairo_3x3.png" alt="IP_Cairo_3x3" width="200"/> | `a` is the side length of a pentagon. `beta` transforms the ice to Shakti, but this is not recommended in the Ising approximation. 1/5 occupation. |
 
 ### Out-of-plane
 
 | Class | Lattice | Parameters |
 |---|:---:|---|
-| `OOP_Square` | <img src="./figures/ASI_lattices/OOP_Square_11x11.png" alt="OOP_Square_11x11" width="200"/> | `a` is the distance between nearest neighbors. The occupation is full. |
-| `OOP_Triangle` | <img src="./figures/ASI_lattices/OOP_Triangle_7x4.png" alt="OOP_Triangle_7x4" width="200"/> | `a` is the distance between nearest neighbors. The occupation is 1/2. |
-| `OOP_Honeycomb` | <img src="./figures/ASI_lattices/OOP_Honeycomb_4x7.png" alt="OOP_Honeycomb_4x7" width="200"/> | `a` is the distance between nearest neighbors. The occupation is 2/5. |
+| `OOP_Square` | <img src="./figures/ASI_lattices/OOP_Square_11x11.png" alt="OOP_Square_11x11" width="200"/> | `a` is the distance between nearest neighbors. Full occupation. |
+| `OOP_Triangle` | <img src="./figures/ASI_lattices/OOP_Triangle_7x4.png" alt="OOP_Triangle_7x4" width="200"/> | `a` is the distance between nearest neighbors. 1/2 occupation. |
+| `OOP_Honeycomb` | <img src="./figures/ASI_lattices/OOP_Honeycomb_4x7.png" alt="OOP_Honeycomb_4x7" width="200"/> | `a` is the distance between nearest neighbors. 2/5 occupation. |
+| `OOP_Cairo` | <img src="./figures/ASI_lattices/OOP_Cairo_3x3.png" alt="OOP_Cairo_3x3" width="200"/> | `a` is the distance between nearest neighbors. 3/16 occupation. |
