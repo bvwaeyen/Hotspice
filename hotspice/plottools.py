@@ -564,5 +564,26 @@ def save_plot(save_path: str, ext=None, **savefig_kwargs):
         warnings.warn(f"Could not save to {save_path}, probably because the file is opened somewhere else.", stacklevel=2)
 
 
+# TODO: incorporate monopole plot into the GUI
+def plot_monopoles(mm: Magnets, d=200e-9): # Original author: Diego De Gusem
+    charges_xx_plot = np.zeros((mm.ny, mm.nx, 2))
+    charges_yy_plot = np.zeros((mm.ny, mm.nx, 2))
+    charges_xx_plot[:,:,0] = (mm.xx + mm.m*d/2*xp.cos(mm.angles))*mm.occupation
+    charges_xx_plot[:,:,1] = (mm.xx - mm.m*d/2*xp.cos(mm.angles))*mm.occupation
+    charges_yy_plot[:,:,0] = (mm.yy + mm.m*d/2*xp.sin(mm.angles))*mm.occupation
+    charges_yy_plot[:,:,1] = (mm.yy - mm.m*d/2*xp.sin(mm.angles))*mm.occupation
+    charges_xx_plot[xp.where(mm.m == 0)] = np.nan
+    charges_yy_plot[xp.where(mm.m == 0)] = np.nan
+
+    plt.scatter(charges_xx_plot[:,:,0], charges_yy_plot[:,:,0], color='red', zorder=2)
+    plt.scatter(charges_xx_plot[:,:,1], charges_yy_plot[:,:,1], color='blue', zorder=2)
+    for (i, j), _ in xp.ndenumerate(mm.m):
+        plt.plot(charges_xx_plot[i,j], charges_yy_plot[i,j], color='black', zorder=1)
+
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.xlabel("x [m]")
+    plt.ylabel("y [m]")
+    plt.show()
+
 if __name__ == "__main__":
     print(Average.TRIANGLE.mask)
