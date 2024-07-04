@@ -367,7 +367,7 @@ class IP_Pinwheel_LuckyKnot(IP_Square_Open):
         return ['crossfour', 'square']
 
 
-class IP_Kagome(IP_ASI):
+class IP_Kagome(IP_ASI): # TODO: change the meaning of <a> such that it is the side length of a hexagon (this would be more in line with other ASI definitions).
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. """
         self.a = a # [m] The distance between opposing sides of a hexagon

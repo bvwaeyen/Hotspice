@@ -435,7 +435,7 @@ def show_history(mm: Magnets, *, y_quantity=None, y_label="Average magnetization
     plt.gcf().tight_layout()
     plt.show()
 
-def get_AFMness(mm: Magnets, AFM_mask=None):
+def get_AFMness(mm: Magnets, AFM_mask=None): # TODO: remove this ill-defined function
     """ Returns the average AFM-ness of `mm.m` at the current time step, normalized to 1.
         For a perfectly uniform configuration this is 0, while for random it is 0.375.
         Note that the boundaries are not taken into account for the normalization, so the

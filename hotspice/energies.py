@@ -356,7 +356,10 @@ class DipolarEnergy(Energy):
         return xp.sum(self.E)/2
 
     def get_NN_interaction(self):
-        """ An APPROXIMATE value for the nearest-neighbor dipolar interaction energy. """
+        """ An APPROXIMATE value for the nearest-neighbor dipolar interaction energy.
+            Approximate means that the highest value over all NNs over all kernels is returned, using the average magnetic moment.
+            Hence, for a highly symmetric system like a uniform Ising system, this will be exact, but not for IP ASI.
+        """
         # Approximation: use highest value from all nearest-neighbors in all kernels, and average magnetic moment
         largest = 0
         for kernel in self.kernel_unitcell:
