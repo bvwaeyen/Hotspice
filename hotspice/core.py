@@ -44,7 +44,7 @@ class SimParams:
         # If a multisampling scheme is incompatible with an update scheme, an error should be raised at runtime, not here.
 
 
-class Magnets(ABC):
+class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of cells (e.g. to create open-edge IP_Square)
     def __init__(
         self, nx: int, ny: int, dx: float|Field, dy: float|Field, *,
         T: Field = 300, E_B: Field = 0., moment: Field = None, Msat: Field = 800e3, V: Field = 2e-22,
@@ -616,7 +616,7 @@ class Magnets(ABC):
 
         if not self.USE_PERP_ENERGY: # Use simplified calculation, taken from old Néel/Glauber
             # THERE ARE TWO CHOICES OF FORMULA, DEPENDING ON THE INTERPRETATION OF THE CASE WHERE THE ENERGY BARRIER DISAPPEARS:
-            barrier = xp.maximum(delta_E, E_B - E) # THIS FORMULA IS FULLY BACKWARDS COMPATIBLE (pre-2024), and in a sense uses the 'curvature' of the energy landscape for cases where it is <0
+            # TODO: Determine what is the best approach for the 'barrier < 0' case. barrier=delta_E? barrier=curvature? barrier=0?
             # barrier = xp.where(E_B > E_highest_state, E_B - E, delta_E) # This formula has a discontinuity as soon as barrier < 0, because then the opposite state is used (which is always suddenly much lower), thus ensuring that barrierless magnets will always switch before magnets with even the tiniest barrier.
             return barrier if min_only else (barrier, barrier)
         

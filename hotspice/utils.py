@@ -362,21 +362,34 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
     """
     # Make output directory
     script = Path(inspect.stack()[1].filename) # The caller script, i.e. the one where __name__ == "__main__"
-    if outdir is None: outdir = script.parent / (script.stem + '.out') / timestamp()
-    Path(outdir).mkdir(exist_ok=True, parents=True) # Make directory "caller_script.out/<timestamp>"
+    if outdir is None:
+        outdir = script.parent / (script.stem + '.out') / timestamp()
+    else:
+        outdir = Path(outdir)
+        if not outdir.exists(): outdir = script.parent / (script.stem + '.out') / outdir
+    outdir.mkdir(exist_ok=True, parents=True) # Make directory "caller_script.out/<timestamp>" (or <outdir> if argument passed)
     # Save information
     if copy_script:
-        try: shutil.copy2(script, os.path.join(outdir, 'script.py'))
+        try: shutil.copy2(script, outdir / 'script.py')
         except shutil.SameFileError: pass
-    if parameters is not None: json.dump(parameters, open(os.path.join(outdir, 'params.json'), 'w+'), indent="\t", cls=_CompactJSONEncoder)
-    if data is not None: pickle.dump(data, open(os.path.join(outdir, 'data.pkl'), 'wb')) #! Must be 'wb' because binary object
+    if parameters is not None: json.dump(parameters, open(outdir / 'params.json', 'w+'), indent="\t", cls=_CompactJSONEncoder)
+    if data is not None: pickle.dump(data, open(outdir / 'data.pkl', 'wb')) #! Must be 'wb' because binary object
     # Save figure(s)
     if figures is not None:
         if not isinstance(figures, Iterable): figures = [figures]
         for i, fig in enumerate(figures):
             for ext in ('.pdf', '.png', '.svg'):
-                fig.savefig(os.path.join(outdir, f'figure{i if len(figures) > 1 else ""}') + ext, dpi=dpi)
+                fig.savefig(outdir / f'figure{i if len(figures) > 1 else ""}{ext}', dpi=dpi)
     return outdir
+
+def load_results(data_dir: Path|str):
+    """ Loads the `params` and `data` as saved by `save_results()`. """
+    data_dir = Path(data_dir)
+    with open(data_dir / "data.pkl", "rb") as infile:
+        data = pickle.load(infile)
+    with open(data_dir / "params.json", "r") as infile:
+        params: dict = json.load(infile)
+    return params, data
 
 class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
     def __init__(self, df: pd.DataFrame, constants: dict = None, metadata: dict = None, compact: bool = True):
