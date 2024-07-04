@@ -346,7 +346,7 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
-def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure] = None, copy_script: bool = True, outdir: str|Path = None, dpi=600) -> str:
+def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure]|dict[str,Figure] = None, copy_script: bool = True, outdir: str|Path = None, dpi=600) -> str:
     """ The most basic way to consistently save results of a simulation script. This can save the basic
         parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
         figure(s) as pdf/png/svg, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
@@ -356,7 +356,7 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
             @param data [Any] (None): will be saved as a pickle file. This is usually a large array,
                 or a dict of arrays, but can really be anything as long as you remember what it represents.
             @param figures [Figure|Iterable[Figure]] (None): one or more Matplotlib figures that will be
-                saved to pdf file(s).
+                saved to pdf file(s). Can pass a (str: Figure) dict to specify the filename of each figure. 
             @param dpi [float] (600): The resolution at which the figures will be saved.
             @return [str]: the output directory. Can be used to manually save additional resources there.
     """
@@ -376,10 +376,13 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
     if data is not None: pickle.dump(data, open(outdir / 'data.pkl', 'wb')) #! Must be 'wb' because binary object
     # Save figure(s)
     if figures is not None:
-        if not isinstance(figures, Iterable): figures = [figures]
-        for i, fig in enumerate(figures):
+        if not isinstance(figures, Iterable):
+            figures = [figures]
+        if not isinstance(figures, dict):
+            figures = {f'figure{i if len(figures) > 1 else ""}': figure for i, figure in enumerate(figures)}
+        for name, fig in figures.items():
             for ext in ('.pdf', '.png', '.svg'):
-                fig.savefig(outdir / f'figure{i if len(figures) > 1 else ""}{ext}', dpi=dpi)
+                fig.savefig(outdir / (name + ext), dpi=dpi)
     return outdir
 
 def load_results(data_dir: Path|str):

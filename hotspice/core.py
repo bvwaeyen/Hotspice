@@ -32,6 +32,7 @@ class SimParams:
     REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
     UPDATE_SCHEME: Literal['Néel', 'Metropolis', 'Wolff'] = 'Néel' # Wolff is only available for exchange-coupled ASI
     MULTISAMPLING_SCHEME: Literal['single', 'grid', 'Poisson', 'cluster'] = 'grid' # Only used if UPDATE_SCHEME is 'Metropolis'.
+    ENERGY_BARRIER_METHOD: Literal['simple', 'parabolic'] = 'simple' # Determines how intricately the energy barrier is calculated
 
     def __post_init__(self):
         self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = int(self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF)
@@ -328,6 +329,8 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
     @E_B.setter
     def E_B(self, value: Field):
         self._E_B = as_2D_array(value, self.shape)
+        with np.errstate(divide='ignore'): # For zero-E_B case (nonphysical but better to warn that in a more obvious way than here)
+            self._E_B_inv_over_four = .25/self._E_B # Precalculated for slightly faster E_barrier calculation
 
     @property
     def moment(self) -> xp.ndarray:
@@ -613,9 +616,15 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
             delta_E = self.switch_energy(idx)*(self._occupation_inf if idx is None else self._occupation_inf[idx[0], idx[1]])
             E = -delta_E/2 # Don't use self.E, because that would need additional indexing
             E_B = self.E_B if idx is None else self.E_B[idx[0], idx[1]]
+            E_B_inv_over_four = self._E_B_inv_over_four if idx is None else self._E_B_inv_over_four[idx[0], idx[1]]
 
-        if not self.USE_PERP_ENERGY: # Use simplified calculation, taken from old Néel/Glauber
+        if not self.USE_PERP_ENERGY: # Use simplified calculation, taken from old Néel/Metropolis
             # THERE ARE TWO CHOICES OF FORMULA, DEPENDING ON THE INTERPRETATION OF THE CASE WHERE THE ENERGY BARRIER DISAPPEARS:
+            match self.params.ENERGY_BARRIER_METHOD:
+                case 'simple':
+                    barrier = xp.maximum(delta_E, E_B - E) # THIS FORMULA IS FULLY BACKWARDS COMPATIBLE (pre-2024), and in a sense uses the 'curvature' of the energy landscape for cases where it is <0
+                case 'parabolic': # This is the best that can be done without E_perp. (is also exact for OOP ASI because 
+                    barrier = xp.where(delta_E > 4*E_B, delta_E, xp.minimum(E_B*(delta_E*E_B_inv_over_four + 1)**2, delta_E + 4*E_B)) # PARABOLIC FORMULA, in the region without real barrier it rises/drops equally fast as delta_E, this is correct if one assumes the effective field is along the easy axis (which is never the case if E_perp != 0).
             # TODO: Determine what is the best approach for the 'barrier < 0' case. barrier=delta_E? barrier=curvature? barrier=0?
             # barrier = xp.where(E_B > E_highest_state, E_B - E, delta_E) # This formula has a discontinuity as soon as barrier < 0, because then the opposite state is used (which is always suddenly much lower), thus ensuring that barrierless magnets will always switch before magnets with even the tiniest barrier.
             return barrier if min_only else (barrier, barrier)
