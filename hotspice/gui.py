@@ -285,7 +285,7 @@ class ActionsPanel(ctk.CTkScrollableFrame):
             case "Néel":
                 kwargs.setdefault("t_max", self.gui.ASI_settings.t_max)
                 kwargs.setdefault("attempt_freq", self.gui.ASI_settings.attempt_freq)
-            case "Glauber":
+            case "Metropolis":
                 kwargs.setdefault("Q", self.gui.ASI_settings.Q)
         t = time.perf_counter() + 1
         for _ in range(n):
@@ -338,7 +338,7 @@ class ParameterInfo(ctk.CTkFrame):
         self.info_switches_label = ctk.CTkLabel(self, textvariable=self.info_switches)
         ctk.CTkLabel(self, text="Switches:").grid(row=1, column=0, sticky=ctk.E)
         self.info_switches_label.grid(row=1, column=1, padx=10, sticky=ctk.W)
-        # 3) MCsteps (Glauber)
+        # 3) MCsteps (Metropolis)
         self.info_MCsteps = tk.StringVar()
         self.info_MCsteps_label = ctk.CTkLabel(self, textvariable=self.info_MCsteps)
         ctk.CTkLabel(self, text="Monte Carlo steps:").grid(row=2, column=0, sticky=ctk.E)
@@ -885,11 +885,11 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
 class ASISettingsFrame(ctk.CTkFrame):
     @dataclass
     class ASISettings:
-        UPDATE_SCHEME: Literal['Néel', 'Glauber'] = 'Néel'
+        UPDATE_SCHEME: Literal['Néel', 'Metropolis'] = 'Néel'
         t_max: float = 1.
         attempt_freq: float = 1e10
         Q: float = 0.05
-        # TODO: allow choosing grid selection method in Glauber
+        # TODO: allow choosing grid selection method in Metropolis
 
         def __post_init__(self):
             self.UPDATE_SCHEME = str(self.UPDATE_SCHEME)
@@ -899,7 +899,7 @@ class ASISettingsFrame(ctk.CTkFrame):
             self.Q = float(self.Q) # Range 0-inf, but logical range 0-1, and goes logarithmically
 
         @property
-        def available_update_modes(self): return ['Néel', 'Glauber']
+        def available_update_modes(self): return ['Néel', 'Metropolis']
 
     def __init__(self, master, gui: GUI, **kwargs):
         super().__init__(master, **kwargs)
@@ -931,15 +931,15 @@ class ASISettingsFrame(ctk.CTkFrame):
         self.Néel_attempt_freq_text = ctk.CTkLabel(self.Néel, text="Attempt freq. [GHz]: ", anchor=ctk.E)
         self.Néel_attempt_freq_text.grid(row=1, column=0, sticky=ctk.E, padx=(10,0))
 
-        self.Glauber = self.updatescheme_tabview.add("Glauber")
-        self.Glauber.grid_columnconfigure(0, weight=2)
-        self.Glauber.grid_columnconfigure(1, weight=1)
-        Glauber_Q_values = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, np.inf]
-        self.Glauber_Q_var = tk.DoubleVar()
-        self.Glauber_Q = ttk.Spinbox(self.Glauber, width=7, command=lambda: self.change_setting('Q', float(self.Glauber_Q.get())), values=Glauber_Q_values, textvariable=self.Glauber_Q_var)
-        self.Glauber_Q.grid(row=0, column=1, padx=10, sticky=ctk.W)
-        self.Glauber_Q_text = ctk.CTkLabel(self.Glauber, text="Q: ", anchor=ctk.E)
-        self.Glauber_Q_text.grid(row=0, column=0, sticky=ctk.E)
+        self.Metropolis = self.updatescheme_tabview.add("Metropolis")
+        self.Metropolis.grid_columnconfigure(0, weight=2)
+        self.Metropolis.grid_columnconfigure(1, weight=1)
+        Metropolis_Q_values = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, np.inf]
+        self.Metropolis_Q_var = tk.DoubleVar()
+        self.Metropolis_Q = ttk.Spinbox(self.Metropolis, width=7, command=lambda: self.change_setting('Q', float(self.Metropolis_Q.get())), values=Metropolis_Q_values, textvariable=self.Metropolis_Q_var)
+        self.Metropolis_Q.grid(row=0, column=1, padx=10, sticky=ctk.W)
+        self.Metropolis_Q_text = ctk.CTkLabel(self.Metropolis, text="Q: ", anchor=ctk.E)
+        self.Metropolis_Q_text.grid(row=0, column=0, sticky=ctk.E)
 
         self.get_settings_from_mm()
     
@@ -952,8 +952,8 @@ class ASISettingsFrame(ctk.CTkFrame):
         sig_Néel = inspect.signature(self.mm._update_Néel)
         self.Néel_t_max_var.set(float(sig_Néel.parameters['t_max'].default))
         self.Néel_attemptfreq_var.set(float(sig_Néel.parameters['attempt_freq'].default)*1e-9)
-        sig_Glauber = inspect.signature(self.mm._update_Glauber)
-        self.Glauber_Q_var.set(sig_Glauber.parameters['Q'].default)
+        sig_Metropolis = inspect.signature(self.mm._update_Metropolis)
+        self.Metropolis_Q_var.set(sig_Metropolis.parameters['Q'].default)
 
     def change_setting(self, setting, value, _redraw=True):
         if not hasattr(self.settings, setting): # If the setting does not exist, then don't set it
@@ -1003,7 +1003,7 @@ def show(mm, **kwargs):
 def test(in_plane=False, **kwargs):
     from .ASI import OOP_Square, IP_Pinwheel
     if in_plane:
-        mm = IP_Pinwheel(230e-9, 40, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Glauber"))
+        mm = IP_Pinwheel(230e-9, 40, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Metropolis"))
     else:
         mm = OOP_Square(230e-9, 200, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Néel"))
     show(mm, **kwargs)

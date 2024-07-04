@@ -20,17 +20,17 @@ xp = hotspice.xp
 
 
 class PinwheelReversalTest:
-    def __init__(self, size: int = 50, m_perp_factor: float = 1, scheme: Literal['Néel', 'Glauber'] = 'Néel', E_B: float = None, E_B_std: float = 0.05, dilution: float = 0):
+    def __init__(self, size: int = 50, m_perp_factor: float = 1, scheme: Literal['Néel', 'Metropolis'] = 'Néel', E_B: float = None, E_B_std: float = 0.05, dilution: float = 0):
         """ This test attempts to reproduce
                 "Superferromagnetism and Domain-Wall Topologies in Artificial “Pinwheel” Spin Ice"
                 by Y. Li, G. W. Paterson, G. M. Macauley et al. ACS Nano 2019 13 (2), 2213-2222, doi:10.1021/acsnano.8b08884
             using various approximations: using (or not using) the exact energy of the metastable perpendicularly magnetized state,
-            or using dipoles vs. monopoles, and whether we use Néel or Glauber (though that should not matter at all).
+            or using dipoles vs. monopoles, and whether we use Néel or Metropolis (though that should not matter at all).
             
             A system size of 50 gives the exact same geometry as in the paper, but with the x- and y-axes flipped.
             But the paper also defines their angle clockwise from the y-axis, which thus corresponds to our definition of the angle.
 
-            @param `scheme` ['Néel'|'Glauber'] ('Néel'): The update scheme to use.
+            @param `scheme` ['Néel'|'Metropolis'] ('Néel'): The update scheme to use.
         """
         ## Basic system: 50x50 system of 470x170x10nm islands, 420nm center-to-center NN spacing
         l, d, t, Msat = 470e-9, 170e-9, 10e-9, 800e3
@@ -176,7 +176,7 @@ class Hysteresis:
         for i, H in enumerate(self.H_fields):
             if verbose and hotspice.utils.is_significant(i, _N, order=2): print(f"[{hotspice.utils.J_to_eV(self.mm.E_B_avg):.0f}eV] {i+1}/{_N*(2-self.half)}")
             ZeemanEnergy.set_field(angle=angle_rad, magnitude=H)
-            if self.mm.params.UPDATE_SCHEME == 'Glauber': self.mm.progress(r=1e-7)
+            if self.mm.params.UPDATE_SCHEME == 'Metropolis': self.mm.progress(r=1e-7)
             else: self.mm.progress()
             self.m_avg[i], self.m_angle[i] = self.mm.m_avg, self.mm.m_avg_angle
             if self.thresholds.pass_check(m_parallel_normalized()):

@@ -2,7 +2,7 @@
 <!-- markdownlint-disable MD033 -->
 
 Hotspice is a tool for simulating thermally active artificial spin ices, using an Ising-like approximation: the axis and position of each spin is fixed, only their binary state can switch.
-The time evolution can either follow the Néel-Arrhenius law of switching over an energy barrier in a chronological manner, or use Glauber dynamics to model the statistical behavior while making abstraction of the time variable.
+The time evolution can either follow the Néel-Arrhenius law of switching over an energy barrier in a chronological manner, or use Metropolis-Hastings to model the statistical behavior while making abstraction of the time variable.
 
 ## Dependencies
 
@@ -61,7 +61,7 @@ Examples of usage for each of the ASI lattices, as well as examples of functions
 
 ### Stepping in time
 
-To perform a single simulation step, call `mm.update()`. The scheme used to perform this single step is determined by `mm.params.UPDATE_SCHEME` (possible schemes: `'Néel'`, `'Glauber'`, `'Wolff'`).
+To perform a single simulation step, call `mm.update()`. The scheme used to perform this single step is determined by `mm.params.UPDATE_SCHEME` (possible schemes: `'Néel'`, `'Metropolis'`, `'Wolff'`).
 
 To relax the magnetization to a (meta)stable state, call `mm.relax()` or `mm.minimize()` (the former is faster for large simulations but less accurate, the latter is faster for small simulations and follows the real relaxation order more closely).
 

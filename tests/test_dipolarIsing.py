@@ -19,7 +19,7 @@ class test_dipolarIsing:
         self.a = 1e-6 # Lattice spacing
         self.size = kwargs.get('size', 400) # Large to get the most statistically ok behavior
         self.energyDD, self.energyExch = hotspice.DipolarEnergy(), hotspice.ExchangeEnergy()
-        self.mm = hotspice.ASI.OOP_Square(self.a, self.size, E_B=0, T=self.T, energies=[self.energyDD, self.energyExch], pattern='AFM', PBC=False, params=hotspice.SimParams(UPDATE_SCHEME="Glauber"))
+        self.mm = hotspice.ASI.OOP_Square(self.a, self.size, E_B=0, T=self.T, energies=[self.energyDD, self.energyExch], pattern='AFM', PBC=False, params=hotspice.SimParams(UPDATE_SCHEME="Metropolis"))
     
     @property
     def dipolar_nearest(self):

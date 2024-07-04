@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from scipy.spatial import distance
 from textwrap import dedent
+from typing import Literal
 
 from .poisson import PoissonGrid, SequentialPoissonDiskSampling, poisson_disc_samples
 from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, lower_than
@@ -29,13 +30,14 @@ kB = 1.380649e-23
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are strictly more than <this> switches in a single iteration, a convolution is used, otherwise the energies are just summed.
     REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
-    UPDATE_SCHEME: str = 'Néel' # Can be any of 'Néel', 'Glauber', 'Wolff'
-    MULTISAMPLING_SCHEME: str = 'grid' # Can be any of 'single', 'grid', 'Poisson', 'cluster'. Only used if UPDATE_SCHEME is 'Glauber'.
+    UPDATE_SCHEME: Literal['Néel', 'Metropolis', 'Wolff'] = 'Néel' # Wolff is only available for exchange-coupled ASI
+    MULTISAMPLING_SCHEME: Literal['single', 'grid', 'Poisson', 'cluster'] = 'grid' # Only used if UPDATE_SCHEME is 'Metropolis'.
 
     def __post_init__(self):
         self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = int(self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF)
         self.REDUCED_KERNEL_SIZE = int(self.REDUCED_KERNEL_SIZE)
-        if self.UPDATE_SCHEME not in (allowed := ['Glauber', 'Néel', 'Wolff']):
+        if self.UPDATE_SCHEME not in (allowed := ['Metropolis', 'Néel', 'Wolff']):
+            if self.UPDATE_SCHEME == 'Glauber': self.UPDATE_SCHEME = 'Metropolis'
             raise ValueError(f"UPDATE_SCHEME='{self.UPDATE_SCHEME}' is invalid: allowed values are {allowed}.")
         if self.MULTISAMPLING_SCHEME not in (allowed := ['single', 'grid', 'Poisson', 'cluster']):
             raise ValueError(f"MULTISAMPLING_SCHEME='{self.MULTISAMPLING_SCHEME}' is invalid: allowed values are {allowed}.")
@@ -317,6 +319,8 @@ class Magnets(ABC):
     @T.setter
     def T(self, value: Field):
         self._T = as_2D_array(value, self.shape)
+        self.kBT = kB*self._T # Array representing the thermal energy k_B*T throughout the system.
+        self.beta = 1/self.kBT # Array representing the reciprocal thermal energy 1/kBT throughout the system.
 
     @property
     def E_B(self) -> xp.ndarray:
@@ -386,11 +390,6 @@ class Magnets(ABC):
         for energy in self._energies: energy.initialize(self)
 
     @property
-    def kBT(self) -> xp.ndarray:
-        """ Array representing the thermal energy k_B*T throughout the system. """
-        return kB*self._T
-
-    @property
     def m_avg_x(self) -> float:
         return float(xp.mean(xp.multiply(self.m, self.orientation[:,:,0])))*self.nx*self.ny/self.n if self.in_plane else 0
     @property
@@ -437,7 +436,7 @@ class Magnets(ABC):
         """ Performs the appropriate sampling method as specified by `self.params.MULTISAMPLING_SCHEME`.
             - 'single': strictly speaking, this is the only physically correct sampling scheme. However,
                 to improve efficiency while making as small an approximation as possible, the grid and
-                Poisson schemes exist for use in the Glauber update scheme.
+                Poisson schemes exist for use in the Metropolis update scheme.
             - 'grid': built for efficient parallel generation of samples, but this introduces strong grid
                 bias in the sample distribution. To remedy this to some extent, using poisson=True randomizes
                 the positioning of the supercells, though these are still placed on a supergrid and therefore
@@ -583,7 +582,7 @@ class Magnets(ABC):
 
     def update(self, *args, **kwargs):
         """ Runs a single update step using the update scheme and magnet selection method in `self.params`. """
-        can_handle_zero_temperature = ['Glauber']
+        can_handle_zero_temperature = ['Metropolis']
         if xp.any(self.T == 0):
             if self.params.UPDATE_SCHEME not in can_handle_zero_temperature:
                 warnings.warn("T=0 somewhere in the domain, so no switch will be simulated to prevent DIV/0 errors.", stacklevel=2)
@@ -593,8 +592,8 @@ class Magnets(ABC):
         match self.params.UPDATE_SCHEME:
             case 'Néel':
                 idx = self._update_Néel(*args, **kwargs)
-            case 'Glauber':
-                idx = self._update_Glauber(*args, **kwargs)
+            case 'Metropolis':
+                idx = self._update_Metropolis(*args, **kwargs)
             case 'Wolff':
                 idx = self._update_Wolff(*args, **kwargs)
             case str(unrecognizedscheme):
@@ -630,25 +629,24 @@ class Magnets(ABC):
         return xp.minimum(E_barrier_1, E_barrier_2) if min_only else (E_barrier_1, E_barrier_2)
 
 
-    def _update_Glauber(self, idx=None, Q=0.05, r=0):
+    def _update_Metropolis(self, idx=None, Q=0.05, r=0, attempt_freq=1e10): # TODO: flag to choose which kind of exponential to use: clip(0, exp, 1) or exp/(1+exp)
+         # TODO: implement maximum elapsed time. (t_max)
         # 1) Choose a bunch of magnets at random
         if idx is None: idx = self.select(r=self.calc_r(Q) if r == 0 else r)
         self.attempted_switches += idx.shape[1]
+        beta = self.beta[idx[0], idx[1]]
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
-        # OPTION 1: TRUE GLAUBER, NO ENERGY BARRIER (or at least not explicitly)
-        # exponential = xp.clip(xp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
-        # OPTION 2: AD-HOC ADJUSTED GLAUBER, where we assume that the 'other state' is at the top of the energy barrier
-        barrier = self.E_barrier(idx, min_only=True)
         with np.errstate(divide='ignore', over='ignore'): # To allow low T or even T=0 without warnings or errors
-            exponential = xp.clip(xp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
+            exponential = xp.clip(xp.exp(-self.switch_energy(idx)*beta), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
-        idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance min(1, e^-E/kT) (Metropolis-hastings rather than Glauber; Glauber e^-E/kT/(1+e^-E/kT) should give same statistics but is just slower)
-        # idx = idx[:,xp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, looks more natural but equilibrium state is same as M-H, and is slower than M-H to reach it
+        idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # METROPOLIS-HASTINGS acceptance probability, derived from detailed balance: min(1, e^-E/kT)
+        # idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # GLAUBER acceptance probability, from https://en.wikipedia.org/wiki/Glauber_dynamics: e^-E/kT/(1+e^-E/kT) (Should give same statistics as Metropolis, but is just slower, might look "more natural" according to some)
         if idx_switch.shape[1] > 0:
             self.m[idx_switch[0], idx_switch[1]] *= -1
             self.switches += idx_switch.shape[1]
             self.update_energy(index=idx_switch)
-        return idx_switch # TODO: can we get some sort of elapsed time? Yes for one switch, but what about many at once?
+            self.t += xp.sum(-xp.log(self.rng.random())/attempt_freq/self.n*xp.exp(-self.E_barrier(idx, min_only=True)*beta))
+        return idx_switch
 
     def _update_Néel(self, t_max=1, attempt_freq=1e10):
         """ Performs a single magnetization switch, if the switch would occur sooner than `t_max` seconds.
@@ -662,7 +660,7 @@ class Magnets(ABC):
                 minBarrier = min(xp.nanmin(barrier1), xp.nanmin(barrier2)) # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
                 barrier1 -= minBarrier
                 barrier2 -= minBarrier
-                frequency = xp.exp(-barrier1/self.kBT) + xp.exp(-barrier2/self.kBT) # Sadly we have to divide in the next step, and that is a costly function.
+                frequency = xp.exp(-barrier1*self.beta) + xp.exp(-barrier2*self.beta) # Sadly we have to divide in the next step, and that is a costly function.
                 taus = self.rng.random(size=barrier1.shape)/frequency # Draw random relative times from an exponential distribution.
                 attempt_freq /= 2 # Because we have 2 parallel switching channels, and we want equivalence between USE_PERP_ENERGY True and False in case of equal barriers.
             else:
@@ -671,7 +669,7 @@ class Magnets(ABC):
                 barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
                 taus = self.rng.random(size=barrier.shape)*xp.exp(barrier/self.kBT) # Draw random relative times from an exponential distribution
             indexmin2D = divmod(xp.nanargmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
-            time = taus[indexmin2D]*xp.exp(minBarrier/self.kBT[indexmin2D])/attempt_freq # This can become infinite quite quickly if T is small
+            time = taus[indexmin2D]*xp.exp(minBarrier*self.beta[indexmin2D])/attempt_freq # This can become infinite quite quickly if T is small
             self.attempted_switches += 1
             if time > t_max or np.isnan(time):
                 self.t += t_max

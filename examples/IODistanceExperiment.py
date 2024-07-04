@@ -6,7 +6,7 @@ import hotspice
 ## OPTION FOR IP_PINWHEEL WITH PERPFIELDINPUTTER:
 # mm = hotspice.ASI.IP_Pinwheel(300e-9, 21, E_B=0.5*55e-3*800e3*2e-22, Msat=800e3, V=2e-22, pattern="uniform")
 # mm.add_energy(hotspice.ZeemanEnergy())
-# mm.params.UPDATE_SCHEME = "Glauber"
+# mm.params.UPDATE_SCHEME = "Metropolis"
 # datastream = hotspice.io.RandomBinaryDatastream()
 # inputter = hotspice.io.PerpFieldInputter(datastream, magnitude=46e-3, angle=7*math.pi/180, relax=False, frequency=0, n=10)
 # outputreader = hotspice.io.RegionalOutputReader(5, 5, mm)  # Uses mm, so can't be reused

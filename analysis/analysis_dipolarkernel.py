@@ -7,7 +7,7 @@ import pandas as pd
 from matplotlib import colormaps, widgets
 
 import os
-os.environ['HOTSPICE_USE_GPU'] = 'True' # This is beneficial for Glauber's convolutions
+os.environ['HOTSPICE_USE_GPU'] = 'True' # This is beneficial for Metropolis' convolutions
 
 from context import hotspice
 if hotspice.config.USE_GPU:
@@ -25,12 +25,12 @@ def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n: int = 10000, L: 
         @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify `L` for square domain.
         @param cutoff [int] (16): the size of the reduced kernel. TODO: could it be interesting to sweep this?
     """
-    if mm is None: mm = hotspice.ASI.OOP_Square(1e-6, nx=(Lx or L), ny=(Ly or L), PBC=True) # Large spacing to get many Glauber switches
+    if mm is None: mm = hotspice.ASI.OOP_Square(1e-6, nx=(Lx or L), ny=(Ly or L), PBC=True) # Large spacing to get many Metropolis switches
 
     if mm.get_energy('dipolar', verbose=False) is None: mm.add_energy(hotspice.DipolarEnergy())
     mm.params.REDUCED_KERNEL_SIZE = cutoff
     mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = 0 # Need convolution method to use truncated kernel
-    mm.params.UPDATE_SCHEME = "Glauber" # Néel collapses to update_single(), which has no cutoff. Furthermore, using Glauber samples way more magnets, especially if Q=np.inf.
+    mm.params.UPDATE_SCHEME = "Metropolis" # Néel collapses to update_single(), which has no cutoff. Furthermore, using Metropolis samples way more magnets, especially if Q=np.inf.
     mm.PBC = True
     if pattern is not None: mm.initialize_m(pattern)
 
