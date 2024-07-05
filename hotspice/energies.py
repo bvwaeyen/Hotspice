@@ -101,6 +101,7 @@ class ZeemanEnergy(Energy):
     def set_field(self, magnitude=None, angle=None):
         if magnitude is not None: self._magnitude = magnitude
         if angle is not None: self._angle = angle
+        if not hasattr(self, 'mm'): return
 
         if self.mm.in_plane:
             B_ext = (self.magnitude*xp.cos(self.angle), self.magnitude*xp.sin(self.angle)) # [T] tuple(2) of 2D xp.ndarray
@@ -695,6 +696,16 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
 class ExchangeEnergy(Energy):  # TODO: allow random variation in J, see https://stackoverflow.com/a/73398072 for this kind of convolution
     def __init__(self, J=1):
         self.J = J # [J]
+    
+    @property
+    def J(self):
+        return self._J
+    
+    @J.setter
+    def J(self, value):
+        self._J = value
+        try: self.update()
+        except AttributeError: pass # Not assigned to a Magnets object yet
 
     def _initialize(self):
         self.local_interaction = self.mm._get_nearest_neighbors()
