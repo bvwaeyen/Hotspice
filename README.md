@@ -39,7 +39,7 @@ To create a simulation, the first thing one has to do is to create a spin ice. T
 ```python
 import hotspice
 mm = hotspice.ASI.IP_Pinwheel(1e-6, 100) # Create the spin ice object
-hotspice.plottools.show_m(mm) # Display the current state of the spin ice
+hotspice.gui.show(mm) # Display a GUI showing the current state of the spin ice
 ```
 
 The meaning of the values `1e-6` and `100` requires a small introduction on how the spin ices are stored in memory.
@@ -99,8 +99,9 @@ import hotspice # Only import AFTER setting 'HOTSPICE_USE_GPU'!
 
 ## GUI
 
-A graphical user interface is available for the user to interact with the ASI. The state of the ASI can be displayed in several ways (magnetization, domains, each energy component separately or total energy, effective energy barrier, and various spatially resolved parameters like temperature, anisotropy and magnetic moment).
-The ASI can be changed in realtime using the usual update schemes and initializations, or by directly clicking on the ASI.
+A graphical user interface is available to display and interact with the ASI. As shown earlier, it can be run by calling `hotspice.gui.show(mm)`, with `mm` the ASI object.
+
+Buttons in the right sidebar allow the user to interact with the ASI by progressing through time. It is also possible to interact with the ASI at a granular level by clicking on the ASI plot directly (for more info on this, click the blue circled `i` to the bottom right of the ASI). The bottom left panel shows the elapsed time. The bottom central panel is used to change the main ASI view: it is possible to show the magnetization, domains, various energy contributions and barriers, as well as spatially resolved parameters like temperature, anisotropy and magnetic moment.
 
 ![Screenshot of GUI for a Pinwheel ASI with various domains.](./figures/GUI_Pinwheel_squarefour.PNG)
 
