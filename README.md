@@ -1,8 +1,8 @@
 # Hotspice
 <!-- markdownlint-disable MD033 -->
 
-Hotspice is a tool for simulating thermally active artificial spin ices, using an Ising-like approximation: the axis and position of each spin is fixed, only their binary state can switch.
-The time evolution can either follow the Néel-Arrhenius law of switching over an energy barrier in a chronological manner, or use Metropolis-Hastings to model the statistical behavior while making abstraction of the time variable.
+Hotspice is a kinetic Monte Carlo simulation package for thermally active artificial spin ices, using an Ising-like approximation: the axis and position of each spin is fixed, only their binary state can switch.
+The time evolution can either follow the Néel-Arrhenius law of switching over an energy barrier in a chronological manner, or alternatively use Metropolis-Hastings to model the statistical behavior while making abstraction of the time variable.
 
 ## Dependencies
 
@@ -12,15 +12,15 @@ To create a new conda environment which only includes the necessary modules for 
 conda env create -n hotspice310 -f environment.yml
 ```
 
-where `hotspice310` is the name of the new environment (because it uses Python 3.10).
+where `hotspice310` is the name of the new environment (because it was developed using Python 3.10).
 
-### CuPy
+### CuPy (GPU calculation, optional)
 
-*Note that CuPy will not function properly on systems without CUDA support. On such systems, Hotspice can still be used by only using the CPU as shown in [choosing between GPU or CPU](#choosing-between-gpu-or-cpu).*
+*By default, Hotspice runs on the CPU. To use the GPU, see [choosing between GPU or CPU](#choosing-between-gpu-or-cpu).*
 
-Hotspice relies on the `CuPy` library to provide GPU-accelerated array computing with CUDA for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
+On systems with CUDA support, Hotspice can run on the GPU. For this, it relies on the `CuPy` library to provide GPU-accelerated array computing for NVIDIA GPUs. When creating a conda environment as shown above, CuPy will be installed automatically.
 
-To [install CuPy](https://docs.cupy.dev/en/stable/install.html) separately, the easiest method is likely to use the following `conda` command, as this automatically installs the appropriate version of the CUDA toolkit:
+If this fails, see the [CuPy installation guide](https://docs.cupy.dev/en/stable/install.html): the easiest method is likely to use the following `conda` command, as this automatically installs the appropriate version of the CUDA toolkit:
 
 ```shell
 conda install -c conda-forge cupy
@@ -43,19 +43,17 @@ hotspice.plottools.show_m(mm) # Display the current state of the spin ice
 ```
 
 The meaning of the values `1e-6` and `100` requires a small introduction on how the spin ices are stored in memory.
-Most data and parameters of a spin ice are stored as 2D CuPy arrays, since this improves efficiency for certain steps in the calculation.
+Most data and parameters of a spin ice are stored as 2D arrays, for efficient calculation.
 However, this also implies that the possible spin ice geometries are restricted to those that can be represented as a periodic structure on a square grid.
 The geometry is then defined by leaving some spots on this grid empty, while filling others with a magnet and its relevant parameters like magnetic moment $M_{sat} V$ (`mm.moment`), energy barrier $E_B$ (`mm.E_B`), temperature $T$ (`mm.T`), orientation...
 
-- The first parameter (`a=1e-6`) specifies a typical distance between two magnets, but the exact meaning of this depends on the spin ice geometry being used, and how it is implemented on a grid.
+- The first parameter (`a=1e-6`) specifies a typical distance between two magnets. The exact meaning of this depends on the spin ice geometry being used: see [Available spin ices](#available-spin-ices) for the definition of `a` in the default ASI lattices.
 
 - The second parameter in the initialization call (`n=100`) specifies the length of each axis of these underlying 2D arrays.
-Hence, the spin ice in the example above will have 10000 available grid-points to put a magnet.
+Hence, the spin ice in the example above will have 10000 available grid-points on which to put a magnet.
 However, this 'diamond' pinwheel geometry can only be represented on a grid by leaving half of the available cells empty, so the simulation above actually contains 5000 magnets (see `mm.n`).
 
-- Additional parameters can be used, for which we currently refer to the docstring of `hotspice.Magnets()`. In particular, the `params` parameter accepts a `hotspice.SimParams` instance which can set technical details for the spin ice, e.g. the update/sampling scheme to use, whether to use a reduced kernel...
-
-For details on the grid representation and exact meaning of the 'typical distance' for each of the standard spin ices, see [Available spin ices](#available-spin-ices) or refer to the docstrings.
+- Additional parameters can be used, for which we refer to the docstring of `hotspice.Magnets()`. In particular, the `params` parameter accepts a `hotspice.SimParams` instance which can set technical details for the spin ice, e.g. the update/sampling scheme to use, whether to use a reduced kernel...
 
 Examples of usage for each of the ASI lattices, as well as examples of functions operating on these ASI objects, are provided in the 'examples' directory.
 
@@ -67,13 +65,13 @@ To relax the magnetization to a (meta)stable state, call `mm.relax()` or `mm.min
 
 ### Applying input and reading output
 
-More complex input-output simulations can be performed using the `hotspice.io` and `hotspice.experiments` modules, but these are still under construction.
+More complex input-output simulations, e.g. for reservoir computing, can be performed using the `hotspice.io` and `hotspice.experiments` modules.
 
 The `hotspice.io` module contains classes that apply external stimuli to the spin ice, or read the state of the spin ice in some manner.
 
 The `hotspice.experiments` module contains classes to bundle many input/output runs and calculate relevant metrics from them, as well as classes to perform parameter sweeps.
 
-### Performing a parameter sweep on multiple GPUs
+### Performing a parameter sweep on multiple GPUs/CPUs
 
 The `hotspice/scripts/ParallelJobs.py` script can be used to run a `hotspice.experiments.Sweep` on multiple GPUs or CPU cores. This sweep should be defined in a file that follows a structure similar to `examples/SweepKQ_RC_ASI.py`. Running `ParallelJobs.py` can be done
 
@@ -82,18 +80,18 @@ The `hotspice/scripts/ParallelJobs.py` script can be used to run a `hotspice.exp
 
 ### Choosing between GPU or CPU
 
-*By default, hotspice runs on the GPU.* One can also choose to run hotspice on the CPU instead, e.g. for small simulations with only several tens of magnets, where the parallelism of GPU computing is not quite beneficial.
+*By default, hotspice runs on the CPU.* One can also choose to run hotspice on the GPU instead, e.g. for large simulations with over a thousand magnets, where the parallelism of GPU computing becomes beneficial.
 
 At the moment when hotspice is imported through `import hotspice`, it
 
-1) checks if the command-line argument `--hotspice-use-cpu` is present. If it is, the CPU is used. Otherwise,
-2) the environment variable `'HOTSPICE_USE_GPU'` (default: `'True'`) is checked instead, and either the GPU or CPU is used based on this value.
+1) checks if the command-line argument `--hotspice-use-cpu` or `--hotspice-use-gpu` is present, and act accordingly. Otherwise,
+2) the environment variable `'HOTSPICE_USE_GPU'` (default: `'False'`) is checked instead, and either the GPU or CPU is used based on this value.
 
 *When invoking a script* from the command line, the cmd argument can be used. *Inside a python script*, however, it is discouraged to meddle with `sys.argv`. In that case, it is better to set the environment variable as follows:
 
 ```python
 import os
-os.environ['HOTSPICE_USE_GPU'] = 'False' # Must be type 'str'
+os.environ['HOTSPICE_USE_GPU'] = 'True' # Must be type 'str'
 import hotspice # Only import AFTER setting 'HOTSPICE_USE_GPU'!
 ```
 
