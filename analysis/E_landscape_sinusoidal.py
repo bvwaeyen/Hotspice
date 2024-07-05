@@ -6,7 +6,7 @@ import numpy as np
 
 def E(E_B, ext_field, angle=0):
     """ Adds an external field (period 2π) to the energy barrier (period π).
-        If angle=0, ext_field is equal to Delta_E (energy diff. between m angle at 0 and at π).
+        If `angle=0`, `ext_field` is equal to Delta_E (energy diff. between m angle at 0 and at π).
     """
     return lambda theta: -E_B*(np.cos(2*theta)-1)/2 - ext_field*(np.cos(theta - angle)-1)/2
 

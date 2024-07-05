@@ -11,7 +11,7 @@ except ModuleNotFoundError: import hotspice
 
 
 def analysis_TAmetrics_Nk(filename: str, k_range=10, save=True, plot=True, verbose=True):
-    """ Loads a full TaskAgnosticExperiment dataframe (of a single run) and determines the
+    """ Loads a full `TaskAgnosticExperiment` dataframe (of a single run) and determines the
         task-agnostic metrics NL, MC and CP as a function of the number of recorded iterations N.
         This will allow to determine an optimum value of N before performing any sort of
         parameter sweep on an HPC cluster such that we do not use too much time.

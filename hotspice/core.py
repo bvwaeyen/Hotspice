@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from scipy.spatial import distance
 from textwrap import dedent
+from typing import Literal
 
 from .poisson import PoissonGrid, SequentialPoissonDiskSampling, poisson_disc_samples
 from .utils import as_2D_array, asnumpy, check_repetition, Field, full_obj_name, lower_than
@@ -29,41 +30,47 @@ kB = 1.380649e-23
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are strictly more than <this> switches in a single iteration, a convolution is used, otherwise the energies are just summed.
     REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
-    UPDATE_SCHEME: str = 'Néel' # Can be any of 'Néel', 'Glauber', 'Wolff'
-    MULTISAMPLING_SCHEME: str = 'grid' # Can be any of 'single', 'grid', 'Poisson', 'cluster'. Only used if UPDATE_SCHEME is 'Glauber'.
+    UPDATE_SCHEME: Literal['Néel', 'Metropolis', 'Wolff'] = 'Néel' # Wolff is only available for exchange-coupled ASI
+    MULTISAMPLING_SCHEME: Literal['single', 'grid', 'Poisson', 'cluster'] = 'grid' # Only used if UPDATE_SCHEME is 'Metropolis'.
+    ENERGY_BARRIER_METHOD: Literal['simple', 'parabolic'] = 'simple' # Determines how intricately the energy barrier is calculated
 
     def __post_init__(self):
         self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = int(self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF)
         self.REDUCED_KERNEL_SIZE = int(self.REDUCED_KERNEL_SIZE)
-        if self.UPDATE_SCHEME not in (allowed := ['Glauber', 'Néel', 'Wolff']):
+        if self.UPDATE_SCHEME not in (allowed := ['Metropolis', 'Néel', 'Wolff']):
+            if self.UPDATE_SCHEME == 'Glauber': self.UPDATE_SCHEME = 'Metropolis'
             raise ValueError(f"UPDATE_SCHEME='{self.UPDATE_SCHEME}' is invalid: allowed values are {allowed}.")
         if self.MULTISAMPLING_SCHEME not in (allowed := ['single', 'grid', 'Poisson', 'cluster']):
             raise ValueError(f"MULTISAMPLING_SCHEME='{self.MULTISAMPLING_SCHEME}' is invalid: allowed values are {allowed}.")
         # If a multisampling scheme is incompatible with an update scheme, an error should be raised at runtime, not here.
 
 
-class Magnets(ABC):
+class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of cells (e.g. to create open-edge IP_Square)
     def __init__(
-        self, nx: int, ny: int, dx: float, dy: float, *,
+        self, nx: int, ny: int, dx: float|Field, dy: float|Field, *,
         T: Field = 300, E_B: Field = 0., moment: Field = None, Msat: Field = 800e3, V: Field = 2e-22,
         pattern: str = None, energies: tuple['Energy'] = None,
         PBC: bool = False, m_perp_factor: float = None,
+        major_axis: float = 0, minor_axis: float = None, # Ellipse shape is constant throughout the array because it is baked into the dipolar kernel.
         angle: float = 0., params: SimParams = None, in_plane: bool = False):
-        """ The position of magnets is specified using <nx>, <ny>, <dx> and <dy>. Only rectilinear grids are currently allowed.
-            The initial configuration of a Magnets geometry consists of 3 parts:
-                1) in_plane: Magnets can be in-plane or out-of-plane: True or False, respectively. Determined by subclassing.
+        """ The position of magnets is specified using `nx`, `ny`, `dx` and `dy`. Only rectilinear grids are currently allowed.
+            The initial configuration of a `Magnets` geometry consists of 3 parts:
+                1) `in_plane`: Magnets can be in-plane or out-of-plane: True or False, respectively. Determined by subclassing.
                 2) ASI type: Defined through subclasses (pinwheel, kagome, Ising...). This concerns the layout of spins.
-                3) pattern:  The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM', 'vortex' or 'random'.
-            One can also specify which energies should be considered by passing a tuple of Energy objects to <energies>.
-                If <energies> is not passed, only the dipolar energy is considered. If a tuple is passed, however, the
+                3) `pattern`:  The initial magnetization direction (e.g. up/down) can be 'uniform', 'AFM', 'vortex' or 'random'.
+            One can also specify which energies should be considered by passing a tuple of `Energy` objects to `energies`.
+                If `energies` is not passed, only the dipolar energy is considered. If a tuple is passed, however, the
                 dipolar energy is not automatically added: if still desired, the user should include this themselves.
-            The arguments <T>, <E_B>, <moment>, <Msat> and <V> can all be constant (by passing them as a float) or spatially
-                varying (by passing them as a shape (nx, ny) array).
-            The magnetic moment can either be specified using the 2 arguments <Msat> (default 800e3 A/m) and <V> (default 2e-22 m³),
-                or directly by passing a value to <moment>. The argument <moment> takes precedence over <Msat> and <V>.
-            To enable periodic boundary conditions (default: disabled), pass PBC=True.
-            To add an extra rotation to all spins in addition to self._get_angles(), pass <angle> as a float (in radians).
-            The parameter <in_plane> should only be used in a super().__init__() call when subclassing this class.
+            The arguments `T`, `E_B`, `moment`, `Msat` and `V` can all be constant (by passing them as a float) or spatially
+                varying (by passing them as a shape (`nx`, `ny`) array).
+            The magnetic moment can either be specified using the 2 arguments `Msat` (default 800e3 A/m) and `V` (default 2e-22 m³),
+                or directly by passing a value to `moment`. The argument `moment` takes precedence over `Msat` and `V`.
+            Corrections to the Ising approximation can be applied using `major_axis` and `minor_axis`: when nonzero,
+                the dipole interaction will consider the magnets to be ellipses with these major/minor axes.
+                If only `major_axis` is specified, the magnet is assumed to be round with radius `major_axis/2`.
+            To enable periodic boundary conditions (default: disabled), pass `PBC=True`.
+            To add an extra rotation to all spins in addition to `self._get_angles()`, pass `angle` as a float (in radians).
+            The parameter `in_plane` should only be used in a `super().__init__()` call when subclassing this class.
         """
         self.rng = xp.random.default_rng() # There is no significant speed difference between XORWOW or MRG32k3a or Philox4x3210
         self.params = SimParams() if params is None else params # This can just be edited and accessed normally since it is just a dataclass # TODO: find a better way to do this, this is not very user-friendly now
@@ -93,6 +100,8 @@ class Magnets(ABC):
         self.E_B = E_B # [J]
         self.moment = Msat*V if moment is None else moment # [Am²] moment is saturation magnetization multiplied by volume
         self.m_perp_factor = in_plane if m_perp_factor is None else m_perp_factor
+        self.major_axis = major_axis
+        self.minor_axis = major_axis if minor_axis is None else minor_axis # Shorthand: `minor_axis or major_axis`
 
         # History
         self.t = 0. # [s]
@@ -118,7 +127,7 @@ class Magnets(ABC):
         return distance.pdist(asnumpy(xp.asarray([pos_x, pos_y]).T)).min()
 
     def _get_m_uniform(self, angle=0):
-        """ Returns the self.m state with all magnets aligned along <angle> as much as possible. """
+        """ Returns the `self.m` state with all magnets aligned along `angle` as much as possible. """
         angle += 1e-6 # To avoid possible ambiguous rounding for popular angles, if <angle> ⊥ <self.orientation>
         if self.in_plane:
             return self.occupation*(2*((self.orientation[:,:,0]*xp.cos(angle) + self.orientation[:,:,1]*xp.sin(angle)) >= 0) - 1)
@@ -126,19 +135,16 @@ class Magnets(ABC):
             return xp.ones_like(self.xx)*((xp.floor(angle/math.pi - .5) % 2)*2 - 1)
 
     def _get_unitcell(self, max_cell=100):
-        """ Returns a Unitcell containing the number of single grid cells in a unit cell along the x- and y-axis.
+        """ Returns a `Unitcell` containing the number of single grid cells in a unit cell along the x- and y-axis.
             Only works for square-lattice unit cells. # TODO: allow manual assignment of more complex unit cells
-            @param max_cell [int] (100): Only unitcells with ux+uy < max_cell are considered for performance reasons.
+            @param max_cell [int] (100): Only unitcells with ux+uy < `max_cell` are considered for performance reasons.
         """
+        dx, dy = self.dx.reshape(1, -1), self.dy.reshape(-1, 1)
         for n in range(1, min(self.nx + self.ny + 1, max_cell + 1)): # Test possible unit cells in a triangle-like manner: (1,1), (2,1), (1,2), (3,1), (2,2), (1,3), ...
-            for i in range(max(0, n - self.nx) + 1, min(n, self.ny) + 1): # Don't test unit cells larger than the domain
-                ux = n - i + 1
-                uy = i
-                if self.in_plane:
-                    if check_repetition(self.orientation, ux, uy):
-                        return Unitcell(ux, uy)
-                else:
-                    if check_repetition(self.occupation, ux, uy):
+            for uy in range(max(0, n - self.nx) + 1, min(n, self.ny) + 1): # Don't test unit cells larger than the domain
+                ux = n - uy + 1
+                if check_repetition(self.orientation if self.in_plane else self.occupation, ux, uy):
+                    if check_repetition(dx, ux, 1) and check_repetition(dy, 1, uy):
                         return Unitcell(ux, uy)
         warnings.warn(dedent(f"""
             Could not detect a reasonably sized unit cell. Defaulting to entire domain {self.nx}x{self.ny}.
@@ -146,9 +152,9 @@ class Magnets(ABC):
         return Unitcell(self.nx, self.ny)
 
     def initialize_m(self, pattern: str|Field = 'random', *, angle: float = 0, update_energy: bool = True):
-        """ Initializes the self.m (array of -1, 0 or 1) and occupation.
+        """ Initializes `self.m` (array of -1, 0 or 1) based on `pattern` and occupation.
             @param pattern [str|utils.Field]: If type str, this can be any of 'random', 'uniform', 'AFM' by default.
-            @param angle [float]: 
+            @param angle [float]: Can be used to change the direction of the magnets for a given pattern.
         """
         if isinstance(pattern, str):
             self._set_m(pattern)
@@ -160,15 +166,15 @@ class Magnets(ABC):
 
         self.m = self.m.astype(float) # Need float to multiply correctly with other float arrays
         self.m = xp.sign(self.m) # Put all to -1., 0. or 1.
-        self.m = xp.multiply(self.m, self.occupation)
+        self.m = xp.multiply(self.m, self.occupation) # TODO: make occupation editable to allow dynamic removal ("decimation") of magnets (so have self._occupation and a property with setter that takes care of all that needs to be done)
         self.m[xp.where(self._get_m_uniform() != self._get_m_uniform(angle))] *= -1 # Allow 'rotation' for any kind of initialized state
         if update_energy: self.update_energy() # Have to recalculate all the energies since m changed completely
 
     def _initialize_ip(self, angle: float = 0.):
         """ Initialize the angles of all the magnets (only applicable in the in-plane case).
-            This function should only be called by the Magnets() class itself, not by the user.
+            This function should only be called by the `Magnets()` class itself, not by the user.
             @param angle [float] (0): the additional angle (in radians) by which every spin in
-                the system will be rotated, i.e. in addition to self._get_angles().
+                the system will be rotated, i.e. in addition to `self._get_angles()`.
         """
         assert self.in_plane, "Can not _initialize_ip() if magnets are not in-plane (in_plane=False)."
         self.angles = (self._get_angles() + angle)*self.occupation
@@ -177,8 +183,8 @@ class Magnets(ABC):
         self.orientation[:,:,1] = xp.sin(self.angles)*self.occupation
 
     def add_energy(self, energy: 'Energy', exist_ok=False, verbose=True):
-        """ Adds an Energy object to self._energies. This object is stored under its reduced name,
-            e.g. ZeemanEnergy is stored under 'zeeman'.
+        """ Adds an `Energy` object to `self._energies`. This object is stored under its reduced name,
+            e.g. `ZeemanEnergy` is stored under 'zeeman'.
             @param energy [Energy]: the energy to be added.
             @param exist_ok [bool] (False): if True, the energy is not added if an energy of its type is already present.
         """
@@ -193,7 +199,7 @@ class Magnets(ABC):
         return energy
 
     def remove_energy(self, name: str, verbose=True): # This is faster when using self._energies as dict
-        """ Removes the specified energy from self._energies.
+        """ Removes the specified energy from `self._energies`.
             @param name [str]: the name of the energy to be removed. Case-insensitive and may or may not include
                 the 'energy' part of the class name. Valid options include e.g. 'dipolar', 'DipolarEnergy'...
         """
@@ -211,7 +217,7 @@ class Magnets(ABC):
         return False
 
     def get_energy(self, name: str, verbose=True): # This is faster when using self._energies as dict
-        """ Returns the specified energy from self._energies.
+        """ Returns the specified energy from `self._energies`.
             @param name [str]: the name of the energy to be returned. Case-insensitive and may or may not include
                 the 'energy' part of the class name. Valid options include e.g. 'dipolar', 'DipolarEnergy'...
             @returns [Energy]: the requested energy object.
@@ -261,10 +267,10 @@ class Magnets(ABC):
     def m_perp_factor(self):
         return self._m_perp_factor
     @m_perp_factor.setter
-    def m_perp_factor(self, value):
+    def m_perp_factor(self, value): # We assume this is not called very often
         if not hasattr(self, '_m_perp_factor'): self._m_perp_factor = 0
         if not isinstance(value, (int, float, bool)): raise ValueError("m_perp_factor must be scalar. It is not currently supported as a 2D array.")
-        if value and not self.in_plane: warnings.warn("You tried to set a nonzero `m_perp_energy`, but since this has no effect for an OOP ASI.")
+        if value and not self.in_plane: warnings.warn("You set a nonzero `m_perp_energy`, but this has no effect for an OOP ASI.")
         USED_PERP_ENERGY = self.USE_PERP_ENERGY
         self._m_perp_factor = float(value)
         if not USED_PERP_ENERGY and self.USE_PERP_ENERGY:
@@ -294,6 +300,19 @@ class Magnets(ABC):
     def E_perp(self) -> xp.ndarray: # NOTE: E_perp should be defined as "energy if the spin were rotated 90°↺"
         """ If only part of the array is needed, use `self.perp_energy(idx)` instead. """
         return sum([energy.E_perp for energy in self._energies])*self.m_perp_factor
+    
+    @property
+    def H_eff(self) -> xp.ndarray: # NOTE: E_perp should be activated
+        """ Returns the effective field (H_x, H_y) at the position of each magnet. """
+        if not self.USE_PERP_ENERGY: return np.zeros_like(self.m), np.zeros_like(self.m)
+        E_1, E_perp = self.E, sum([energy.E_perp for energy in self._energies]) #! Don't use self.E_perp, that is already scaled by m_perp_factor!
+        moment = np.where(self.moment, self.moment, np.inf)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            a = np.where(E_1 != 0, E_1*xp.sqrt(1 + (E_perp/E_1)**2), np.abs(E_perp))/moment # [T] Field strength
+            b = xp.arctan(E_perp/E_1) # Field angle w.r.t. magnetization direction (if E_1 = 0: yields sign(E_perp)*np.pi/2)
+        angle = b + self.angles + (self.m + 1)*np.pi/2
+        H_x, H_y = a*xp.cos(angle), a*xp.sin(angle)
+        return H_x, H_y
 
     @property
     def T(self) -> xp.ndarray:
@@ -301,6 +320,8 @@ class Magnets(ABC):
     @T.setter
     def T(self, value: Field):
         self._T = as_2D_array(value, self.shape)
+        self.kBT = kB*self._T # Array representing the thermal energy k_B*T throughout the system.
+        self.beta = 1/self.kBT # Array representing the reciprocal thermal energy 1/kBT throughout the system.
 
     @property
     def E_B(self) -> xp.ndarray:
@@ -308,6 +329,8 @@ class Magnets(ABC):
     @E_B.setter
     def E_B(self, value: Field):
         self._E_B = as_2D_array(value, self.shape)
+        with np.errstate(divide='ignore'): # For zero-E_B case (nonphysical but better to warn that in a more obvious way than here)
+            self._E_B_inv_over_four = .25/self._E_B # Precalculated for slightly faster E_barrier calculation
 
     @property
     def moment(self) -> xp.ndarray:
@@ -347,9 +370,16 @@ class Magnets(ABC):
         return self._dx
     @dx.setter
     def dx(self, value: float):
-        self._dx = float(value)
-        self.xx, _ = xp.meshgrid(xp.linspace(0, self._dx*(self.nx-1), self.nx), xp.arange(self.ny))
-        self.x_min, self.x_max = float(self.xx[0,0]), float(self.xx[-1,-1])
+        """ When specifying `dx` as an array (instead of a single scalar), then it should specify
+            the elements [x1-x0, x2-x1, ..., x(ux)-x(ux-1)], if a unitcell has size (ux, uy).
+            Note that the last element is the spacing over the boundaries of a unit cell!
+        """
+        value = xp.asarray(value).reshape(-1)
+        self._dx = xp.tile(value, math.ceil(self.nx/value.size))[:self.nx]
+        self.x = xp.zeros(self.nx)
+        self.x[1:] = xp.cumsum(self._dx)[:-1]
+        self.xx, _ = xp.meshgrid(self.x, xp.empty(self.ny))
+        self.x_min, self.x_max = float(self.x[0]), float(self.x[-1])
         for energy in self._energies: energy.initialize(self)
     
     @property
@@ -358,15 +388,17 @@ class Magnets(ABC):
         return self._dy
     @dy.setter
     def dy(self, value: float):
-        self._dy = float(value)
-        _, self.yy = xp.meshgrid(xp.arange(self.nx), xp.linspace(0, self._dy*(self.ny-1), self.ny))
-        self.y_min, self.y_max = float(self.yy[0,0]), float(self.yy[-1,-1])
+        """ When specifying `dy` as an array (instead of a single scalar), then it should specify
+            the elements [y1-y0, y2-y1, ..., y(uy)-y(uy-1)], if a unitcell has size (ux, uy).
+            Note that the last element is the spacing over the boundaries of a unit cell!
+        """
+        value = xp.asarray(value).reshape(-1)
+        self._dy = xp.tile(value, math.ceil(self.ny/value.size))[:self.ny]
+        self.y = xp.zeros(self.ny)
+        self.y[1:] = xp.cumsum(self._dy)[:-1]
+        _, self.yy = xp.meshgrid(xp.empty(self.nx), self.y)
+        self.y_min, self.y_max = float(self.y[0]), float(self.y[-1])
         for energy in self._energies: energy.initialize(self)
-
-    @property
-    def kBT(self) -> xp.ndarray:
-        """ Array representing the thermal energy k_B*T throughout the system. """
-        return kB*self._T
 
     @property
     def m_avg_x(self) -> float:
@@ -398,26 +430,24 @@ class Magnets(ABC):
         return float(xp.mean(self.moment))
 
     def set_T(self, f, /, *, center=False, crystalunits=False):
-        """ Sets the temperature field according to a spatial function. To simply set the temperature array, use self.T = assignment instead.
+        """ Sets the temperature field according to a spatial function. To simply set the temperature array, use `self.T = ` instead.
             @param f [function(x,y)->T]: x and y in meters yield T in Kelvin (should accept CuPy/NumPy arrays as x and y).
             @param center [bool] (False): if True, the origin is put in the middle of the simulation,
                 otherwise it is in the usual lower left corner.
             @param crystalunits [bool] (False): if True, x and y are assumed to be a number of cells instead of a distance in meters (but still float).
         """
-        if center:
-            xx = self.xx + self.dx*self.nx/2
-            yy = self.yy + self.dy*self.ny/2
-        else:
-            xx, yy = self.xx, self.yy
-        if crystalunits: xx, yy = xx/self.dx, xx/self.dy
-        self._T = f(xx, yy)
+        xx = self.ixx if crystalunits else self.xx
+        yy = self.iyy if crystalunits else self.yy
+        len_x = self.nx - 1 if crystalunits else self.x_max - self.x_min
+        len_y = self.ny - 1 if crystalunits else self.y_max - self.y_min
+        self._T = f(xx - center*len_x/2, yy - center*len_y/2)
 
 
     def select(self, **kwargs):
-        """ Performs the appropriate sampling method as specified by self.params.MULTISAMPLING_SCHEME.
+        """ Performs the appropriate sampling method as specified by `self.params.MULTISAMPLING_SCHEME`.
             - 'single': strictly speaking, this is the only physically correct sampling scheme. However,
                 to improve efficiency while making as small an approximation as possible, the grid and
-                Poisson schemes exist for use in the Glauber update scheme.
+                Poisson schemes exist for use in the Metropolis update scheme.
             - 'grid': built for efficient parallel generation of samples, but this introduces strong grid
                 bias in the sample distribution. To remedy this to some extent, using poisson=True randomizes
                 the positioning of the supercells, though these are still placed on a supergrid and therefore
@@ -430,7 +460,7 @@ class Magnets(ABC):
                 slowing down" in the 2D square-lattice exchange-coupled Ising model.
             @param r [float] (self.calc_r(0.01)): minimal distance between magnets, in meters
             @return [xp.array]: a 2xN array, where the 2 rows represent y- and x-coordinates (!), respectively.
-                (this is because the indexing of 2D arrays is e.g. self.m[y,x])
+                (this is because the indexing of 2D arrays is e.g. `self.m[y,x]`)
         """
         match self.params.MULTISAMPLING_SCHEME:
             case 'single': # Strictly speaking, this is the only physically correct sampling scheme
@@ -454,19 +484,19 @@ class Magnets(ABC):
         return self._nonzero_array[:,idx].reshape(2,-1)
 
     def _select_grid(self, r=None, poisson=None, **kwargs):
-        """ Uses a supergrid with supercells of size <r> to select multiple sufficiently-spaced magnets at once.
+        """ Uses a supergrid with supercells of size `r` to select multiple sufficiently-spaced magnets at once.
             ! <r> is a distance in meters, not a number of cells !
             @param r [float] (self.calc_r(0.01)): the minimal distance between two samples.
             @param poisson [bool] (True|False): whether or not to choose the supercells using a poisson-like scheme.
-                Using poisson=True is slower (already 2x slower for more than ~15x15 supercells) and places less
+                Using `poisson=True` is slower (already 2x slower for more than ~15x15 supercells) and places less
                 samples at once, but provides a much better sample distribution where the orthogonal grid bias is
-                not entirely eliminated but nonetheless significantly reduced as compared to poisson=False.
+                not entirely eliminated but nonetheless significantly reduced as compared to `poisson=False`.
         """
         ## Appropriately determine r, Rx, Ry
         if r is None: r = self.calc_r(0.01)
         # if poisson is None: poisson = (15*r)**2 < self.nx*self.ny # use poisson supercells only if there are not too many supercells
         if poisson is None: poisson = False # TODO: when parallel Poisson is implemented, uncomment the line above etc.
-        Rx, Ry = math.ceil(r/self.dx) - 1, math.ceil(r/self.dy) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
+        Rx, Ry = math.ceil(r/xp.min(self.dx)) - 1, math.ceil(r/xp.min(self.dy)) - 1 # - 1 because effective minimal distance in grid-method is supercell_size + 1
         Rx, Ry = self.unitcell.x*math.ceil(Rx/self.unitcell.x), self.unitcell.y*math.ceil(Ry/self.unitcell.y) # To have integer number of unit cells in a supercell (necessary for occupation_supercell)
         Rx, Ry = min(Rx, self.nx), min(Ry, self.ny) # No need to make supercell larger than simulation itself
         Rx, Ry = max(Rx, 1 if poisson else 2), max(Ry, 1 if poisson else 2) # Also don't take too small, too much randomness could be removed, resulting in nonphysical behavior
@@ -520,9 +550,13 @@ class Magnets(ABC):
     def _select_Poisson(self, r=None, **kwargs): # WARN: does not take occupation into account, so preferably only use on OOP_Square/IP_Ising!
         if r is None: r = self.calc_r(0.01)
 
-        # p = SequentialPoissonDiskSampling(self.ny*self.dy, self.nx*self.dx, r, tries=1).fill()
-        p = poisson_disc_samples(self.ny*self.dy, self.nx*self.dx, r, k=4)
-        points = (np.array(p)/self.dx).astype(int)
+        # p = SequentialPoissonDiskSampling(self.y_max, self.x_max, r, tries=1).fill()
+        p = np.asarray(poisson_disc_samples(self.y_max, self.x_max, r, k=4))
+        
+        def nearest_grid_indices(grid_1D, coords_1D): # TODO: this method is flawed because if some dx are very small they will almost never be visited
+            return np.abs(grid_1D[:, np.newaxis] - coords_1D).argmin(axis=0)
+        points = np.column_stack((nearest_grid_indices(self.x, p[:,0] + self.x_min),
+                                  nearest_grid_indices(self.y, p[:,1] + self.y_min)))
         return xp.asarray(points.T)
 
     def _select_cluster(self, **kwargs):
@@ -558,8 +592,8 @@ class Magnets(ABC):
         return xp.asarray(xp.where(cluster == 1))
 
     def update(self, *args, **kwargs):
-        """ Runs a single update step using the update scheme and magnet selection method in self.params. """
-        can_handle_zero_temperature = ['Glauber']
+        """ Runs a single update step using the update scheme and magnet selection method in `self.params`. """
+        can_handle_zero_temperature = ['Metropolis']
         if xp.any(self.T == 0):
             if self.params.UPDATE_SCHEME not in can_handle_zero_temperature:
                 warnings.warn("T=0 somewhere in the domain, so no switch will be simulated to prevent DIV/0 errors.", stacklevel=2)
@@ -569,8 +603,8 @@ class Magnets(ABC):
         match self.params.UPDATE_SCHEME:
             case 'Néel':
                 idx = self._update_Néel(*args, **kwargs)
-            case 'Glauber':
-                idx = self._update_Glauber(*args, **kwargs)
+            case 'Metropolis':
+                idx = self._update_Metropolis(*args, **kwargs)
             case 'Wolff':
                 idx = self._update_Wolff(*args, **kwargs)
             case str(unrecognizedscheme):
@@ -582,18 +616,24 @@ class Magnets(ABC):
         """ @param `idx`: (2,N)-array with rows representing y- and x-coordinates, respectively.
             @param `min_only` [bool] (False): If True, only the smallest of the two energy barriers is returned.
                 Otherwise a tuple with the two energy barriers is returned (for clockwise/counterclockwise rotation, respectively).
-            @return: 1D array (if min_only is True) or tuple with two 1D arrays (if min_only is False),
-                with the same length as `idx.shape[1]`. If idx is None, then it will be 2D arrays of the same shape as `self.m`.
-            Example: if idx is not None and min_only is False, a return value could be (array(1.4, -0.3, 0.6 ...), array(2.5, -0.12, 0.2 ...)).
+            @return: 1D array (if `min_only` is True) or tuple with two 1D arrays (if `min_only` is False),
+                with the same length as `idx.shape[1]`. If `idx` is None, then it will be 2D arrays of the same shape as `self.m`.
+            Example: if `idx` is not None and `min_only` is False, a return value could be (array(1.4, -0.3, 0.6 ...), array(2.5, -0.12, 0.2 ...)).
         """
         with np.errstate(invalid='ignore', divide='ignore'):
             delta_E = self.switch_energy(idx)*(self._occupation_inf if idx is None else self._occupation_inf[idx[0], idx[1]])
             E = -delta_E/2 # Don't use self.E, because that would need additional indexing
             E_B = self.E_B if idx is None else self.E_B[idx[0], idx[1]]
+            E_B_inv_over_four = self._E_B_inv_over_four if idx is None else self._E_B_inv_over_four[idx[0], idx[1]]
 
-        if not self.USE_PERP_ENERGY: # Use simplified calculation, taken from old Néel/Glauber
+        if not self.USE_PERP_ENERGY: # Use simplified calculation, taken from old Néel/Metropolis
             # THERE ARE TWO CHOICES OF FORMULA, DEPENDING ON THE INTERPRETATION OF THE CASE WHERE THE ENERGY BARRIER DISAPPEARS:
-            barrier = xp.maximum(delta_E, E_B - E) # THIS FORMULA IS FULLY BACKWARDS COMPATIBLE (pre-2024), and in a sense uses the 'curvature' of the energy landscape for cases where it is <0
+            match self.params.ENERGY_BARRIER_METHOD:
+                case 'simple':
+                    barrier = xp.maximum(delta_E, E_B - E) # THIS FORMULA IS FULLY BACKWARDS COMPATIBLE (pre-2024), and in a sense uses the 'curvature' of the energy landscape for cases where it is <0
+                case 'parabolic': # This is the best that can be done without E_perp. (is also exact for OOP ASI because 
+                    barrier = xp.where(delta_E > 4*E_B, delta_E, xp.minimum(E_B*(delta_E*E_B_inv_over_four + 1)**2, delta_E + 4*E_B)) # PARABOLIC FORMULA, in the region without real barrier it rises/drops equally fast as delta_E, this is correct if one assumes the effective field is along the easy axis (which is never the case if E_perp != 0).
+            # TODO: Determine what is the best approach for the 'barrier < 0' case. barrier=delta_E? barrier=curvature? barrier=0?
             # barrier = xp.where(E_B > E_highest_state, E_B - E, delta_E) # This formula has a discontinuity as soon as barrier < 0, because then the opposite state is used (which is always suddenly much lower), thus ensuring that barrierless magnets will always switch before magnets with even the tiniest barrier.
             return barrier if min_only else (barrier, barrier)
         
@@ -606,29 +646,28 @@ class Magnets(ABC):
         return xp.minimum(E_barrier_1, E_barrier_2) if min_only else (E_barrier_1, E_barrier_2)
 
 
-    def _update_Glauber(self, idx=None, Q=0.05, r=0):
+    def _update_Metropolis(self, idx=None, Q=0.05, r=0, attempt_freq=1e10): # TODO: flag to choose which kind of exponential to use: clip(0, exp, 1) or exp/(1+exp)
+         # TODO: implement maximum elapsed time. (t_max)
         # 1) Choose a bunch of magnets at random
         if idx is None: idx = self.select(r=self.calc_r(Q) if r == 0 else r)
         self.attempted_switches += idx.shape[1]
+        beta = self.beta[idx[0], idx[1]]
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
-        # OPTION 1: TRUE GLAUBER, NO ENERGY BARRIER (or at least not explicitly)
-        # exponential = xp.clip(xp.exp(-self.switch_energy(idx)/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
-        # OPTION 2: AD-HOC ADJUSTED GLAUBER, where we assume that the 'other state' is at the top of the energy barrier
-        barrier = self.E_barrier(idx, min_only=True)
         with np.errstate(divide='ignore', over='ignore'): # To allow low T or even T=0 without warnings or errors
-            exponential = xp.clip(xp.exp(-barrier/self.kBT[idx[0], idx[1]]), 1e-10, 1e10) # clip to avoid inf
+            exponential = xp.clip(xp.exp(-self.switch_energy(idx)*beta), 1e-10, 1e10) # clip to avoid inf
         # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
-        idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # Acceptance condition from detailed balance min(1, e^-E/kT) (Metropolis-hastings rather than Glauber; Glauber e^-E/kT/(1+e^-E/kT) should give same statistics but is just slower)
-        # idx = idx[:,xp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # From https://en.wikipedia.org/wiki/Glauber_dynamics, looks more natural but equilibrium state is same as M-H, and is slower than M-H to reach it
+        idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # METROPOLIS-HASTINGS acceptance probability, derived from detailed balance: min(1, e^-E/kT)
+        # idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # GLAUBER acceptance probability, from https://en.wikipedia.org/wiki/Glauber_dynamics: e^-E/kT/(1+e^-E/kT) (Should give same statistics as Metropolis, but is just slower, might look "more natural" according to some)
         if idx_switch.shape[1] > 0:
             self.m[idx_switch[0], idx_switch[1]] *= -1
             self.switches += idx_switch.shape[1]
             self.update_energy(index=idx_switch)
-        return idx_switch # TODO: can we get some sort of elapsed time? Yes for one switch, but what about many at once?
+            self.t += xp.sum(-xp.log(self.rng.random())/attempt_freq/self.n*xp.exp(-self.E_barrier(idx, min_only=True)*beta))
+        return idx_switch
 
     def _update_Néel(self, t_max=1, attempt_freq=1e10):
-        """ Performs a single magnetization switch, if the switch would occur sooner than <t_max> seconds.
-            Returns the index of the magnet that switched, or None if none switched within <t_max>.
+        """ Performs a single magnetization switch, if the switch would occur sooner than `t_max` seconds.
+            Returns the index of the magnet that switched, or None if none switched within `t_max`.
         """
         # TODO: is there a way to multi-switch here as well, without a danger of creating infinite loops?
         # TODO: is there a way to move faster in time if there is a magnet that keeps switching back and forth, which thus inhibits further evolution of the system?
@@ -638,16 +677,16 @@ class Magnets(ABC):
                 minBarrier = min(xp.nanmin(barrier1), xp.nanmin(barrier2)) # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
                 barrier1 -= minBarrier
                 barrier2 -= minBarrier
-                frequency = xp.exp(-barrier1/self.kBT) + xp.exp(-barrier2/self.kBT) # Sadly we have to divide in the next step, and that is a costly function.
-                taus = self.rng.random(size=barrier1.shape)/frequency # Draw random relative times from an exponential distribution.
+                frequency = xp.exp(-barrier1*self.beta) + xp.exp(-barrier2*self.beta) # Sadly we have to divide in the next step, and that is a costly function.
+                taus = self.rng.exponential(scale=1/frequency) # Draw random relative times from an exponential distribution.
                 attempt_freq /= 2 # Because we have 2 parallel switching channels, and we want equivalence between USE_PERP_ENERGY True and False in case of equal barriers.
             else:
                 barrier = self.E_barrier(min_only=True)
                 minBarrier = xp.nanmin(barrier)
                 barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
-                taus = self.rng.random(size=barrier.shape)*xp.exp(barrier/self.kBT) # Draw random relative times from an exponential distribution
+                taus = self.rng.exponential(scale=xp.exp(barrier*self.beta)) # Draw random relative times from an exponential distribution
             indexmin2D = divmod(xp.nanargmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
-            time = taus[indexmin2D]*xp.exp(minBarrier/self.kBT[indexmin2D])/attempt_freq # This can become infinite quite quickly if T is small
+            time = taus[indexmin2D]*xp.exp(minBarrier*self.beta[indexmin2D])/attempt_freq # This can become infinite quite quickly if T is small
             self.attempted_switches += 1
             if time > t_max or np.isnan(time):
                 self.t += t_max
@@ -669,17 +708,17 @@ class Magnets(ABC):
 
     @lru_cache
     def calc_r(self, Q, as_scalar=True) -> float|xp.ndarray:
-        """ Calculates the minimal value of r (IN METERS). Considering two nearby sampled magnets, the switching probability
-            of the first magnet will depend on the state of the second. For magnets further than <calc_r(Q)> apart, the switching
-            probability of the first will not change by more than <Q> if the second magnet switches.
+        """ Calculates the minimal value of r (IN METERS): considering two nearby sampled magnets, the switching probability
+            of the first magnet will depend on the state of the second. For magnets further than `calc_r(Q)` apart, the switching
+            probability of the first will not change by more than `Q` if the second magnet switches.
             @param Q [float]: (0<Q<1) the maximum allowed change in switching probability of a sample if any other sample switches.
             @param as_scalar [bool] (True): if True, a safe value for the whole grid is returned.
                 If False, an array is returned which can for example be used in adaptive Poisson disc sampling.
             @return [float|xp.ndarray]: the minimal distance (in meters) between samples, if their mutual influence on their
-                switching probabilities is to be less than <Q>.
+                switching probabilities is to be less than `Q`.
         """
         r = (8e-7*self._momentSq/(Q*self.kBT))**(1/3)
-        r = xp.clip(r, 0, self.nx*self.dx + self.ny*self.dy) # If T=0, we clip the infinite r back to a high value nx*dx+ny*dy which is slightly larger than the simulation
+        r = xp.clip(r, 0, (self.x_max - self.x_min) + (self.y_max - self.y_min)) # If T=0, we clip the infinite r back to a high value nx*dx+ny*dy which is slightly larger than the simulation
         return float(xp.max(r)) if as_scalar else r # Use max to be safe if requested to be scalar value
 
 
@@ -687,12 +726,12 @@ class Magnets(ABC):
         #! For backwards compatibility, <stepwise> default must be False!
         """ Runs as many self.update steps as is required to progress a certain amount of
             time or Monte Carlo steps (whichever is reached first) into the future.
-            **kwargs get passed to self.update().
+            **kwargs get passed to `self.update()`.
             @param t_max [float] (None): The maximum amount of time difference between start and end of this function.
             @param MCsteps_max [float] (4.): The maximum amount of Monte Carlo steps performed during this function.
             @return [tuple(2)|generator]:
-                If <stepwise> is False: tuple (elapsed time, number of MC steps performed) during the execution of this function.
-                If <stepwise> is True: a generator that yields after every self.update() call. Can be used to inspect transients etc.
+                If `stepwise` is False: tuple (elapsed time, number of MC steps performed) during the execution of this function.
+                If `stepwise` is True: a generator that yields after every `self.update()` call. Can be used to inspect transients etc.
         """
         generator = self._progress_stepwise(t_max=t_max, MCsteps_max=MCsteps_max, **kwargs)
         if stepwise: return generator
@@ -701,7 +740,7 @@ class Magnets(ABC):
             except StopIteration as e: return e.value # And then this is how you can return the 'return' value of a generator as if it were a normal function
 
     def _progress_stepwise(self, t_max: float = 1, MCsteps_max: float = 4., **kwargs):
-        """ Generator that forms the foundation of self.progress(). Yields after every self.update(). """
+        """ Generator that forms the foundation of `self.progress()`. Yields after every `self.update()`. """
         t_0, MCsteps_0 = self.t, self.MCsteps
         while lower_than(dt := self.t - t_0, t_max) and lower_than(dMCsteps := self.MCsteps - MCsteps_0, MCsteps_max):
             if self.params.UPDATE_SCHEME == 'Néel': self.update(t_max=(t_max - dt), **kwargs) # A max time can be specified
@@ -711,12 +750,12 @@ class Magnets(ABC):
 
     # TODO: clean the minimize(), _minimize_all() and relax() functions (i.e. verbosity and standardize barrier calculation)
     def minimize(self, ignore_barrier=True, verbose=False, _frac=0.3):
-        """ NOTE: this is basically the sequential version of self.relax().
+        """ NOTE: this is basically the sequential version of `self.relax()`.
             NOTE: this is not deterministic.
             Switches the magnet which has the highest switching probability.
             Repeats this until there are no more magnets that can gain energy from switching.
             NOTE: it can take a while for large simulations to become fully relaxed, especially with this
-                sequential procedure. Consider using self.relax() for large simulations.
+                sequential procedure. Consider using `self.relax()` for large simulations.
         """
         visited = np.zeros_like(self.m) # Used to make sure we don't get an infinite loop
         while True:
@@ -750,7 +789,7 @@ class Magnets(ABC):
         """ Switches all magnets that can gain energy by switching.
             By default, several subsets of the domain are updated in a random order, such that in total
             every cell got exactly one chance at switching. This randomness may increase the runtime, but
-            reduces systematic bias and possible loops which would otherwise cause self.relax() to get stuck.
+            reduces systematic bias and possible loops which would otherwise cause `self.relax()` to get stuck.
             @param _simultaneous [bool] (False): if True, all magnets are evaluated simultaneously (nonphysical, error-prone).
                 If False, several subgrids are evaluated after each other in a random order to prevent systematic bias.
         """
@@ -781,8 +820,8 @@ class Magnets(ABC):
         # 3) If switching did not make it the magnet with the highest energy, then switch the other one and add all of its neighbors to the 'todo' list of magnets to switch and perform this check onto.
         # I have not thought much about how this could get stuck in an infinite loop, but I guess if the number of magnets to be checked starts to exceed several times mm.n, then just stop because it is exploding.
         # If such cases occur, I will perform further case studies to avoid those.
-        """ NOTE: this is basically the parallel version of self.minimize().
-            Relaxes self.m to a (meta)stable state using multiple self._minimize_all() calls.
+        """ NOTE: this is basically the parallel version of `self.minimize()`.
+            Relaxes `self.m` to a (meta)stable state using multiple `self._minimize_all()` calls.
             NOTE: it can take a while for large simulations to become fully relaxed.
         """
         if verbose:
@@ -812,8 +851,8 @@ class Magnets(ABC):
 
 
     def history_save(self, *, E_tot=None, t=None, T_avg=None, m_avg=None):
-        """ Records E_tot, t, T_avg and m_avg as they were last calculated. This default behavior can be overruled: if
-            passed as keyword parameters, their arguments will be saved instead of the self.<E_tot|t|T_avg|m_avg> value(s).
+        """ Records `E_tot`, `t`, `T_avg` and `m_avg` as they were last calculated. This default behavior can be overruled: if
+            passed as keyword parameters, their arguments will be saved instead of the `self.<E_tot|t|T_avg|m_avg>` value(s).
         """
         self.history.entry(self)
         if E_tot is not None: self.history.E[-1] = float(E_tot)
@@ -821,10 +860,10 @@ class Magnets(ABC):
         if T_avg is not None: self.history.T[-1] = float(T_avg)
         if m_avg is not None: self.history.m[-1] = float(m_avg)
 
-
+    # TODO: improve these autocorrelation and correlation length functions to take into account the non-uniform dx and dy
     def autocorrelation(self, *, normalize=True):
         """ In case of a 2D signal, this basically calculates the autocorrelation of the
-            self.m matrix, while taking into account self.orientation for the in-plane case.
+            `self.m` matrix, while taking into account `self.orientation` for the in-plane case.
             Note that strictly speaking this assumes dx and dy to be the same for all cells.
         """
         boundary = 'wrap' if self.PBC else 'fill'
@@ -838,20 +877,21 @@ class Magnets(ABC):
             corr = signal.correlate2d(self.m, self.m, boundary=boundary)
 
         if normalize:
-            corr_norm = signal.correlate2d(xp.ones_like(self.m), xp.ones_like(self.m), boundary=boundary) # Is this necessary? (this is number of occurences of each cell in correlation sum)
-            corr = corr*self.m.size/self.n/corr_norm # Put between 0 and 1
+            ones = xp.ones_like(self.m)
+            corr_norm = signal.correlate2d(ones, ones, boundary=boundary) # Is this necessary? (this is number of occurences of each cell in correlation sum)
+            corr *= self.m.size/self.n/corr_norm # Put between 0 and 1
         
         return corr[(self.ny-1):(2*self.ny-1),(self.nx-1):(2*self.nx-1)]**2
 
     def correlation_length(self, correlation=None):
         if correlation is None: correlation = self.autocorrelation()
         # First calculate the distance between all spins in the simulation.
-        rr = (self.xx**2 + self.yy**2)**(1/2) # This only works if dx, dy is the same for every cell!
+        rr = (self.xx**2 + self.yy**2)**(1/2) # TODO: This only works correctly if dx, dy is the same for every cell!
         return float(xp.sum(xp.abs(correlation) * rr * rr)/xp.max(xp.abs(correlation))) # Do *rr twice, once for weighted avg, once for 'binning' by distance
 
     def get_appropriate_avg(self, n=0):
-        ''' n=0,1,2,3... gives the n-th recommended averaging mask.
-            n=None gives all allowed values, always including 'point'.
+        ''' `n`=0,1,2,3... gives the `n`-th recommended averaging mask.
+            `n=None` gives all allowed values, always including 'point'.
         '''
         allowed_averages = self._get_appropriate_avg()
         if isinstance(allowed_averages, str): allowed_averages = [allowed_averages]
@@ -865,15 +905,15 @@ class Magnets(ABC):
     @abstractmethod # Not needed for out-of-plane ASI, but essential for in-plane ASI, therefore abstractmethod anyway
     def _get_angles(self):
         """ Returns a 2D array containing the angle (measured counterclockwise from the x-axis)
-            of each spin. The angle of unoccupied cells (self._get_occupation() == 0) is ignored.
+            of each spin. The angle of unoccupied cells (`self._get_occupation() == 0`) is ignored.
         """
         return xp.zeros_like(self.ixx) # Example
 
     @abstractmethod # TODO: should this really be an abstractmethod? Uniform and random can be defaults and subclasses can define more of course
     def _set_m(self, pattern: str):
-        """ Directly sets <self.m>, depending on <pattern>. Usually, <pattern> is "uniform", "vortex", "AFM" or "random".
-            <self.m> is a shape (ny, nx) array containing only -1, 0 or 1 indicating the magnetization direction.
-            ONLY <self.m> should be set/changed/defined by this function.
+        """ Directly sets `self.m`, depending on `pattern`. Usually, `pattern` is "uniform", "vortex", "AFM" or "random".
+            `self.m` is a shape (`self.ny`, `self.nx`) array containing only -1, 0 or 1 indicating the magnetization direction.
+            ONLY `self.m` should be set/changed/defined by this function.
         """
         match str(pattern).strip().lower():
             case 'uniform':
@@ -884,9 +924,8 @@ class Magnets(ABC):
                 #   <angle> near math.pi/2 or -math.pi/2: bowtie configuration (top region: up/down, respectively)
                 self.m = xp.ones_like(self.xx)
                 if self.in_plane: # In-plane has a clear 'vortex' meaning
-                    middle = (self.dx*(self.nx-1)/2, self.dy*(self.ny-1)/2)
-                    diff_x = self.xx - middle[0]
-                    diff_y = self.yy - middle[1]
+                    diff_x = self.xx - (self.x_max - self.x_min)/2
+                    diff_y = self.yy - (self.y_max - self.y_min)/2
                     diff_complex = diff_x + 1j*diff_y
                     angle_desired = diff_complex*(-1j+1e-6) # Small offset from 90° to avoid weird boundaries in highly symmetric systems
                     dotprod = angle_desired.real*self.orientation[:,:,0] + angle_desired.imag*self.orientation[:,:,1]
@@ -895,7 +934,7 @@ class Magnets(ABC):
                     occupied = xp.where(self.occupation == 1)
                     self.m[occupied] = sign[occupied]
                 else: # for OOP, 'vortex' means 'up' on one side, 'down' on other side
-                    half_side = xp.where(self.xx >= (self.x_max-self.x_min)/2)
+                    half_side = xp.where(self.xx >= (self.x_max - self.x_min)/2)
                     self.m[half_side] *= -1
             case str(unknown_pattern):
                 self.m = self.rng.integers(0, 2, size=self.xx.shape)*2 - 1
@@ -908,8 +947,8 @@ class Magnets(ABC):
 
     @abstractmethod
     def _get_groundstate(self):
-        """ Returns <pattern> in self.initialize_m(<pattern>) which corresponds to a global ground state of the system.
-            Use 'random' if no ground state is implemented in self._set_m().
+        """ Returns `pattern` in `self.initialize_m(pattern)` which corresponds to a global ground state of the system.
+            Use 'random' if no ground state is implemented in `self._set_m()`.
         """
         return 'random'
 

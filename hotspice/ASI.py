@@ -25,8 +25,11 @@ class OOP_ASI(Magnets):
         # This abstract method is irrelevant for OOP ASI, so just return NaNs.
         return xp.nan*xp.zeros_like(self.ixx)
 
-    def correlation_NN(self): # Basically <S_i S_{i+1}>
-        NN = self._get_nearest_neighbors()
+    def correlation_NN(self, NN=None): # Basically <S_i S_{i+1}>
+        """ `NN` can be used to set a different NN mask (default: `self._get_nearest_neighbors()`),
+            for example in subclasses for further-NN implementations.
+        """
+        if NN is None: NN = self._get_nearest_neighbors()
         total_NN = signal.convolve2d(self.occupation, NN, mode='same', boundary='wrap' if self.PBC else 'fill')*self.occupation
         neighbors_sign_sum = signal.convolve2d(self.m, NN, mode='same', boundary='wrap' if self.PBC else 'fill')
         valid_positions = xp.where(total_NN != 0)
@@ -86,6 +89,15 @@ class OOP_Square(OOP_ASI):
         return xp.concatenate(sizes)
     def domain_size(self):
         return xp.mean(self.domain_sizes())
+    
+    def correlation_NN(self, N=1): # Basically <S_i S_{i+1}>
+        """ Calculates the correlation with the `N`-th nearest neighbor (average over the system). """
+        if not isinstance(N, int) and not (1 <= N <= 3): raise ValueError("Can only calculate NN correlation up to third-nearest neighbor")
+        match N:
+            case 1: NN = None
+            case 2: NN = xp.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]])
+            case 3: NN = xp.array([[0, 0, 1, 0, 0], [0, 0, 0, 0, 0], [1, 0, 0, 0, 1], [0, 0, 0, 0, 0], [0, 0, 1, 0, 0]])
+        return super().correlation_NN(NN=NN)
 
 
 class OOP_Triangle(OOP_ASI):
@@ -170,6 +182,50 @@ class OOP_Honeycomb(OOP_ASI):
         return (sublattice == self.m).astype(int)
 
 
+class OOP_Cairo(OOP_ASI):
+    def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, beta: float = None, offset_factor: float = 1., **kwargs):
+        """ In-plane ASI with all spins placed on the edges of the equilateral Cairo tiling.
+            NOTE: `dx` and `dy` can not be specified spearately, all is controlled by `a` and `beta`.
+            `offset_factor` can be used to offset the magnets to make the 4-vertices and 3-vertices look less unbalanced.
+                The nicest shape is achieved for `offset_factor=1.2`.
+        """
+        self.a = a # [m] The side length of the pentagons
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        
+        self.beta = math.pi/4 + math.acos(math.sqrt(2)/4) if beta is None else beta
+        dx = dy = [-a*math.cos(self.beta),a/2,a/2,-a*math.cos(self.beta)]
+        super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
+
+    def _set_m(self, pattern: str, angle=None):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = xp.ones_like(self.ixx)
+                self.m[(self.ixx + self.iyy) % 5 == 1] *= -1
+                self.m[(self.ixx + self.iyy) % 5 == 3] *= -1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_occupation(self):
+        occupation = xp.zeros_like(self.xx)
+        for x, y in [(0,0), (0,4), (1,2), (2,5), (2,7), (3,2), (4,0), (4,4), (5,6), (6,1), (6,3), (7,6)]:
+            occupation[y::8,x::8] = 1
+        return occupation
+
+    def _get_appropriate_avg(self):
+        return ['point']
+
+    def _get_AFMmask(self):
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+
+    def _get_nearest_neighbors(self):
+        return xp.array([[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]])
+
+    def _get_groundstate(self):
+        return 'afm'
+
+
 class IP_Ising(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with all spins on a square grid, all pointing in the same direction. """
@@ -232,7 +288,7 @@ class IP_Square_Closed(IP_ASI):
         return (self.ixx + self.iyy) % 2 == 1
 
     def _get_appropriate_avg(self):
-        return ['squarefour', 'cross', 'square']
+        return ['cross', 'square', 'squarefour']
 
     def _get_AFMmask(self):
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
@@ -297,7 +353,7 @@ class IP_Square_Open(IP_ASI):
     def _get_groundstate(self):
         return 'afm'
 
-class IP_Pinwheel(IP_Pinwheel_Diamond): pass
+class IP_Pinwheel(IP_Pinwheel_Diamond): pass # Just an alias for IP_Pinwheel, to follow naming scheme from "Apparent ferromagnetism in the pinwheel artificial spin ice"
 class IP_Pinwheel_LuckyKnot(IP_Square_Open):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI similar to IP_Square_Open, but all spins rotated by 45°, hence forming a pinwheel geometry. """
@@ -311,7 +367,7 @@ class IP_Pinwheel_LuckyKnot(IP_Square_Open):
         return ['crossfour', 'square']
 
 
-class IP_Kagome(IP_ASI):
+class IP_Kagome(IP_ASI): # TODO: change the meaning of <a> such that it is the side length of a hexagon (this would be more in line with other ASI definitions).
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
         """ In-plane ASI with all spins placed on, and oriented along, the edges of hexagons. """
         self.a = a # [m] The distance between opposing sides of a hexagon
@@ -345,7 +401,7 @@ class IP_Kagome(IP_ASI):
         return occupation
 
     def _get_appropriate_avg(self):
-        return ['point', 'cross', 'triangle', 'hexagon']
+        return ['cross', 'point', 'triangle', 'hexagon']
 
     def _get_AFMmask(self):
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
@@ -365,6 +421,65 @@ class IP_Triangle(IP_Kagome):
 
     def _get_appropriate_avg(self):
         return ['point', 'cross', 'triangle']
+
+    def _get_groundstate(self):
+        return 'afm'
+
+
+class IP_Cairo(IP_ASI):
+    def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, beta: float = None, offset_factor: float = 1., **kwargs):
+        """ In-plane ASI with all spins placed on the edges of the equilateral Cairo tiling.
+            NOTE: `dx` and `dy` can not be specified spearately, all is controlled by `a` and `beta`.
+            `offset_factor` can be used to offset the magnets to make the 4-vertices and 3-vertices look less unbalanced.
+                The nicest shape is achieved for `offset_factor=1.2`.
+        """
+        self.a = a # [m] The side length of the pentagons
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        
+        self.beta = math.pi/4 + math.acos(math.sqrt(2)/4) if beta is None else beta
+        dxPQ = dyRS = a/2*math.sin(self.beta)
+        dxQR = dxPQ - a/2*math.cos(self.beta)
+        dxRS = dyPQ = math.sin(math.pi/2 - self.beta)*a + math.cos(math.pi/2 - self.beta)*a - a/2*math.cos(self.beta)
+        dyQR = (dyPQ - dxPQ)*offset_factor
+        dx = dy = [dyQR,dxPQ,dxPQ,dyQR,-a*math.cos(self.beta)*offset_factor]
+        super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
+
+    def _set_m(self, pattern: str, angle=None):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = xp.ones_like(self.ixx)
+                self.m[(self.ixx + self.iyy) % 5 == 1] *= -1
+                self.m[(self.ixx + self.iyy) % 5 == 3] *= -1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_angles(self):
+        angles = xp.zeros_like(self.xx)
+        s = lambda x, y: (slice(y,self.ny,10), slice(x,self.nx,10))
+        angles[s(2,2)] = angles[s(7,7)] = 0 # -
+        angles[s(2,7)] = angles[s(7,2)] = math.pi/2 # |
+        angles[s(0,1)] = angles[s(4,3)] = angles[s(5,6)] = angles[s(9,8)] = math.pi - self.beta # steep /
+        angles[s(0,3)] = angles[s(4,1)] = angles[s(5,8)] = angles[s(9,6)] = self.beta # steep \
+        angles[s(1,5)] = angles[s(3,9)] = angles[s(6,0)] = angles[s(8,4)] = self.beta - math.pi/2 # shallow /
+        angles[s(1,9)] = angles[s(3,5)] = angles[s(6,4)] = angles[s(8,0)] = math.pi/2 - self.beta # shallow \
+        return angles
+
+    def _get_occupation(self):
+        occupation = xp.zeros_like(self.xx)
+        occupation[xp.where(self._get_angles() != 0)] = 1 # Non-horizontal magnets
+        occupation[2::10,2::10] = occupation[7::10,7::10] = 1 # Horizontal magnets
+        return occupation
+
+    def _get_appropriate_avg(self):
+        return ['point']
+
+    def _get_AFMmask(self):
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+
+    def _get_nearest_neighbors(self):
+        return xp.array([[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]])
 
     def _get_groundstate(self):
         return 'afm'

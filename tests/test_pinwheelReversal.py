@@ -20,17 +20,17 @@ xp = hotspice.xp
 
 
 class PinwheelReversalTest:
-    def __init__(self, size: int = 50, m_perp_factor: float = 1, scheme: Literal['Néel', 'Glauber'] = 'Néel', E_B: float = None, E_B_std: float = 0.05, dilution: float = 0):
+    def __init__(self, size: int = 50, m_perp_factor: float = 1, scheme: Literal['Néel', 'Metropolis'] = 'Néel', E_B: float = None, E_B_std: float = 0.05, dilution: float = 0):
         """ This test attempts to reproduce
                 "Superferromagnetism and Domain-Wall Topologies in Artificial “Pinwheel” Spin Ice"
                 by Y. Li, G. W. Paterson, G. M. Macauley et al. ACS Nano 2019 13 (2), 2213-2222, doi:10.1021/acsnano.8b08884
             using various approximations: using (or not using) the exact energy of the metastable perpendicularly magnetized state,
-            or using dipoles vs. monopoles, and whether we use Néel or Glauber (though that should not matter at all).
+            or using dipoles vs. monopoles, and whether we use Néel or Metropolis (though that should not matter at all).
             
             A system size of 50 gives the exact same geometry as in the paper, but with the x- and y-axes flipped.
             But the paper also defines their angle clockwise from the y-axis, which thus corresponds to our definition of the angle.
 
-            @param `scheme` ['Néel'|'Glauber'] ('Néel'): The update scheme to use.
+            @param `scheme` ['Néel'|'Metropolis'] ('Néel'): The update scheme to use.
         """
         ## Basic system: 50x50 system of 470x170x10nm islands, 420nm center-to-center NN spacing
         l, d, t, Msat = 470e-9, 170e-9, 10e-9, 800e3
@@ -176,7 +176,7 @@ class Hysteresis:
         for i, H in enumerate(self.H_fields):
             if verbose and hotspice.utils.is_significant(i, _N, order=2): print(f"[{hotspice.utils.J_to_eV(self.mm.E_B_avg):.0f}eV] {i+1}/{_N*(2-self.half)}")
             ZeemanEnergy.set_field(angle=angle_rad, magnitude=H)
-            if self.mm.params.UPDATE_SCHEME == 'Glauber': self.mm.progress(r=1e-7)
+            if self.mm.params.UPDATE_SCHEME == 'Metropolis': self.mm.progress(r=1e-7)
             else: self.mm.progress()
             self.m_avg[i], self.m_angle[i] = self.mm.m_avg, self.mm.m_avg_angle
             if self.thresholds.pass_check(m_parallel_normalized()):
@@ -206,13 +206,14 @@ class Hysteresis:
         is_monotonic = [all(data.H_fields[i] <= data.H_fields[i-1] for i in range(1, data.H_fields.size))
                     or all(data.H_fields[i] >= data.H_fields[i-1] for i in range(1, data.H_fields.size))
                     for data in hystereses] # Whether data[j] is a half hysteresis or not # TODO: refactor this using hysteresis.half
-        if colors is None: colors = np.resize(hotspice.plottools.colorcycle(), n)
+        if colors is None:
+            colors = [plt.get_cmap('jet', 2*n+1)(2*i+1) if i < 5 else plt.get_cmap('jet', n)(i) for i in range(n)]
+            # colors = np.resize(hotspice.plottools.colorcycle(), n)
         if labels is None: labels = [None]*len(hystereses)
         markers = np.resize(['o', 's', 'D', 'P', 'X', 'p', '*', '^'], n) # Circle, square, diamond, plus, cross, pentagon, star, triangle up (and repeat enough times)
         if SHOW_SNAPSHOTS is None: SHOW_SNAPSHOTS = n == 1
         if _vertical is None: _vertical = n == 1 # Whether the line plots are above the snapshot plots (True), or next to them (False). Also affects layout of snapshot plot subgrid.
         
-        hotspice.plottools.init_style()
         fig = plt.figure(figsize=(8, 6) if _vertical else (10, 4))
         if SHOW_SNAPSHOTS:
             snapshot_ratio = np.clip(n/2, 1, 2.5) # Don't use too much space for the snapshots, but don't squeeze them too much either
@@ -331,7 +332,7 @@ if __name__ == "__main__":
         FOR ANGLE=-6°:
             - M_PERP_FACTOR = 0.3 NO LONGER WORKS: CRITICAL FIELD IS KIND OF OK, BUT POLAR PLOT IS NOT OK AT ALL (too wide, should be straight line)
     """
-    save = True
+    save = False
     outdir_base = Path("./results/test_pinwheelReversal").absolute()
     
     def run_hysteresis_sweep(varname: Literal["angle", "E_B", "E_B_std", "m_perp_factor"], /,
@@ -375,30 +376,30 @@ if __name__ == "__main__":
             values_here = params | {varname: value}
             reversaltests.append(PinwheelReversalTest(E_B_std=values_here['E_B_std'], E_B=hotspice.utils.eV_to_J(values_here['E_B']), m_perp_factor=values_here['m_perp_factor']))
             hystereses.append(reversaltests[-1].hysteresis(H_angle=values_here['angle'], half=half, save=(outdir/f"{varname}={value:.2g}{unit}") if save else False))
-        Hysteresis.plot(*hystereses, SHOW_SNAPSHOTS=show_thresholds, _vertical=show_thresholds, labels=labels, legend_title=legend_title, save=outdir/"summary.pdf" if save else False, show=False)
+        Hysteresis.plot(*hystereses, SHOW_SNAPSHOTS=show_thresholds, _vertical=show_thresholds, labels=labels, legend_title=legend_title, save=outdir/"summary.pdf" if save else False, show=(not save))
         return hystereses, reversaltests
     
     ## NEW VS. OLD BARRIER CALCULATION (PERP OR NO PERP) (for the closest reproduction of the experimental system as I can guess)
-    run_hysteresis_sweep("m_perp_factor", angle=-6, E_B_std=0.07, E_B=60, m_perp_factor=[0.4, 0], show_thresholds=True, labels=['With perp', 'No perp'])
-    run_hysteresis_sweep("m_perp_factor", angle=-6, E_B_std=0.07, E_B=60, m_perp_factor=[0.3, 0], show_thresholds=True, labels=['With perp', 'No perp'])
-    run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0.3, 0], show_thresholds=True, labels=['With perp', 'No perp'])
-    run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.05, E_B=71, m_perp_factor=[1, 0], show_thresholds=True, labels=['With perp', 'No perp']) # Original best guess before using m_perp_factor
-    run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0.4, 0], show_thresholds=True, labels=['With perp', 'No perp'])
+    # run_hysteresis_sweep("m_perp_factor", angle=-6, E_B_std=0.07, E_B=60, m_perp_factor=[0.4, 0], show_thresholds=True, labels=['With perp', 'No perp'])
+    # run_hysteresis_sweep("m_perp_factor", angle=-6, E_B_std=0.07, E_B=60, m_perp_factor=[0.3, 0], show_thresholds=True, labels=['With perp', 'No perp'])
+    # run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0.3, 0], show_thresholds=True, labels=['With perp', 'No perp'])
+    # run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.05, E_B=71, m_perp_factor=[1, 0], show_thresholds=True, labels=['With perp', 'No perp']) # Original best guess before using m_perp_factor
+    # run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0.4, 0], show_thresholds=True, labels=['With perp', 'No perp'])
     
     ## VARY FIELD ANGLE
-    run_hysteresis_sweep("angle", angle=np.linspace(0, 40, 5), E_B_std=0.07, E_B=60, m_perp_factor=0.4)
+    # run_hysteresis_sweep("angle", angle=np.linspace(0, 40, 5), E_B_std=0.07, E_B=60, m_perp_factor=0.4)
 
     ## VARY E_B_STD
-    run_hysteresis_sweep("E_B_std", E_B_std=np.linspace(0, 0.15, 3), angle=30, E_B=60, m_perp_factor=0.4)
+    # run_hysteresis_sweep("E_B_std", E_B_std=np.linspace(0, 0.15, 3), angle=30, E_B=60, m_perp_factor=0.4)
 
     ## VARY E_B
-    run_hysteresis_sweep("E_B", E_B=np.linspace(1, 11, 6), angle=30, E_B_std=0.07, m_perp_factor=0.4)
+    # run_hysteresis_sweep("E_B", E_B=np.linspace(1, 11, 6), angle=30, E_B_std=0.07, m_perp_factor=0.4)
 
     ## VARY M_PERP_FACTOR
-    run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=30, E_B=60, E_B_std=0.07)
-    run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1], angle=30, E_B=60, E_B_std=0.07)
-    run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=-6, E_B=60, E_B_std=0.07)
-    run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=0, E_B=60, E_B_std=0.07)
+    # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=30, E_B=60, E_B_std=0.07)
+    # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1], angle=30, E_B=60, E_B_std=0.07)
+    # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=-6, E_B=60, E_B_std=0.07)
+    # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=0, E_B=60, E_B_std=0.07)
 
     # BEST FITS TO EXPERIMENT (zoomed in using 'half')
-    run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3], half=True, angle=30, E_B=60, E_B_std=0.07)
+    # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3], half=True, angle=30, E_B=60, E_B_std=0.07)

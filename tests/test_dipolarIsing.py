@@ -18,12 +18,13 @@ class test_dipolarIsing:
         self.T = kwargs.get('T', 100) # Low temperature to avoid paramagnetic state
         self.a = 1e-6 # Lattice spacing
         self.size = kwargs.get('size', 400) # Large to get the most statistically ok behavior
-        self.mm = hotspice.ASI.OOP_Square(self.a, self.size, E_B=0, T=self.T, energies=[hotspice.DipolarEnergy(), hotspice.ExchangeEnergy()], pattern='AFM', PBC=False, params=hotspice.SimParams(UPDATE_SCHEME="Glauber"))
+        self.energyDD, self.energyExch = hotspice.DipolarEnergy(), hotspice.ExchangeEnergy()
+        self.mm = hotspice.ASI.OOP_Square(self.a, self.size, E_B=0, T=self.T, energies=[self.energyDD, self.energyExch], pattern='AFM', PBC=False, params=hotspice.SimParams(UPDATE_SCHEME="Metropolis"))
     
     @property
     def dipolar_nearest(self):
         """ Yields the dipolar interaction energy between nearest neighbors. """
-        return 1e-7*self.mm.get_energy('dipolar').prefactor*(self.mm._momentSq)/(self.mm.a**3)
+        return 1e-7*self.energyDD.prefactor*(self.mm._momentSq)/(self.mm.a**3)
     
     @property
     def delta(self):
@@ -31,11 +32,11 @@ class test_dipolarIsing:
             Exchange energy magnitude: m*m* J
             So delta = exchange/dipolar is given by...
         """
-        return 2*self.mm.get_energy('exchange').J/self.dipolar_nearest
+        return 2*self.energyExch.J/self.dipolar_nearest
     
     @delta.setter
     def delta(self, value):
-        self.mm.get_energy('exchange').J = value*self.dipolar_nearest/2
+        self.energyExch.J = value*self.dipolar_nearest/2
     
     def test(self, *args, **kwargs):
         self.data = self.test_delta_influence(*args, **kwargs)

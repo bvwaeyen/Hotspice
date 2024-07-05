@@ -60,8 +60,8 @@ class Average(Enum):
 
     @classmethod
     def resolve(cls, avg, mm: Magnets=None):
-        """ <avg> can be any of [str], [bool-like], or [Average]. This function will
-            then return the [Average] instance that is most appropriate.
+        """ `avg` can be any of [str], [bool-like], or [`Average`]. This function will
+            then return the [`Average`] instance that is most appropriate.
         """
         match avg:
             case Average():
@@ -82,29 +82,29 @@ def _get_averaged_extent(mm: Magnets, avg):
     """ Returns the extent (in meters) that can be used in imshow when plotting an averaged quantity. """
     avg = Average.resolve(avg, mm)
     mask = avg.mask
-    if mm.PBC:
-        movex, movey = 0.5*mm.dx, 0.5*mm.dy
+    margin_x, margin_y = asnumpy(mm.dx[-1]), asnumpy(mm.dy[-1])
+    if mm.PBC: # TODO: the movex and movey are calculated incorrectly here. Should just move to pcolormesh instead of imshow in general.
+        movex, movey = 0.5*margin_x, 0.5*margin_y
     else:
-        movex, movey = mask.shape[1]/2*mm.dx, mask.shape[0]/2*mm.dy # The averaged imshow should be displaced by this much
-    return np.array([mm.x_min-mm.dx+movex,mm.x_max-movex+mm.dx,mm.y_min-mm.dy+movey,mm.y_max-movey+mm.dy]) # [m]
+        movex, movey = mask.shape[1]/2*margin_x, mask.shape[0]/2*margin_y # The averaged imshow should be displaced by this much
+    return np.array([mm.x_min-margin_x+movex, mm.x_max-movex+margin_x, mm.y_min-margin_y+movey, mm.y_max-movey+margin_y]) # [m]
 
 def get_m_polar(mm: Magnets, m=None, avg=True):
-    """
-        Returns the magnetization angle and magnitude (can be averaged using the averaging method specified by <avg>).
-        If the local average magnetization is zero, the corresponding angle is NaN.
-        If there are no magnets to average around a given cell, then the angle and magnitude are both NaN.
+    """ Returns the magnetization angle and magnitude (can be averaged using the averaging method specified by `avg`).
+        If the local average magnetization is zero, the corresponding angle is `NaN`.
+        If there are no magnets to average around a given cell, then the angle and magnitude are both `NaN`.
         @param m [2D array] (mm.m): The magnetization profile that should be averaged.
-        @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon':
-            True: automatically determines the appropriate averaging method.
-            False|'point': no averaging at all, just calculates the angle of each individual spin.
-            'cross': averages the spins north, east, south and west of each position.
-            'square': averages the 8 nearest neighbors of each cell.
-            'triangle': averages the three magnets connected to a corner of a hexagon in the kagome geometry.
-            'hexagon:' averages each hexagon in kagome ASI, or each star in triangle ASI.
+        @param avg [str|bool] (True): can be any of:
+            `True`: automatically determines the appropriate averaging method.
+            `False`|`'point'`: no averaging at all, just calculates the angle of each individual spin.
+            `'cross'`: averages the spins north, east, south and west of each position.
+            `'square'`: averages the 8 nearest neighbors of each cell.
+            `'triangle'`: averages the three magnets connected to a corner of a hexagon in the kagome geometry.
+            `'hexagon:'` averages each hexagon in kagome ASI, or each star in triangle ASI.
         @return [(2D np.array, 2D np.array)]: a tuple containing two arrays, namely the (averaged) magnetization
             angle and magnitude, respecively, for each relevant position in the simulation.
-            Angles lay between 0 and 2*pi, magnitudes between 0 and mm.moment.
-            !! This does not necessarily have the same shape as <m> !!
+            Angles lay between 0 and 2π, magnitudes between 0 and `mm.moment`.
+            !! This does not necessarily have the same shape as `m` !!
     """
     if m is None: m = mm.m
     avg = Average.resolve(avg, mm)
@@ -143,7 +143,7 @@ def get_m_polar(mm: Magnets, m=None, avg=True):
     return angles_avg, magnitudes_avg
 
 def get_hsv(mm: Magnets, angles=None, magnitudes=None, m=None, avg=True, fill=False, autoscale=True):
-    """ Returns the hsv values for the polar coordinates defined by angles [rad] and magnitudes [A/m]. 
+    """ Returns the hsv values for the polar coordinates defined by `angles` [rad] and `magnitudes` [A/m]. 
         TAKES CUPY/NUMPY ARRAYS AS INPUT, ONLY YIELDS NUMPY ARRAYS AS OUTPUT
         @param angles [2D xp.array()] (None): The averaged angles.
     """
@@ -194,27 +194,28 @@ def get_rgb(*args, **kwargs):
     return colors.hsv_to_rgb(get_hsv(*args, **kwargs))
 
 
-def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None, mode: Literal['avg', 'quiver'] = 'quiver', avg: str = None):
-    """ Plots a nicely colored quiver/avg in `ax`, without any axis labels etc. """
+def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None,
+                   mode: Literal['avg', 'quiver'] = 'quiver', avg: str = None, cmap: str = 'hsv', scale: str = 'µ'):
+    """ Plots a nicely colored quiver/avg in `ax`, without any axis labels etc.
+        @param `cmap` [str] (hsv): the colormap to indicate the magnetization direction.
+            For an OOP ASI: `cmap(0)` is used for spin 'down' and `cmap(1)` for spin 'up',
+            unless the colormap is cyclic: then `cmap(0)` is 'up' and `cmap(0.5)` is 'down'.
+            (NOTE: when using `mode='avg'` for IP ASI, the colormap is always HSV.)
+    """
     if m is None: m = mm.m
-    cmap = colormaps['hsv']
-    if not mm.in_plane:
+    cmap = colormaps[cmap]
+    if not mm.in_plane and cmap.name in ['hsv', 'twilight', 'twilight_shifted']: # Only do this for cyclic colormaps.
         r0, g0, b0, _ = cmap(.5) # Value at angle 'pi' (-1)
         r1, g1, b1, _ = cmap(0) # Value at angle '0' (1)
-        cdict = {'red': [[0.0, r0,  r0], # x, value_left, value_right
-                            [0.5, 0.0, 0.0],
-                            [1.0, r1,  r1]],
-                'green': [[0.0, g0,  g0],
-                            [0.5, 0.0, 0.0],
-                            [1.0, g1,  g1]],
-                'blue':  [[0.0, b0,  b0],
-                            [0.5, 0.0, 0.0],
-                            [1.0, b1,  b1]]}
+        cdict = {'red':  [(0.0, r0,  r0), (0.5, 0.0, 0.0), (1.0, r1,  r1)], # tuples of (x, red_left, red_right)
+                'green': [(0.0, g0,  g0), (0.5, 0.0, 0.0), (1.0, g1,  g1)], # tuples of (x, green_left, green_right)
+                'blue':  [(0.0, b0,  b0), (0.5, 0.0, 0.0), (1.0, b1,  b1)]} # tuples of (x, blue_left, blue_right)
         cmap = colors.LinearSegmentedColormap('OOP_cmap', segmentdata=cdict, N=256)
 
+    scale = SIprefix_to_mul(scale)
     match mode.strip().lower():
         case 'quiver':
-            extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dy/2])
+            extent = np.array([mm.x_min-mm.dx[-1]/2, mm.x_max+mm.dx[-1]/2, mm.y_min-mm.dy[-1]/2, mm.y_max+mm.dy[-1]/2])/scale
             nonzero = mm.nonzero
             if mm.in_plane:
                 mx, my = asnumpy(xp.multiply(m, mm.orientation[:,:,0])[nonzero]), asnumpy(xp.multiply(m, mm.orientation[:,:,1])[nonzero])
@@ -224,13 +225,13 @@ def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None, mode: Literal['a
                 ax.scatter(asnumpy(mm.xx[nonzero]), asnumpy(mm.yy[nonzero]), color=cmap(m))
         case 'avg':
             avg = Average.resolve(True if avg is None else avg, mm)
-            extent = _get_averaged_extent(mm, avg) # List comp to convert to micrometre
-            im = get_rgb(mm, m=m, avg=avg, fill=True)
-            if mm.in_plane:
+            extent = _get_averaged_extent(mm, avg)/scale # List comp to convert to micrometre
+            if mm.in_plane: # TODO: allow custom colormaps for in-plane with avg='avg'
+                im = get_rgb(mm, m=m, avg=avg, fill=True)
                 ax.imshow(im, cmap=cmap, origin='lower', vmin=0, vmax=2*math.pi,
                           extent=extent, interpolation='antialiased', interpolation_stage='rgba') # extent doesnt work perfectly with triangle or kagome but is still ok
             else:
-                ax.imshow(im, cmap=cmap, origin='lower', vmin=-1, vmax=1,
+                ax.imshow(m, cmap=cmap, origin='lower', vmin=-1, vmax=1,
                           extent=extent, interpolation='antialiased', interpolation_stage='rgba')
     ax.set_aspect('equal')
     ax.set_xlim(extent[:2])
@@ -238,21 +239,21 @@ def plot_simple_ax(ax: Axes, mm: Magnets, m: xp.ndarray = None, mode: Literal['a
 
 
 def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=True, overlay_quiver=False, color_quiver=True, unit='µ', figure=None, subtract_barrier=False, in_eV=True, **figparams):
-    """ Shows two (or three if <show_energy> is True) figures displaying the direction of each spin: one showing
-        the (locally averaged) angles, another quiver plot showing the actual vectors. If <show_energy> is True,
+    """ Shows two (or three if `show_energy` is True) figures displaying the direction of each spin: one showing
+        the (locally averaged) angles, another quiver plot showing the actual vectors. If `show_energy` is True,
         a third and similar plot, displaying the interaction energy of each spin, is also shown.
         @param m [2D array] (mm.m): the direction (+1 or -1) of each spin on the geometry. Default is the current
             magnetization profile. This is useful if some magnetization profiles have been saved manually, while 
-            mm.update() has been called since: one can then pass these saved profiles as the <m> parameter to
-            draw them onto the geometry stored in <mm>.
-        @param avg [str|bool] (True): can be any of True, False, 'point', 'cross', 'square', 'triangle', 'hexagon'.
-        @param figscale [float] (1): the figure is 3*<figscale> inches high. The width scales similarly. 
+            `mm.update()` has been called since: one can then pass these saved profiles as the `m` parameter to
+            draw them onto the geometry stored in `mm`.
+        @param avg [str|bool] (True): can be any of `True`, `False`, `'point'`, `'cross'`, `'square'`, `'triangle'`, `'hexagon'`.
+        @param figscale [float] (1): the figure is `3*figscale` inches high. The width scales similarly. 
         @param show_energy [bool] (True): if True, a 2D plot of the energy is shown in the figure as well.
         @param fill [bool] (False): if True, empty pixels are interpolated if all neighboring averages are equal.
         @param overlay_quiver [bool] (False): if True, the quiver plot is shown overlaid on the color average plot.
         @param color_quiver [bool] (True): if True, the quiver plot arrows are colored according to their angle.
         @param unit [str] ('µ'): the symbol of the unit. Automatically converts this to a power of 10 for scaling.
-        @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this show_m().
+        @param figure [matplotlib.Figure] (None): if specified, that figure is used to redraw this `show_m()`.
         @param subtract_barrier [bool] (False): if True, the energy scale displayed is the effective energy barrier.
         @param fontsize_colorbar [int] (10): the font size of the color bar description.
         @param fontsize_axes [int] (10): the font size of the axes labels and titles.
@@ -270,7 +271,7 @@ def show_m(mm: Magnets, m=None, avg=True, figscale=1, show_energy=True, fill=Tru
         show_quiver = False
     unit_factor = SIprefix_to_mul(unit)
     averaged_extent = _get_averaged_extent(mm, avg)/unit_factor # List comp to convert to micrometre
-    full_extent = np.array([mm.x_min-mm.dx/2,mm.x_max+mm.dx/2,mm.y_min-mm.dy/2,mm.y_max+mm.dy/2])/unit_factor
+    full_extent = _get_averaged_extent(mm, "point")/unit_factor
 
     num_plots = 1
     num_plots += 1 if show_energy else 0
@@ -363,8 +364,8 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
         @param scale [float] (.8): how long the shown ellipses are, as a multiple of the distance between nearest neighbors.
         @param save [bool] (False): if True, the figure is saved as "results/lattices/<ASI_name>_<nx>x<ny>.pdf
     """
-    len_x = mm.unitcell.x*mm.dx
-    len_y = mm.unitcell.y*mm.dy
+    len_x = xp.sum(mm.dx[:mm.unitcell.x])
+    len_y = xp.sum(mm.dy[:mm.unitcell.y])
     x_is_longer = len_x > len_y
     if nx is None: nx = n if x_is_longer else round(n*len_y/len_x)
     if ny is None: ny = round(nx*len_x/len_y) if x_is_longer else n
@@ -378,7 +379,6 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
     positions_x = asnumpy(mm.xx[occupied_indices])
     positions_y = asnumpy(mm.yy[occupied_indices])
     xmin, xmax, ymin, ymax = positions_x.min(), positions_x.max(), positions_y.min(), positions_y.max()
-    ux, uy = mm.unitcell.x*mm.dx, mm.unitcell.y*mm.dy
 
     figsize = 6
     size = mm._get_closest_dist()*scale
@@ -397,8 +397,8 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
 
     for i in range(positions_x.size):
         px, py = positions_x[i], positions_y[i]
-        edgedist = min([(px-xmin)/ux, (xmax-px)/ux, (py-ymin)/uy, (ymax-py)/uy, fall_off])/fall_off # Normalized distance to edge of figure (between 0 and 1)
-        alpha = max(edgedist, 0.1)
+        edgedist = min([(px-xmin)/len_x, (xmax-px)/len_x, (py-ymin)/len_y, (ymax-py)/len_y, fall_off])/fall_off # Normalized distance to edge of figure (between 0 and 1)
+        alpha = max(float(edgedist), 0.1)
         ax.add_artist(patches.Ellipse((px, py), size, (size/2 if mm.in_plane else size), angle=angles[i], alpha=alpha, ec=None))
     ax.set_xlim(xmin-size/2, xmax+size/2)
     ax.set_ylim(ymin-size/2, ymax+size/2)
@@ -409,9 +409,9 @@ def show_lattice(mm: Magnets, n: int = 3, nx: int = None, ny: int = None, fall_o
     plt.show()
 
 def show_history(mm: Magnets, *, y_quantity=None, y_label="Average magnetization"):
-    """ Plots <y_quantity> (default: average magnetization (mm.history.m)) and total energy (mm.history.E)
-        as a function of either the time or the temperature: if the temperature (mm.history.T) is constant, 
-        then the x-axis will represent the time (mm.history.t), otherwise it represents the temperature.
+    """ Plots `y_quantity` (default: average magnetization (`mm.history.m`)) and total energy (`mm.history.E`)
+        as a function of either the time or the temperature: if the temperature (`mm.history.T`) is constant, 
+        then the x-axis will represent the time (`mm.history.t`), otherwise it represents the temperature.
         @param y_quantity [1D array] (mm.m): The quantity to be plotted as a function of T or t.
         @param y_label [str] ("Average magnetization"): The y-axis label in the plot.
     """
@@ -435,8 +435,8 @@ def show_history(mm: Magnets, *, y_quantity=None, y_label="Average magnetization
     plt.gcf().tight_layout()
     plt.show()
 
-def get_AFMness(mm: Magnets, AFM_mask=None):
-    """ Returns the average AFM-ness of mm.m at the current time step, normalized to 1.
+def get_AFMness(mm: Magnets, AFM_mask=None): # TODO: remove this ill-defined function
+    """ Returns the average AFM-ness of `mm.m` at the current time step, normalized to 1.
         For a perfectly uniform configuration this is 0, while for random it is 0.375.
         Note that the boundaries are not taken into account for the normalization, so the
         AFM-ness will often be slightly lower than the ideal values mentioned above.
@@ -451,13 +451,13 @@ def get_AFMness(mm: Magnets, AFM_mask=None):
 def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False): # TODO: this is quite messy because we are working with color here instead of angles/magnitudes
     """ THIS FUNCTION ONLY WORKS FOR GRIDS WHICH HAVE A CHESS-LIKE OCCUPATION OF THE CELLS! (cross ⁛)
         THIS FUNCTION OPERATES ON HSV VALUES, AND RETURNS HSV AS WELL!!! NOT RGB HERE!
-        The 2D array <replaceable> is True at the positions of hsv which can be overwritten by this function.
-        The 3D array <hsv> has the same first two dimensions as <replaceable>, with the third dimension having size 3 (h, s, v).
+        The 2D array `replaceable` is True at the positions of hsv which can be overwritten by this function.
+        The 3D array `hsv` has the same first two dimensions as `replaceable`, with the third dimension having size 3 (h, s, v).
         Then this function overwrites the replaceables with the surrounding values at the nearest neighbors (cross neighbors ⁛),
         but only if all those neighbors are equal. This is useful for very large simulations where each cell
         occupies less than 1 pixel when plotted: by removing the replaceables, visual issues can be prevented.
         @param fillblack [bool] (False): If True, white pixels next to black pixels are colored black regardless of other neighbors.
-        @param fillwhite [bool] (False): If True, white pixels are colored in using the Average.SQUAREFULL rule.
+        @param fillwhite [bool] (False): If True, white pixels are colored in using the `Average.SQUAREFULL` rule.
         @return [2D np.array]: The interpolated array.
     """
     if hsv.shape[0] < 2 or hsv.shape[1] < 2: return hsv
@@ -490,10 +490,10 @@ def fill_neighbors(hsv, replaceable, mm=None, fillblack=False, fillwhite=False):
     return asnumpy(result)
 
 
-def init_style(backend=True, small=10, medium=11, large=12, style: Literal['default', 'tableau-colorblind10', 'fivethirtyeight'] = "tableau-colorblind10"):
+def init_style(backend=True, small=10, medium=11, large=12, style: Literal['default', 'tableau-colorblind10', 'fivethirtyeight', 'snooker', 'rainbow'] = "tableau-colorblind10"):
     """ Sets various parameters for consistent plotting across all Hotspice scripts.
         This should be called before instantiating any subplots.
-        This should not be called directly by any function in hotspice.plottools itself,
+        This should not be called directly by any function in `hotspice.plottools` itself,
         only by higher-level scripts (e.g. examples, analyses, tests...) which can
         then decide for themselves whether or not to use these standardized settings.
         @param backend [bool] (True): if True, the tkinter backend is activated. This
@@ -518,7 +518,12 @@ def init_style(backend=True, small=10, medium=11, large=12, style: Literal['defa
     plt.rc('figure', titlesize=large)  # fontsize of the figure title
     
     # Use appropriate style (default is good for colorblindness)
-    plt.style.use(style)
+    match style:
+        case 'default' | 'tableau-colorblind10' | 'fivethirtyeight':
+            plt.style.use(style)
+        case 'snooker':
+            colors = ["red", "yellow", "green", "brown", "blue", "pink", "black"]
+            matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=colors)
 
 def colorcycle():
     """ Returns a list of matplotlib colors that I can actually see (C2 and C3 look basically identical). """
@@ -543,7 +548,7 @@ def close_interactive(figure=None):
 
 
 def save_plot(save_path: str, ext=None, **savefig_kwargs):
-    """ <save_path> is a full relative pathname, usually something like
+    """ `save_path` is a full relative pathname, usually something like
         "results/<test_or_experiment_name>/<relevant_params=...>.pdf"
     """
     if ext is not None: # Then a specific extension was requested, to override the one in save_path
@@ -558,6 +563,27 @@ def save_plot(save_path: str, ext=None, **savefig_kwargs):
     except PermissionError:
         warnings.warn(f"Could not save to {save_path}, probably because the file is opened somewhere else.", stacklevel=2)
 
+
+# TODO: incorporate monopole plot into the GUI
+def plot_monopoles(mm: Magnets, d=200e-9): # Original author: Diego De Gusem
+    charges_xx_plot = np.zeros((mm.ny, mm.nx, 2))
+    charges_yy_plot = np.zeros((mm.ny, mm.nx, 2))
+    charges_xx_plot[:,:,0] = (mm.xx + mm.m*d/2*xp.cos(mm.angles))*mm.occupation
+    charges_xx_plot[:,:,1] = (mm.xx - mm.m*d/2*xp.cos(mm.angles))*mm.occupation
+    charges_yy_plot[:,:,0] = (mm.yy + mm.m*d/2*xp.sin(mm.angles))*mm.occupation
+    charges_yy_plot[:,:,1] = (mm.yy - mm.m*d/2*xp.sin(mm.angles))*mm.occupation
+    charges_xx_plot[xp.where(mm.m == 0)] = np.nan
+    charges_yy_plot[xp.where(mm.m == 0)] = np.nan
+
+    plt.scatter(charges_xx_plot[:,:,0], charges_yy_plot[:,:,0], color='red', zorder=2)
+    plt.scatter(charges_xx_plot[:,:,1], charges_yy_plot[:,:,1], color='blue', zorder=2)
+    for (i, j), _ in xp.ndenumerate(mm.m):
+        plt.plot(charges_xx_plot[i,j], charges_yy_plot[i,j], color='black', zorder=1)
+
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.xlabel("x [m]")
+    plt.ylabel("y [m]")
+    plt.show()
 
 if __name__ == "__main__":
     print(Average.TRIANGLE.mask)

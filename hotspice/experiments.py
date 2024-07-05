@@ -42,24 +42,24 @@ class Experiment(ABC):
     
     @abstractmethod
     def calculate_all(self) -> None:
-        """ (Re)calculates all the metrics in the <self.results> dict. """
+        """ (Re)calculates all the metrics in the `self.results` dict. """
     
     @abstractmethod
     def to_dataframe(self) -> pd.DataFrame:
-        """ Creates a Pandas dataframe from the saved results of self.run(). """
+        """ Creates a Pandas dataframe from the saved results of `self.run()`. """
     
     @abstractmethod
     def load_dataframe(self, df: pd.DataFrame) -> None:
-        """ Loads the data from self.to_dataframe() to the current object.
+        """ Loads the data from `self.to_dataframe()` to the current object.
             Might return the most important columns of data, but this is not required.
         """
     
     @abstractmethod
     def get_plot_metrics() -> dict[str, 'SweepMetricPlotparams']:
         """ Returns a dictionary with as many elements as there should be 2D or 1D plots
-            in Sweep().plot(). Keys are names of these metrics, values are functions that
-            take one argument (a hotspice.utils.Data object, which for this purpose is
-            equivalent to a pandas.DataFrame), and returns a pandas.Series which is either
+            in `Sweep().plot()`. Keys are names of these metrics, values are functions that
+            take one argument (a `hotspice.utils.Data` object, which for this purpose is
+            equivalent to a `pandas.DataFrame`), and returns a `pandas.Series` which is either
             a simple column from the Data, or a mathematical combination of several columns.
         """
         return {}
@@ -67,29 +67,29 @@ class Experiment(ABC):
 
 class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specifying an output directory to be completed
     def __init__(self, groups: Iterable[tuple[str]] = None, names: dict[str, str] = None, units: dict[str, str] = None, **kwargs): # kwargs can be anything to specify the sweeping variables and their values.
-        """ Sweep quacks like a generator yielding <Experiment> instances, or subclasses thereof.
-            The purpose of a Sweep is to reliably generate a sequence of <Experiment>s in a consistent order.
+        """ Sweep quacks like a generator yielding `Experiment` instances, or subclasses thereof.
+            The purpose of a Sweep is to reliably generate a sequence of `Experiment`s in a consistent order.
             @param groups [iterable[tuple[str]]] (None): a tuple of tuples of strings. Each tuple represents a group:
                 groups are sweeped together. The strings inside those tuples represent the names of the
                 variables that are being swept together. By sweeping together, it is meant that those
                 variables move through their sweeping values simultaneously, instead of forming a
                 hypercube through their values in which each pair is visited. We only visit the diagonal.
-                Example: groups=(('nx', 'ny'), ('res_x', 'res_y')) will cause the variables <nx> and <ny>
-                    to sweep together, e.g. when <nx> is at its fourth value, <ny> will also be at its fourth value.
-                    The same will go for <res_x> and <res_y> together, but they are independent of <nx> and <ny>.
+                Example: `groups=(('nx', 'ny'), ('res_x', 'res_y'))` will cause the variables `nx` and `ny`
+                    to sweep together, e.g. when `nx` is at its fourth value, `ny` will also be at its fourth value.
+                    The same will go for `res_x` and `res_y` together, but they are independent of `nx` and `ny`.
             @param names [dict[str, str]] (None): a dictionary whose keys are the parameters (i.e. **kwargs names),
-                and whose values are a readable name for said parameter. This is used in self.plot().
-                By default, if a parameter is not present in <names>, its name in **kwargs is used.
-            @param units [dict[str, str]] (None): same as <names>, but now the values are the SI units of the parameter.
-                By default, if a parameter is not present in <units>, its unit is None.
-                Example: names={'a': "Lattice parameter", ...} and units={'a': "m", ...}
+                and whose values are a readable name for said parameter. This is used in `self.plot()`.
+                By default, if a parameter is not present in `names`, its name in `**kwargs` is used.
+            @param units [dict[str, str]] (None): same as `names`, but now the values are the SI units of the parameter.
+                By default, if a parameter is not present in `units`, its unit is None.
+                Example: `names={'a': "Lattice parameter", ...}` and `units={'a': "m", ...}`
 
-            Any additional keyword arguments (**kwargs) are interpreted as follows:
-            If a kwarg is iterable then it is stored in self.variables as a sweeped variable,
-                unless it has length 1, in which case its only element is stored in self.constants.
+            Any additional keyword arguments (`**kwargs`) are interpreted as follows:
+            If a kwarg is iterable then it is stored in `self.variables` as a sweeped variable,
+                unless it has length 1, in which case its only element is stored in `self.constants`.
                 WARN: watch out with multi-dimensional arrays, as their first axis can be interpreted as the 'sweep'!
-            If an argument is not iterable, its value is stored in self.constants without converting to a length-1 tuple.
-            Subclasses of <Sweep> determine which kwargs are accepted and how they are used to build <Experiment>s.
+            If an argument is not iterable, its value is stored in `self.constants` without converting to a length-1 tuple.
+            Subclasses of `Sweep` determine which kwargs are accepted and how they are used to build `Experiment`s.
             @attr parameters [dict[str, tuple]]: stores all variables and constants with their values in a tuple,
                 even if this tuple only has length 1.
             @attr variables [dict[str, tuple]]: stores the sweeped variables and their values in a tuple.
@@ -130,12 +130,12 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
 
     @abstractmethod
     def create_experiment(self, params: dict) -> Experiment:
-        """ Subclasses should create an Experiment here according to <params> and return it. """
+        """ Subclasses should create an `Experiment` here according to `params` and return it. """
         pass
 
     @staticmethod
     def variable(iterable):
-        """ Converts <iterable> into a tuple, or a length-1 tuple if <iterable> is not iterable."""
+        """ Converts `iterable` into a tuple, or a length-1 tuple if `iterable` is not iterable."""
         if isinstance(iterable, str): return (iterable,) # We don't want to parse strings character by character
         try: return tuple(iterable)
         except TypeError: return (iterable,)
@@ -146,7 +146,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
     @property
     def info(self):
         """ Some information about a specific sweep, e.g. what the input/output protocol is etc.
-            This should simply be set using self.info = ...
+            This should simply be set using `self.info = `
         """
         if not hasattr(self, '_info'):
             self._info = self.__doc__
@@ -160,21 +160,21 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         self._info = dedent(str(value)).strip()
 
     def __iter__(self):
-        """ A generator to conveniently iterate as "for vars, exp in sweep:".
+        """ A generator to conveniently iterate as `for vars, exp in sweep:`.
             Yields a tuple for this iteration: (variable:value dict, experiment object).
         """
         for i in range(len(self)):
             yield self.get_iteration(i)
 
     def get_iteration(self, i: int) -> tuple[dict, Experiment]:
-        """ Returns one iteration of the self.__iter__() generator, the <i>th (zero-indexed) that would normally be generated. """
+        """ Returns one iteration of the `self.__iter__()` generator, the `i`-th (zero-indexed) that would normally be generated. """
         vars = self.get_iteration_vars(i)
         params = vars | self.constants
         experiment = self.create_experiment(params)
         return (vars, experiment)
     
     def get_iteration_vars(self, i: int) -> dict:
-        """ Returns a dictionary with the values of all variables in iteration <i> (zero-indexed). """
+        """ Returns a dictionary with the values of all variables in iteration `i` (zero-indexed). """
         index = np.unravel_index(i, self._n_per_group)
         return {key: self.variables[key][index[i]] for i, group in enumerate(self.groups) for key in group}
 
@@ -218,10 +218,10 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
             log(f"Saved iteration #{iteration} to {saved_path}", style='success')
 
     def load_results(self, dir: str, save=True, verbose=True, return_savepath=False):
-        """ Loads the collection of JSON files corresponding to a parameter sweep in directory <dir>,
-            calculates the relevant results with Experiment().calculate_all() and saves these all to a single file.
+        """ Loads the collection of JSON files corresponding to a parameter sweep in directory `dir`,
+            calculates the relevant results with `Experiment().calculate_all()` and saves these all to a single file.
             @param dir [str]: the path to the directory where all the sweep data was stored.
-            @param sweep [Sweep]: the sweep that generated all the data in <dir>.
+            @param sweep [Sweep]: the sweep that generated all the data in `dir`.
             @param save [bool|str] (True): if truthy, the results are saved to a file.
                 If specified as a string, the base name of this saved file is this string.
         """
@@ -277,20 +277,20 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
     def plot(self, summary_files, param_x=None, param_y=None, unit_x=None, unit_y=None, transform_x=None, transform_y=None,
              transform_z=None, name_x=None, name_y=None, names_z: list|str = None,
              logarithmic_vars: list[str] = None, colormap: str = None, title=None,
-             save=True, plot=True, metrics: list[str] = None):
+             save=True, plot=True, metrics: list[str] = None, dpi: float = 600):
         """ Generic function to plot the results of a sweep in a general way.
-            @param summary_files [list(str)]: list of path()s to file(s) as generated by Sweep.load_results().
+            @param summary_files [list(str)]: list of path()s to file(s) as generated by `Sweep.load_results()`.
                 If more than one such file is passed on, multiple sweeps' metrics are averaged. This is for example
                 useful when there is a random energy barrier that needs to be sampled many times for a correct distribution.
             @param param_x, param_y [str] (None): the column names of the sweeped parameters
                 to be put on the X- and Y-axis, respectively.
             @param metrics [list(str)] (None): if specified, only the metrics in this list are plotted (i.e., the
-                keys in experiment.get_plot_metrics()). If not specified, all possible metrics are plotted.
+                keys in `experiment.get_plot_metrics()`). If not specified, all possible metrics are plotted.
             # TODO: for ND (N>2) sweeps, we need a way of specifying the values of the N-2 or N-1 unplottable parameters (e.g. by adding <other_params> dict)
             # TODO: Check if this function works for 1D sweeps, or higher than 3D
             # TODO: do something about transform_x and transform_y, they feel out-of-place right now
-            # TODO: revisit save=True, plot=True, title=None...
-            # TODO: is there a way to somehow detect the units of the axes without explicitly passing them to name_x and name_y?
+            # TODO: revisit `save=True`, `plot=True`, `title=None`...
+            # TODO: is there a way to somehow detect the units of the axes without explicitly passing them to `name_x` and `name_y`?
         """
         if isinstance(summary_files, str):
             if os.path.isfile(summary_files):
@@ -352,7 +352,8 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
             data.df[metric_key] = all_metrics[i].reshape(-1)
 
         ## PLOTTING
-        cmap = colormaps['viridis' if colormap is None else colormap].copy()
+        if colormap is None: colormap = 'viridis'
+        cmap = colormaps[colormap].copy()
         # cmap.set_under(color='black')
         init_style()
 
@@ -375,7 +376,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         # Plot the metrics
         fig = plt.figure(figsize=(3.3*n, 3))
         axes = []
-        label_x = name_x if unit_x is None else f"{name_x} [{unit_x}]"
+        label_x = name_x if unit_x is None else f"{name_x} ({unit_x})"
         if names_z is None:
             names_z = [None]*n
         elif isinstance(names_z, str): # Just add it at the end
@@ -383,7 +384,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         else:
             names_z = names_z + [None]*(n - len(names_z))
         if is_2D:
-            label_y = name_y if unit_y is None else f"{name_y} [{unit_y}]"
+            label_y = name_y if unit_y is None else f"{name_y} ({unit_y})"
             X, Y = np.meshgrid(x_lims, y_lims)
             for i, params in enumerate(metrics_dict.values()):
                 Z = np.transpose(all_metrics[i])
@@ -405,7 +406,8 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
                 ax.set_title(params.full_name)
                 vmin = params.min_value(data) if isinstance(params.min_value, Callable) else params.min_value
                 vmax = params.max_value(data) if isinstance(params.max_value, Callable) else params.max_value
-                im = ax.pcolormesh(X, Y, Z, cmap=cmap, vmin=vmin, vmax=vmax, shading='flat') # OPT: can use vmin and vmax, but not without a Metric() class, which I think would lead us a bit too far once again
+                im = ax.pcolormesh(X, Y, Z, cmap=cmap, vmin=vmin, vmax=vmax, shading='flat', linewidth=0, rasterized=True) # OPT: can use vmin and vmax, but not without a Metric() class, which I think would lead us a bit too far once again
+                im.set_edgecolor('face')
                 c: colorbar.Colorbar = plt.colorbar(im) # OPT: can use extend='min' for nice triangle at the bottom if range is known
                 if params.is_integer: c.ax.yaxis.get_major_locator().set_params(integer=True) # only integer colorbar labels
                 if len(params.contours) > 0:
@@ -434,8 +436,8 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
                 save_path = os.path.splitext(os.path.join(os.path.dirname(summary_files[0]), "averaged"))[0]
             else:
                 save_path = os.path.splitext(summary_files[0])[0]
-            save_plot(save_path, ext='.pdf')
-            save_plot(save_path, ext='.png', dpi=200) # Default dpi is 100, so save at higher res
+            for ext in ('.pdf', '.png', '.svg'):
+                save_plot(save_path, ext=ext, dpi=dpi) # Default dpi is 100, so save at higher res
         if plot:
             plt.show()
         plt.close()
@@ -444,12 +446,12 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
 class SweepMetricPlotparams:
     ''' Stores some parameters to correctly plot the metrics belonging to a certain experiment.
         @param full_name [str]: A human-readable name for the metric.
-        @param data_extractor [Callable]: A function that takes one argument, namely a Data object.
-            It returns a DataFrame column with the metric. Usually, this will just be a column from Data().df.
-            The simplest example of this would be something like "lambda data: data[<column_of_metric>]".
-            Combinations of columns are also possible, e.g. "lambda data: data[<some_metric>] - data[<other_metric>]".
+        @param data_extractor [Callable]: A function that takes one argument, namely a `Data` object.
+            It returns a `DataFrame` column with the metric. Usually, this will just be a column from `Data().df`.
+            The simplest example of this would be something like `lambda data: data[<column_of_metric>]`.
+            Combinations of columns are also possible, e.g. `lambda data: data[<some_metric>] - data[<other_metric>]`.
         @param is_integer [bool] (False): True if the metric is integer-valued, otherwise False.
-        The following parameters can (besides scalar values) also be Callable. If so, they take one argument: a Data object.
+        The following parameters can (besides scalar values) also be `Callable`. If so, they take one argument: a `Data` object.
         This allows them to be defined relative to the values of other metrics.
         @param min_value [float|Callable] (None): The minimum value that the metric can be.
         @param max_value [float|Callable] (None): The maximum value that the metric can be.
@@ -466,8 +468,6 @@ class SweepMetricPlotparams:
 
 
 ######## Below are subclasses of the superclasses above
-
-
 class KernelQualityExperiment(Experiment):
     def __init__(self, inputter, outputreader, mm):
         """ Follows the paper
@@ -481,7 +481,7 @@ class KernelQualityExperiment(Experiment):
         self.results = {'K': None, 'G': None, 'k': None, 'g': None} # Kernel-quality and Generalization-capability, and their normalized counterparts
 
     def run(self, input_length: int = 100, constant_fraction: float = 0.6, pattern=None, verbose=False):
-        """ @param input_length [int]: the number of inputter.input() calls before each recording of the output state. """
+        """ @param input_length [int]: the number of `inputter.input()` calls before each recording of the output state. """
         if verbose: log("Calculating kernel-quality K.")
         self.run_K(input_length=input_length, verbose=verbose, pattern=pattern)
         if verbose: log("Calculating generalization-capability G.")
@@ -504,8 +504,8 @@ class KernelQualityExperiment(Experiment):
             self.all_states_K[i,:] = state.reshape(-1)
 
     def run_G(self, input_length: int = 100, constant_fraction=0.6, pattern=None, verbose=False):
-        """ @param constant_fraction [float] (0.6): the last <constant_fraction>*<input_length> bits will
-                be equal for all <self.n_out> bit sequences.
+        """ @param constant_fraction [float] (0.6): the last `constant_fraction*input_length` bits will
+                be equal for all `self.n_out` bit sequences.
         """
         self.all_states_G = xp.zeros((self.n_out,)*2)
         self.all_inputs_G = ["" for _ in range(self.n_out)]
@@ -546,7 +546,7 @@ class KernelQualityExperiment(Experiment):
 
     def to_dataframe(self):
         """ DF has columns 'metric' and 'y'.
-            When 'metric' == "K", the row corresponds to a state from self.run_K(), and vice versa for 'G'.
+            When 'metric' == "K", the row corresponds to a state from `self.run_K()`, and vice versa for 'G'.
         """
         u = self.all_inputs_K + self.all_inputs_G # Both are lists so we can concatenate them like this
         yK = asnumpy(self.all_states_K) # Need as NumPy array for pd
@@ -557,8 +557,8 @@ class KernelQualityExperiment(Experiment):
         return pd.DataFrame({'metric': metric, 'inputs': u, 'y': list(yK) + list(yG)})
 
     def load_dataframe(self, df: pd.DataFrame):
-        """ Loads the arrays <all_states_K> and <all_states_G> stored in the dataframe <df>
-            into the <self.all_states_K> and <self.all_states_G> attributes, and returns both.
+        """ Loads the arrays `all_states_K` and `all_states_G` stored in the dataframe `df`
+            into the `self.all_states_K` and `self.all_states_G` attributes, and returns both.
         """
         df_K = df[df['metric'] == "K"]
         df_G = df[df['metric'] == "G"]
@@ -598,9 +598,9 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
 
     @classmethod
     def dummy(cls, mm: Magnets = None):
-        """ Creates a minimalistic working TaskAgnosticExperiment instance.
-            @param mm [hotspice.Magnets] (None): if specified, this is used as Magnets()
-                object. Otherwise, a minimalistic hotspice.ASI.OOP_Square() instance is used.
+        """ Creates a minimalistic working `TaskAgnosticExperiment` instance.
+            @param mm [hotspice.Magnets] (None): if specified, this is used as `Magnets()`
+                object. Otherwise, a minimalistic `hotspice.ASI.OOP_Square()` instance is used.
         """
         if mm is None: mm = OOP_Square(1, 10, energies=(DipolarEnergy(), ZeemanEnergy()))
         datastream = RandomScalarDatastream(low=-1, high=1)
@@ -609,8 +609,8 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         return cls(inputter, outputreader, mm)
 
     def run(self, N=1000, pattern=None, verbose=False):
-        """ @param N [int]: The total number of <self.inputter.input()> iterations performed.
-            @param pattern [str] (None): The state that <self.mm> is initialized in. If not specified,
+        """ @param N [int]: The total number of `self.inputter.input()` iterations performed.
+            @param pattern [str] (None): The state that `self.mm` is initialized in. If not specified,
                 the ground state of the spin ice geometry is used.
             @param verbose [int] (False): If 0, nothing is printed or plotted.
                 If 1, significant iterations are printed to console.
@@ -645,10 +645,10 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         # Still need to call self.calculate_all() manually after this method.
 
     def calculate_all(self, ignore_errors=False, **kwargs):
-        """ Recalculates NL, MC, S and PC. Arguments passed to calculate_all()
-            are directly passed through to the appropriate self.<metric> functions.
+        """ Recalculates NL, MC, S and PC. Arguments passed to `calculate_all()`
+            are directly passed through to the appropriate `self.<metric>` functions.
             @param ignore_errors [bool] (False): if True, exceptions raised by the
-                self.<metric> functions are ignored (use with caution).
+                `self.<metric>` functions are ignored (use with caution).
         """
         kwargs.setdefault('use_stored', True)
         for metric, method in {'NL_local': self.NL_local, 'NL': self.NL, 'MC_local': self.MC_local, 'MC': self.MC, 'S_local': self.S_local, 'S': self.S, 'PC_local': self.PC_local, 'PC': self.PC}.items():
@@ -659,12 +659,12 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
 
     def NL_local(self, k: int = 10, test_fraction: float = 1/4, verbose: bool = False, **kwargs) -> xp.ndarray:
         """ Returns an array representing the nonlinearity of each output node. For this, a linear
-            estimator is trained which attempts to predict the current output (self.y) based on the
-            <k> most recent inputs (self.u) (including the current one).
+            estimator is trained which attempts to predict the current output (`self.y`) based on the
+            `k` most recent inputs (`self.u`) (including the current one).
             @param k [int] (10): the number of previous inputs visible to the linear estimator to
                 estimate the output (this should be longer than the relaxation time of the reservoir).
             @param test_fraction [float] (.25): this is the fraction of data points used in the test set
-                to evaluate the metrics. The remaining 1-<test_fraction> are used to train the estimators.
+                to evaluate the metrics. The remaining `1-test_fraction` are used to train the estimators.
         """
         if verbose: log(f"Calculating NL_local...")
         
@@ -694,14 +694,14 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
 
     def MC_local(self, k: int = 10, test_fraction: float = 1/4, threshold_dist: float = None, verbose: bool = False, **kwargs) -> xp.ndarray:
         """ Returns an array representing the memory capacity of each output node. For this, a
-            linear estimator is trained to recall the history of inputs (self.u) based on the
-            output values (self.y) of the output nodes within a threshold distance of each node.
+            linear estimator is trained to recall the history of inputs (`self.u`) based on the
+            output values (`self.y`) of the output nodes within a threshold distance of each node.
             @param k [int] (10): the furthest amount of steps back in time that an estimator is
                 trained to recall (this should be longer than the relaxation time of the reservoir).
             @param test_fraction [float] (.25): this is the fraction of data points used in the test set
-                to evaluate the metrics. The remaining 1-<test_fraction> are used to train the estimators.
+                to evaluate the metrics. The remaining `1-test_fraction` are used to train the estimators.
             @param threshold_dist [float] (2*NN_dist): to determine local MC, a neighborhood (all output
-                nodes at a distance of at most <threshold_dist>) around the output node is used to provide
+                nodes at a distance of at most `threshold_dist`) around the output node is used to provide
                 data for the estimator.
         """
         if verbose: log(f"Calculating MC_local...")
@@ -786,10 +786,10 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
 
 
     def to_dataframe(self, u: xp.ndarray = None, y: xp.ndarray = None):
-        """ If <u> and <y> are not explicitly provided, the saved <self.u> and <self.y>
-            arrays are used. When providing <u> and <y> directly,
-                <u> should be a 1D array of length N, and
-                <y> a <NxL> array, where L is the number of output nodes.
+        """ If `u` and `y` are not explicitly provided, the saved `self.u` and `self.y`
+            arrays are used. When providing `u` and `y` directly,
+                `u` should be a 1D array of length N, and
+                `y` an N x L array, where L is the number of output nodes.
             The resulting dataframe has columns 'u' and 'y'.
         """
         if (u is None) != (y is None): raise ValueError("Either none or both of <u> and <y> arguments must be provided.")
@@ -805,8 +805,8 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         return pd.DataFrame({'u': u, 'y': list(y)})
 
     def load_dataframe(self, df: pd.DataFrame, u: xp.ndarray = None, y: xp.ndarray = None):
-        """ Loads the arrays <u> and <y> stored in the dataframe <df>
-            into the <self.u> and <self.y> attributes, and returns both.
+        """ Loads the arrays `u` and `y` stored in the dataframe `df`
+            into the `self.u` and `self.y` attributes, and returns both.
         """
         if u is None: u = xp.asarray(df['u'])
         if y is None: y = xp.asarray(df['y'])
@@ -857,7 +857,7 @@ class IODistanceExperiment(Experiment):
         # Still need to call self.calculate_all() manually after this method.
     
     def calculate_all(self, input_metric='hamming', output_metric='euclidean', input_metric_kwargs=None, output_metric_kwargs=None):
-        """ (Re)calculates all the metrics in the self.results dict.
+        """ (Re)calculates all the metrics in the `self.results` dict.
             @param input_metric [str] ('hamming'): the distance metric to use between two input sequences.
                 The default metric 'hamming' represents the fraction of disagreeing elements between two input sequences.
             @param output_metric [str] ('euclidean'): the distance metric to use between two output sequences.
@@ -875,7 +875,7 @@ class IODistanceExperiment(Experiment):
         return df
     
     def load_dataframe(self, df: pd.DataFrame):
-        """ Loads data generated by self.to_dataframe() to the current object. """
+        """ Loads data generated by `self.to_dataframe()` to the current object. """
         self.input_sequences = xp.asarray(df['input_sequence'])
         self.output_sequences = xp.asarray(df['output_sequence'])
         self.calculate_all()
@@ -890,8 +890,8 @@ class IODistanceExperiment(Experiment):
     @staticmethod
     def get_plot_metrics(self):
         """ Returns a dictionary with as many elements as there should be 2D or 1D plots
-            in Sweep().plot(). Keys are names of these metrics, values are functions that
-            take one argument which is a pd.DataFrame, and returns either a simple column
+            in `Sweep().plot()`. Keys are names of these metrics, values are functions that
+            take one argument which is a `pd.DataFrame`, and returns either a simple column
             or a mathematical combination of several columns.
         """
         return {}

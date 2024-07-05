@@ -8,16 +8,16 @@ from context import hotspice
 
 
 def analysis_speed(mm: hotspice.Magnets, t_min: float = 1, n_min: int = 1, verbose: bool = False):
-    """ In this analysis, the performance of Hotspice for the geometry in <mm> is measured,
+    """ In this analysis, the performance of Hotspice for the geometry in `mm` is measured,
         by simply calculating the number of attempted switches per second, real switches
-        per second, and Monte Carlo steps per second, when calling mm.update() successively.
+        per second, and Monte Carlo steps per second, when calling `mm.update()` successively.
         @param mm [hotspice.Magnets]: the Magnets object with the desired size and parameters.
         @param t_min [float] (1): the minimal number of seconds during which the performance is monitored.
-        @param n_min [int] (1): the minimal number of mm.update() calls whose performance is monitored.
+        @param n_min [int] (1): the minimal number of `mm.update()` calls whose performance is monitored.
     """
     hotspice.utils.free_gpu_memory()
     i, t0 = -1, time.perf_counter()
-    while (i := i + 1) < n_min or time.perf_counter() - t0 < t_min: # Do this for at least <n_min> iterations and <t_min> seconds
+    while (i := i + 1) < n_min or time.perf_counter() - t0 < t_min: # Do this for at least `n_min` iterations and `t_min` seconds
         mm.update()
     dt = time.perf_counter() - t0
     if verbose: print(f"[{hotspice.utils.get_gpu_memory()['free']} free on GPU] Time required for {i} runs ({mm.switches} switches) of Magnets.select() on {mm.nx}x{mm.ny} grid: {dt:.3f}s.")

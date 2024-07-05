@@ -17,7 +17,7 @@ def calculate_any_neighbors(pos, shape, center: int = 0):
     """ @param pos [xp.array(2xN)]: the array of indices (row 0: y, row 1: x)
         @param shape [tuple(2)]: the maximum indices (+1) in y- and x- direction
         @param center [int]: if 0, then the full neighbor array is returned. If nonzero, only the 
-            middle region (of at most <center> cells away from the middle) is returned.
+            middle region (of at most `center` cells away from the middle) is returned.
         @return [xp.array2D]: an array representing where the other samples are relative to every
             other sample. To this end, each sample is placed in the middle of the array, and all
             positions where another sample exists are incremented by 1. As such, the array is
@@ -43,13 +43,13 @@ def calculate_any_neighbors(pos, shape, center: int = 0):
 
 
 def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r:float=16, plot:bool=True, save:bool=False, PBC:bool=True, params:hotspice.SimParams=None, ASI_type:type[hotspice.Magnets]=None):
-    """ In this analysis, the multiple-magnet-selection algorithm of hotspice.Magnets.select() is analyzed.
-        The spatial distribution is calculated by performing <n> runs of the select() method.
+    """ In this analysis, the multiple-magnet-selection algorithm of `hotspice.Magnets.select()` is analyzed.
+        The spatial distribution is calculated by performing `n` runs of the `select()` method.
         Also the probability distribution of the distance between two samples is calculated,
         as well as the probablity distrbution of their relative positions.
-            (note that this becomes expensive to calculate for large L)
-        @param n [int] (10000): the number of times the select() method is executed.
-        @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify <L> for square domain.
+            (note that this becomes expensive to calculate for large `L`)
+        @param n [int] (10000): the number of times the `select()` method is executed.
+        @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify `L` for square domain.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     """
     if Ly is None: Ly = L
@@ -158,7 +158,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     im2 = ax2.imshow(data2, vmin=1e-10, vmax=max(2e-10, np.max(data2)), extent=[-.5-r*scale, .5+r*scale, -.5-r*scale, .5+r*scale], interpolation_stage='rgba', interpolation='nearest', cmap=cmap)
     ax2.set_title("Prob. dens. of neighbors\naround any sample")
     ax2.add_patch(plt.Circle((0, 0), 0.707, linewidth=0.5, fill=False, color='white'))
-    ax2.add_patch(patches.Ellipse((0, 0), 2*r/mm.dx, 2*r/mm.dy, linewidth=1, fill=False, color='white', linestyle=':'))
+    ax2.add_patch(patches.Ellipse((0, 0), 2*r/xp.min(mm.dx), 2*r/xp.min(mm.dy), linewidth=1, fill=False, color='white', linestyle=':'))
     plt.colorbar(im2, extend='min')
 
     # PLOT 3: PROBABILITY OF CHOOSING EACH CELL
@@ -189,7 +189,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
 
 def analysis_select_speed(n: int=10000, L:int=400, r=16, PBC:bool=True, params:hotspice.SimParams=None):
     """ Tests the speed of selecting magnets without any other analysis-related calculations in between.
-        @param n [int] (10000): the number of times the select() method is executed.
+        @param n [int] (10000): the number of times the `select()` method is executed.
         @param L [int] (400): the size of the simulation.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     """

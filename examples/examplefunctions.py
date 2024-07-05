@@ -12,15 +12,15 @@ except ModuleNotFoundError: import hotspice
 
 
 def run_a_bit(mm: hotspice.Magnets, N=50e3, T=None, save_history=1, verbose=False, show_m=True, **kwargs):
-    """ Simulates <N> consecutive switches at temperature <T> and plots the end result.
-        This end plot can be disabled by setting <show_m> to False.
+    """ Simulates `N` consecutive switches at temperature `T` and plots the end result.
+        This end plot can be disabled by setting `show_m` to False.
         @param N [int] (50000): the number of update steps to run.
-        @param T [float] (mm.T): the temperature at which to run the <N> steps.
+        @param T [float] (mm.T): the temperature at which to run the `N` steps.
             If not specified, the current temperature of the simulation is retained.
         @param save_history [int] (1): the number of steps between two recorded entries in mm.history.
             If 0, no history is recorded.
         @param verbose [bool] (False): whether or not to print supporting information about the run.
-        @param show_m [bool] (True): whether or not to plot the magnetization profile after the <N> switches.
+        @param show_m [bool] (True): whether or not to plot the magnetization profile after the `N` switches.
     """
     if T is not None: mm.T = T
 
@@ -79,7 +79,7 @@ def neelTemperature(mm: hotspice.Magnets, N=200000, T_min=0, T_max=200):
 
 def animate_quenching(mm: hotspice.Magnets, animate=1, speed=20, n_sweep=40000, T_low=2, T_high=1000, save=False, fill=False, avg=True, pattern=None):
     """ Shows an animation of repeatedly sweeping the simulation between quite low and high temperatures,
-        WITH a smooth temperature transition in between (exponential between T_low and T_high).
+        WITH a smooth temperature transition in between (exponential between `T_low` and `T_high`).
         @param animate [float] (1): How fast the animation will go: this is inversely proportional to the
             time between two frames.
         @param speed [int] (20): How many switches are simulated between each frame.
@@ -159,9 +159,7 @@ def animate_quenching(mm: hotspice.Magnets, animate=1, speed=20, n_sweep=40000, 
 
 
 def autocorrelation_dist_dependence(mm: hotspice.Magnets):
-    """ Shows the full 2D autocorrelation, as well as the binned autocorrelation
-        as a function of distance.
-    """
+    """ Shows the full 2D autocorrelation, as well as the binned autocorrelation as a function of distance. """
     correlation = mm.autocorrelation()
     corr_length = mm.correlation_length(correlation=correlation)
     print("Correlation length:", corr_length)
@@ -182,8 +180,8 @@ def autocorrelation_dist_dependence(mm: hotspice.Magnets):
 
 def autocorrelation_temp_dependence(mm: hotspice.Magnets, N=41, M=50, L=500, T_min=0, T_max=400):
     """ Shows how the correlation distance depends on the temperature. 
-        @param N [int] (31): Number of temperature steps between <T_min> and <T_max>.
-        @param M [int] (50): How many times to do <L> switches at each temperature,
+        @param N [int] (31): Number of temperature steps between `T_min` and `T_max`.
+        @param M [int] (50): How many times to do `L` switches at each temperature,
             which are then averaged to get the correlation length at each temperature.
         @param L [int] (500): Number of switches between each measurement of the
             correlation length.
