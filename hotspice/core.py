@@ -370,6 +370,10 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         return self._dx
     @dx.setter
     def dx(self, value: float):
+        """ When specifying `dx` as an array (instead of a single scalar), then it should specify
+            the elements [x1-x0, x2-x1, ..., x(ux)-x(ux-1)], if a unitcell has size (ux, uy).
+            Note that the last element is the spacing over the boundaries of a unit cell!
+        """
         value = xp.asarray(value).reshape(-1)
         self._dx = xp.tile(value, math.ceil(self.nx/value.size))[:self.nx]
         self.x = xp.zeros(self.nx)
@@ -384,6 +388,10 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         return self._dy
     @dy.setter
     def dy(self, value: float):
+        """ When specifying `dy` as an array (instead of a single scalar), then it should specify
+            the elements [y1-y0, y2-y1, ..., y(uy)-y(uy-1)], if a unitcell has size (ux, uy).
+            Note that the last element is the spacing over the boundaries of a unit cell!
+        """
         value = xp.asarray(value).reshape(-1)
         self._dy = xp.tile(value, math.ceil(self.ny/value.size))[:self.ny]
         self.y = xp.zeros(self.ny)

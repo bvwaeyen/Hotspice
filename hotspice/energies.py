@@ -207,8 +207,8 @@ class DipolarEnergy(Energy):
                 rinv3 = rr_inv**(-self.decay_exponent) # = 1/r^3 by default
                 rinv5 = rr_inv**(-self.decay_exponent + 2) # = 1/r^5 by default
                 # Now we determine the normalized rx and ry
-                ux = xp.abs(rrx*rr_inv)
-                uy = xp.abs(rry*rr_inv)
+                ux = rrx*rr_inv
+                uy = rry*rr_inv
                 ## NORMAL KERNEL
                 if self.mm.in_plane:
                     if (ox1 := unitcell_ox[y,x]) == (oy1 := unitcell_oy[y,x]) == 0:
