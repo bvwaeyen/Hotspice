@@ -148,7 +148,7 @@ class OOP_Honeycomb(OOP_ASI):
             ny = int(nx/math.sqrt(3))//2*2 # Try to make the domain reasonably square-shaped
             if not kwargs.get('PBC', False): ny -= 1 # Remove dangling spins if no PBC
         if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
-        dx = kwargs.pop('dx', a/2)
+        dx = kwargs.pop('dx', a/2) # TODO: add nonuniform grid here as well because Honeycomb can benefit from it
         dy = kwargs.pop('dy', math.sqrt(3)*dx)
         super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
 
@@ -183,6 +183,7 @@ class OOP_Honeycomb(OOP_ASI):
 
 
 class OOP_Cairo(OOP_ASI):
+    BETA = math.pi/4 + math.acos(math.sqrt(2)/4) # In an equilateral pentagon with two non-adjacent right angles, `beta` is the size of the two other equal angles. 
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, beta: float = None, offset_factor: float = 1., **kwargs):
         """ In-plane ASI with all spins placed on the edges of the equilateral Cairo tiling.
             NOTE: `dx` and `dy` can not be specified spearately, all is controlled by `a` and `beta`.
@@ -194,7 +195,7 @@ class OOP_Cairo(OOP_ASI):
         if ny is None: ny = n
         if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
         
-        self.beta = math.pi/4 + math.acos(math.sqrt(2)/4) if beta is None else beta
+        self.beta = OOP_Cairo.BETA if beta is None else beta
         dx = dy = [-a*math.cos(self.beta),a/2,a/2,-a*math.cos(self.beta)]
         super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
 
@@ -427,6 +428,7 @@ class IP_Triangle(IP_Kagome):
 
 
 class IP_Cairo(IP_ASI):
+    BETA = math.pi/4 + math.acos(math.sqrt(2)/4) # In an equilateral pentagon with two non-adjacent right angles, `beta` is the size of the two other equal angles. 
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, beta: float = None, offset_factor: float = 1., **kwargs):
         """ In-plane ASI with all spins placed on the edges of the equilateral Cairo tiling.
             NOTE: `dx` and `dy` can not be specified spearately, all is controlled by `a` and `beta`.
@@ -438,7 +440,7 @@ class IP_Cairo(IP_ASI):
         if ny is None: ny = n
         if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
         
-        self.beta = math.pi/4 + math.acos(math.sqrt(2)/4) if beta is None else beta
+        self.beta = IP_Cairo.BETA if beta is None else beta
         dxPQ = dyRS = a/2*math.sin(self.beta)
         dxQR = dxPQ - a/2*math.cos(self.beta)
         dxRS = dyPQ = math.sin(math.pi/2 - self.beta)*a + math.cos(math.pi/2 - self.beta)*a - a/2*math.cos(self.beta)

@@ -638,14 +638,14 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
                 self.ax.set_title(r"Magnetization $\overrightarrow{m}$")
                 IP = self.mm.in_plane
                 self.content = self.ax.imshow(im_placeholder, cmap=self.cmap_hsv, origin='lower', vmin=0 if IP else -1, vmax=2*np.pi if IP else 1, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect) # extent doesnt work perfectly with triangle or kagome but is still ok
-                self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
+                self.colorbar = self.figure.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
             case self.DisplayMode.QUIVER:
                 if not self.mm.in_plane: raise ValueError("Can only use DisplayMode.QUIVER for in-plane ASI.") # TODO: draw scatter plot for OOP ASI
                 self.content = self.ax.quiver(asnumpy(self.mm.xx[self.mm.nonzero])/self.unit_axes_factor, asnumpy(self.mm.yy[self.mm.nonzero])/self.unit_axes_factor,
                                            np.ones(self.mm.n), np.ones(self.mm.n), color=self.cmap_hsv(np.ones(self.mm.n)), pivot='mid',
                                            scale=1.1/self.mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
-                self.colorbar = plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=0, vmax=2*np.pi), cmap=self.cmap_hsv), **colorbar_ax_kwargs) # Quiver is not a Mappable, so we create our own ScalarMappable.
+                self.colorbar = self.figure.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=0, vmax=2*np.pi), cmap=self.cmap_hsv), **colorbar_ax_kwargs) # Quiver is not a Mappable, so we create our own ScalarMappable.
                 self.colorbar.ax.get_yaxis().labelpad = 15
                 self.colorbar.ax.set_ylabel(f"Magnetization angle [rad]", rotation=270, fontsize=self.figparams['fontsize_colorbar'])
             case self.DisplayMode.DOMAINS:
@@ -654,17 +654,17 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
                 cmap = colormaps['Greys'].copy()
                 cmap.set_bad(color='#FFAAAA')
                 self.content = self.ax.imshow(im_placeholder, cmap=cmap, origin='lower', extent=self.full_extent, vmin=0, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
-                self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
+                self.colorbar = self.figure.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
                 self.colorbar.ax.set_ylabel("Domain number", rotation=270, fontsize=self.figparams['fontsize_colorbar']) # TODO: use the number of domains as vmax, when that has been implemented in .ASI module
             case self.DisplayMode.ENERGY:
                 self.ax.set_title(r"Local energy")
                 self.content = self.ax.imshow(im_placeholder, origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
-                self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
+                self.colorbar = self.figure.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 15
             case self.DisplayMode.FIELD:
                 self.content = self.ax.imshow(im_placeholder, cmap=colormaps['inferno'], origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
-                self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
+                self.colorbar = self.figure.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 15
             case self.DisplayMode.READOUT:
                 if self.outputreader is None: raise AttributeError("Can not use DisplayMode.READOUT because no OutputReader was provided.")
@@ -846,7 +846,7 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
         valid_components += [e.__class__.__name__ for e in self.mm._energies]
         self.option_energy_component = ctk.CTkOptionMenu(self.tab_ENERGY, values=valid_components, command=self.init_settings_magview)
         self.option_energy_component.pack(pady=10, padx=10)
-        self.option_energy_component.set('Total') # Set to 'Total' by default
+        self.option_energy_component.set('Total energy') # Set to 'Total' by default
         self.option_perp = ctk.CTkSwitch(self.tab_ENERGY, text="Show perpendicular component", command=self.init_settings_magview)
         if self.mm.USE_PERP_ENERGY: self.option_perp.pack() # Only show this button if USE_PERP_ENERGY
         self.option_perp.deselect() # Set to 'off' by default

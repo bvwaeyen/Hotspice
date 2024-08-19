@@ -202,7 +202,7 @@ class DipolarEnergy(Energy):
                 rry = yy - yy[self.mm.ny - 1,0]
                 
                 # Let us first make the four-mirrored distance matrix rinv3
-                rr_sq = rrx**2 + rry**2
+                rr_sq = (rrx**2 + rry**2).astype(float)
                 rr_sq[self.mm.ny - 1,self.mm.nx - 1] = xp.inf
                 rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
                 rinv3 = rr_inv**(-self.decay_exponent) # = 1/r^3 by default
@@ -397,7 +397,19 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
         self.charge_sq = self.charge**2
 
         # Create a grid that is too large. This is needed to place every magnet in the unitcell in the centrum to convolve
-        xx, yy = xp.meshgrid(self.mm.dx * xp.arange(-(self.mm.nx-1), self.mm.nx + self.mm.unitcell.x), self.mm.dy * xp.arange(-(self.mm.ny-1), self.mm.ny + self.mm.unitcell.y))
+        x_arange = xp.arange(-(self.mm.nx-1), self.mm.nx + self.mm.unitcell.x)
+        dx = self.mm.dx[x_arange % self.mm.nx]
+        x_large = xp.zeros(x_arange.size)
+        x_large[1:] = xp.cumsum(dx)[:-1]
+        x_large -= x_large[self.mm.nx - 1]
+        
+        y_arange = xp.arange(-(self.mm.ny-1), self.mm.ny + self.mm.unitcell.y)
+        dy = self.mm.dy[y_arange % self.mm.ny]
+        y_large = xp.zeros(y_arange.size)
+        y_large[1:] = xp.cumsum(dy)[:-1]
+        y_large -= y_large[self.mm.ny - 1]
+        
+        xx, yy = xp.meshgrid(x_large, y_large)
         # Determine the angle of each magnet in the too large grid
         angle_unitcell = self.mm.angles[0:self.unitcell.y, 0:self.unitcell.x]
         angles = xp.zeros(xx.shape)

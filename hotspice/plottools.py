@@ -565,7 +565,8 @@ def save_plot(save_path: str, ext=None, **savefig_kwargs):
 
 
 # TODO: incorporate monopole plot into the GUI
-def plot_monopoles(mm: Magnets, d=200e-9): # Original author: Diego De Gusem
+def plot_monopoles(mm: Magnets, d=None): # Original author: Diego De Gusem
+    if d is None: d = mm.get_energy('dimonopolar').d
     charges_xx_plot = np.zeros((mm.ny, mm.nx, 2))
     charges_yy_plot = np.zeros((mm.ny, mm.nx, 2))
     charges_xx_plot[:,:,0] = (mm.xx + mm.m*d/2*xp.cos(mm.angles))*mm.occupation

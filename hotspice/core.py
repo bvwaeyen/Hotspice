@@ -678,13 +678,13 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
                 barrier1 -= minBarrier
                 barrier2 -= minBarrier
                 frequency = xp.exp(-barrier1*self.beta) + xp.exp(-barrier2*self.beta) # Sadly we have to divide in the next step, and that is a costly function.
-                taus = self.rng.exponential(scale=1/frequency) # Draw random relative times from an exponential distribution.
+                taus = self.rng.exponential(scale=1/frequency, size=self.m.shape) # Draw random relative times from an exponential distribution.
                 attempt_freq /= 2 # Because we have 2 parallel switching channels, and we want equivalence between USE_PERP_ENERGY True and False in case of equal barriers.
             else:
                 barrier = self.E_barrier(min_only=True)
                 minBarrier = xp.nanmin(barrier)
                 barrier -= minBarrier # Energy is relative, so set min(barrier) to zero (this prevents issues at low T)
-                taus = self.rng.exponential(scale=xp.exp(barrier*self.beta)) # Draw random relative times from an exponential distribution
+                taus = self.rng.exponential(scale=xp.exp(barrier*self.beta), size=self.m.shape) # Draw random relative times from an exponential distribution
             indexmin2D = divmod(xp.nanargmin(taus), self.m.shape[1]) # The min(tau) index in 2D form for easy indexing
             time = taus[indexmin2D]*xp.exp(minBarrier*self.beta[indexmin2D])/attempt_freq # This can become infinite quite quickly if T is small
             self.attempted_switches += 1
