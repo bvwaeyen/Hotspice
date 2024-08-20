@@ -483,3 +483,73 @@ class IP_Cairo(IP_ASI):
 
     def _get_groundstate(self):
         return 'afm'
+
+
+class IP_Shakti(IP_ASI):
+    def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
+        """ In-plane ASI with all spins placed on the edges of the equilateral Cairo tiling.
+            NOTE: `dx` and `dy` can not be specified spearately, all is controlled by `a` and `beta`.
+            `offset_factor` can be used to offset the magnets to make the 4-vertices and 3-vertices look less unbalanced.
+                The nicest shape is achieved for `offset_factor=1.2`.
+        """
+        self.a = a/4
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx, dy = kwargs.pop('dx', a / 4), kwargs.pop('dy', a / 4)
+        super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
+
+    def _set_m(self, pattern: str, angle=None):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = ((self.ixx - self.iyy) % 2) * 2 - 1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_angles(self):
+        angles = xp.zeros_like(self.xx)
+        angles[self.ixx % 2 == 0] = xp.pi/2
+        angles[2::8,2::8] = angles[6::8,6::8] = 0 # Horizontal magnets
+        return angles
+
+    def _get_occupation(self):
+        occupation = xp.zeros_like(self.xx)
+        occupation[(self.ixx + self.iyy) % 2 == 1] = 1
+        occupation[2::8, 2::8] = 1
+        occupation[6::8, 2::8] = 1
+        occupation[2::8, 6::8] = 1
+        occupation[6::8, 6::8] = 1
+
+        occupation[1::8, 2::8] = 0
+        occupation[3::8, 2::8] = 0
+        occupation[6::8, 1::8] = 0
+        occupation[6::8, 3::8] = 0
+
+        occupation[2::8, 5::8] = 0
+        occupation[2::8, 7::8] = 0
+        occupation[5::8, 6::8] = 0
+        occupation[7::8, 6::8] = 0
+
+        occupation[2::8, 1::8] = 0
+        occupation[2::8, 3::8] = 0
+        occupation[1::8, 6::8] = 0
+        occupation[3::8, 6::8] = 0
+
+        occupation[5::8, 2::8] = 0
+        occupation[7::8, 2::8] = 0
+        occupation[6::8, 5::8] = 0
+        occupation[6::8, 7::8] = 0
+        return occupation
+
+    def _get_appropriate_avg(self):
+        return ['point']
+
+    def _get_AFMmask(self):
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float') / 4
+
+    def _get_nearest_neighbors(self):
+        return xp.array([[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]])
+
+    def _get_groundstate(self):
+        return 'afm'
+
