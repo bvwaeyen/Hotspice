@@ -391,27 +391,49 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
         self.small_d = small_d # [m]
 
     def _initialize(self):
+        if not isinstance(self.d, np.ndarray):
+            self.dist_unitcell = as_2D_array(self.d, (self.mm.unitcell.x, self.mm.unitcell.y))
+        else:
+            self.dist_unitcell = self.d
+        self.dist = np.tile(self.dist_unitcell,(math.ceil(self.mm.nx / self.mm.unitcell.x), math.ceil(self.mm.ny / self.mm.unitcell.y)))
+        self.dist_exact = self.dist[:self.mm.nx, :self.mm.ny]
         self.unitcell = self.mm.unitcell
         self.E = xp.zeros_like(self.mm.xx)
-        self.charge = self.mm.moment / self.d  # Magnetic charge [Am]
-        self.charge_sq = self.charge**2
+        self.charge = self.mm.moment / self.dist_exact  # Magnetic charge [Am]
+        self.charge_sq = self.charge ** 2
 
         # Create a grid that is too large. This is needed to place every magnet in the unitcell in the centrum to convolve
-        xx, yy = xp.meshgrid(self.mm.dx * xp.arange(-(self.mm.nx-1), self.mm.nx + self.mm.unitcell.x), self.mm.dy * xp.arange(-(self.mm.ny-1), self.mm.ny + self.mm.unitcell.y))
+        dx_unitcell, dy_unitcell = self.mm.dx[:self.mm.unitcell.x], self.mm.dx[:self.mm.unitcell.y]
+        dx_big = np.zeros(shape=xp.arange(-(self.mm.nx - 1), self.mm.nx + self.mm.unitcell.x).shape)
+        dx_big[0:len(self.mm.dx)-1] = self.mm.dx[1:][::-1]  # Mirrored part
+        dx_big[len(self.mm.dx)-1:] = np.tile(dx_unitcell, (math.ceil(self.mm.nx / self.mm.unitcell.x)+1))[:self.mm.nx+self.mm.unitcell.x]
+
+        dy_big = np.zeros(shape=xp.arange(-(self.mm.ny - 1), self.mm.ny + self.mm.unitcell.y).shape)
+        dy_big[0:len(self.mm.dy)-1] = self.mm.dy[1::][::-1]  # Mirrored part
+        dy_big[len(self.mm.dx)-1:] = np.tile(dy_unitcell, (math.ceil(self.mm.ny / self.mm.unitcell.y)+1))[:self.mm.ny+self.mm.unitcell.y]
+
+        xx, yy = xp.meshgrid(dx_big * xp.arange(-(self.mm.nx - 1), self.mm.nx + self.mm.unitcell.x), dy_big * xp.arange(-(self.mm.ny - 1), self.mm.ny + self.mm.unitcell.y))
+        if not isinstance(self.d, np.ndarray):
+            self.dist_too_big = as_2D_array(self.d, xx.shape)
+        else:
+            self.dist_too_big = mirror4(np.tile(self.dist_unitcell, (math.ceil(self.mm.nx / self.mm.unitcell.x) + 1, math.ceil(self.mm.ny / self.mm.unitcell.y) + 1)))  # Make it one cell bigger
+            self.dist_too_big = self.dist_too_big[self.mm.unitcell.y:,self.mm.unitcell.x:]  # Because of the mirroring, the one unit cell at the left and at the top are too much
+            self.dist_too_big = self.dist_too_big[:xx.shape[0],:xx.shape[1]]
+
         # Determine the angle of each magnet in the too large grid
-        angle_unitcell = self.mm.angles[0:self.unitcell.y, 0:self.unitcell.x]
+        angle_unitcell = self.mm.original_angles[0:self.unitcell.y, 0:self.unitcell.x]
         angles = xp.zeros(xx.shape)
         for y in range(xx.shape[0]):
             for x in range(xx.shape[1]):
                 angles[y,x] = angle_unitcell[(y-(self.mm.ny-1))%self.mm.unitcell.y, (x-(self.mm.nx-1))%self.mm.unitcell.x]
 
         # Let us now find our monopoles, given the position and angle of the magnets we just found
-        charges_xx = np.zeros((2*self.mm.ny-1 + self.mm.unitcell.y, 2*self.mm.nx-1 + self.mm.unitcell.x, 2))
-        charges_yy = np.zeros((2*self.mm.ny-1 + self.mm.unitcell.y, 2*self.mm.nx-1 + self.mm.unitcell.x, 2))
-        charges_xx[:,:,0] = xx + self.d / 2 * xp.cos(angles)
-        charges_xx[:,:,1] = xx - self.d / 2 * xp.cos(angles)
-        charges_yy[:,:,0] = yy + self.d / 2 * xp.sin(angles)
-        charges_yy[:,:,1] = yy - self.d / 2 * xp.sin(angles)
+        charges_xx = np.zeros((2 * self.mm.ny - 1 + self.mm.unitcell.y, 2 * self.mm.nx - 1 + self.mm.unitcell.x, 2))
+        charges_yy = np.zeros((2 * self.mm.ny - 1 + self.mm.unitcell.y, 2 * self.mm.nx - 1 + self.mm.unitcell.x, 2))
+        charges_xx[:, :, 0] = xx + self.dist_too_big / 2 * xp.cos(angles)
+        charges_xx[:, :, 1] = xx - self.dist_too_big / 2 * xp.cos(angles)
+        charges_yy[:, :, 0] = yy + self.dist_too_big / 2 * xp.sin(angles)
+        charges_yy[:, :, 1] = yy - self.dist_too_big / 2 * xp.sin(angles)
 
         # DETERMINE THE POSITIONS WHEN ONE UNITCELL MAGNET HAS FLIPPED (1 d should be small)
         charges_xx_perp_self = np.zeros((2 * self.mm.ny - 1 + self.mm.unitcell.y, 2 * self.mm.nx - 1 + self.mm.unitcell.x, 2, self.mm.unitcell.x*self.mm.unitcell.y))
@@ -433,12 +455,12 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
         magnet_n = 0
         for y in range(self.mm.ny - 1, self.mm.ny - 1 + self.unitcell.y):
             for x in range(self.mm.nx - 1, self.mm.nx - 1 + self.unitcell.x):
-                charges_xx_perp_other[:, :, 0, magnet_n] = xx + self.small_d / 2 * xp.cos(angles+np.pi/2)
-                charges_xx_perp_other[:, :, 1, magnet_n] = xx - self.small_d / 2 * xp.cos(angles+np.pi/2)
-                charges_xx_perp_other[y, x, 0, magnet_n] = xx[y, x] + self.d / 2 * xp.cos(angles[y, x] - np.pi / 2)
-                charges_xx_perp_other[y, x, 1, magnet_n] = xx[y, x] - self.d / 2 * xp.cos(angles[y, x] - np.pi / 2)
-                charges_yy_perp_other[:, :, 0, magnet_n] = yy + self.small_d / 2 * xp.sin(angles+np.pi/2)
-                charges_yy_perp_other[:, :, 1, magnet_n] = yy - self.small_d / 2 * xp.sin(angles+np.pi/2)
+                charges_xx_perp_other[:, :, 0, magnet_n] = xx + self.small_d / 2 * xp.cos(angles + np.pi / 2)
+                charges_xx_perp_other[:, :, 1, magnet_n] = xx - self.small_d / 2 * xp.cos(angles + np.pi / 2)
+                charges_xx_perp_other[y, x, 0, magnet_n] = xx[y, x] + self.dist_too_big[y, x] / 2 * xp.cos(angles[y, x] - np.pi / 2)
+                charges_xx_perp_other[y, x, 1, magnet_n] = xx[y, x] - self.dist_too_big[y, x] / 2 * xp.cos(angles[y, x] - np.pi / 2)
+                charges_yy_perp_other[:, :, 0, magnet_n] = yy + self.small_d / 2 * xp.sin(angles + np.pi / 2)
+                charges_yy_perp_other[:, :, 1, magnet_n] = yy - self.small_d / 2 * xp.sin(angles + np.pi / 2)
                 charges_yy_perp_other[y, x, 0, magnet_n] = yy[y, x] + self.small_d / 2 * xp.sin(angles[y, x] - np.pi / 2)
                 charges_yy_perp_other[y, x, 1, magnet_n] = yy[y, x] - self.small_d / 2 * xp.sin(angles[y, x] - np.pi / 2)
                 magnet_n += 1
