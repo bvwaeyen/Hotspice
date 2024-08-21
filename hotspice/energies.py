@@ -392,36 +392,40 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
 
     def _initialize(self):
         if not isinstance(self.d, np.ndarray):
-            self.dist_unitcell = as_2D_array(self.d, (self.mm.unitcell.x, self.mm.unitcell.y))
+            self.dist_unitcell = as_2D_array(self.d, (self.mm.unitcell.y, self.mm.unitcell.x))
         else:
             self.dist_unitcell = self.d
-        self.dist = np.tile(self.dist_unitcell,(math.ceil(self.mm.nx / self.mm.unitcell.x), math.ceil(self.mm.ny / self.mm.unitcell.y)))
-        self.dist_exact = self.dist[:self.mm.nx, :self.mm.ny]
+        self.dist = np.tile(self.dist_unitcell,(math.ceil(self.mm.ny / self.mm.unitcell.y), math.ceil(self.mm.nx / self.mm.unitcell.x)))
+        self.dist_exact = self.dist[:self.mm.ny, :self.mm.nx]
         self.unitcell = self.mm.unitcell
         self.E = xp.zeros_like(self.mm.xx)
         self.charge = self.mm.moment / self.dist_exact  # Magnetic charge [Am]
         self.charge_sq = self.charge ** 2
 
         # Create a grid that is too large. This is needed to place every magnet in the unitcell in the centrum to convolve
-        dx_unitcell, dy_unitcell = self.mm.dx[:self.mm.unitcell.x], self.mm.dx[:self.mm.unitcell.y]
-        dx_big = np.zeros(shape=xp.arange(-(self.mm.nx - 1), self.mm.nx + self.mm.unitcell.x).shape)
-        dx_big[0:len(self.mm.dx)-1] = self.mm.dx[1:][::-1]  # Mirrored part
-        dx_big[len(self.mm.dx)-1:] = np.tile(dx_unitcell, (math.ceil(self.mm.nx / self.mm.unitcell.x)+1))[:self.mm.nx+self.mm.unitcell.x]
+        x_arange = xp.arange(-(self.mm.nx - 1), self.mm.nx + self.mm.unitcell.x)
+        dx = self.mm.dx[x_arange % self.mm.nx]
+        x_large = xp.zeros(x_arange.size)
+        x_large[1:] = xp.cumsum(dx)[:-1]
+        x_large -= x_large[self.mm.nx - 1]
 
-        dy_big = np.zeros(shape=xp.arange(-(self.mm.ny - 1), self.mm.ny + self.mm.unitcell.y).shape)
-        dy_big[0:len(self.mm.dy)-1] = self.mm.dy[1::][::-1]  # Mirrored part
-        dy_big[len(self.mm.dx)-1:] = np.tile(dy_unitcell, (math.ceil(self.mm.ny / self.mm.unitcell.y)+1))[:self.mm.ny+self.mm.unitcell.y]
+        y_arange = xp.arange(-(self.mm.ny - 1), self.mm.ny + self.mm.unitcell.y)
+        dy = self.mm.dy[y_arange % self.mm.ny]
+        y_large = xp.zeros(y_arange.size)
+        y_large[1:] = xp.cumsum(dy)[:-1]
+        y_large -= y_large[self.mm.ny - 1]
 
-        xx, yy = xp.meshgrid(dx_big * xp.arange(-(self.mm.nx - 1), self.mm.nx + self.mm.unitcell.x), dy_big * xp.arange(-(self.mm.ny - 1), self.mm.ny + self.mm.unitcell.y))
+        xx, yy = xp.meshgrid(x_large, y_large)
         if not isinstance(self.d, np.ndarray):
             self.dist_too_big = as_2D_array(self.d, xx.shape)
         else:
-            self.dist_too_big = mirror4(np.tile(self.dist_unitcell, (math.ceil(self.mm.nx / self.mm.unitcell.x) + 1, math.ceil(self.mm.ny / self.mm.unitcell.y) + 1)))  # Make it one cell bigger
-            self.dist_too_big = self.dist_too_big[self.mm.unitcell.y:,self.mm.unitcell.x:]  # Because of the mirroring, the one unit cell at the left and at the top are too much
-            self.dist_too_big = self.dist_too_big[:xx.shape[0],:xx.shape[1]]
+            self.dist_too_big = xp.zeros(xx.shape)
+            for y in range(xx.shape[0]):
+                for x in range(xx.shape[1]):
+                    self.dist_too_big[y,x] = self.dist_unitcell[(y-(self.mm.ny-1))%self.mm.unitcell.y,(x-(self.mm.nx-1))%self.mm.unitcell.x]
 
         # Determine the angle of each magnet in the too large grid
-        angle_unitcell = self.mm.original_angles[0:self.unitcell.y, 0:self.unitcell.x]
+        angle_unitcell = self.mm.original_angles[:self.unitcell.y,:self.unitcell.x]
         angles = xp.zeros(xx.shape)
         for y in range(xx.shape[0]):
             for x in range(xx.shape[1]):
@@ -487,15 +491,16 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
                 rrxSN = charges_xx[:,:,1] - charges_xx[y,x,0]
                 rrySN = charges_yy[:,:,1] - charges_yy[y,x,0]
 
-                rrNN_sq = rrxNN**2 + rryNN**2
-                rrSS_sq = rrxSS**2 + rrySS**2
-                rrNS_sq = rrxNS**2 + rryNS**2
-                rrSN_sq = rrxSN**2 + rrySN**2
+                rrNN_sq = (rrxNN**2 + rryNN**2).astype(np.float32)
+                rrSS_sq = (rrxSS**2 + rrySS**2).astype(np.float32)
+                rrNS_sq = (rrxNS**2 + rryNS**2).astype(np.float32)
+                rrSN_sq = (rrxSN**2 + rrySN**2).astype(np.float32)
 
-                rrNN_sq[y,x] = xp.inf
-                rrSS_sq[y,x] = xp.inf
-                rrNS_sq[y,x] = xp.inf
-                rrSN_sq[y,x] = xp.inf
+                # It is possible that artificial monopoles overlap and also give a 0, for this reason:
+                rrNN_sq[rrNN_sq==0] = xp.inf
+                rrSS_sq[rrSS_sq==0] = xp.inf
+                rrNS_sq[rrNS_sq==0] = xp.inf
+                rrSN_sq[rrSN_sq==0] = xp.inf
 
                 rrNN_inv = rrNN_sq ** -0.5  # Due to the previous line, this is now never infinite
                 rrSS_inv = rrSS_sq ** -0.5
