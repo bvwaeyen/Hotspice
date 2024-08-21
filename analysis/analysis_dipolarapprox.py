@@ -8,6 +8,21 @@ from context import hotspice
 xp = hotspice.xp
 
 
+def mirror4(arr, /, *, negativex=False, negativey=False):
+    """ Mirrors the 2D array `arr` along some of the edges, in such a manner that the
+        original element at [0,0] ends up in the middle of the returned array.
+        Hence, if `arr` has shape (a, b), the returned array has shape (2*a - 1, 2*b - 1).
+    """
+    ny, nx = arr.shape
+    arr4 = xp.zeros((2*ny-1, 2*nx-1))
+    x_sign = -1 if negativex else 1
+    y_sign = -1 if negativey else 1
+    arr4[ny-1:, nx-1:] = arr
+    arr4[ny-1:, nx-1::-1] = x_sign*arr
+    arr4[ny-1::-1, nx-1:] = y_sign*arr
+    arr4[ny-1::-1, nx-1::-1] = x_sign*y_sign*arr
+    return arr4
+
 def analysis_dipolarapprox_OOP(a: float = 200e-9, d: float = 170e-9):
     ''' `a` is the center-to-center distance between magnets,
         `d` is the diameter of the magnets.
@@ -16,7 +31,7 @@ def analysis_dipolarapprox_OOP(a: float = 200e-9, d: float = 170e-9):
     dipolar: hotspice.energies.DipolarEnergy = mm.get_energy('dipolar')
     rrx = xp.maximum(mm.xx - mm.xx[0,0], 0) # Taken from `DipolarEnergy.initialize()`
     rry = xp.maximum(mm.yy - mm.yy[0,0], 0)
-    rr = hotspice.utils.mirror4(xp.sqrt(rrx**2 + rry**2))
+    rr = mirror4(xp.sqrt(rrx**2 + rry**2))
     unique_distances = xp.unique(rr)[1:]
     interactions = xp.zeros_like(unique_distances)
     for i, distance in enumerate(unique_distances): # Can only do this check for OOP due to the symmetry

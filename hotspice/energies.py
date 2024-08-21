@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .core import Magnets # Only need Magnets for type annotations
 
-from .utils import as_2D_array, mirror4
+from .utils import as_2D_array
 
 from abc import ABC, abstractmethod
 from functools import cache

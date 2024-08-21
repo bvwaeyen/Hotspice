@@ -64,21 +64,6 @@ def check_repetition(arr, nx: int, ny: int):
         i += 1
     return True
 
-def mirror4(arr, /, *, negativex=False, negativey=False):
-    """ Mirrors the 2D array `arr` along some of the edges, in such a manner that the
-        original element at [0,0] ends up in the middle of the returned array.
-        Hence, if `arr` has shape (a, b), the returned array has shape (2*a - 1, 2*b - 1).
-    """
-    ny, nx = arr.shape
-    arr4 = xp.zeros((2*ny-1, 2*nx-1))
-    x_sign = -1 if negativex else 1
-    y_sign = -1 if negativey else 1
-    arr4[ny-1:, nx-1:] = arr
-    arr4[ny-1:, nx-1::-1] = x_sign*arr
-    arr4[ny-1::-1, nx-1:] = y_sign*arr
-    arr4[ny-1::-1, nx-1::-1] = x_sign*y_sign*arr
-    return arr4
-
 def R_squared(a, b):
     """ Returns the R² metric between two 1D arrays `a` and `b` as defined in
         "Task Agnostic Metrics for Reservoir Computing" by Love et al.
