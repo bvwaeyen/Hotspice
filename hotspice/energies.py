@@ -491,6 +491,12 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
                 rrxSN = charges_xx[:,:,1] - charges_xx[y,x,0]
                 rrySN = charges_yy[:,:,1] - charges_yy[y,x,0]
 
+                # Remove the self interaction in the cross terms
+                rrxNS[y,x] = 0
+                rryNS[y,x] = 0
+                rrxSN[y,x] = 0
+                rrySN[y,x] = 0
+
                 rrNN_sq = (rrxNN**2 + rryNN**2).astype(np.float32)
                 rrSS_sq = (rrxSS**2 + rrySS**2).astype(np.float32)
                 rrNS_sq = (rrxNS**2 + rryNS**2).astype(np.float32)
