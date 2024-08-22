@@ -9,9 +9,12 @@ os.environ["HOTSPICE_USE_GPU"] = "False"
 import math
 import warnings
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
+from matplotlib import cm
+from matplotlib.patches import FancyArrowPatch
 from pathlib import Path
 from typing import Iterable, Literal
 
@@ -20,7 +23,7 @@ xp = hotspice.xp
 
 
 class PinwheelReversalTest:
-    def __init__(self, size: int = 50, m_perp_factor: float = 1, scheme: Literal['Néel', 'Metropolis'] = 'Néel', E_B: float = None, E_B_std: float = 0.05, dilution: float = 0):
+    def __init__(self, size: int = 50, m_perp_factor: float = 1, monopoles=False, scheme: Literal['Néel', 'Metropolis'] = 'Néel', E_B: float = None, E_B_std: float = 0.05, dilution: float = 0):
         """ This test attempts to reproduce
                 "Superferromagnetism and Domain-Wall Topologies in Artificial “Pinwheel” Spin Ice"
                 by Y. Li, G. W. Paterson, G. M. Macauley et al. ACS Nano 2019 13 (2), 2213-2222, doi:10.1021/acsnano.8b08884
@@ -46,7 +49,8 @@ class PinwheelReversalTest:
         self.m_perp_factor = m_perp_factor
         
         ## CREATE MM
-        self.mm = hotspice.ASI.IP_Pinwheel(self.a, self.size, moment=self.moment, T=self.T, PBC=False,
+        energies = (hotspice.energies.DiMonopolarEnergy(d=l, small_d=d)) if monopoles else (hotspice.energies.DipolarEnergy())
+        self.mm = hotspice.ASI.IP_Pinwheel(self.a, self.size, moment=self.moment, T=self.T, PBC=False, energies=energies,
                                            m_perp_factor=self.m_perp_factor, params=hotspice.SimParams(UPDATE_SCHEME=self.scheme))
         self.mm.m[xp.where(xp.random.random(size=self.mm.m.shape) < self.dilution)] = 0
         self.mm.E_B = self.E_B*xp.random.normal(1, self.E_B_std, size=self.mm.E_B.shape)
@@ -197,9 +201,9 @@ class Hysteresis:
 
     @staticmethod
     # TODO: make this capable of plotting relaxations as well
-    def plot(*hystereses: 'Hysteresis', labels: list[str] = None, colors: list[str] = None, legend_title: str = None, H_SIprefix: str = 'm', FIELD_POLAR_ZERO: bool = False, SHOW_SNAPSHOTS: bool = None, _vertical: bool = None, show: bool = True, save: bool|Path = False):
+    def plot(*hystereses: 'Hysteresis', labels: list[str] = None, labels_snapshots: list[str] = None, original_data: str|Path = None, colors: list[str] = None, legend_title: str = None, H_SIprefix: str = 'm', FIELD_POLAR_ZERO: bool = False, SHOW_SNAPSHOTS: bool = None, _vertical: bool = None, show: bool = True, save: bool|Path = False):
         """ Can pass multiple hysteresis calculations as the first few arguments, with legend `labels` and line/symbol `colors`. """
-        hotspice.plottools.init_style()
+        hotspice.plottools.init_style(style='default')
         
         n = len(hystereses)
         H_factor = hotspice.utils.SIprefix_to_mul(H_SIprefix) # Default H_unit is milli(Tesla)
@@ -207,14 +211,23 @@ class Hysteresis:
                     or all(data.H_fields[i] >= data.H_fields[i-1] for i in range(1, data.H_fields.size))
                     for data in hystereses] # Whether data[j] is a half hysteresis or not # TODO: refactor this using hysteresis.half
         if colors is None:
-            colors = [plt.get_cmap('jet', 2*n+1)(2*i+1) if i < 5 else plt.get_cmap('jet', n)(i) for i in range(n)]
-            # colors = np.resize(hotspice.plottools.colorcycle(), n)
+            # colors = [plt.get_cmap('jet', 2*n+1)(2*i+1) if i < 5 else plt.get_cmap('jet', n)(i) for i in range(n)]
+            colors = np.resize(hotspice.plottools.colorcycle(), n)
         if labels is None: labels = [None]*len(hystereses)
+        if labels_snapshots is None: labels_snapshots = labels
         markers = np.resize(['o', 's', 'D', 'P', 'X', 'p', '*', '^'], n) # Circle, square, diamond, plus, cross, pentagon, star, triangle up (and repeat enough times)
+        markersize = 3
+        markevery = 0.015
+        max_thresholds = max(len(data.threshold_indices) for data in hystereses)
         if SHOW_SNAPSHOTS is None: SHOW_SNAPSHOTS = n == 1
         if _vertical is None: _vertical = n == 1 # Whether the line plots are above the snapshot plots (True), or next to them (False). Also affects layout of snapshot plot subgrid.
         
-        fig = plt.figure(figsize=(8, 6) if _vertical else (10, 4))
+        if _vertical:
+            fig_width, fig_height = 7, 3.5 # (7, 5.5) for (3x9) snapshot plots works well
+            if SHOW_SNAPSHOTS: fig_height += fig_width/(max_thresholds+1)*len(hystereses)
+        else:
+            fig_width, fig_height = 10, 4
+        fig = plt.figure(figsize=(fig_width, fig_height) if _vertical else (10, 4))
         if SHOW_SNAPSHOTS:
             snapshot_ratio = np.clip(n/2, 1, 2.5) # Don't use too much space for the snapshots, but don't squeeze them too much either
             if _vertical: gs_fig = fig.add_gridspec(2, 1, height_ratios=(2,snapshot_ratio))
@@ -229,17 +242,34 @@ class Hysteresis:
         ax1.grid(color='grey', linestyle=':')
         ax1.set_xlabel(f"External field magnitude [{H_SIprefix}T]")
         ax1.set_ylabel(r"Magnetization $M_{\parallel}/M_\mathrm{\parallel,sat}$")
+        ax1.axhline(0, linestyle="--", color='k', linewidth=1)
+        ax1.axvline(0, linestyle="--", color='k', linewidth=1)
+        label_ax(ax1, 0, offset=(-0.25,0))
         # POLAR PLOT
         ax2 = fig.add_subplot(gs_sub_hysteresis[1], projection='polar') # Polar plot
         ax2.set_rticks([0.2, 0.4, 0.6, 0.8, 1])  # Less radial ticks
         ax2.set_rlim(0, 1)
-        ax2.set_theta_zero_location('N')
+        # ax2.set_theta_zero_location('N')
         ax2.set_thetagrids(angles=np.arange(0, 360, 30), zorder=-1)
         ax2.set_axisbelow(True)
         ax2.set_rlabel_position(285) # Move radial labels to an empty region
         if FIELD_POLAR_ZERO:
             ax2.set_xticklabels(["Field ↑"] + ax2.get_xticklabels()[1:]) # Theta ticks are 'xticks'
         ax2.grid(True)
+        label_ax(ax2, 1, offset=(-0.2,0))
+        
+        ## Original data
+        if original_data is not None: # original_data is assumed to be a csv file of format "x,y" with x in mT.
+            x, y = [], []
+            with open(original_data) as inFile:
+                for i, line in enumerate(inFile):
+                    if i == 0: continue
+                    xi, yi = map(float, line.strip().split(','))
+                    x.append(xi)
+                    y.append(yi)
+            ax1.plot(x, y, color='k', marker='.', label="Exp.")
+            ax2.plot([0, np.pi/2, np.pi, 3*np.pi/2, 0], [1, 1, 1, 1, 1], color='k', linewidth=3)
+            print('plotted')
         
         for j, data in enumerate(hystereses):
             ## Remove a lot of points that are identical to their neighbors (otherwise many thousands of points plotted, now a few hundred)
@@ -257,28 +287,33 @@ class Hysteresis:
             X = H_fields/H_factor
             Y = m_parallel/m_parallel_sat
             # NORMAL HYSTERESIS PLOT
-            ax1.step(X, Y, where="post", linewidth=1, color=color, marker=markers[j], fillstyle='none', label=labels[j])
-            if SHOW_SNAPSHOTS:
-                for i, state in enumerate(data.threshold_states):
-                    H_index = data.threshold_indices[i]
-                    idx = np.searchsorted(nonremovable_i, H_index)
-                    ax1.annotate(f"({i+1})", xy=(X[idx], Y[idx]), color=color, xycoords='data', xytext=(-3, 3), textcoords='offset points', va='bottom', ha='right')
+            ax1.step(X, Y, where="post", linewidth=1, color=color, marker=markers[j], markevery=markevery, markersize=markersize, fillstyle='none', label=labels[j])
+            # if SHOW_SNAPSHOTS:
+                # for i, state in enumerate(data.threshold_states):
+                    # H_index = data.threshold_indices[i]
+                    # idx = np.searchsorted(nonremovable_i, H_index)
+                    # ax1.annotate(f"({i+1})", xy=(X[idx], Y[idx]), color=color, xycoords='data', xytext=(-3, 3), textcoords='offset points', va='bottom', ha='right')
+            # for y in data.thresholds.thresholds: ax1.axhline(y, linestyle="--", color=color, linewidth=1)
             # POLAR PLOT
             angle = d_angle if FIELD_POLAR_ZERO else m_angle # If FIELD_POLAR_ZERO, then the 0° on the polar plot is the field direction. Otherwise, 0° is the x-axis.
             if is_monotonic[j]:
-                ax2.plot(angle, (m_avg/data.m_avg_sat), color='red' if n == 1 else color, marker='^', fillstyle='none')
+                ax2.plot(angle, (m_avg/data.m_avg_sat), color='red' if n == 1 else color, marker='^', markevery=markevery, markersize=markersize, fillstyle='none')
             else:
-                N2 = math.floor(H_fields.size//2)
-                ax2.plot(angle[:N2], (m_avg/data.m_avg_sat)[:N2], color='black' if n == 1 else color, marker='^', fillstyle='none', label='up' if j == 0 else None)
-                ax2.plot(angle[N2:], (m_avg/data.m_avg_sat)[N2:], color='red' if n == 1 else color, marker='v', fillstyle='none', label='down' if j == 0 else None)
+                increasing = (H_fields[1:] - H_fields[:-1]) > 0
+                N2 = np.argmax(increasing != increasing[0]) # First index where direction of field reverses. An edge case remains where the direction never reverses but that should have been caught by is_monotonic.
+                ax2.plot(angle[:N2+1], (m_avg/data.m_avg_sat)[:N2+1], color='black' if n == 1 else color, marker='^', markevery=markevery, markersize=markersize, fillstyle='none', label='Up' if j == 0 else None)
+                ax2.plot(angle[N2:], (m_avg/data.m_avg_sat)[N2:], color='red' if n == 1 else color, marker='v', markevery=markevery, markersize=markersize, fillstyle='none', label='Down' if j == 0 else None)
             if not FIELD_POLAR_ZERO: # Draw line of field
                 all_same_angle = np.allclose([h.H_angle for h in hystereses], data.H_angle)
                 if j == 0 or not all_same_angle: # Always draw the first one, but after that only draw if they are not all the same
-                    for i in range(2): ax2.axvline(x=np.deg2rad(data.H_angle) + i*np.pi, ymin=0, ymax=1, color='black' if all_same_angle else color, lw=2, linestyle=':', zorder=0.75)
+                    for i in range(2): 
+                        ax2.add_artist(FancyArrowPatch(posA=(np.deg2rad(data.H_angle), 1), posB=(np.deg2rad(data.H_angle) + np.pi, 1), arrowstyle='<|-|>', color='grey' if all_same_angle else color, lw=1, linestyle='-', zorder=0.75, mutation_scale=16, shrinkA=0, shrinkB=0))
+                        # ax2.axvline(x=np.deg2rad(data.H_angle) + i*np.pi, ymin=0, ymax=1, color='black' if all_same_angle else color, lw=2, linestyle='--', zorder=0.75)
             
         if all(is_monotonic): ax1.set_xlim(left=0)
         if any(labels):
-            ax1.legend(title=legend_title)
+            # ax1.legend(title=legend_title, loc="lower right")
+            ax1.legend(title=None, loc="lower right")
         if not all(is_monotonic):
             leg2 = ax2.legend(frameon=True, markerfirst=False, loc='upper right')
             for handle in leg2.legend_handles:
@@ -286,11 +321,14 @@ class Hysteresis:
         
         ## THRESHOLD STATES PLOT
         if SHOW_SNAPSHOTS:
-            max_thresholds = max(len(data.threshold_indices) for data in hystereses)
             if _vertical:
-                gs_sub_snapshots = gs_fig[1].subgridspec(n, max_thresholds, height_ratios=(1,)*n)
+                gs_bottom = gs_fig[1].subgridspec(1, 2, width_ratios=(0.9,0.1), wspace=-0.1)
+                # gs_sub_snapshots = gs_fig[1].subgridspec(n, max_thresholds+1, height_ratios=(1,)*n, width_ratios=(1/max_thresholds,)*max_thresholds + (0.1,))
+                gs_sub_snapshots = gs_bottom[0].subgridspec(n, max_thresholds+1, height_ratios=(1,)*n)
             else:
-                gs_sub_snapshots = gs_fig[1].subgridspec(max_thresholds, n, width_ratios=(1,)*n)
+                gs_bottom = gs_fig[1].subgridspec(2, 1, height_ratios=(0.9,0.1), hspace=0)
+                # gs_sub_snapshots = gs_fig[1].subgridspec(max_thresholds+1, n, width_ratios=(1,)*n, height_ratios=(1/max_thresholds,)*max_thresholds + (0.1,))
+                gs_sub_snapshots = gs_bottom[0].subgridspec(max_thresholds+1, n, width_ratios=(1,)*n)
             for j, data in enumerate(hystereses):
                 for i, state in enumerate(data.threshold_states):
                     ax = fig.add_subplot(gs_sub_snapshots[j,i] if _vertical else gs_sub_snapshots[i,j])
@@ -298,28 +336,65 @@ class Hysteresis:
                     H = data.H_fields[data.threshold_indices[i]]
                     n_thresholds, c = len(data.threshold_indices), colors[j] # fontsize decreases if there are more plots
                     if _vertical:
-                        fs = min(10, 80/max_thresholds)
+                        fs = min(10, 55/max_thresholds)
                         separator = ' ' if n_thresholds < 11 else '\n'
-                        ax.set_title(f"({i+1}){separator}{H/H_factor:.1f}{H_SIprefix}T", fontsize=fs, color=c)
-                        if i == 0 and n > 1: ax.set_ylabel(labels[j], color=colors[j])
+                        ax.set_title((r"$\bf{(%d)}$" % (i+1)) + f"{separator}{H/H_factor:.1f}{H_SIprefix}T", pad=0, fontsize=fs, color=c)
+                        if i == 0 and n > 1: ax.set_ylabel(labels_snapshots[j], color=colors[j])
                     else:
                         fs = min(10, 40/max_thresholds)
                         separator = ' ' if n_thresholds < 5 else '\n'
-                        ax.set_ylabel(f"({i+1}){separator}{H/H_factor:.1f}{H_SIprefix}T", rotation=270, labelpad=11, fontsize=fs, color=c)
+                        ax.set_ylabel((r"$\bf{(%d)}$" % (i+1)) + f"{separator}{H/H_factor:.1f}{H_SIprefix}T", rotation=270, labelpad=11, fontsize=fs, color=c)
                         ax.yaxis.set_label_position("right")
-                        if i == 0 and n > 1: ax.set_title(labels[j], color=colors[j])
+                        if i == 0 and n > 1: ax.set_title(labels_snapshots[j], color=colors[j])
                     ax.set_xticklabels([])
                     ax.set_xticks([])
                     ax.set_yticklabels([])
                     ax.set_yticks([])
+                    if i == 0: label_ax(ax, 2+j, offset=(-0.15*max_thresholds, -0.5), va='center')
+            ax_cw = fig.add_subplot(gs_bottom[1], projection='polar')
+            ax_cw._direction = 2*np.pi ## This is a nasty hack - using the hidden field to multiply the values such that 1 become 2*pi this field is supposed to take values 1 or -1 only!!
+            norm = mpl.colors.Normalize(0.0, 2*np.pi)
+            cb = mpl.colorbar.ColorbarBase(ax_cw, cmap=mpl.colormaps.get_cmap('hsv').resampled(2056), norm=norm, orientation='horizontal')                           
+            cb.outline.set_visible(False)                                 
+            for ang in np.arange(0, 2*np.pi, np.pi/4): ax_cw.annotate("", xy=(ang, 0.8), xytext=(ang, 0.2), arrowprops=dict(arrowstyle="->", shrinkA=0, shrinkB=0))
+            ax_cw.set_axis_off()
 
         fig.tight_layout()
-        if save: hotspice.plottools.save_plot(save, ext='pdf')
+        if save:
+            for ext in ['png', 'pdf', 'svg']: hotspice.plottools.save_plot(save, ext=ext, dpi=600)
         if show:
             plt.show()
         else:
             plt.close(fig=fig)
         return fig
+
+
+def label_ax(ax: plt.Axes, i: int = None, form: str = "(%s)", offset: tuple[float, float] = (0,0), fontsize: float = 11, **kwargs):
+    """ To add a label to `ax`, pass either `i` or `form` (or both).
+        If only `i` is passed, the label becomes "(a)", with the letter corresponding to index `i` (0=a, 1=b ...)
+        If only `form` is passed, it is used as the complete label.
+        If both `i` and `form` are passed, then the letter s corresponding to `i` is formatted using `form % s`.
+        Examples:
+            label_ax(ax, 1) --> "(b)"
+            label_ax(ax, form="Some text.") --> "Some text."
+            label_ax(ax, 3, "[%s]") --> "[d]"
+        
+        @param `ax` [plt.Axes]: The axis object for which the label should be drawn.
+        @param `i` [int] (None): Index of the axis, which gets translated to a letter.
+            If None, then `form` is assumed to be the complete string.
+        @param `form` [str] ("(%s)"): The format used to represent the label with index `i`.
+        @param `offset` [tuple(2)]: Tuple of two floats, determining x and y offset (in axis units).
+        @param `fontsize` [float] (12): Font size of the label (default 12pt).
+        Additional `**kwargs` get passed to the `ax.text()` call.
+    """
+    if isinstance(i, int):
+        s = 'abcdefghijklmnopqrstuvwxyz'[i]
+        form = form % s
+    kwargs = dict(color='k', weight='bold', fontfamily='DejaVu Sans', ha='left', va='bottom') | kwargs
+    t = ax.text(0 + offset[0], 1 + offset[1], form, fontsize=fontsize,
+                bbox=dict(boxstyle='square,pad=3', facecolor='none', edgecolor='none'),
+                transform=ax.transAxes, zorder=1000,
+                **kwargs)
 
 
 if __name__ == "__main__":
@@ -332,51 +407,69 @@ if __name__ == "__main__":
         FOR ANGLE=-6°:
             - M_PERP_FACTOR = 0.3 NO LONGER WORKS: CRITICAL FIELD IS KIND OF OK, BUT POLAR PLOT IS NOT OK AT ALL (too wide, should be straight line)
     """
-    save = False
+    save = True
+    ONLY_REPLOT = True
     outdir_base = Path("./results/test_pinwheelReversal").absolute()
     
-    def run_hysteresis_sweep(varname: Literal["angle", "E_B", "E_B_std", "m_perp_factor"], /,
+    def run_hysteresis_sweep(varname: Literal["angle", "E_B", "E_B_std", "m_perp_factor"], /, dirname=None,
+                             monopoles: bool = False,
                              angle: float = 30, E_B: float = 60, E_B_std: float = 0.07, m_perp_factor: float = 0.4, *,
-                             half: bool = False, show_thresholds: bool = None, labels: list[str] = None):
+                             half: bool = False, show_thresholds: bool = None, labels: list[str] = None, only_replot: bool = None, **kwargs):
+        """ `dirname` determines the directory where the various `<varname>=<value>/data.pkl` will be stored. """
         params = {"angle": angle, "E_B": E_B, "E_B_std": E_B_std, "m_perp_factor": m_perp_factor}
         values = params[varname]
         if not isinstance(values, Iterable):
             raise ValueError(f"Varname is '{varname}', yet its provided value ({values}) is not iterable.")
+        if only_replot is None: only_replot = ONLY_REPLOT
         
         ## Determine output directory name
-        dirname = []
-        if varname != "m_perp_factor": dirname.append(f"[⊥{m_perp_factor:.2g}]" if m_perp_factor else '[∥]')
-        elif len(values) == 2 and 0 in values: dirname.append(f"[⊥{values[np.nonzero(values)[0][0]]}]") # If it is purely a comparison between perp and no perp, then add the ⊥ in the directory anyway
-        if varname != "angle": dirname.append(f"{angle:.3g}°")
-        dirname.append(f"E_B" if varname == "E_B" else f"{E_B:.4g}eV")
-        if varname != "E_B_std": dirname[-1] += f"±{E_B_std*100:.2g}%" # Previous one is always present so can just add to it
-        dirname = ",".join(dirname)
-        if half: dirname += "_half"
-        dirname += f"_{hotspice.utils.timestamp()}"
+        if dirname is None:
+            dirname = []
+            if varname != "m_perp_factor": dirname.append(f"[⊥{m_perp_factor:.2g}]" if m_perp_factor else '[∥]')
+            elif len(values) == 2 and 0 in values: dirname.append(f"[⊥{values[np.nonzero(values)[0][0]]}]") # If it is purely a comparison between perp and no perp, then add the ⊥ in the directory anyway
+            if varname != "angle": dirname.append(f"{angle:.3g}°")
+            dirname.append(f"E_B" if varname == "E_B" else f"{E_B:.4g}eV")
+            if varname != "E_B_std": dirname[-1] += f"±{E_B_std*100:.2g}%" # Previous one is always present so can just add to it
+            dirname = ",".join(dirname)
+            if half: dirname += "_half"
+            # dirname += f"_{hotspice.utils.timestamp()}"
         outdir = outdir_base / varname / dirname
         print(f'Saving results in "{outdir}"' if save else 'Not saving results.')
         
         ## Determine relevant figure labels
         hystereses: list[Hysteresis] = []
         reversaltests: list[PinwheelReversalTest] = []
-        legend_title = {"angle": f"Field angle",
-                        "E_B": f"$E_B$ [eV]",
-                        "E_B_std": f"$E_B$ std",
-                        "m_perp_factor": f"$m_\perp$/$m_\parallel$"
+        legend_title = {"angle": r"Field angle",
+                        "E_B": r"$E_B$ [eV]",
+                        "E_B_std": r"$E_B$ std",
+                        "m_perp_factor": r"$\rho = m_\perp/m_\parallel$"
                         }[varname] if labels is None else None
+        labels_snapshots = [(lambda x: {"angle": f"{x:.3g}°",
+                                        "E_B": r"$E_\mathrm{B}$ = " + f"{x:.4g}",
+                                        "E_B_std": r"$\sigma_{E_\mathrm{B}}$ = " + f"{x*100:.2g}%",
+                                        "m_perp_factor": r"$\rho$ = " + f"{x:.2g}"
+                                        }[varname])(value) for value in values] if labels is None else labels
         labels = [(lambda x: {"angle": f"{x:.3g}°",
                               "E_B": f"{x:.4g}",
                               "E_B_std": f"{x*100:.2g}%",
-                              "m_perp_factor": f"{x:.2g}"
+                              "m_perp_factor": r"$\rho$=" + f"{x:.2g}"
                               }[varname])(value) for value in values] if labels is None else labels
         unit = {"angle": "°", "E_B": "eV", "E_B_std": "", "m_perp_factor": ""}[varname]
         
         ## Run the various hystereses
         for value in values:
             values_here = params | {varname: value}
-            reversaltests.append(PinwheelReversalTest(E_B_std=values_here['E_B_std'], E_B=hotspice.utils.eV_to_J(values_here['E_B']), m_perp_factor=values_here['m_perp_factor']))
-            hystereses.append(reversaltests[-1].hysteresis(H_angle=values_here['angle'], half=half, save=(outdir/f"{varname}={value:.2g}{unit}") if save else False))
-        Hysteresis.plot(*hystereses, SHOW_SNAPSHOTS=show_thresholds, _vertical=show_thresholds, labels=labels, legend_title=legend_title, save=outdir/"summary.pdf" if save else False, show=(not save))
+            this_outdir = outdir/f"{varname}={value:.2g}{unit}"
+            if only_replot:
+                params, data = hotspice.utils.load_results(this_outdir)
+                hystereses.append(data)
+                if save:
+                    fig = Hysteresis.plot(data, show=False, save=False)
+                    hotspice.utils.save_results(figures=fig, outdir=this_outdir)
+            else:
+                reversaltests.append(PinwheelReversalTest(monopoles=monopoles, E_B_std=values_here['E_B_std'], E_B=hotspice.utils.eV_to_J(values_here['E_B']), m_perp_factor=values_here['m_perp_factor']))
+                hystereses.append(reversaltests[-1].hysteresis(H_angle=values_here['angle'], half=half, save=this_outdir if save else False))
+        Hysteresis.plot(*hystereses, SHOW_SNAPSHOTS=show_thresholds, _vertical=show_thresholds, labels=labels, labels_snapshots=labels_snapshots, legend_title=legend_title, save=outdir/"summary.pdf" if save else False, show=(not save), **kwargs)
         return hystereses, reversaltests
     
     ## NEW VS. OLD BARRIER CALCULATION (PERP OR NO PERP) (for the closest reproduction of the experimental system as I can guess)
@@ -396,10 +489,15 @@ if __name__ == "__main__":
     # run_hysteresis_sweep("E_B", E_B=np.linspace(1, 11, 6), angle=30, E_B_std=0.07, m_perp_factor=0.4)
 
     ## VARY M_PERP_FACTOR
-    # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=30, E_B=60, E_B_std=0.07)
+    # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=30, E_B=60, E_B_std=0.07, dirname="30°,60eV±7%_4steps", show_thresholds=True)
     # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1], angle=30, E_B=60, E_B_std=0.07)
     # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=-6, E_B=60, E_B_std=0.07)
     # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3, 0.5, 0.75, 1], angle=0, E_B=60, E_B_std=0.07)
 
     # BEST FITS TO EXPERIMENT (zoomed in using 'half')
     # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3], half=True, angle=30, E_B=60, E_B_std=0.07)
+
+
+    ## PAPER FIGURE
+    run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0, 0.4, 1], dirname="paper_fig", original_data=r'results\test_pinwheelReversal\Li-data.csv', show_thresholds=True, only_replot=True) #! only_replot=True because we now have 9 threshold states (sometimes it only gives 7)
+    # run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0, 0.4, 1], monopoles=True, dirname="paper_fig_mono", show_thresholds=True)

@@ -64,21 +64,6 @@ def check_repetition(arr, nx: int, ny: int):
         i += 1
     return True
 
-def mirror4(arr, /, *, negativex=False, negativey=False):
-    """ Mirrors the 2D array `arr` along some of the edges, in such a manner that the
-        original element at [0,0] ends up in the middle of the returned array.
-        Hence, if `arr` has shape (a, b), the returned array has shape (2*a - 1, 2*b - 1).
-    """
-    ny, nx = arr.shape
-    arr4 = xp.zeros((2*ny-1, 2*nx-1))
-    x_sign = -1 if negativex else 1
-    y_sign = -1 if negativey else 1
-    arr4[ny-1:, nx-1:] = arr
-    arr4[ny-1:, nx-1::-1] = x_sign*arr
-    arr4[ny-1::-1, nx-1:] = y_sign*arr
-    arr4[ny-1::-1, nx-1::-1] = x_sign*y_sign*arr
-    return arr4
-
 def R_squared(a, b):
     """ Returns the R² metric between two 1D arrays `a` and `b` as defined in
         "Task Agnostic Metrics for Reservoir Computing" by Love et al.
@@ -346,7 +331,7 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
-def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure]|dict[str,Figure] = None, copy_script: bool = True, outdir: str|Path = None, dpi=600) -> str:
+def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure]|dict[str,Figure] = None, copy_script: bool = True, timestamped: bool = True, outdir: str|Path = None, figure_format: tuple[str]|str = ('.pdf', '.png', '.svg'), dpi=600) -> str:
     """ The most basic way to consistently save results of a simulation script. This can save the basic
         parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
         figure(s) as pdf/png/svg, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
@@ -363,7 +348,8 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
     # Make output directory
     script = Path(inspect.stack()[1].filename) # The caller script, i.e. the one where __name__ == "__main__"
     if outdir is None:
-        outdir = script.parent / (script.stem + '.out') / timestamp()
+        outdir = script.parent / (script.stem + '.out')
+        if timestamped: outdir /= timestamp()
     else:
         outdir = Path(outdir)
         if not outdir.exists(): outdir = script.parent / (script.stem + '.out') / outdir
@@ -376,12 +362,13 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
     if data is not None: pickle.dump(data, open(outdir / 'data.pkl', 'wb')) #! Must be 'wb' because binary object
     # Save figure(s)
     if figures is not None:
+        figure_format = (figure_format,) if isinstance(figure_format, str) else tuple(figure_format)
         if not isinstance(figures, Iterable):
             figures = [figures]
         if not isinstance(figures, dict):
             figures = {f'figure{i if len(figures) > 1 else ""}': figure for i, figure in enumerate(figures)}
         for name, fig in figures.items():
-            for ext in ('.pdf', '.png', '.svg'):
+            for ext in figure_format:
                 fig.savefig(outdir / (name + ext), dpi=dpi)
     return outdir
 

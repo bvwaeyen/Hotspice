@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .core import Magnets # Only need Magnets for type annotations
 
-from .utils import as_2D_array, mirror4
+from .utils import as_2D_array
 
 from abc import ABC, abstractmethod
 from functools import cache
@@ -202,7 +202,7 @@ class DipolarEnergy(Energy):
                 rry = yy - yy[self.mm.ny - 1,0]
                 
                 # Let us first make the four-mirrored distance matrix rinv3
-                rr_sq = rrx**2 + rry**2
+                rr_sq = (rrx**2 + rry**2).astype(float)
                 rr_sq[self.mm.ny - 1,self.mm.nx - 1] = xp.inf
                 rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
                 rinv3 = rr_inv**(-self.decay_exponent) # = 1/r^3 by default

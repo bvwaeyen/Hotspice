@@ -148,7 +148,7 @@ class OOP_Honeycomb(OOP_ASI):
             ny = int(nx/math.sqrt(3))//2*2 # Try to make the domain reasonably square-shaped
             if not kwargs.get('PBC', False): ny -= 1 # Remove dangling spins if no PBC
         if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
-        dx = kwargs.pop('dx', a/2)
+        dx = kwargs.pop('dx', a/2) # TODO: add nonuniform grid here as well because Honeycomb can benefit from it
         dy = kwargs.pop('dy', math.sqrt(3)*dx)
         super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
 
@@ -183,6 +183,7 @@ class OOP_Honeycomb(OOP_ASI):
 
 
 class OOP_Cairo(OOP_ASI):
+    BETA = math.pi/4 + math.acos(math.sqrt(2)/4) # In an equilateral pentagon with two non-adjacent right angles, `beta` is the size of the two other equal angles. 
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, beta: float = None, offset_factor: float = 1., **kwargs):
         """ In-plane ASI with all spins placed on the edges of the equilateral Cairo tiling.
             NOTE: `dx` and `dy` can not be specified spearately, all is controlled by `a` and `beta`.
@@ -194,7 +195,7 @@ class OOP_Cairo(OOP_ASI):
         if ny is None: ny = n
         if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
         
-        self.beta = math.pi/4 + math.acos(math.sqrt(2)/4) if beta is None else beta
+        self.beta = OOP_Cairo.BETA if beta is None else beta
         dx = dy = [-a*math.cos(self.beta),a/2,a/2,-a*math.cos(self.beta)]
         super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
 
@@ -427,6 +428,7 @@ class IP_Triangle(IP_Kagome):
 
 
 class IP_Cairo(IP_ASI):
+    BETA = math.pi/4 + math.acos(math.sqrt(2)/4) # In an equilateral pentagon with two non-adjacent right angles, `beta` is the size of the two other equal angles. 
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, beta: float = None, offset_factor: float = 1., **kwargs):
         """ In-plane ASI with all spins placed on the edges of the equilateral Cairo tiling.
             NOTE: `dx` and `dy` can not be specified spearately, all is controlled by `a` and `beta`.
@@ -438,12 +440,12 @@ class IP_Cairo(IP_ASI):
         if ny is None: ny = n
         if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
         
-        self.beta = math.pi/4 + math.acos(math.sqrt(2)/4) if beta is None else beta
+        self.beta = IP_Cairo.BETA if beta is None else beta
         dxPQ = dyRS = a/2*math.sin(self.beta)
         dxQR = dxPQ - a/2*math.cos(self.beta)
         dxRS = dyPQ = math.sin(math.pi/2 - self.beta)*a + math.cos(math.pi/2 - self.beta)*a - a/2*math.cos(self.beta)
         dyQR = (dyPQ - dxPQ)*offset_factor
-        dx = dy = [dyQR,dxPQ,dxPQ,dyQR,-a*math.cos(self.beta)*offset_factor]
+        dx = dy = [-a*math.cos(self.beta)*offset_factor,dyQR,dxPQ,dxPQ,dyQR]
         super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str, angle=None):
@@ -457,19 +459,19 @@ class IP_Cairo(IP_ASI):
 
     def _get_angles(self):
         angles = xp.zeros_like(self.xx)
-        s = lambda x, y: (slice(y,self.ny,10), slice(x,self.nx,10))
-        angles[s(2,2)] = angles[s(7,7)] = 0 # -
-        angles[s(2,7)] = angles[s(7,2)] = math.pi/2 # |
-        angles[s(0,1)] = angles[s(4,3)] = angles[s(5,6)] = angles[s(9,8)] = math.pi - self.beta # steep /
-        angles[s(0,3)] = angles[s(4,1)] = angles[s(5,8)] = angles[s(9,6)] = self.beta # steep \
-        angles[s(1,5)] = angles[s(3,9)] = angles[s(6,0)] = angles[s(8,4)] = self.beta - math.pi/2 # shallow /
-        angles[s(1,9)] = angles[s(3,5)] = angles[s(6,4)] = angles[s(8,0)] = math.pi/2 - self.beta # shallow \
+        s = lambda x, y: (slice(y,self.ny,10), slice(x,self.nx,10)) # Unit cell is 10x10
+        angles[s(3,3)] = angles[s(8,8)] = 0 # -
+        angles[s(3,8)] = angles[s(8,3)] = math.pi/2 # |
+        angles[s(1,2)] = angles[s(5,4)] = angles[s(6,7)] = angles[s(0,9)] = math.pi - self.beta # steep /
+        angles[s(1,4)] = angles[s(5,2)] = angles[s(6,9)] = angles[s(0,7)] = self.beta # steep \
+        angles[s(2,6)] = angles[s(4,0)] = angles[s(7,1)] = angles[s(9,5)] = self.beta - math.pi/2 # shallow /
+        angles[s(2,0)] = angles[s(4,6)] = angles[s(7,5)] = angles[s(9,1)] = math.pi/2 - self.beta # shallow \
         return angles
 
     def _get_occupation(self):
         occupation = xp.zeros_like(self.xx)
         occupation[xp.where(self._get_angles() != 0)] = 1 # Non-horizontal magnets
-        occupation[2::10,2::10] = occupation[7::10,7::10] = 1 # Horizontal magnets
+        occupation[3::10,3::10] = occupation[8::10,8::10] = 1 # Horizontal magnets
         return occupation
 
     def _get_appropriate_avg(self):
@@ -487,10 +489,11 @@ class IP_Cairo(IP_ASI):
 
 class IP_Shakti(IP_ASI):
     def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
-        """ In-plane ASI with all spins placed on the edges of the equilateral Cairo tiling.
-            NOTE: `dx` and `dy` can not be specified spearately, all is controlled by `a` and `beta`.
-            `offset_factor` can be used to offset the magnets to make the 4-vertices and 3-vertices look less unbalanced.
-                The nicest shape is achieved for `offset_factor=1.2`.
+        # TODO: Include a default value for the length of each magnet (for monopoles or finite dipole) in the ASI class definition. Otherwise the user has to define the non-equal d themselves, which is suboptimal.
+        """ In-plane 'Shakti' ASI, which contains magnets of unequal size.
+            NOTE: While this lattice is equivalent to `IP_Cairo(beta=pi/2)`, this class exists
+                  because it can use an 8x8 unit cell, rather than the 10x10 of `IP_Cairo`.
+            NOTE: The unequal magnet size is not included in this class.
         """
         self.a = a/4
         if nx is None: nx = n
@@ -515,30 +518,8 @@ class IP_Shakti(IP_ASI):
     def _get_occupation(self):
         occupation = xp.zeros_like(self.xx)
         occupation[(self.ixx + self.iyy) % 2 == 1] = 1
-        occupation[2::8, 2::8] = 1
-        occupation[6::8, 2::8] = 1
-        occupation[2::8, 6::8] = 1
-        occupation[6::8, 6::8] = 1
-
-        occupation[1::8, 2::8] = 0
-        occupation[3::8, 2::8] = 0
-        occupation[6::8, 1::8] = 0
-        occupation[6::8, 3::8] = 0
-
-        occupation[2::8, 5::8] = 0
-        occupation[2::8, 7::8] = 0
-        occupation[5::8, 6::8] = 0
-        occupation[7::8, 6::8] = 0
-
-        occupation[2::8, 1::8] = 0
-        occupation[2::8, 3::8] = 0
-        occupation[1::8, 6::8] = 0
-        occupation[3::8, 6::8] = 0
-
-        occupation[5::8, 2::8] = 0
-        occupation[7::8, 2::8] = 0
-        occupation[6::8, 5::8] = 0
-        occupation[6::8, 7::8] = 0
+        occupation[2::4, 2::4] = 1
+        occupation[1::4, 2::4] = occupation[3::4, 2::4] = occupation[2::4, 1::4] = occupation[2::4, 3::4] = 0
         return occupation
 
     def _get_appropriate_avg(self):
@@ -552,4 +533,3 @@ class IP_Shakti(IP_ASI):
 
     def _get_groundstate(self):
         return 'afm'
-
