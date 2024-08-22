@@ -569,6 +569,9 @@ def plot_monopoles(mm: Magnets, d=None): # Original author: Diego De Gusem
     if d is None: d = mm.get_energy('dimonopolar').d
     charges_xx_plot = np.zeros((mm.ny, mm.nx, 2))
     charges_yy_plot = np.zeros((mm.ny, mm.nx, 2))
+    if isinstance(d, np.ndarray):
+        d = np.tile(d, (math.ceil(mm.nx / mm.unitcell.x), math.ceil(mm.ny / mm.unitcell.y)))
+        d = d[:mm.ny,:mm.nx]
     charges_xx_plot[:,:,0] = (mm.xx + mm.m*d/2*xp.cos(mm.angles))*mm.occupation
     charges_xx_plot[:,:,1] = (mm.xx - mm.m*d/2*xp.cos(mm.angles))*mm.occupation
     charges_yy_plot[:,:,0] = (mm.yy + mm.m*d/2*xp.sin(mm.angles))*mm.occupation

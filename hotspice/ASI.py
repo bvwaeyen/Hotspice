@@ -445,7 +445,7 @@ class IP_Cairo(IP_ASI):
         dxQR = dxPQ - a/2*math.cos(self.beta)
         dxRS = dyPQ = math.sin(math.pi/2 - self.beta)*a + math.cos(math.pi/2 - self.beta)*a - a/2*math.cos(self.beta)
         dyQR = (dyPQ - dxPQ)*offset_factor
-        dx = dy = [dyQR,dxPQ,dxPQ,dyQR,-a*math.cos(self.beta)*offset_factor]
+        dx = dy = [-a*math.cos(self.beta)*offset_factor,dyQR,dxPQ,dxPQ,dyQR]
         super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
 
     def _set_m(self, pattern: str, angle=None):
@@ -459,19 +459,19 @@ class IP_Cairo(IP_ASI):
 
     def _get_angles(self):
         angles = xp.zeros_like(self.xx)
-        s = lambda x, y: (slice(y,self.ny,10), slice(x,self.nx,10))
-        angles[s(2,2)] = angles[s(7,7)] = 0 # -
-        angles[s(2,7)] = angles[s(7,2)] = math.pi/2 # |
-        angles[s(0,1)] = angles[s(4,3)] = angles[s(5,6)] = angles[s(9,8)] = math.pi - self.beta # steep /
-        angles[s(0,3)] = angles[s(4,1)] = angles[s(5,8)] = angles[s(9,6)] = self.beta # steep \
-        angles[s(1,5)] = angles[s(3,9)] = angles[s(6,0)] = angles[s(8,4)] = self.beta - math.pi/2 # shallow /
-        angles[s(1,9)] = angles[s(3,5)] = angles[s(6,4)] = angles[s(8,0)] = math.pi/2 - self.beta # shallow \
+        s = lambda x, y: (slice(y,self.ny,10), slice(x,self.nx,10)) # Unit cell is 10x10
+        angles[s(3,3)] = angles[s(8,8)] = 0 # -
+        angles[s(3,8)] = angles[s(8,3)] = math.pi/2 # |
+        angles[s(1,2)] = angles[s(5,4)] = angles[s(6,7)] = angles[s(0,9)] = math.pi - self.beta # steep /
+        angles[s(1,4)] = angles[s(5,2)] = angles[s(6,9)] = angles[s(0,7)] = self.beta # steep \
+        angles[s(2,6)] = angles[s(4,0)] = angles[s(7,1)] = angles[s(9,5)] = self.beta - math.pi/2 # shallow /
+        angles[s(2,0)] = angles[s(4,6)] = angles[s(7,5)] = angles[s(9,1)] = math.pi/2 - self.beta # shallow \
         return angles
 
     def _get_occupation(self):
         occupation = xp.zeros_like(self.xx)
         occupation[xp.where(self._get_angles() != 0)] = 1 # Non-horizontal magnets
-        occupation[2::10,2::10] = occupation[7::10,7::10] = 1 # Horizontal magnets
+        occupation[3::10,3::10] = occupation[8::10,8::10] = 1 # Horizontal magnets
         return occupation
 
     def _get_appropriate_avg(self):
@@ -479,6 +479,54 @@ class IP_Cairo(IP_ASI):
 
     def _get_AFMmask(self):
         return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float')/4
+
+    def _get_nearest_neighbors(self):
+        return xp.array([[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]])
+
+    def _get_groundstate(self):
+        return 'afm'
+
+
+class IP_Shakti(IP_ASI):
+    def __init__(self, a: float, n: int = None, *, nx: int = None, ny: int = None, **kwargs):
+        # TODO: Include a default value for the length of each magnet (for monopoles or finite dipole) in the ASI class definition. Otherwise the user has to define the non-equal d themselves, which is suboptimal.
+        """ In-plane 'Shakti' ASI, which contains magnets of unequal size.
+            NOTE: While this lattice is equivalent to `IP_Cairo(beta=pi/2)`, this class exists
+                  because it can use an 8x8 unit cell, rather than the 10x10 of `IP_Cairo`.
+            NOTE: The unequal magnet size is not included in this class.
+        """
+        self.a = a/4
+        if nx is None: nx = n
+        if ny is None: ny = n
+        if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
+        dx, dy = kwargs.pop('dx', a / 4), kwargs.pop('dy', a / 4)
+        super().__init__(nx, ny, dx, dy, in_plane=True, **kwargs)
+
+    def _set_m(self, pattern: str, angle=None):
+        match str(pattern).strip().lower():
+            case 'afm':
+                self.m = ((self.ixx - self.iyy) % 2) * 2 - 1
+            case str(unknown_pattern):
+                super()._set_m(pattern=unknown_pattern)
+
+    def _get_angles(self):
+        angles = xp.zeros_like(self.xx)
+        angles[self.ixx % 2 == 0] = xp.pi/2
+        angles[2::8,2::8] = angles[6::8,6::8] = 0 # Horizontal magnets
+        return angles
+
+    def _get_occupation(self):
+        occupation = xp.zeros_like(self.xx)
+        occupation[(self.ixx + self.iyy) % 2 == 1] = 1
+        occupation[2::4, 2::4] = 1
+        occupation[1::4, 2::4] = occupation[3::4, 2::4] = occupation[2::4, 1::4] = occupation[2::4, 3::4] = 0
+        return occupation
+
+    def _get_appropriate_avg(self):
+        return ['point']
+
+    def _get_AFMmask(self):
+        return xp.array([[1, 0, -1], [0, 0, 0], [-1, 0, 1]], dtype='float') / 4
 
     def _get_nearest_neighbors(self):
         return xp.array([[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]])
