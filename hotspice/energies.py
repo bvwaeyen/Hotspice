@@ -461,12 +461,10 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
             for x in range(self.mm.nx - 1, self.mm.nx - 1 + self.unitcell.x):
                 charges_xx_perp_other[:, :, 0, magnet_n] = xx + self.small_d / 2 * xp.cos(angles + np.pi / 2)
                 charges_xx_perp_other[:, :, 1, magnet_n] = xx - self.small_d / 2 * xp.cos(angles + np.pi / 2)
-                charges_xx_perp_other[y, x, 0, magnet_n] = xx[y, x] + self.dist_too_big[y, x] / 2 * xp.cos(angles[y, x] - np.pi / 2)
-                charges_xx_perp_other[y, x, 1, magnet_n] = xx[y, x] - self.dist_too_big[y, x] / 2 * xp.cos(angles[y, x] - np.pi / 2)
+                charges_xx_perp_other[y, x, :, magnet_n] = charges_xx[y,x]
                 charges_yy_perp_other[:, :, 0, magnet_n] = yy + self.small_d / 2 * xp.sin(angles + np.pi / 2)
                 charges_yy_perp_other[:, :, 1, magnet_n] = yy - self.small_d / 2 * xp.sin(angles + np.pi / 2)
-                charges_yy_perp_other[y, x, 0, magnet_n] = yy[y, x] + self.small_d / 2 * xp.sin(angles[y, x] - np.pi / 2)
-                charges_yy_perp_other[y, x, 1, magnet_n] = yy[y, x] - self.small_d / 2 * xp.sin(angles[y, x] - np.pi / 2)
+                charges_yy_perp_other[y, x, :, magnet_n] = charges_yy[y, x]
                 magnet_n += 1
 
         # For each monopole in the unit cell, determine the relative position to every other monopole in the system
