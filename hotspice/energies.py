@@ -529,15 +529,22 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
                 rrxSN_perp_self = charges_xx_perp_self[:, :, 1, magnet_n] - charges_xx_perp_self[y, x, 0, magnet_n]
                 rrySN_perp_self = charges_yy_perp_self[:, :, 1, magnet_n] - charges_yy_perp_self[y, x, 0, magnet_n]
 
+                # Remove the self interaction in the cross terms
+                rrxNS_perp_self[y, x] = 0
+                rryNS_perp_self[y, x] = 0
+                rrxSN_perp_self[y, x] = 0
+                rrySN_perp_self[y, x] = 0
+
                 rrNN_sq_perp_self = rrxNN_perp_self ** 2 + rryNN_perp_self ** 2
                 rrSS_sq_perp_self = rrxSS_perp_self ** 2 + rrySS_perp_self ** 2
                 rrNS_sq_perp_self = rrxNS_perp_self ** 2 + rryNS_perp_self ** 2
                 rrSN_sq_perp_self = rrxSN_perp_self ** 2 + rrySN_perp_self ** 2
 
-                rrNN_sq_perp_self[y, x] = xp.inf
-                rrSS_sq_perp_self[y, x] = xp.inf
-                rrNS_sq_perp_self[y, x] = xp.inf
-                rrSN_sq_perp_self[y, x] = xp.inf
+                # It is possible that artificial monopoles overlap and also give a 0, for this reason:
+                rrNN_sq_perp_self[rrNN_sq_perp_self==0] = xp.inf
+                rrSS_sq_perp_self[rrSS_sq_perp_self==0] = xp.inf
+                rrNS_sq_perp_self[rrNS_sq_perp_self==0] = xp.inf
+                rrSN_sq_perp_self[rrSN_sq_perp_self==0] = xp.inf
 
                 rrNN_inv_perp_self = rrNN_sq_perp_self ** -0.5  # Due to the previous line, this is now never infinite
                 rrSS_inv_perp_self = rrSS_sq_perp_self ** -0.5
@@ -560,15 +567,22 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
                 rrxSN_perp_other = charges_xx_perp_other[:, :, 1, magnet_n] - charges_xx_perp_other[y, x, 0, magnet_n]
                 rrySN_perp_other = charges_yy_perp_other[:, :, 1, magnet_n] - charges_yy_perp_other[y, x, 0, magnet_n]
 
+                # Remove the self interaction in the cross terms
+                rrxNS_perp_other[y, x] = 0
+                rryNS_perp_other[y, x] = 0
+                rrxSN_perp_other[y, x] = 0
+                rrySN_perp_other[y, x] = 0
+
                 rrNN_sq_perp_other = rrxNN_perp_other ** 2 + rryNN_perp_other ** 2
                 rrSS_sq_perp_other = rrxSS_perp_other ** 2 + rrySS_perp_other ** 2
                 rrNS_sq_perp_other = rrxNS_perp_other ** 2 + rryNS_perp_other ** 2
                 rrSN_sq_perp_other = rrxSN_perp_other ** 2 + rrySN_perp_other ** 2
 
-                rrNN_sq_perp_other[y, x] = xp.inf
-                rrSS_sq_perp_other[y, x] = xp.inf
-                rrNS_sq_perp_other[y, x] = xp.inf
-                rrSN_sq_perp_other[y, x] = xp.inf
+                # It is possible that artificial monopoles overlap and also give a 0, for this reason:
+                rrNN_sq_perp_other[rrNN_sq_perp_other==0] = xp.inf
+                rrSS_sq_perp_other[rrSS_sq_perp_other==0] = xp.inf
+                rrNS_sq_perp_other[rrNS_sq_perp_other==0] = xp.inf
+                rrSN_sq_perp_other[rrSN_sq_perp_other==0] = xp.inf
 
                 rrNN_inv_perp_other = rrNN_sq_perp_other ** -0.5  # Due to the previous line, this is now never infinite
                 rrSS_inv_perp_other = rrSS_sq_perp_other ** -0.5
