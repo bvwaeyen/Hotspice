@@ -28,7 +28,7 @@ class test_squareIsing:
     def T_c(self):
         return 2*self.J/hotspice.kB/math.log(1+math.sqrt(2))
 
-    def test_magnetization(self, T_steps=21, N=1000, scheme: Literal['Metropolis', 'Néel', 'Wolff'] = 'Metropolis', verbose=False, plot=True, save=False, reverse=False) -> hotspice.utils.Data:
+    def test_magnetization(self, T_steps=21, N=1000, scheme: hotspice.Scheme = hotspice.Scheme.METROPOLIS, verbose=False, plot=True, save=False, reverse=False) -> hotspice.utils.Data:
         """ Performs a sweep of the temperature in `T_steps` steps. At each step, `N` calls of `Magnets.update()` are performed.
             The final half of these `N` update calls are recorded, from which and their average/stdev of m_avg calculated.
             @param reverse [bool] (False): if True, the temperature steps are in descending order, otherwise ascending.

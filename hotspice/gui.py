@@ -19,7 +19,7 @@ from textwrap import dedent
 from tkinter import messagebox
 from typing import Callable, Literal
 
-from .core import Magnets, SimParams
+from .core import Magnets, SimParams, Scheme
 from .io import Inputter, OutputReader, BinaryDatastream, ScalarDatastream, IntegerDatastream
 from .utils import appropriate_SIprefix, asnumpy, bresenham, J_to_eV, SIprefix_to_mul
 from .plottools import get_rgb, Average, _get_averaged_extent
@@ -282,7 +282,7 @@ class ActionsPanel(ctk.CTkScrollableFrame):
     
     def _action_step(self, n=1, **kwargs):
         match self.mm.params.UPDATE_SCHEME:
-            case "Néel":
+            case Scheme.NEEL:
                 kwargs.setdefault("t_max", self.gui.ASI_settings.t_max)
                 kwargs.setdefault("attempt_freq", self.gui.ASI_settings.attempt_freq)
             case "Metropolis":
@@ -885,7 +885,7 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
 class ASISettingsFrame(ctk.CTkFrame):
     @dataclass
     class ASISettings:
-        UPDATE_SCHEME: Literal['Néel', 'Metropolis'] = 'Néel'
+        UPDATE_SCHEME: Scheme = Scheme.NEEL
         t_max: float = 1.
         attempt_freq: float = 1e10
         Q: float = 0.05
@@ -899,7 +899,7 @@ class ASISettingsFrame(ctk.CTkFrame):
             self.Q = float(self.Q) # Range 0-inf, but logical range 0-1, and goes logarithmically
 
         @property
-        def available_update_modes(self): return ['Néel', 'Metropolis']
+        def available_update_modes(self): return [Scheme.NEEL, Scheme.METROPOLIS]
 
     def __init__(self, master, gui: GUI, **kwargs):
         super().__init__(master, **kwargs)
@@ -1003,7 +1003,7 @@ def show(mm, **kwargs):
 def test(in_plane=False, **kwargs):
     from .ASI import OOP_Square, IP_Pinwheel
     if in_plane:
-        mm = IP_Pinwheel(230e-9, 40, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Metropolis"))
+        mm = IP_Pinwheel(230e-9, 40, T=300, E_B=0, params=SimParams(UPDATE_SCHEME=Scheme.METROPOLIS))
     else:
-        mm = OOP_Square(230e-9, 200, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Néel"))
+        mm = OOP_Square(230e-9, 200, T=300, E_B=0, params=SimParams(UPDATE_SCHEME=Scheme.NEEL))
     show(mm, **kwargs)

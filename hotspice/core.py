@@ -1,4 +1,4 @@
-__all__ = ['xp', 'kB', 'SimParams', 'Magnets']
+__all__ = ['xp', 'kB', 'SimParams', 'Magnets', 'Scheme']
 
 import math
 import warnings
@@ -7,6 +7,7 @@ import numpy as np
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from functools import lru_cache
 from scipy.spatial import distance
 from textwrap import dedent
@@ -25,21 +26,27 @@ else:
 
 kB = 1.380649e-23
 
+class Scheme(Enum):
+    NEEL = auto()
+    METROPOLIS = auto()
+    WOLFF = auto()
 
 @dataclass(slots=True)
 class SimParams:
     SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF: int = 20 # If there are strictly more than <this> switches in a single iteration, a convolution is used, otherwise the energies are just summed.
     REDUCED_KERNEL_SIZE: int = 20 # If nonzero, the dipolar kernel is cropped to an array of shape (2*<this>-1, 2*<this>-1).
-    UPDATE_SCHEME: Literal['Néel', 'Metropolis', 'Wolff'] = 'Néel' # Wolff is only available for exchange-coupled ASI
+    UPDATE_SCHEME: Scheme | str = Scheme.NEEL # Wolff is only available for exchange-coupled ASI
     MULTISAMPLING_SCHEME: Literal['single', 'grid', 'Poisson', 'cluster'] = 'grid' # Only used if UPDATE_SCHEME is 'Metropolis'.
     ENERGY_BARRIER_METHOD: Literal['simple', 'parabolic'] = 'simple' # Determines how intricately the energy barrier is calculated
 
     def __post_init__(self):
         self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = int(self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF)
         self.REDUCED_KERNEL_SIZE = int(self.REDUCED_KERNEL_SIZE)
-        if self.UPDATE_SCHEME not in (allowed := ['Metropolis', 'Néel', 'Wolff']):
-            if self.UPDATE_SCHEME == 'Glauber': self.UPDATE_SCHEME = 'Metropolis'
-            raise ValueError(f"UPDATE_SCHEME='{self.UPDATE_SCHEME}' is invalid: allowed values are {allowed}.")
+        if not isinstance(self.UPDATE_SCHEME, Scheme):
+            allowed = {'Néel': Scheme.NEEL, 'Neel': Scheme.NEEL, 'Metropolis': Scheme.METROPOLIS, 'Glauber': Scheme.METROPOLIS, 'Wolff': Scheme.WOLFF}
+            if self.UPDATE_SCHEME not in allowed.keys():
+                raise ValueError(f"UPDATE_SCHEME='{self.UPDATE_SCHEME}' is invalid: allowed values are {allowed.keys()}.")
+            self.UPDATE_SCHEME = allowed[self.UPDATE_SCHEME]
         if self.MULTISAMPLING_SCHEME not in (allowed := ['single', 'grid', 'Poisson', 'cluster']):
             raise ValueError(f"MULTISAMPLING_SCHEME='{self.MULTISAMPLING_SCHEME}' is invalid: allowed values are {allowed}.")
         # If a multisampling scheme is incompatible with an update scheme, an error should be raised at runtime, not here.
@@ -50,7 +57,7 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         self, nx: int, ny: int, dx: float|Field, dy: float|Field, *,
         T: Field = 300, E_B: Field = 0., moment: Field = None, Msat: Field = 800e3, V: Field = 2e-22,
         pattern: str = None, energies: tuple['Energy'] = None,
-        PBC: bool = False, m_perp_factor: float = None,
+        PBC: bool = False, m_perp_factor: float = None, E_B_std: float = None,
         major_axis: float = 0, minor_axis: float = None, # Ellipse shape is constant throughout the array because it is baked into the dipolar kernel.
         angle: float = 0., params: SimParams = None, in_plane: bool = False):
         """ The position of magnets is specified using `nx`, `ny`, `dx` and `dy`. Only rectilinear grids are currently allowed.
@@ -98,6 +105,7 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         # Initialize field-like properties (!!! these need the geometry to exist already, since they have the same shape)
         self.T = T # [K]
         self.E_B = E_B # [J]
+        if E_B_std is not None: self.E_B *= xp.random.normal(1, E_B_std, size=self.E_B.shape)
         self.moment = Msat*V if moment is None else moment # [Am²] moment is saturation magnetization multiplied by volume
         self.m_perp_factor = in_plane if m_perp_factor is None else m_perp_factor
         self.major_axis = major_axis
@@ -602,11 +610,11 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
                 warnings.warn("T=0 somewhere in the domain, so ergodicity can not be guaranteed. Proceed with caution.", stacklevel=2)
             return # We just warned that no switch will be simulated, so let's keep our word
         match self.params.UPDATE_SCHEME:
-            case 'Néel':
+            case Scheme.NEEL:
                 idx = self._update_Néel(*args, **kwargs)
-            case 'Metropolis':
+            case Scheme.METROPOLIS:
                 idx = self._update_Metropolis(*args, **kwargs)
-            case 'Wolff':
+            case Scheme.WOLFF:
                 idx = self._update_Wolff(*args, **kwargs)
             case str(unrecognizedscheme):
                 raise ValueError(f"The Magnets.params object has an invalid value for UPDATE_SCHEME='{unrecognizedscheme}'.")
@@ -744,7 +752,7 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         """ Generator that forms the foundation of `self.progress()`. Yields after every `self.update()`. """
         t_0, MCsteps_0 = self.t, self.MCsteps
         while lower_than(dt := self.t - t_0, t_max) and lower_than(dMCsteps := self.MCsteps - MCsteps_0, MCsteps_max):
-            if self.params.UPDATE_SCHEME == 'Néel': self.update(t_max=(t_max - dt), **kwargs) # A max time can be specified
+            if self.params.UPDATE_SCHEME == Scheme.NEEL: self.update(t_max=(t_max - dt), **kwargs) # A max time can be specified
             else: self.update(**kwargs) # No time
             yield
         return self.t - t_0, self.MCsteps - MCsteps_0

@@ -36,7 +36,7 @@ class Sweep_OOPSquare_AFM2_KQ_byteInput(hotspice.experiments.Sweep):
         E_B = params.get('E_B', params['E_B_mean']*np.random.normal(1, params['E_B_std'], size=(nx, ny)))
         mm = hotspice.ASI.OOP_Square(params['a'], params['nx'], ny=params['ny'], T=params['T'], E_B=E_B, moment=params['moment'], PBC=params['PBC'],
             energies=(hotspice.DipolarEnergy(), hotspice.ZeemanEnergy()),
-            params=hotspice.SimParams(UPDATE_SCHEME='Néel', SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF=0)) # Need Néel for inputter
+            params=hotspice.SimParams(UPDATE_SCHEME=hotspice.Scheme.NEEL, SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF=0)) # Need Néel for inputter
         datastream = hotspice.io.RandomBinaryDatastream()
         inputter = hotspice.io.OOPSquareChessStepsInputter(datastream, magnitude=params['ext_field'], n=2, frequency=1) # Frequency does not matter as long as it is nonzero and reasonable
         outputreader = hotspice.io.OOPSquareChessOutputReader(params['res_x'], params['res_y'], mm)
