@@ -148,21 +148,21 @@ class OOP_Honeycomb(OOP_ASI):
             ny = int(nx/math.sqrt(3))//2*2 # Try to make the domain reasonably square-shaped
             if not kwargs.get('PBC', False): ny -= 1 # Remove dangling spins if no PBC
         if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
-        dx = kwargs.pop('dx', a/2) # TODO: add nonuniform grid here as well because Honeycomb can benefit from it
-        dy = kwargs.pop('dy', math.sqrt(3)*dx)
+        dy = kwargs.pop('dx', a/2) # TODO: add nonuniform grid here as well because Honeycomb can benefit from it
+        dx = kwargs.pop('dy', math.sqrt(3)*dy)
         super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
 
     def _set_m(self, pattern: str):
         match str(pattern).strip().lower():
             case 'afm':
-                self.m = (self.ixx % 3 == 1)*2 - 1
+                self.m = (self.iyy % 3 == 1)*2 - 1
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
     def _get_occupation(self):
         occupation = xp.ones_like(self.xx)
         occupation[(self.ixx + self.iyy) % 2 == 0] = 0 # A bunch of diagonals 
-        occupation[self.ixx % 3 == 2] = 0 # Some vertical lines that are completely empty
+        occupation[self.iyy % 3 == 2] = 0 # Some vertical lines that are completely empty
         return occupation
 
     def _get_appropriate_avg(self): # TODO: not so relevant
@@ -178,7 +178,7 @@ class OOP_Honeycomb(OOP_ASI):
         return 'afm'
 
     def get_domains(self):
-        sublattice = xp.where(self.ixx % 3 == 0, -1, 1)
+        sublattice = xp.where(self.iyy % 3 == 0, -1, 1)
         return (sublattice == self.m).astype(int)
 
 
@@ -196,21 +196,21 @@ class OOP_Cairo(OOP_ASI):
         if nx is None or ny is None: raise AttributeError("Must specify <n> if either <nx> or <ny> are not specified.")
         
         self.beta = OOP_Cairo.BETA if beta is None else beta
-        dx = dy = [-a*math.cos(self.beta),a/2,a/2,-a*math.cos(self.beta)]
+        dx = dy = [-a*math.cos(self.beta),-a*math.cos(self.beta),a/2,a/2]
         super().__init__(nx, ny, dx, dy, in_plane=False, **kwargs)
 
     def _set_m(self, pattern: str, angle=None):
         match str(pattern).strip().lower():
             case 'afm':
                 self.m = xp.ones_like(self.ixx)
-                self.m[(self.ixx + self.iyy) % 5 == 1] *= -1
+                self.m[(self.ixx + self.iyy) % 5 == 0] *= -1
                 self.m[(self.ixx + self.iyy) % 5 == 3] *= -1
             case str(unknown_pattern):
                 super()._set_m(pattern=unknown_pattern)
 
     def _get_occupation(self):
         occupation = xp.zeros_like(self.xx)
-        for x, y in [(0,0), (0,4), (1,2), (2,5), (2,7), (3,2), (4,0), (4,4), (5,6), (6,1), (6,3), (7,6)]:
+        for x, y in [(1,1), (1,5), (2,3), (3,6), (3,0), (4,3), (5,1), (5,5), (6,7), (7,2), (7,4), (0,7)]:
             occupation[y::8,x::8] = 1
         return occupation
 
