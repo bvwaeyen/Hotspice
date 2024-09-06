@@ -655,8 +655,7 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         return xp.minimum(E_barrier_1, E_barrier_2) if min_only else (E_barrier_1, E_barrier_2)
 
 
-    def _update_Metropolis(self, idx=None, Q=0.05, r=0, attempt_freq=1e10): # TODO: flag to choose which kind of exponential to use: clip(0, exp, 1) or exp/(1+exp)
-         # TODO: implement maximum elapsed time. (t_max)
+    def _update_Metropolis(self, idx=None, Q=0.05, r=0, attempt_freq=1e10):
         # 1) Choose a bunch of magnets at random
         if idx is None: idx = self.select(r=self.calc_r(Q) if r == 0 else r)
         self.attempted_switches += idx.shape[1]
@@ -664,14 +663,15 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
         with np.errstate(divide='ignore', over='ignore'): # To allow low T or even T=0 without warnings or errors
             exponential = xp.clip(xp.exp(-self.switch_energy(idx)*beta), 1e-10, 1e10) # clip to avoid inf
-        # 3) Flip the spins with a certain exponential probability. There are two commonly used and similar approaches:
+            times = -xp.log(self.rng.random(size=idx.shape[1]))/attempt_freq/self.n*xp.exp(self.E_barrier(idx, min_only=True)*beta)
+            self.t += xp.sum(times)
+        # 3) Flip the spins with a certain exponential probability. There are two commonly used acceptance proabilities:
         idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # METROPOLIS-HASTINGS acceptance probability, derived from detailed balance: min(1, e^-E/kT)
         # idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # GLAUBER acceptance probability, from https://en.wikipedia.org/wiki/Glauber_dynamics: e^-E/kT/(1+e^-E/kT) (Should give same statistics as Metropolis, but is just slower, might look "more natural" according to some)
         if idx_switch.shape[1] > 0:
             self.m[idx_switch[0], idx_switch[1]] *= -1
             self.switches += idx_switch.shape[1]
             self.update_energy(index=idx_switch)
-            self.t += xp.sum(-xp.log(self.rng.random())/attempt_freq/self.n*xp.exp(-self.E_barrier(idx, min_only=True)*beta))
         return idx_switch
 
     def _update_Néel(self, t_max=1, attempt_freq=1e10):

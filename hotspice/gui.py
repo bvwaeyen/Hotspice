@@ -285,7 +285,7 @@ class ActionsPanel(ctk.CTkScrollableFrame):
             case Scheme.NEEL:
                 kwargs.setdefault("t_max", self.gui.ASI_settings.t_max)
                 kwargs.setdefault("attempt_freq", self.gui.ASI_settings.attempt_freq)
-            case "Metropolis":
+            case Scheme.METROPOLIS:
                 kwargs.setdefault("Q", self.gui.ASI_settings.Q)
         t = time.perf_counter() + 1
         for _ in range(n):
@@ -707,7 +707,8 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         if settings_changed: self.quiver_scale = np.inf
         match quiver_qty:
             case 'spin':
-                x, y = asnumpy(xp.multiply(self.mm.m, self.mm.orientation[:,:,0])[self.mm.nonzero]), asnumpy(xp.multiply(self.mm.m, self.mm.orientation[:,:,1])[self.mm.nonzero])
+                x = asnumpy(xp.multiply(xp.multiply(self.mm.m, self.mm.orientation[:,:,0]), self.mm.occupation)[self.mm.nonzero])
+                y = asnumpy(xp.multiply(xp.multiply(self.mm.m, self.mm.orientation[:,:,1]), self.mm.occupation)[self.mm.nonzero])
             case 'H_eff':
                 x, y = self.mm.H_eff
                 x, y = asnumpy(x[self.mm.nonzero]), asnumpy(y[self.mm.nonzero])
@@ -892,7 +893,6 @@ class ASISettingsFrame(ctk.CTkFrame):
         # TODO: allow choosing grid selection method in Metropolis
 
         def __post_init__(self):
-            self.UPDATE_SCHEME = str(self.UPDATE_SCHEME)
             if self.UPDATE_SCHEME not in self.available_update_modes: raise ValueError(f"<UPDATE_MODE> can only be any of {self.available_update_modes}.")
             self.t_max = float(self.t_max)
             self.attempt_freq = float(self.attempt_freq)
@@ -906,9 +906,11 @@ class ASISettingsFrame(ctk.CTkFrame):
         self.gui = gui
         self.mm = gui.mm
         self.settings = ASISettingsFrame.ASISettings(UPDATE_SCHEME=self.mm.params.UPDATE_SCHEME)
+        self.UPDATE_SCHEME_TO_NAME = {Scheme.NEEL: "Néel", Scheme.METROPOLIS: "Metropolis"}
+        self.NAME_TO_UPDATE_SCHEME = {v:k for k, v in self.UPDATE_SCHEME_TO_NAME.items()}
 
         def change_updatemode():
-            self.settings.UPDATE_SCHEME = self.updatescheme_tabview._current_name
+            self.settings.UPDATE_SCHEME = self.NAME_TO_UPDATE_SCHEME[self.updatescheme_tabview._current_name]
             self.apply_settings_to_mm()
 
         ## Update scheme
@@ -948,7 +950,7 @@ class ASISettingsFrame(ctk.CTkFrame):
     
     def get_settings_from_mm(self):
         self.settings.UPDATE_SCHEME = self.mm.params.UPDATE_SCHEME
-        self.updatescheme_tabview.set(self.settings.UPDATE_SCHEME)
+        self.updatescheme_tabview.set(self.UPDATE_SCHEME_TO_NAME[self.settings.UPDATE_SCHEME])
         sig_Néel = inspect.signature(self.mm._update_Néel)
         self.Néel_t_max_var.set(float(sig_Néel.parameters['t_max'].default))
         self.Néel_attemptfreq_var.set(float(sig_Néel.parameters['attempt_freq'].default)*1e-9)
