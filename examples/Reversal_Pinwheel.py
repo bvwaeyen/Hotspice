@@ -1,25 +1,28 @@
 """ This file tests the correspondence between experiment and simulation for a
-    two-dimensional pinwheel artifical spin ice, which is initialized in a uniform
-    state and reversed using an external field. Ideally, the reversal should take place
+    pinwheel artifical spin ice, which is initialized in a uniform state and
+    reversed using an external field. Ideally, the reversal should take place
     in two steps, roughly corresponding to two 90° rotations.
+    Based on the paper
+        Y. Li, G. W. Paterson, G. M. Macauley et al. Superferromagnetism and Domain-Wall Topologies
+        in Artificial “Pinwheel” Spin Ice. ACS Nano 2019 13 (2), 2213-2222, doi:10.1021/acsnano.8b08884
+    NOTE: this example was made to simulate the hysteresis as function of any parameter.
+          For the Hotspice paper, it was used to simulate the Pinwheel lattice as function of m_perp_factor.
+          Therefore, the code under __name__ == "__main__" is more complex than required for the paper figure. 
 """
-import os
-os.environ["HOTSPICE_USE_GPU"] = "False"
-
 import math
-import warnings
-
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+import warnings
 
-from matplotlib import cm
 from matplotlib.patches import FancyArrowPatch
 from pathlib import Path
 from typing import Iterable, Literal
 
-from context import hotspice
-xp = hotspice.xp
+import hotspice
+xp = hotspice.xp # CuPy or NumPy, depending on GPU or CPU
+import _example_plot_utils as epu
 
 
 class PinwheelReversalTest:
@@ -49,7 +52,7 @@ class PinwheelReversalTest:
         self.m_perp_factor = m_perp_factor
         
         ## CREATE MM
-        energies = (hotspice.energies.DiMonopolarEnergy(d=l, small_d=d)) if monopoles else (hotspice.energies.DipolarEnergy())
+        energies = (hotspice.energies.DiMonopolarEnergy(d=0.9*l, small_d=0.9*d)) if monopoles else (hotspice.energies.DipolarEnergy())
         self.mm = hotspice.ASI.IP_Pinwheel(self.a, self.size, moment=self.moment, T=self.T, PBC=False, energies=energies,
                                            m_perp_factor=self.m_perp_factor, params=hotspice.SimParams(UPDATE_SCHEME=self.scheme))
         self.mm.m[xp.where(xp.random.random(size=self.mm.m.shape) < self.dilution)] = 0
@@ -160,18 +163,6 @@ class Hysteresis:
         if halfway_reversed < 0.2: halfway_reversed = 0 # Don't take too close to zero because we have a threshold there already
         if thresholds is None: thresholds = [.98, halfway_reversed, 0, -halfway_reversed, -.98]
         self.thresholds = Threshold(thresholds, start_value=m_parallel_normalized()) # If the average magnetization crosses this, a plot is shown.
-        
-        # TODO: Auto-detect at which energy the reversal starts, and when m_parallel_sat is reached (so not really H_max), use step size tesla_per_ZeemankBT, but need good way to detect if saturation is achieved to start coming back, currently commented code below is useless
-        # desired_barrier = self.mm.kBT*40 # For attempt frequency of 10GHz, 40kBT barrier switches once a year, so is safe if we mm.progress() 1 second.
-        # self.ZeemanEnergy.magnitude = 0
-        # barrier_0 = self.mm.E_barrier(min_only=True)
-        # self.ZeemanEnergy.magnitude = 1
-        # barrier_1 = self.mm.E_barrier(min_only=True)
-        # with np.errstate(divide='ignore'):
-        #     tesla_per_ZeemankBT = xp.min(self.mm.kBT/xp.maximum(xp.abs(self.ZeemanEnergy.E), xp.abs(self.ZeemanEnergy.E_perp))) # Max. field [T] that does not increase Zeeman E by more than kBT anywhere
-        #     self.ZeemanEnergy.magnitude = float(xp.max((desired_barrier - barrier_0)/(barrier_1 - barrier_0)))
-        # while xp.any(self.mm.E_barrier(min_only=True) < desired_barrier):
-        #     self.ZeemanEnergy.magnitude += 40*tesla_per_ZeemankBT
 
         self.H_fields = np.linspace(-H_max, H_max, _N) # One sweep to opposite fields (N steps)
         if not self.half: self.H_fields = np.append(self.H_fields, np.flip(self.H_fields)) # Sweep both ways (2*N steps)
@@ -200,19 +191,16 @@ class Hysteresis:
         }
 
     @staticmethod
-    # TODO: make this capable of plotting relaxations as well
     def plot(*hystereses: 'Hysteresis', labels: list[str] = None, labels_snapshots: list[str] = None, original_data: str|Path = None, colors: list[str] = None, legend_title: str = None, H_SIprefix: str = 'm', FIELD_POLAR_ZERO: bool = False, SHOW_SNAPSHOTS: bool = None, _vertical: bool = None, show: bool = True, save: bool|Path = False):
         """ Can pass multiple hysteresis calculations as the first few arguments, with legend `labels` and line/symbol `colors`. """
-        hotspice.plottools.init_style(style='default')
+        epu.init_style()
         
         n = len(hystereses)
         H_factor = hotspice.utils.SIprefix_to_mul(H_SIprefix) # Default H_unit is milli(Tesla)
         is_monotonic = [all(data.H_fields[i] <= data.H_fields[i-1] for i in range(1, data.H_fields.size))
                     or all(data.H_fields[i] >= data.H_fields[i-1] for i in range(1, data.H_fields.size))
                     for data in hystereses] # Whether data[j] is a half hysteresis or not # TODO: refactor this using hysteresis.half
-        if colors is None:
-            # colors = [plt.get_cmap('jet', 2*n+1)(2*i+1) if i < 5 else plt.get_cmap('jet', n)(i) for i in range(n)]
-            colors = np.resize(hotspice.plottools.colorcycle(), n)
+        if colors is None: colors = np.resize(hotspice.plottools.colorcycle(), n)
         if labels is None: labels = [None]*len(hystereses)
         if labels_snapshots is None: labels_snapshots = labels
         markers = np.resize(['o', 's', 'D', 'P', 'X', 'p', '*', '^'], n) # Circle, square, diamond, plus, cross, pentagon, star, triangle up (and repeat enough times)
@@ -223,20 +211,21 @@ class Hysteresis:
         if _vertical is None: _vertical = n == 1 # Whether the line plots are above the snapshot plots (True), or next to them (False). Also affects layout of snapshot plot subgrid.
         
         if _vertical:
-            fig_width, fig_height = 7, 3.5 # (7, 5.5) for (3x9) snapshot plots works well
+            fig_width, fig_height = epu.page_width, 3.3 # (7, 5.5) for (3x9) snapshot plots works well
             if SHOW_SNAPSHOTS: fig_height += fig_width/(max_thresholds+1)*len(hystereses)
         else:
             fig_width, fig_height = 10, 4
-        fig = plt.figure(figsize=(fig_width, fig_height) if _vertical else (10, 4))
+        fig = plt.figure(figsize=(fig_width, fig_height))
         if SHOW_SNAPSHOTS:
             snapshot_ratio = np.clip(n/2, 1, 2.5) # Don't use too much space for the snapshots, but don't squeeze them too much either
-            if _vertical: gs_fig = fig.add_gridspec(2, 1, height_ratios=(2,snapshot_ratio))
+            if _vertical: gs_fig = fig.add_gridspec(2, 1, height_ratios=(1.6,snapshot_ratio))
             else: gs_fig = fig.add_gridspec(1, 2, width_ratios=(4,snapshot_ratio))
         else: # No snapshots so no subgrids needed
             gs_fig = fig.add_gridspec(1, 1)
         
         ## HYSTERESIS LINE PLOTS
-        gs_sub_hysteresis = gs_fig[0].subgridspec(1, 2, width_ratios=(1,1), wspace=0.2)
+        gs_top = gs_fig[0].subgridspec(1, 2, width_ratios=(0.9,0.1), wspace=0)
+        gs_sub_hysteresis = gs_top[0].subgridspec(1, 2, width_ratios=(1,1), wspace=0.2)
         # NORMAL HYSTERESIS PLOT
         ax1 = fig.add_subplot(gs_sub_hysteresis[0]) # Normal hysteresis plot of parallel component
         ax1.grid(color='grey', linestyle=':')
@@ -244,12 +233,13 @@ class Hysteresis:
         ax1.set_ylabel(r"Magnetization $M_{\parallel}/M_\mathrm{\parallel,sat}$")
         ax1.axhline(0, linestyle="--", color='k', linewidth=1)
         ax1.axvline(0, linestyle="--", color='k', linewidth=1)
-        label_ax(ax1, 0, offset=(-0.25,0))
+        ax1.minorticks_on()
+        ax1.yaxis.set_tick_params(which='minor', bottom=False)
+        label_ax(ax1, 0, offset=(-0.28,0))
         # POLAR PLOT
         ax2 = fig.add_subplot(gs_sub_hysteresis[1], projection='polar') # Polar plot
         ax2.set_rticks([0.2, 0.4, 0.6, 0.8, 1])  # Less radial ticks
         ax2.set_rlim(0, 1)
-        # ax2.set_theta_zero_location('N')
         ax2.set_thetagrids(angles=np.arange(0, 360, 30), zorder=-1)
         ax2.set_axisbelow(True)
         ax2.set_rlabel_position(285) # Move radial labels to an empty region
@@ -276,7 +266,8 @@ class Hysteresis:
             nonremovable_i = np.array([i for i in range(1, data.H_fields.size - 1)
                                        if (data.m_avg[i] != data.m_avg[i+1]) or (data.m_angle[i] != data.m_angle[i+1]) # Only keep the first occurrence of a state, because we use where="post"
                                        or (data.m_avg[i] != data.m_avg[i-1]) or (data.m_angle[i] != data.m_angle[i-1])]) # in plt.step(). Would need "pre" if we would keep the last occurrence. # Only keep 'down' sweep if requested
-            if not is_monotonic[j]: nonremovable_i = np.insert(nonremovable_i, 0, nonremovable_i[-1]) # Only need to connect end to start if is_half
+            if nonremovable_i.size == 0: nonremovable_i = np.arange(1, data.H_fields.size - 1)
+            if not is_monotonic[j]: nonremovable_i = np.insert(nonremovable_i, 0, nonremovable_i[-1]) # Connect end to start, but only if is_half
             H_fields, m_avg, m_angle = data.H_fields[nonremovable_i], data.m_avg[nonremovable_i], data.m_angle[nonremovable_i]
             
             d_angle = m_angle - np.deg2rad(data.H_angle)
@@ -288,12 +279,6 @@ class Hysteresis:
             Y = m_parallel/m_parallel_sat
             # NORMAL HYSTERESIS PLOT
             ax1.step(X, Y, where="post", linewidth=1, color=color, marker=markers[j], markevery=markevery, markersize=markersize, fillstyle='none', label=labels[j])
-            # if SHOW_SNAPSHOTS:
-                # for i, state in enumerate(data.threshold_states):
-                    # H_index = data.threshold_indices[i]
-                    # idx = np.searchsorted(nonremovable_i, H_index)
-                    # ax1.annotate(f"({i+1})", xy=(X[idx], Y[idx]), color=color, xycoords='data', xytext=(-3, 3), textcoords='offset points', va='bottom', ha='right')
-            # for y in data.thresholds.thresholds: ax1.axhline(y, linestyle="--", color=color, linewidth=1)
             # POLAR PLOT
             angle = d_angle if FIELD_POLAR_ZERO else m_angle # If FIELD_POLAR_ZERO, then the 0° on the polar plot is the field direction. Otherwise, 0° is the x-axis.
             if is_monotonic[j]:
@@ -308,11 +293,9 @@ class Hysteresis:
                 if j == 0 or not all_same_angle: # Always draw the first one, but after that only draw if they are not all the same
                     for i in range(2): 
                         ax2.add_artist(FancyArrowPatch(posA=(np.deg2rad(data.H_angle), 1), posB=(np.deg2rad(data.H_angle) + np.pi, 1), arrowstyle='<|-|>', color='grey' if all_same_angle else color, lw=1, linestyle='-', zorder=0.75, mutation_scale=16, shrinkA=0, shrinkB=0))
-                        # ax2.axvline(x=np.deg2rad(data.H_angle) + i*np.pi, ymin=0, ymax=1, color='black' if all_same_angle else color, lw=2, linestyle='--', zorder=0.75)
-            
+                        
         if all(is_monotonic): ax1.set_xlim(left=0)
         if any(labels):
-            # ax1.legend(title=legend_title, loc="lower right")
             ax1.legend(title=None, loc="lower right")
         if not all(is_monotonic):
             leg2 = ax2.legend(frameon=True, markerfirst=False, loc='upper right')
@@ -336,12 +319,12 @@ class Hysteresis:
                     H = data.H_fields[data.threshold_indices[i]]
                     n_thresholds, c = len(data.threshold_indices), colors[j] # fontsize decreases if there are more plots
                     if _vertical:
-                        fs = min(10, 55/max_thresholds)
+                        fs = min(10, 65/max_thresholds)
                         separator = ' ' if n_thresholds < 11 else '\n'
                         ax.set_title((r"$\bf{(%d)}$" % (i+1)) + f"{separator}{H/H_factor:.1f}{H_SIprefix}T", pad=0, fontsize=fs, color=c)
                         if i == 0 and n > 1: ax.set_ylabel(labels_snapshots[j], color=colors[j])
                     else:
-                        fs = min(10, 40/max_thresholds)
+                        fs = min(10, 50/max_thresholds)
                         separator = ' ' if n_thresholds < 5 else '\n'
                         ax.set_ylabel((r"$\bf{(%d)}$" % (i+1)) + f"{separator}{H/H_factor:.1f}{H_SIprefix}T", rotation=270, labelpad=11, fontsize=fs, color=c)
                         ax.yaxis.set_label_position("right")
@@ -398,18 +381,15 @@ def label_ax(ax: plt.Axes, i: int = None, form: str = "(%s)", offset: tuple[floa
 
 
 if __name__ == "__main__":
-    """ KEY FINDINGS: 
-        - M_PERP_FACTOR < 1 IS CRITICAL TO GET THE TWO-STEP BEHAVIOR BACK
-        FOR ANGLE=30°:
-            - E_B_STD 7% SEEMS BEST FIT WITH FIG. 4 FROM EXPERIMENTAL PAPER
-            - E_B OF 60eV PLACES THE FIRST DROP AT THE SAME FIELD AS IN EXPERIMENT
-            - M_PERP_FACTOR = 0.3 IS CRITICAL TO GET THE CORRECT FIELD MAGNITUDES FOR BOTH STEPS
-        FOR ANGLE=-6°:
-            - M_PERP_FACTOR = 0.3 NO LONGER WORKS: CRITICAL FIELD IS KIND OF OK, BUT POLAR PLOT IS NOT OK AT ALL (too wide, should be straight line)
+    """ EXPECTED RUNTIME: <1min per hysteresis. The paper figure has 3 hystereses, so <3min.
+        NOTE: this example was made to simulate the hysteresis as function of any parameter.
+        For the Hotspice paper, it was used to simulate the Pinwheel lattice as function of m_perp_factor.
+        Therefore, the code under __name__ == "__main__" is more complex than required for the paper figure.
+        At the end of this __name__ == "__main__" block, many alternative parameter sweeps can be found, commented out.
     """
     save = True
-    ONLY_REPLOT = True
-    outdir_base = Path("./results/test_pinwheelReversal").absolute()
+    ONLY_REPLOT = False
+    outdir_base = Path(os.path.splitext(hotspice.utils.get_caller_script())[0] + '.out') # Where things get saved by default
     
     def run_hysteresis_sweep(varname: Literal["angle", "E_B", "E_B_std", "m_perp_factor"], /, dirname=None,
                              monopoles: bool = False,
@@ -471,7 +451,14 @@ if __name__ == "__main__":
                 hystereses.append(reversaltests[-1].hysteresis(H_angle=values_here['angle'], half=half, save=this_outdir if save else False))
         Hysteresis.plot(*hystereses, SHOW_SNAPSHOTS=show_thresholds, _vertical=show_thresholds, labels=labels, labels_snapshots=labels_snapshots, legend_title=legend_title, save=outdir/"summary.pdf" if save else False, show=(not save), **kwargs)
         return hystereses, reversaltests
-    
+
+    ## PAPER FIGURE
+    original_data = r'Reversal_Pinwheel.out\Li-data.csv'
+    if not os.path.exists(original_data): original_data = None
+    run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0, 0.4, 1], dirname="paper_fig", original_data=original_data, show_thresholds=True, only_replot=ONLY_REPLOT)
+    # run_hysteresis_sweep("m_perp_factor", monopoles=True, angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0, 0.4, 1], dirname="paper_fig_mono", original_data=original_data, show_thresholds=True, only_replot=ONLY_REPLOT)
+
+    #### OTHER PARAMETER SWEEPS THAT CAN BE SIMULATED WITH THIS EXAMPLE FILE ####
     ## NEW VS. OLD BARRIER CALCULATION (PERP OR NO PERP) (for the closest reproduction of the experimental system as I can guess)
     # run_hysteresis_sweep("m_perp_factor", angle=-6, E_B_std=0.07, E_B=60, m_perp_factor=[0.4, 0], show_thresholds=True, labels=['With perp', 'No perp'])
     # run_hysteresis_sweep("m_perp_factor", angle=-6, E_B_std=0.07, E_B=60, m_perp_factor=[0.3, 0], show_thresholds=True, labels=['With perp', 'No perp'])
@@ -496,8 +483,3 @@ if __name__ == "__main__":
 
     # BEST FITS TO EXPERIMENT (zoomed in using 'half')
     # run_hysteresis_sweep("m_perp_factor", m_perp_factor=[0.3], half=True, angle=30, E_B=60, E_B_std=0.07)
-
-
-    ## PAPER FIGURE
-    run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0, 0.4, 1], dirname="paper_fig", original_data=r'results\test_pinwheelReversal\Li-data.csv', show_thresholds=True, only_replot=True) #! only_replot=True because we now have 9 threshold states (sometimes it only gives 7)
-    # run_hysteresis_sweep("m_perp_factor", angle=30, E_B_std=0.07, E_B=60, m_perp_factor=[0, 0.4, 1], monopoles=True, dirname="paper_fig_mono", show_thresholds=True)

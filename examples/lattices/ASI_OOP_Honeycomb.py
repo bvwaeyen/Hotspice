@@ -1,7 +1,7 @@
 import time
 
 import examplefunctions as ef
-from context import hotspice
+import hotspice
 
 
 ## Parameters

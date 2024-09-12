@@ -1,14 +1,12 @@
 import math
+import matplotlib.pyplot as plt
+import numpy as np
 import os
 import time
 
-import numpy as np
-import matplotlib.pyplot as plt
-
 from matplotlib import animation, cm, colormaps, colors
 
-try: from context import hotspice
-except ModuleNotFoundError: import hotspice
+import hotspice
 
 
 def run_a_bit(mm: hotspice.Magnets, N=50e3, T=None, save_history=1, verbose=False, show_m=True, **kwargs):

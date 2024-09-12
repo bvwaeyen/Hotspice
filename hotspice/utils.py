@@ -331,6 +331,10 @@ def log(message, device_id=None, style: Literal['issue', 'success', 'header'] = 
 
 
 ## STANDARDIZED WAY OF HANDLING DATA ACROSS HOTSPICE EXAMPLES
+def get_caller_script():
+    """ Returns the filename of the script that calls this function. """
+    return Path(inspect.stack()[1].filename)
+
 def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure]|dict[str,Figure] = None, copy_script: bool = True, timestamped: bool = True, outdir: str|Path = None, figure_format: tuple[str]|str = ('.pdf', '.png', '.svg'), dpi=600) -> str:
     """ The most basic way to consistently save results of a simulation script. This can save the basic
         parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
@@ -346,13 +350,14 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
             @return [str]: the output directory. Can be used to manually save additional resources there.
     """
     # Make output directory
-    script = Path(inspect.stack()[1].filename) # The caller script, i.e. the one where __name__ == "__main__"
+    script = Path(inspect.stack()[1].filename) # Returns the caller script. Note that this is not necessarily the one where __name__ == "__main__".
     if outdir is None:
         outdir = script.parent / (script.stem + '.out')
         if timestamped: outdir /= timestamp()
     else:
         outdir = Path(outdir)
-        if not outdir.exists(): outdir = script.parent / (script.stem + '.out') / outdir
+        if not outdir.exists() and script.stem + '.out' not in outdir.parts: 
+            outdir = script.parent / (script.stem + '.out') / outdir
     outdir.mkdir(exist_ok=True, parents=True) # Make directory "caller_script.out/<timestamp>" (or <outdir> if argument passed)
     # Save information
     if copy_script:

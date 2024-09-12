@@ -1,8 +1,7 @@
 import math
 import os
 
-try: from context import hotspice
-except ModuleNotFoundError: import hotspice
+import hotspice
 
 
 class SweepTAExperiment(hotspice.experiments.Sweep): # Example of a fully implemented Sweep subclass
