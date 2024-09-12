@@ -38,6 +38,7 @@ class SimParams:
     UPDATE_SCHEME: Scheme | str = Scheme.NEEL # Wolff is only available for exchange-coupled ASI
     MULTISAMPLING_SCHEME: Literal['single', 'grid', 'Poisson', 'cluster'] = 'grid' # Only used if UPDATE_SCHEME is 'Metropolis'.
     ENERGY_BARRIER_METHOD: Literal['simple', 'parabolic'] = 'simple' # Determines how intricately the energy barrier is calculated
+    METROPOLIS_TIME: bool = False # Whether Metropolis updates the time variable (Magnets().t). Note that this also affects progress() etc.
 
     def __post_init__(self):
         self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = int(self.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF)
@@ -663,8 +664,9 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         # 2) Compute the change in energy if they were to flip, and the corresponding Boltzmann factor.
         with np.errstate(divide='ignore', over='ignore'): # To allow low T or even T=0 without warnings or errors
             exponential = xp.clip(xp.exp(-self.switch_energy(idx)*beta), 1e-10, 1e10) # clip to avoid inf
-            times = -xp.log(self.rng.random(size=idx.shape[1]))/attempt_freq/self.n*xp.exp(self.E_barrier(idx, min_only=True)*beta)
-            self.t += xp.sum(times)
+            if self.params.METROPOLIS_TIME:
+                times = -xp.log(self.rng.random(size=idx.shape[1]))/attempt_freq/self.n*xp.exp(self.E_barrier(idx, min_only=True)*beta)
+                self.t += xp.sum(times)
         # 3) Flip the spins with a certain exponential probability. There are two commonly used acceptance proabilities:
         idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < exponential)[0]] # METROPOLIS-HASTINGS acceptance probability, derived from detailed balance: min(1, e^-E/kT)
         # idx_switch = idx[:,xp.where(self.rng.random(size=exponential.shape) < (exponential/(1+exponential)))[0]] # GLAUBER acceptance probability, from https://en.wikipedia.org/wiki/Glauber_dynamics: e^-E/kT/(1+e^-E/kT) (Should give same statistics as Metropolis, but is just slower, might look "more natural" according to some)
