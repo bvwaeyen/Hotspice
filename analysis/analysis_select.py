@@ -42,7 +42,7 @@ def calculate_any_neighbors(pos, shape, center: int = 0):
         return final_array
 
 
-def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r:float=16, plot:bool=True, save:bool=False, PBC:bool=True, params:hotspice.SimParams=None, ASI_type:type[hotspice.Magnets]=None):
+def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r:float=16, plot:bool=True, save:bool=False, PBC:bool=True, ASI_type:type[hotspice.Magnets]=None):
     """ In this analysis, the multiple-magnet-selection algorithm of `hotspice.Magnets.select()` is analyzed.
         The spatial distribution is calculated by performing `n` runs of the `select()` method.
         Also the probability distribution of the distance between two samples is calculated,
@@ -55,7 +55,9 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     if Ly is None: Ly = L
     if Lx is None: Lx = L
     if ASI_type is None: ASI_type = hotspice.ASI.OOP_Square
-    mm = ASI_type(1, Lx, ny=Ly, PBC=PBC, params=params)
+    mm = ASI_type(1, Lx, ny=Ly, PBC=PBC)
+    mm.params.UPDATE_SCHEME = hotspice.Scheme.METROPOLIS
+    mm.params.MULTISAMPLING_SCHEME = 'grid'
     INTEGER_BINS = False # If true, the bins are pure integers, otherwise they can be finer than this.
     ONLY_SMALLEST_DISTANCE = True # If true, only the distances to nearest neighbors are counted.
     scale: int = 3 if ONLY_SMALLEST_DISTANCE else 4 # The distances are stored up to scale*r, beyond that we dont keep in memory
@@ -206,6 +208,7 @@ def analysis_select_speed(n: int=10000, L:int=400, r=16, PBC:bool=True, params:h
 
 if __name__ == "__main__":
     save = False
-    PBC, simparams = True, hotspice.SimParams(MULTISAMPLING_SCHEME='grid')
-    # analysis_select_speed(L=400, n=400, PBC=PBC, params=simparams)
-    analysis_select_distribution(Lx=300, Ly=200, n=10000, r=16, ASI_type=hotspice.ASI.OOP_Triangle, save=save, PBC=PBC, params=simparams)
+    PBC = True
+    # analysis_select_speed(L=400, n=400, PBC=PBC)
+    # analysis_select_distribution(Lx=296, Ly=200, n=10000, r=16, ASI_type=hotspice.ASI.OOP_Square, save=save, PBC=PBC)
+    analysis_select_distribution(Lx=315, Ly=296, n=10000, r=16, ASI_type=hotspice.ASI.IP_Pinwheel, save=save, PBC=PBC)

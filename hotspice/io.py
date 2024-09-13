@@ -445,39 +445,6 @@ class OOPSquareChessOutputReader(OutputReader):
         return self.state # [unitless]
 
 
-class OOPSquareClockwiseInputter(Inputter):
-    def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
-        """ Applies an external stimulus in a clockwise manner in 4 substeps.
-            In each substep, one quarter of all magnets is positively biased, while another quarter is negatively biased,
-            and the other half is not stimulated at all. TODO: complete this description
-            `frequency` specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
-            At most `n` Monte Carlo steps will be performed for a single input bit.
-            NOTE: This inputter will probalby work best with Néel update scheme.
-        """
-        super().__init__(datastream)
-        self.magnitude = magnitude
-        self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
-        self.frequency = frequency # The min. frequency the bits are applied at, if the time is known (i.e. Néel scheme is used)
-
-    def input_single(self, mm: OOP_Square, value: bool|int):
-        """ Performs an input corresponding to `value` (generated using `self.datastream`)
-            into the `mm` simulation, and returns this `value`.
-        """
-        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
-        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
-
-        combinations = [(0, 0), (1, 0), (1, 1), (0, 1)] if value else [(0, 0), (0, 1), (1, 1), (1, 0)] # This is (the only place) where <value> comes in
-        # combinations = [(0, 0), (1, 0), (0, 1), (1, 1)] if value else [(0, 0), (0, 1), (1, 0), (1, 1)] # This is (the only place) where <value> comes in
-        for offset_x, offset_y in combinations: # Determines which quarter of the magnets is stimulated at each substep
-            mask_positive = xp.logical_and((mm.ixx % 2) == offset_x, (mm.iyy % 2) == offset_y).astype(float) # need astype float for good multiplication with self.magnitude
-            mask_negative = xp.logical_and((mm.ixx % 2) != offset_x, (mm.iyy % 2) == offset_y).astype(float) # TODO: verify this position based on SOT physics
-            # magnitude_local = self.magnitude*(mask_positive - mask_negative)
-            magnitude_local = self.magnitude*mask_positive
-            magnitude_local = self.magnitude*(mask_positive if value else -mask_negative)
-            Zeeman.set_field(magnitude=magnitude_local)
-            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-
-
 class OOPSquareChessStepsInputter(Inputter):
     def __init__(self, datastream: Datastream, magnitude: float = 1., magnitude_range: float = 0., transition_range: float = 1., n: float = 4., frequency: float = 1.):
         """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external field for each magnet.

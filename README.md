@@ -4,6 +4,10 @@
 Hotspice is a kinetic Monte Carlo simulation package for thermally active artificial spin ices, using an Ising-like approximation: the axis and position of each spin is fixed, only their binary state can switch.
 The time evolution can either follow the Néel-Arrhenius law of switching over an energy barrier in a chronological manner, or alternatively use Metropolis-Hastings to model the statistical behavior while making abstraction of the time variable.
 
+## Paper
+
+"[The design, verification, and applications of Hotspice: a Monte Carlo simulator for artificial spin ice](https://arxiv.org/abs/2409.05580)" explains the model and reasoning behind the model variants used by Hotspice for the simulation of ASI, and discusses the main examples provided in the `examples/` directory.
+
 ## Dependencies
 
 To create a new conda environment which only includes the necessary modules for hotspice, one can use the [`environment.yml`](environment.yml) file through the command
@@ -30,7 +34,7 @@ conda install -c conda-forge cupy
 
 Hotspice is designed as a Python module, and can therefore simply be imported through `import hotspice`.
 Several submodules provide various components, most of which are optional.
-All of the strictly crucial classes and functions are provided in the default `hotspice` namespace, but other modules like `hotspice.ASI` provide wrappers and examples for ease of use.
+All of the crucial classes are provided in the default `hotspice` namespace. Other modules like `hotspice.ASI` provide wrappers and examples for ease of use.
 
 ### Creating a simple spin ice
 
@@ -39,27 +43,26 @@ To create a simulation, the first thing one has to do is to create a spin ice. T
 ```python
 import hotspice
 mm = hotspice.ASI.IP_Pinwheel(1e-6, 100) # Create the spin ice object
+mm.add_energy(hotspice.ZeemanEnergy(magnitude=1e-3)) # Apply a 1mT field
 hotspice.gui.show(mm) # Display a GUI showing the current state of the spin ice
 ```
 
-The meaning of the values `1e-6` and `100` requires a small introduction on how the spin ices are stored in memory.
-Most data and parameters of a spin ice are stored as 2D arrays, for efficient calculation.
-However, this also implies that the possible spin ice geometries are restricted to those that can be represented as a periodic structure on a square grid.
-The geometry is then defined by leaving some spots on this grid empty, while filling others with a magnet and its relevant parameters like magnetic moment $M_{sat} V$ (`mm.moment`), energy barrier $E_B$ (`mm.E_B`), temperature $T$ (`mm.T`), orientation...
+Here, `1e-6` is the lattice parameter in meters, and `100` is the size of the underlying grid in both the x and y directions. All ASI in Hotspice are stored as 2D arrays for efficient calculation. Note that this implies that the possible spin ice lattices are restricted to those that can be represented as a periodic structure on a square grid.
+The lattice is then defined by leaving some spots on this grid empty, while filling others with a magnet and its relevant parameters like magnetic moment $M_{sat} V$ (`mm.moment`), energy barrier $E_B$ (`mm.E_B`), temperature $T$ (`mm.T`), orientation...
 
-- The first parameter (`a=1e-6`) specifies a typical distance between two magnets. The exact meaning of this depends on the spin ice geometry being used: see [Available spin ices](#available-spin-ices) for the definition of `a` in the default ASI lattices.
+- The first parameter (`a=1e-6`) is the lattice parameter, often representing a typical distance between two magnets. The exact definition depends on the lattice used: see [Available spin ices](#available-spin-ices) for the definition of `a` in the default ASI lattices.
 
-- The second parameter in the initialization call (`n=100`) specifies the length of each axis of these underlying 2D arrays.
+- The second parameter (`n=100`) specifies the length of each axis of these underlying 2D arrays.
 Hence, the spin ice in the example above will have 10000 available grid-points on which to put a magnet.
 However, this 'diamond' pinwheel geometry can only be represented on a grid by leaving half of the available cells empty, so the simulation above actually contains 5000 magnets (see `mm.n`).
 
-- Additional parameters can be used, for which we refer to the docstring of `hotspice.Magnets()`. In particular, the `params` parameter accepts a `hotspice.SimParams` instance which can set technical details for the spin ice, e.g. the update/sampling scheme to use, whether to use a reduced kernel...
+- Additional parameters can be used, for which we refer to the docstring of `hotspice.Magnets()`. The `params` parameter accepts a `hotspice.SimParams` instance which can set technical details for the spin ice, e.g. the update/sampling scheme to use, whether to use a reduced kernel... Energies can be added from the `energies.py` file, whose classes are available in the main `hotspice` namespace.
 
-Examples of usage for each of the ASI lattices, as well as examples of functions operating on these ASI objects, are provided in the 'examples' directory.
+Examples of usage for several of the ASI lattices are provided in the 'examples' directory.
 
 ### Stepping in time
 
-To perform a single simulation step, call `mm.update()`. The scheme used to perform this single step is determined by `mm.params.UPDATE_SCHEME`, which is an instance of `hotspice.Scheme`.
+To perform a single simulation step, call `mm.update()`. The scheme used to perform this single step is determined by `mm.params.UPDATE_SCHEME`, which is an instance of `hotspice.Scheme`. Alternatively, `mm.progress()` can be used to advance the simulation by a given duration in time or a number of Monte Carlo steps.
 
 To relax the magnetization to a (meta)stable state, call `mm.relax()` or `mm.minimize()` (the former is faster for large simulations but less accurate, the latter is faster for small simulations and follows the real relaxation order more closely).
 
@@ -132,3 +135,11 @@ They all follow the pattern `hotspice.ASI.<class>(a, n, nx=None, ny=None, **kwar
 | `OOP_Triangle` | <img src="./figures/ASI_lattices/OOP_Triangle_7x4.png" alt="OOP_Triangle_7x4" width="200"/> | `a` is the distance between nearest neighbors. 1/2 occupation. |
 | `OOP_Honeycomb` | <img src="./figures/ASI_lattices/OOP_Honeycomb_4x7.png" alt="OOP_Honeycomb_4x7" width="200"/> | `a` is the distance between nearest neighbors. 2/5 occupation. |
 | `OOP_Cairo` | <img src="./figures/ASI_lattices/OOP_Cairo_3x3.png" alt="OOP_Cairo_3x3" width="200"/> | `a` is the distance between nearest neighbors. 3/16 occupation. |
+
+## Package structure
+
+The modules comprising Hotspice can be found in this repository in the directory `hotspice/`.
+
+`core.py` contains the main functionality. It provides the `Magnets` class which forms the heart of Hotspice: it implements the Néel-Arrhenius and Metropolis-Hastings algorithms. `energies.py` contains the 3 standard energy contributions: magnetostatic interaction, the Zeeman energy, and the exchange energy. Classes from both `core.py` and `energies.py` are available in the main `hotspice` namespace, due to their great importance.
+
+`ASI.py` provides subclasses which derive from the `Magnets` class to implement several specific lattices. `config.py` controls the selection of GPU or CPU. `gui.py` implements a Tkinter GUI. The recent addition of the GUI makes many functions in the old `plottools.py` redundant. `utils.py` contains utility functions used throughout the library and in examples, which are often unrelated to ASI. The `io.py` and `examples.py` provide functionality for reservoir computing and performing parameter sweeps.

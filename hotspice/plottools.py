@@ -524,6 +524,10 @@ def init_style(backend=True, small=10, medium=11, large=12, style: Literal['defa
         case 'snooker':
             colors = ["red", "yellow", "green", "brown", "blue", "pink", "black"]
             matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=colors)
+        case 'rainbow':
+            colors = ["red", "orange", "yellow", "green", "blue", "indigo", "violet"]
+            matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=colors)
+            
 
 def colorcycle():
     """ Returns a list of matplotlib colors that I can actually see (C2 and C3 look basically identical). """
