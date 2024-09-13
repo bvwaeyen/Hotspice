@@ -1,12 +1,11 @@
-import time
-
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 from matplotlib import animation
 
 import examplefunctions as ef
-from context import hotspice
+import hotspice
 if hotspice.config.USE_GPU:
     import cupy as xp
     from cupyx.scipy import signal

@@ -524,6 +524,10 @@ def init_style(backend=True, small=10, medium=11, large=12, style: Literal['defa
         case 'snooker':
             colors = ["red", "yellow", "green", "brown", "blue", "pink", "black"]
             matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=colors)
+        case 'rainbow':
+            colors = ["red", "orange", "yellow", "green", "blue", "indigo", "violet"]
+            matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=colors)
+            
 
 def colorcycle():
     """ Returns a list of matplotlib colors that I can actually see (C2 and C3 look basically identical). """
@@ -565,9 +569,13 @@ def save_plot(save_path: str, ext=None, **savefig_kwargs):
 
 
 # TODO: incorporate monopole plot into the GUI
-def plot_monopoles(mm: Magnets, d=200e-9): # Original author: Diego De Gusem
+def plot_monopoles(mm: Magnets, d=None): # Original author: Diego De Gusem
+    if d is None: d = mm.get_energy('dimonopolar').d
     charges_xx_plot = np.zeros((mm.ny, mm.nx, 2))
     charges_yy_plot = np.zeros((mm.ny, mm.nx, 2))
+    if isinstance(d, np.ndarray):
+        d = np.tile(d, (math.ceil(mm.nx / mm.unitcell.x), math.ceil(mm.ny / mm.unitcell.y)))
+        d = d[:mm.ny,:mm.nx]
     charges_xx_plot[:,:,0] = (mm.xx + mm.m*d/2*xp.cos(mm.angles))*mm.occupation
     charges_xx_plot[:,:,1] = (mm.xx - mm.m*d/2*xp.cos(mm.angles))*mm.occupation
     charges_yy_plot[:,:,0] = (mm.yy + mm.m*d/2*xp.sin(mm.angles))*mm.occupation

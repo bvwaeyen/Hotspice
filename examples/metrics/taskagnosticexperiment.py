@@ -1,8 +1,7 @@
 import math
 import os
 
-try: from context import hotspice
-except ModuleNotFoundError: import hotspice
+import hotspice
 
 
 class SweepTAExperiment(hotspice.experiments.Sweep): # Example of a fully implemented Sweep subclass
@@ -16,7 +15,7 @@ class SweepTAExperiment(hotspice.experiments.Sweep): # Example of a fully implem
 
     def create_experiment(self, params: dict) -> hotspice.experiments.TaskAgnosticExperiment:
         mm = params['ASI_type'](params['a'], params['nx'], ny=params['ny'], T=params['T'], E_B=params['E_B'], moment=params['moment'], PBC=params['PBC'],
-            pattern='random', energies=(hotspice.DipolarEnergy(), hotspice.ZeemanEnergy()), params=hotspice.SimParams(UPDATE_SCHEME='Néel'))
+            pattern='random', energies=(hotspice.DipolarEnergy(), hotspice.ZeemanEnergy()), params=hotspice.SimParams(UPDATE_SCHEME=hotspice.Scheme.NEEL))
         datastream = hotspice.io.RandomBinaryDatastream()
         inputter = hotspice.io.FieldInputterBinary(datastream, magnitudes=(params['H_min'], params['H_max']), angle=params['H_angle'], n=2, sine=params['sine'])
         outputreader = hotspice.io.RegionalOutputReader(params['res_x'], params['res_y'], mm)
@@ -38,7 +37,7 @@ class SweepTA_RC_ASI(hotspice.experiments.Sweep):
 
     def create_experiment(self, params: dict) -> hotspice.experiments.TaskAgnosticExperiment:
         mm = getattr(hotspice.ASI, params['ASI_type'])(params['nx'], params['a'], ny=params['ny'], T=params['T'], E_B=params['E_B'], moment=params['moment'], PBC=params['PBC'],
-            pattern='random', energies=(hotspice.DipolarEnergy(), hotspice.ZeemanEnergy()), params=hotspice.SimParams(UPDATE_SCHEME='Néel'))
+            pattern='random', energies=(hotspice.DipolarEnergy(), hotspice.ZeemanEnergy()), params=hotspice.SimParams(UPDATE_SCHEME=hotspice.Scheme.NEEL))
         datastream = hotspice.io.RandomBinaryDatastream()
         inputter = hotspice.io.PerpFieldInputter(datastream, magnitude=params['ext_field'], angle=params['ext_angle'], n=2, sine=params['sine'])
         outputreader = hotspice.io.RegionalOutputReader(params['res_x'], params['res_y'], mm)
@@ -98,7 +97,7 @@ if __name__ == "__main__":
     # TAsweep_load(temp_dir, save=True)
 
     ## THE SITUATION IN 'Computation in artificial spin ice' BY JENSEN ET AL.:
-    # simparams = hotspice.SimParams(UPDATE_SCHEME='Néel') # Needed because we are working with frequency
+    # simparams = hotspice.SimParams(UPDATE_SCHEME=hotspice.Scheme.NEEL) # Needed because we are working with frequency
     # sweep_taskagnostic(hotspice.ASI.IP_Square, variables={}, params=simparams,
     #                    E_B=hotspice.utils.eV_to_J(5), T=300, V=220e-9*80e-9*25e-9, Msat=860e3, a=320e-9, n=9, PBC=False, pattern='random',
     #                    iterations=1000, ext_angle=math.pi/4, ext_magnitude=(0.015, 0.017), sine=100e6, verbose=1

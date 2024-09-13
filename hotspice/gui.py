@@ -19,7 +19,7 @@ from textwrap import dedent
 from tkinter import messagebox
 from typing import Callable, Literal
 
-from .core import Magnets, SimParams
+from .core import Magnets, SimParams, Scheme
 from .io import Inputter, OutputReader, BinaryDatastream, ScalarDatastream, IntegerDatastream
 from .utils import appropriate_SIprefix, asnumpy, bresenham, J_to_eV, SIprefix_to_mul
 from .plottools import get_rgb, Average, _get_averaged_extent
@@ -282,10 +282,10 @@ class ActionsPanel(ctk.CTkScrollableFrame):
     
     def _action_step(self, n=1, **kwargs):
         match self.mm.params.UPDATE_SCHEME:
-            case "Néel":
+            case Scheme.NEEL:
                 kwargs.setdefault("t_max", self.gui.ASI_settings.t_max)
                 kwargs.setdefault("attempt_freq", self.gui.ASI_settings.attempt_freq)
-            case "Metropolis":
+            case Scheme.METROPOLIS:
                 kwargs.setdefault("Q", self.gui.ASI_settings.Q)
         t = time.perf_counter() + 1
         for _ in range(n):
@@ -638,14 +638,14 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
                 self.ax.set_title(r"Magnetization $\overrightarrow{m}$")
                 IP = self.mm.in_plane
                 self.content = self.ax.imshow(im_placeholder, cmap=self.cmap_hsv, origin='lower', vmin=0 if IP else -1, vmax=2*np.pi if IP else 1, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect) # extent doesnt work perfectly with triangle or kagome but is still ok
-                self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
+                self.colorbar = self.figure.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
             case self.DisplayMode.QUIVER:
                 if not self.mm.in_plane: raise ValueError("Can only use DisplayMode.QUIVER for in-plane ASI.") # TODO: draw scatter plot for OOP ASI
                 self.content = self.ax.quiver(asnumpy(self.mm.xx[self.mm.nonzero])/self.unit_axes_factor, asnumpy(self.mm.yy[self.mm.nonzero])/self.unit_axes_factor,
                                            np.ones(self.mm.n), np.ones(self.mm.n), color=self.cmap_hsv(np.ones(self.mm.n)), pivot='mid',
                                            scale=1.1/self.mm._get_closest_dist(), headlength=17, headaxislength=17, headwidth=7, units='xy') # units='xy' makes arrows scale correctly when zooming
-                self.colorbar = plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=0, vmax=2*np.pi), cmap=self.cmap_hsv), **colorbar_ax_kwargs) # Quiver is not a Mappable, so we create our own ScalarMappable.
+                self.colorbar = self.figure.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=0, vmax=2*np.pi), cmap=self.cmap_hsv), **colorbar_ax_kwargs) # Quiver is not a Mappable, so we create our own ScalarMappable.
                 self.colorbar.ax.get_yaxis().labelpad = 15
                 self.colorbar.ax.set_ylabel(f"Magnetization angle [rad]", rotation=270, fontsize=self.figparams['fontsize_colorbar'])
             case self.DisplayMode.DOMAINS:
@@ -654,17 +654,17 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
                 cmap = colormaps['Greys'].copy()
                 cmap.set_bad(color='#FFAAAA')
                 self.content = self.ax.imshow(im_placeholder, cmap=cmap, origin='lower', extent=self.full_extent, vmin=0, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
-                self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
+                self.colorbar = self.figure.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 10 + 2*self.figparams['fontsize_colorbar']
                 self.colorbar.ax.set_ylabel("Domain number", rotation=270, fontsize=self.figparams['fontsize_colorbar']) # TODO: use the number of domains as vmax, when that has been implemented in .ASI module
             case self.DisplayMode.ENERGY:
                 self.ax.set_title(r"Local energy")
                 self.content = self.ax.imshow(im_placeholder, origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
-                self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
+                self.colorbar = self.figure.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 15
             case self.DisplayMode.FIELD:
                 self.content = self.ax.imshow(im_placeholder, cmap=colormaps['inferno'], origin='lower', extent=self.full_extent, interpolation='antialiased', interpolation_stage='rgba', aspect=self.ax_aspect)
-                self.colorbar = plt.colorbar(self.content, **colorbar_ax_kwargs)
+                self.colorbar = self.figure.colorbar(self.content, **colorbar_ax_kwargs)
                 self.colorbar.ax.get_yaxis().labelpad = 15
             case self.DisplayMode.READOUT:
                 if self.outputreader is None: raise AttributeError("Can not use DisplayMode.READOUT because no OutputReader was provided.")
@@ -707,7 +707,8 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         if settings_changed: self.quiver_scale = np.inf
         match quiver_qty:
             case 'spin':
-                x, y = asnumpy(xp.multiply(self.mm.m, self.mm.orientation[:,:,0])[self.mm.nonzero]), asnumpy(xp.multiply(self.mm.m, self.mm.orientation[:,:,1])[self.mm.nonzero])
+                x = asnumpy(xp.multiply(xp.multiply(self.mm.m, self.mm.orientation[:,:,0]), self.mm.occupation)[self.mm.nonzero])
+                y = asnumpy(xp.multiply(xp.multiply(self.mm.m, self.mm.orientation[:,:,1]), self.mm.occupation)[self.mm.nonzero])
             case 'H_eff':
                 x, y = self.mm.H_eff
                 x, y = asnumpy(x[self.mm.nonzero]), asnumpy(y[self.mm.nonzero])
@@ -846,7 +847,7 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
         valid_components += [e.__class__.__name__ for e in self.mm._energies]
         self.option_energy_component = ctk.CTkOptionMenu(self.tab_ENERGY, values=valid_components, command=self.init_settings_magview)
         self.option_energy_component.pack(pady=10, padx=10)
-        self.option_energy_component.set('Total') # Set to 'Total' by default
+        self.option_energy_component.set('Total energy') # Set to 'Total' by default
         self.option_perp = ctk.CTkSwitch(self.tab_ENERGY, text="Show perpendicular component", command=self.init_settings_magview)
         if self.mm.USE_PERP_ENERGY: self.option_perp.pack() # Only show this button if USE_PERP_ENERGY
         self.option_perp.deselect() # Set to 'off' by default
@@ -885,30 +886,31 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
 class ASISettingsFrame(ctk.CTkFrame):
     @dataclass
     class ASISettings:
-        UPDATE_SCHEME: Literal['Néel', 'Metropolis'] = 'Néel'
+        UPDATE_SCHEME: Scheme = Scheme.NEEL
         t_max: float = 1.
         attempt_freq: float = 1e10
         Q: float = 0.05
         # TODO: allow choosing grid selection method in Metropolis
 
         def __post_init__(self):
-            self.UPDATE_SCHEME = str(self.UPDATE_SCHEME)
             if self.UPDATE_SCHEME not in self.available_update_modes: raise ValueError(f"<UPDATE_MODE> can only be any of {self.available_update_modes}.")
             self.t_max = float(self.t_max)
             self.attempt_freq = float(self.attempt_freq)
             self.Q = float(self.Q) # Range 0-inf, but logical range 0-1, and goes logarithmically
 
         @property
-        def available_update_modes(self): return ['Néel', 'Metropolis']
+        def available_update_modes(self): return [Scheme.NEEL, Scheme.METROPOLIS]
 
     def __init__(self, master, gui: GUI, **kwargs):
         super().__init__(master, **kwargs)
         self.gui = gui
         self.mm = gui.mm
         self.settings = ASISettingsFrame.ASISettings(UPDATE_SCHEME=self.mm.params.UPDATE_SCHEME)
+        self.UPDATE_SCHEME_TO_NAME = {Scheme.NEEL: "Néel", Scheme.METROPOLIS: "Metropolis"}
+        self.NAME_TO_UPDATE_SCHEME = {v:k for k, v in self.UPDATE_SCHEME_TO_NAME.items()}
 
         def change_updatemode():
-            self.settings.UPDATE_SCHEME = self.updatescheme_tabview._current_name
+            self.settings.UPDATE_SCHEME = self.NAME_TO_UPDATE_SCHEME[self.updatescheme_tabview._current_name]
             self.apply_settings_to_mm()
 
         ## Update scheme
@@ -948,7 +950,7 @@ class ASISettingsFrame(ctk.CTkFrame):
     
     def get_settings_from_mm(self):
         self.settings.UPDATE_SCHEME = self.mm.params.UPDATE_SCHEME
-        self.updatescheme_tabview.set(self.settings.UPDATE_SCHEME)
+        self.updatescheme_tabview.set(self.UPDATE_SCHEME_TO_NAME[self.settings.UPDATE_SCHEME])
         sig_Néel = inspect.signature(self.mm._update_Néel)
         self.Néel_t_max_var.set(float(sig_Néel.parameters['t_max'].default))
         self.Néel_attemptfreq_var.set(float(sig_Néel.parameters['attempt_freq'].default)*1e-9)
@@ -1003,7 +1005,7 @@ def show(mm, **kwargs):
 def test(in_plane=False, **kwargs):
     from .ASI import OOP_Square, IP_Pinwheel
     if in_plane:
-        mm = IP_Pinwheel(230e-9, 40, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Metropolis"))
+        mm = IP_Pinwheel(230e-9, 40, T=300, E_B=0, params=SimParams(UPDATE_SCHEME=Scheme.METROPOLIS))
     else:
-        mm = OOP_Square(230e-9, 200, T=300, E_B=0, params=SimParams(UPDATE_SCHEME="Néel"))
+        mm = OOP_Square(230e-9, 200, T=300, E_B=0, params=SimParams(UPDATE_SCHEME=Scheme.NEEL))
     show(mm, **kwargs)

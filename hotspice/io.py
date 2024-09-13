@@ -6,7 +6,7 @@ from inspect import isgeneratorfunction
 from typing import Literal
 
 from .ASI import IP_ASI, OOP_Square
-from .core import Magnets
+from .core import Magnets, Scheme
 from .energies import ZeemanEnergy
 from .plottools import show_m
 from .utils import log, lower_than
@@ -219,8 +219,8 @@ class FieldInputter(Inputter):
         return not self.half_period
 
     def input_single(self, mm: Magnets, value: float|int):
-        if self.sine and mm.params.UPDATE_SCHEME != 'Néel':
-            raise AttributeError("Can not use temporal sine=True if UPDATE_SCHEME != 'Néel'.")
+        if self.sine and mm.params.UPDATE_SCHEME != Scheme.NEEL:
+            raise AttributeError("Can not use temporal sine=True if UPDATE_SCHEME != Scheme.NEEL.")
         Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
         if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
 
@@ -268,8 +268,8 @@ class PerpFieldInputter(FieldInputter):
         super().__init__(datastream, magnitude=magnitude, angle=angle, n=n, frequency=frequency)
 
     def input_single(self, mm: IP_ASI, value: bool|int):
-        if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
-            raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != 'Néel'.")
+        if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != Scheme.NEEL:
+            raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != Scheme.NEEL.")
         if not mm.in_plane:
             raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
 
@@ -290,8 +290,8 @@ class PerpFieldInputter(FieldInputter):
             mm.progress(t_max=0.5/self.frequency, MCsteps_max=self.n)
 
     def input_single_generalized(self, mm: IP_ASI, value: bool|int):
-        if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != 'Néel':
-            raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != 'Néel'.")
+        if (self.sine or self.frequency) and mm.params.UPDATE_SCHEME != Scheme.NEEL:
+            raise AttributeError("Can not use temporal sine=True or nonzero frequency if UPDATE_SCHEME != Scheme.NEEL.")
         if not mm.in_plane:
             raise AttributeError("Can not use PerpFieldInputter on an out-of-plane ASI.")
 
@@ -445,39 +445,6 @@ class OOPSquareChessOutputReader(OutputReader):
         return self.state # [unitless]
 
 
-class OOPSquareClockwiseInputter(Inputter):
-    def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
-        """ Applies an external stimulus in a clockwise manner in 4 substeps.
-            In each substep, one quarter of all magnets is positively biased, while another quarter is negatively biased,
-            and the other half is not stimulated at all. TODO: complete this description
-            `frequency` specifies the frequency [Hz] at which bits are being input to the system, if it is nonzero.
-            At most `n` Monte Carlo steps will be performed for a single input bit.
-            NOTE: This inputter will probalby work best with Néel update scheme.
-        """
-        super().__init__(datastream)
-        self.magnitude = magnitude
-        self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
-        self.frequency = frequency # The min. frequency the bits are applied at, if the time is known (i.e. Néel scheme is used)
-
-    def input_single(self, mm: OOP_Square, value: bool|int):
-        """ Performs an input corresponding to `value` (generated using `self.datastream`)
-            into the `mm` simulation, and returns this `value`.
-        """
-        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
-        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
-
-        combinations = [(0, 0), (1, 0), (1, 1), (0, 1)] if value else [(0, 0), (0, 1), (1, 1), (1, 0)] # This is (the only place) where <value> comes in
-        # combinations = [(0, 0), (1, 0), (0, 1), (1, 1)] if value else [(0, 0), (0, 1), (1, 0), (1, 1)] # This is (the only place) where <value> comes in
-        for offset_x, offset_y in combinations: # Determines which quarter of the magnets is stimulated at each substep
-            mask_positive = xp.logical_and((mm.ixx % 2) == offset_x, (mm.iyy % 2) == offset_y).astype(float) # need astype float for good multiplication with self.magnitude
-            mask_negative = xp.logical_and((mm.ixx % 2) != offset_x, (mm.iyy % 2) == offset_y).astype(float) # TODO: verify this position based on SOT physics
-            # magnitude_local = self.magnitude*(mask_positive - mask_negative)
-            magnitude_local = self.magnitude*mask_positive
-            magnitude_local = self.magnitude*(mask_positive if value else -mask_negative)
-            Zeeman.set_field(magnitude=magnitude_local)
-            mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-
-
 class OOPSquareChessStepsInputter(Inputter):
     def __init__(self, datastream: Datastream, magnitude: float = 1., magnitude_range: float = 0., transition_range: float = 1., n: float = 4., frequency: float = 1.):
         """ Applies an external stimulus in a checkerboard pattern. This is modelled as an external field for each magnet.
@@ -532,43 +499,3 @@ class OOPSquareChessStepsInputter(Inputter):
         if value > 1 - s:
             return self.magnitude + (value - 1)*self.magnitude_range/s
         return 2*(self.magnitude - self.magnitude_range)/self.transition_range*(value - 0.5)
-
-
-class OOPSquareChessSOTStepsInputter(Inputter):
-    def __init__(self, datastream: Datastream, magnitude: float = 1, n=4, frequency=1):
-        """ Tries to model the SOT as a reduction in energy barrier of the magnets.
-            The question is then, how one should define a bit 0 or 1, or any value in between if we want analog input.
-            One option is to use an external field whose strength determines the value, just as was the case in the
-            `OOPSquareChessStepsInputter` (with magnitude `magnitude*datastream.get_next()`). This can be done without
-            a weird transfer function as the ASI is thermally active, I suppose.
-            Another option is to vary the strength of the SOT, however it is not entirely clear what the effect of this is.
-            I doubt it could be modeled as a smaller or larger reduction in the energy barrier. 
-            A checkerboard pattern is used to make sure domain walls only move one step at a time.
-            `frequency` specifies the frequency [Hz] at which bits are being applied to the system, if it is nonzero.
-            At most `n` Monte Carlo steps will be performed for a single input bit.
-        """
-        super().__init__(datastream)
-        self.magnitude = magnitude
-        self.n = n # The max. number of Monte Carlo steps performed every time self.input_single(mm) is called
-        self.frequency = frequency
-
-    def input_single(self, mm: OOP_Square, value: bool|int):
-        Zeeman: ZeemanEnergy = mm.get_energy('Zeeman')
-        if Zeeman is None: mm.add_energy(Zeeman := ZeemanEnergy(0, 0))
-        magnitude = self.magnitude*(2*value - 1)
-        Zeeman.set_field(magnitude=magnitude) # Constant field, determined by the input value
-
-        AFM_mask = ((mm.ixx + mm.iyy) % 2).astype(float) # 0 and 1 checkerboard (need astype float for correct multiplication)
-        E_B_original = mm.E_B.copy()
-        E_B_step1 = E_B_original*AFM_mask # TODO: is this realistic? Not really, because E_B of zero means Ising approximation does not apply
-        E_B_step2 = E_B_original*(1 - AFM_mask)
-
-        # First substep
-        mm.E_B = E_B_step1
-        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-        # Second substep
-        mm.E_B = E_B_step2
-        mm.progress(t_max=1/self.frequency, MCsteps_max=self.n)
-
-        mm.E_B = E_B_original
-

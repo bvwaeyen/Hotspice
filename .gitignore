@@ -5,5 +5,5 @@
 /videos/*
 /profiling/*
 /results/*
-/tests/*.out
+*.out
 /hotspice_results/*

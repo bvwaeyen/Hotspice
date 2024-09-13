@@ -1,13 +1,11 @@
 import math
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 from matplotlib import cm, colormaps
 
-try: from context import hotspice
-except ModuleNotFoundError: import hotspice
+import hotspice
 
 
 def plot2Dsweep(summary_file, save=True, plot=True, title=None,

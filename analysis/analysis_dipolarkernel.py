@@ -30,7 +30,7 @@ def analysis_dipolarkernel_cutoff(mm: hotspice.Magnets=None, n: int = 10000, L: 
     if mm.get_energy('dipolar', verbose=False) is None: mm.add_energy(hotspice.DipolarEnergy())
     mm.params.REDUCED_KERNEL_SIZE = cutoff
     mm.params.SIMULTANEOUS_SWITCHES_CONVOLUTION_OR_SUM_CUTOFF = 0 # Need convolution method to use truncated kernel
-    mm.params.UPDATE_SCHEME = "Metropolis" # Néel collapses to update_single(), which has no cutoff. Furthermore, using Metropolis samples way more magnets, especially if Q=np.inf.
+    mm.params.UPDATE_SCHEME = hotspice.Scheme.METROPOLIS # Néel collapses to update_single(), which has no cutoff. Furthermore, using Metropolis samples way more magnets, especially if Q=np.inf.
     mm.PBC = True
     if pattern is not None: mm.initialize_m(pattern)
 

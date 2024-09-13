@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .core import Magnets # Only need Magnets for type annotations
 
-from .utils import as_2D_array, mirror4
+from .utils import as_2D_array
 
 from abc import ABC, abstractmethod
 from functools import cache
@@ -202,7 +202,7 @@ class DipolarEnergy(Energy):
                 rry = yy - yy[self.mm.ny - 1,0]
                 
                 # Let us first make the four-mirrored distance matrix rinv3
-                rr_sq = rrx**2 + rry**2
+                rr_sq = (rrx**2 + rry**2).astype(float)
                 rr_sq[self.mm.ny - 1,self.mm.nx - 1] = xp.inf
                 rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
                 rinv3 = rr_inv**(-self.decay_exponent) # = 1/r^3 by default
@@ -391,27 +391,53 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
         self.small_d = small_d # [m]
 
     def _initialize(self):
+        if not isinstance(self.d, np.ndarray):
+            self.dist_unitcell = as_2D_array(self.d, (self.mm.unitcell.y, self.mm.unitcell.x))
+        else:
+            self.dist_unitcell = self.d
+        self.dist = np.tile(self.dist_unitcell,(math.ceil(self.mm.ny / self.mm.unitcell.y), math.ceil(self.mm.nx / self.mm.unitcell.x)))
+        self.dist_exact = self.dist[:self.mm.ny, :self.mm.nx]
         self.unitcell = self.mm.unitcell
         self.E = xp.zeros_like(self.mm.xx)
-        self.charge = self.mm.moment / self.d  # Magnetic charge [Am]
-        self.charge_sq = self.charge**2
+        self.charge = self.mm.moment / self.dist_exact  # Magnetic charge [Am]
+        self.charge_sq = self.charge ** 2
 
         # Create a grid that is too large. This is needed to place every magnet in the unitcell in the centrum to convolve
-        xx, yy = xp.meshgrid(self.mm.dx * xp.arange(-(self.mm.nx-1), self.mm.nx + self.mm.unitcell.x), self.mm.dy * xp.arange(-(self.mm.ny-1), self.mm.ny + self.mm.unitcell.y))
+        x_arange = xp.arange(-(self.mm.nx - 1), self.mm.nx + self.mm.unitcell.x)
+        dx = self.mm.dx[x_arange % self.mm.nx]
+        x_large = xp.zeros(x_arange.size)
+        x_large[1:] = xp.cumsum(dx)[:-1]
+        x_large -= x_large[self.mm.nx - 1]
+
+        y_arange = xp.arange(-(self.mm.ny - 1), self.mm.ny + self.mm.unitcell.y)
+        dy = self.mm.dy[y_arange % self.mm.ny]
+        y_large = xp.zeros(y_arange.size)
+        y_large[1:] = xp.cumsum(dy)[:-1]
+        y_large -= y_large[self.mm.ny - 1]
+
+        xx, yy = xp.meshgrid(x_large, y_large)
+        if not isinstance(self.d, np.ndarray):
+            self.dist_too_big = as_2D_array(self.d, xx.shape)
+        else:
+            self.dist_too_big = xp.zeros(xx.shape)
+            for y in range(xx.shape[0]):
+                for x in range(xx.shape[1]):
+                    self.dist_too_big[y,x] = self.dist_unitcell[(y-(self.mm.ny-1))%self.mm.unitcell.y,(x-(self.mm.nx-1))%self.mm.unitcell.x]
+
         # Determine the angle of each magnet in the too large grid
-        angle_unitcell = self.mm.angles[0:self.unitcell.y, 0:self.unitcell.x]
+        angle_unitcell = self.mm.original_angles[:self.unitcell.y,:self.unitcell.x]
         angles = xp.zeros(xx.shape)
         for y in range(xx.shape[0]):
             for x in range(xx.shape[1]):
                 angles[y,x] = angle_unitcell[(y-(self.mm.ny-1))%self.mm.unitcell.y, (x-(self.mm.nx-1))%self.mm.unitcell.x]
 
         # Let us now find our monopoles, given the position and angle of the magnets we just found
-        charges_xx = np.zeros((2*self.mm.ny-1 + self.mm.unitcell.y, 2*self.mm.nx-1 + self.mm.unitcell.x, 2))
-        charges_yy = np.zeros((2*self.mm.ny-1 + self.mm.unitcell.y, 2*self.mm.nx-1 + self.mm.unitcell.x, 2))
-        charges_xx[:,:,0] = xx + self.d / 2 * xp.cos(angles)
-        charges_xx[:,:,1] = xx - self.d / 2 * xp.cos(angles)
-        charges_yy[:,:,0] = yy + self.d / 2 * xp.sin(angles)
-        charges_yy[:,:,1] = yy - self.d / 2 * xp.sin(angles)
+        charges_xx = np.zeros((2 * self.mm.ny - 1 + self.mm.unitcell.y, 2 * self.mm.nx - 1 + self.mm.unitcell.x, 2))
+        charges_yy = np.zeros((2 * self.mm.ny - 1 + self.mm.unitcell.y, 2 * self.mm.nx - 1 + self.mm.unitcell.x, 2))
+        charges_xx[:, :, 0] = xx + self.dist_too_big / 2 * xp.cos(angles)
+        charges_xx[:, :, 1] = xx - self.dist_too_big / 2 * xp.cos(angles)
+        charges_yy[:, :, 0] = yy + self.dist_too_big / 2 * xp.sin(angles)
+        charges_yy[:, :, 1] = yy - self.dist_too_big / 2 * xp.sin(angles)
 
         # DETERMINE THE POSITIONS WHEN ONE UNITCELL MAGNET HAS FLIPPED (1 d should be small)
         charges_xx_perp_self = np.zeros((2 * self.mm.ny - 1 + self.mm.unitcell.y, 2 * self.mm.nx - 1 + self.mm.unitcell.x, 2, self.mm.unitcell.x*self.mm.unitcell.y))
@@ -433,14 +459,12 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
         magnet_n = 0
         for y in range(self.mm.ny - 1, self.mm.ny - 1 + self.unitcell.y):
             for x in range(self.mm.nx - 1, self.mm.nx - 1 + self.unitcell.x):
-                charges_xx_perp_other[:, :, 0, magnet_n] = xx + self.small_d / 2 * xp.cos(angles+np.pi/2)
-                charges_xx_perp_other[:, :, 1, magnet_n] = xx - self.small_d / 2 * xp.cos(angles+np.pi/2)
-                charges_xx_perp_other[y, x, 0, magnet_n] = xx[y, x] + self.d / 2 * xp.cos(angles[y, x] - np.pi / 2)
-                charges_xx_perp_other[y, x, 1, magnet_n] = xx[y, x] - self.d / 2 * xp.cos(angles[y, x] - np.pi / 2)
-                charges_yy_perp_other[:, :, 0, magnet_n] = yy + self.small_d / 2 * xp.sin(angles+np.pi/2)
-                charges_yy_perp_other[:, :, 1, magnet_n] = yy - self.small_d / 2 * xp.sin(angles+np.pi/2)
-                charges_yy_perp_other[y, x, 0, magnet_n] = yy[y, x] + self.small_d / 2 * xp.sin(angles[y, x] - np.pi / 2)
-                charges_yy_perp_other[y, x, 1, magnet_n] = yy[y, x] - self.small_d / 2 * xp.sin(angles[y, x] - np.pi / 2)
+                charges_xx_perp_other[:, :, 0, magnet_n] = xx + self.small_d / 2 * xp.cos(angles + np.pi / 2)
+                charges_xx_perp_other[:, :, 1, magnet_n] = xx - self.small_d / 2 * xp.cos(angles + np.pi / 2)
+                charges_xx_perp_other[y, x, :, magnet_n] = charges_xx[y,x]
+                charges_yy_perp_other[:, :, 0, magnet_n] = yy + self.small_d / 2 * xp.sin(angles + np.pi / 2)
+                charges_yy_perp_other[:, :, 1, magnet_n] = yy - self.small_d / 2 * xp.sin(angles + np.pi / 2)
+                charges_yy_perp_other[y, x, :, magnet_n] = charges_yy[y, x]
                 magnet_n += 1
 
         # For each monopole in the unit cell, determine the relative position to every other monopole in the system
@@ -465,15 +489,22 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
                 rrxSN = charges_xx[:,:,1] - charges_xx[y,x,0]
                 rrySN = charges_yy[:,:,1] - charges_yy[y,x,0]
 
-                rrNN_sq = rrxNN**2 + rryNN**2
-                rrSS_sq = rrxSS**2 + rrySS**2
-                rrNS_sq = rrxNS**2 + rryNS**2
-                rrSN_sq = rrxSN**2 + rrySN**2
+                # Remove the self interaction in the cross terms
+                rrxNS[y,x] = 0
+                rryNS[y,x] = 0
+                rrxSN[y,x] = 0
+                rrySN[y,x] = 0
 
-                rrNN_sq[y,x] = xp.inf
-                rrSS_sq[y,x] = xp.inf
-                rrNS_sq[y,x] = xp.inf
-                rrSN_sq[y,x] = xp.inf
+                rrNN_sq = (rrxNN**2 + rryNN**2).astype(np.float32)
+                rrSS_sq = (rrxSS**2 + rrySS**2).astype(np.float32)
+                rrNS_sq = (rrxNS**2 + rryNS**2).astype(np.float32)
+                rrSN_sq = (rrxSN**2 + rrySN**2).astype(np.float32)
+
+                # It is possible that artificial monopoles overlap and also give a 0, for this reason:
+                rrNN_sq[rrNN_sq==0] = xp.inf
+                rrSS_sq[rrSS_sq==0] = xp.inf
+                rrNS_sq[rrNS_sq==0] = xp.inf
+                rrSN_sq[rrSN_sq==0] = xp.inf
 
                 rrNN_inv = rrNN_sq ** -0.5  # Due to the previous line, this is now never infinite
                 rrSS_inv = rrSS_sq ** -0.5
@@ -496,15 +527,22 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
                 rrxSN_perp_self = charges_xx_perp_self[:, :, 1, magnet_n] - charges_xx_perp_self[y, x, 0, magnet_n]
                 rrySN_perp_self = charges_yy_perp_self[:, :, 1, magnet_n] - charges_yy_perp_self[y, x, 0, magnet_n]
 
+                # Remove the self interaction in the cross terms
+                rrxNS_perp_self[y, x] = 0
+                rryNS_perp_self[y, x] = 0
+                rrxSN_perp_self[y, x] = 0
+                rrySN_perp_self[y, x] = 0
+
                 rrNN_sq_perp_self = rrxNN_perp_self ** 2 + rryNN_perp_self ** 2
                 rrSS_sq_perp_self = rrxSS_perp_self ** 2 + rrySS_perp_self ** 2
                 rrNS_sq_perp_self = rrxNS_perp_self ** 2 + rryNS_perp_self ** 2
                 rrSN_sq_perp_self = rrxSN_perp_self ** 2 + rrySN_perp_self ** 2
 
-                rrNN_sq_perp_self[y, x] = xp.inf
-                rrSS_sq_perp_self[y, x] = xp.inf
-                rrNS_sq_perp_self[y, x] = xp.inf
-                rrSN_sq_perp_self[y, x] = xp.inf
+                # It is possible that artificial monopoles overlap and also give a 0, for this reason:
+                rrNN_sq_perp_self[rrNN_sq_perp_self==0] = xp.inf
+                rrSS_sq_perp_self[rrSS_sq_perp_self==0] = xp.inf
+                rrNS_sq_perp_self[rrNS_sq_perp_self==0] = xp.inf
+                rrSN_sq_perp_self[rrSN_sq_perp_self==0] = xp.inf
 
                 rrNN_inv_perp_self = rrNN_sq_perp_self ** -0.5  # Due to the previous line, this is now never infinite
                 rrSS_inv_perp_self = rrSS_sq_perp_self ** -0.5
@@ -527,15 +565,22 @@ class DiMonopolarEnergy(DipolarEnergy): # Original author: Diego De Gusem
                 rrxSN_perp_other = charges_xx_perp_other[:, :, 1, magnet_n] - charges_xx_perp_other[y, x, 0, magnet_n]
                 rrySN_perp_other = charges_yy_perp_other[:, :, 1, magnet_n] - charges_yy_perp_other[y, x, 0, magnet_n]
 
+                # Remove the self interaction in the cross terms
+                rrxNS_perp_other[y, x] = 0
+                rryNS_perp_other[y, x] = 0
+                rrxSN_perp_other[y, x] = 0
+                rrySN_perp_other[y, x] = 0
+
                 rrNN_sq_perp_other = rrxNN_perp_other ** 2 + rryNN_perp_other ** 2
                 rrSS_sq_perp_other = rrxSS_perp_other ** 2 + rrySS_perp_other ** 2
                 rrNS_sq_perp_other = rrxNS_perp_other ** 2 + rryNS_perp_other ** 2
                 rrSN_sq_perp_other = rrxSN_perp_other ** 2 + rrySN_perp_other ** 2
 
-                rrNN_sq_perp_other[y, x] = xp.inf
-                rrSS_sq_perp_other[y, x] = xp.inf
-                rrNS_sq_perp_other[y, x] = xp.inf
-                rrSN_sq_perp_other[y, x] = xp.inf
+                # It is possible that artificial monopoles overlap and also give a 0, for this reason:
+                rrNN_sq_perp_other[rrNN_sq_perp_other==0] = xp.inf
+                rrSS_sq_perp_other[rrSS_sq_perp_other==0] = xp.inf
+                rrNS_sq_perp_other[rrNS_sq_perp_other==0] = xp.inf
+                rrSN_sq_perp_other[rrSN_sq_perp_other==0] = xp.inf
 
                 rrNN_inv_perp_other = rrNN_sq_perp_other ** -0.5  # Due to the previous line, this is now never infinite
                 rrSS_inv_perp_other = rrSS_sq_perp_other ** -0.5

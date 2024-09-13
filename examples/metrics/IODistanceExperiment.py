@@ -39,7 +39,7 @@ E_B = [ # From the best sample of Sweep20221125115428
 # E_B is the same as from the best (i.e. highest Q) sample of Sweep20221125115428
 mm = hotspice.ASI.OOP_Square(a=2.2660680638228574e-07, n=20, E_B=E_B, T=300, moment=2.534014798975711e-16, PBC=False)
 mm.add_energy(hotspice.ZeemanEnergy())
-mm.params.UPDATE_SCHEME = "Néel"
+mm.params.UPDATE_SCHEME = hotspice.Scheme.NEEL
 datastream = hotspice.io.RandomBinaryDatastream()
 inputter = hotspice.io.OOPSquareChessFieldInputter(datastream, magnitude=0.071, frequency=1)
 outputreader = hotspice.io.OOPSquareChessOutputReader(10, 10)
