@@ -126,6 +126,10 @@ class GUI(ctk.CTk):
     def dark_mode(self) -> bool:
         return ctk.get_appearance_mode() == "Dark"
     
+    @property
+    def color_bg(self):
+        return '#%02x%02x%02x' % tuple(i//256 for i in self.winfo_rgb(self["bg"]))
+
     def all_children(self, widget):
         return [widget] + [subchild
                            for child in widget.winfo_children()
@@ -408,6 +412,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
 
         ## Create the basic MPL figure inside this Tkinter frame
         self.figure = Figure(dpi=100, tight_layout=True) # Tight_layout true at the start to get a nice layout to begin with
+        self.figure.patch.set_facecolor(self.gui.color_bg)
         self.canvas = FigureCanvasTkAgg(self.figure, master=self)
         self.toolbar = NavigationToolbar2Tk(self.canvas, self)
         self.toolbar.update()
@@ -435,6 +440,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         self.ax.set_ylabel(f"y [{self.unit_axes}m]")
         self.ax.set_xlim(self.full_extent[:2])
         self.ax.set_ylim(self.full_extent[2:])
+        self.ax.set_facecolor("None")
         self.content: quiver.Quiver | image.AxesImage = None
         self.colorbar: colorbar.Colorbar = None
         self.figparams = { # This should not be changed dynamically, so this can stay as a dictionary
