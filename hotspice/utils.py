@@ -374,7 +374,7 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
             figures = {f'figure{i if len(figures) > 1 else ""}': figure for i, figure in enumerate(figures)}
         for name, fig in figures.items():
             for ext in figure_format:
-                fig.savefig(outdir / (name + ext), dpi=dpi)
+                fig.savefig(outdir / (name + ext), dpi=dpi, transparent=True)
     return outdir
 
 def load_results(data_dir: Path|str):
