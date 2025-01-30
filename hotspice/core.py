@@ -561,11 +561,11 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         if r is None: r = self.calc_r(0.01)
 
         # p = SequentialPoissonDiskSampling(self.y_max, self.x_max, r, tries=1).fill()
-        p = np.asarray(poisson_disc_samples(self.y_max, self.x_max, r, k=4))
+        p = xp.asarray(poisson_disc_samples(self.y_max, self.x_max, r, k=4)).reshape(-1, 2)
         
         def nearest_grid_indices(grid_1D, coords_1D): # TODO: this method is flawed because if some dx are very small they will almost never be visited
-            return np.abs(grid_1D[:, np.newaxis] - coords_1D).argmin(axis=0)
-        points = np.column_stack((nearest_grid_indices(self.x, p[:,0] + self.x_min),
+            return xp.abs(grid_1D[:, xp.newaxis] - coords_1D).argmin(axis=0)
+        points = xp.column_stack((nearest_grid_indices(self.x, p[:,0] + self.x_min),
                                   nearest_grid_indices(self.y, p[:,1] + self.y_min)))
         return xp.asarray(points.T)
 
