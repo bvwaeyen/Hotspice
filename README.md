@@ -64,11 +64,10 @@ hotspice.gui.show(mm) # Display a GUI showing the current state of the spin ice
 - The first parameter (`a=1e-6`) is the lattice parameter in meters, often representing a typical distance between two magnets. The exact definition depends on the lattice used: see [Available spin ices](#available-spin-ices).
 
 - The second parameter (`n=100`) specifies the size of the rectilinear grid upon which the simulation is performed.
+  In this example, the 'diamond' pinwheel ASI has 10000 available grid-points, of which 5000 (=`mm.n`) will contain a magnet.
 
-  > [!NOTE]
-  > As explained in [our paper](https://arxiv.org/abs/2409.05580), Hotspice simulations use an underlying grid for efficient calculation. Hence, all ASI in Hotspice are represented as 2D arrays. Note that this implies that the possible spin ice lattices are restricted to those that can be represented as a periodic structure on a square grid. The lattices in [Available spin ices](#available-spin-ices) are defined by leaving some spots on this grid empty, while filling others with the properties of a magnet e.g., magnetic moment, orientation...
-
-  For example, the 'diamond' pinwheel ASI in the code snippet above has 10000 available grid-points, of which 5000 (=`mm.n`) will contain a magnet.
+> [!NOTE]
+> As explained in [our paper](https://arxiv.org/abs/2409.05580), Hotspice simulations use an underlying grid for efficient calculation. Hence, all ASI in Hotspice are represented as 2D arrays. Note that this implies that the possible spin ice lattices are restricted to those that can be represented as a periodic structure on a square grid. The lattices in [Available spin ices](#available-spin-ices) are defined by leaving some spots on this grid empty, while filling others with the properties of a magnet e.g., magnetic moment, orientation...
 
 - Additional arguments can be provided, for which we mostly refer to the [docstring of `hotspice.Magnets()`](hotspice/core.py#L56). The most important of these are:
   - `moment` (magnetic moment $M_\mathrm{sat} V$), `T` (temperature) and `E_B` (energy barrier $E_\mathrm{B}$) `E_B` of all magnets can be specified as scalars or 2D NumPy (or CuPy) arrays. For ellipsoidal nanomagnets, `hotspice.utils.E_B_ellipsoid()` can provide a basic estimate for `E_B`.
