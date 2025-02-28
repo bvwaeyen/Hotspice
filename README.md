@@ -61,16 +61,19 @@ mm.add_energy(hotspice.ZeemanEnergy(magnitude=1e-3)) # Apply a 1mT field
 hotspice.gui.show(mm) # Display a GUI showing the current state of the spin ice
 ```
 
-Here, `1e-6` is the lattice parameter in meters, and `100` is the size of the underlying grid in both the x and y directions. All ASI in Hotspice are stored as 2D arrays for efficient calculation. Note that this implies that the possible spin ice lattices are restricted to those that can be represented as a periodic structure on a square grid.
-The lattice is then defined by leaving some spots on this grid empty, while filling others with a magnet and its relevant parameters like magnetic moment $M_{sat} V$ (`mm.moment`), energy barrier $E_B$ (`mm.E_B`), temperature $T$ (`mm.T`), orientation...
+- The first parameter (`a=1e-6`) is the lattice parameter in meters, often representing a typical distance between two magnets. The exact definition depends on the lattice used: see [Available spin ices](#available-spin-ices).
 
-- The first parameter (`a=1e-6`) is the lattice parameter, often representing a typical distance between two magnets. The exact definition depends on the lattice used: see [Available spin ices](#available-spin-ices) for the definition of `a` in the default ASI lattices.
+- The second parameter (`n=100`) specifies the size of the rectilinear grid upon which the simulation is performed.
 
-- The second parameter (`n=100`) specifies the length of each axis of these underlying 2D arrays.
-Hence, the spin ice in the example above will have 10000 available grid-points on which to put a magnet.
-However, this 'diamond' pinwheel geometry can only be represented on a grid by leaving half of the available cells empty, so the simulation above actually contains 5000 magnets (see `mm.n`).
+  > [!Note]
+  > As explained in [our paper](https://arxiv.org/abs/2409.05580), Hotspice simulations use an underlying grid for efficient calculation. Hence, all ASI in Hotspice are represented as 2D arrays. Note that this implies that the possible spin ice lattices are restricted to those that can be represented as a periodic structure on a square grid. The lattices in [Available spin ices](#available-spin-ices) are defined by leaving some spots on this grid empty, while filling others with the properties of a magnet e.g., magnetic moment, orientation...
 
-- Additional parameters can be used, for which we refer to the docstring of `hotspice.Magnets()`. The `params` parameter accepts a `hotspice.SimParams` instance which can set technical details for the spin ice, e.g. the update/sampling scheme to use, whether to use a reduced kernel... Energies can be added from the `energies.py` file, whose classes are available in the main `hotspice` namespace.
+  For example, the 'diamond' pinwheel ASI in the code snippet above has 10000 available grid-points, of which 5000 (=`mm.n`) will contain a magnet.
+
+- Additional arguments can be provided, for which we mostly refer to the [docstring of `hotspice.Magnets()`](hotspice/core.py#L56). The most important of these are:
+  - `moment` (magnetic moment $M_\mathrm{sat} V$), `T` (temperature) and `E_B` (energy barrier $E_\mathrm{B}$) `E_B` of all magnets can be specified as scalars or 2D NumPy (or CuPy) arrays. For ellipsoidal nanomagnets, `hotspice.utils.E_B_ellipsoid()` can provide a basic estimate for `E_B`.
+  - The `params` argument is a `hotspice.SimParams` instance, which controls technical aspects of the simulation e.g., the update/sampling scheme to use, when and at what distance to cut off the magnetostatic interaction (achieved by truncating the kernel array)...
+  - The `energies` argument can be used to add a `hotspice.ZeemanEnergy` or `hotspice.ExchangeEnergy` to the ASI. It takes a list of the energies that should be considered. Note that it is possible to omit the magnetostatic interaction in this manner. Custom energies can also be defined by the user.
 
 Examples of usage for several of the ASI lattices are provided in the 'examples' directory.
 
@@ -80,13 +83,17 @@ To perform a single simulation step, call `mm.update()`. The scheme used to perf
 
 To relax the magnetization to a (meta)stable state, call `mm.relax()` or `mm.minimize()` (the former is faster for large simulations but less accurate, the latter is faster for small simulations and follows the real relaxation order more closely).
 
-### Applying input and reading output
+### Reading output and applying input
 
-More complex input-output simulations, e.g. for reservoir computing, can be performed using the `hotspice.io` and `hotspice.experiments` modules.
+The full state of the system can be read from the `.m` property of an ASI object, and averages can be obtained through `.m_avg` etc.
+Derived quantities like correlations can be calculated using the `._get_nearest_neighbors()` method and the underlying 2D grid.
+The properties `.t`, `.MCsteps`, `switches` and `attempted_switches` provide access to the elapsed time or number of Monte Carlo steps performed.
 
-The `hotspice.io` module contains classes that apply external stimuli to the spin ice, or read the state of the spin ice in some manner.
+For ease of use, Hotspice provides some utilities to consistently store data: `hotspice.utils.save_results()` and `hotspice.utils.load_results()` are general-purpose functions, while the builtin `Sweep` class for parameter sweeps uses the `hotspice.utils.Data` class to store metadata specific to the simulation.
 
-The `hotspice.experiments` module contains classes to bundle many input/output runs and calculate relevant metrics from them, as well as classes to perform parameter sweeps.
+It is also possible to perform more complex input-output simulations, e.g. for reservoir computing.
+For this purpose, the `hotspice.io` module contains classes that apply external stimuli to the spin ice, or read the state of the spin ice in some manner.
+The `hotspice.experiments` module contains classes to bundle many input/output runs and calculate relevant metrics from them, as well as classes to perform parameter `Sweep`s.
 
 ### Performing a parameter sweep on multiple GPUs/CPUs
 
