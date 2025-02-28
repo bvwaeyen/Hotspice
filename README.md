@@ -65,7 +65,7 @@ hotspice.gui.show(mm) # Display a GUI showing the current state of the spin ice
 
 - The second parameter (`n=100`) specifies the size of the rectilinear grid upon which the simulation is performed.
 
-  > [!Note]
+  > [!NOTE]
   > As explained in [our paper](https://arxiv.org/abs/2409.05580), Hotspice simulations use an underlying grid for efficient calculation. Hence, all ASI in Hotspice are represented as 2D arrays. Note that this implies that the possible spin ice lattices are restricted to those that can be represented as a periodic structure on a square grid. The lattices in [Available spin ices](#available-spin-ices) are defined by leaving some spots on this grid empty, while filling others with the properties of a magnet e.g., magnetic moment, orientation...
 
   For example, the 'diamond' pinwheel ASI in the code snippet above has 10000 available grid-points, of which 5000 (=`mm.n`) will contain a magnet.
