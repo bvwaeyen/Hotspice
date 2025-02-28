@@ -1,12 +1,26 @@
 # Hotspice
 <!-- markdownlint-disable MD033 -->
 
-Hotspice is a kinetic Monte Carlo simulation package for thermally active artificial spin ices, using an Ising-like approximation: the axis and position of each spin is fixed, only their binary state can switch.
+**Hotspice is a kinetic Monte Carlo simulation package for thermally active artificial spin ices**, using an Ising-like approximation: the axis and position of each spin is fixed, only their binary state can switch.
 The time evolution can either follow the Néel-Arrhenius law of switching over an energy barrier in a chronological manner, or alternatively use Metropolis-Hastings to model the statistical behavior while making abstraction of the time variable.
 
-## Paper
+> [!NOTE]
+> Our paper, [The design, verification, and applications of Hotspice: a Monte Carlo simulator for artificial spin ice](https://arxiv.org/abs/2409.05580), provides more details on the model used and model variants implemented.
+It also discusses the main examples provided in the `examples/` directory.
 
-"[The design, verification, and applications of Hotspice: a Monte Carlo simulator for artificial spin ice](https://arxiv.org/abs/2409.05580)" explains the model and reasoning behind the model variants used by Hotspice for the simulation of ASI, and discusses the main examples provided in the `examples/` directory.
+1) [Dependencies](#dependencies)
+
+2) [Getting started](#getting-started)
+
+    - [Creating a simple spin ice](#creating-a-simple-spin-ice)
+    - [Stepping in time](#stepping-in-time)
+    - [Applying input and reading output](#applying-input-and-reading-output)
+    - [Performing a parameter sweep on multiple GPUs/CPUs](#performing-a-parameter-sweep-on-multiple-gpuscpus)
+    - [Choosing between GPU or CPU](#choosing-between-gpu-or-cpu)
+
+3) [GUI](#gui)
+
+4) [Available spin ices](#available-spin-ices)
 
 ## Dependencies
 
