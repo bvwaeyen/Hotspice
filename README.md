@@ -72,7 +72,7 @@ hotspice.gui.show(mm) # Display a GUI showing the current state of the spin ice
 - Additional arguments can be provided, for which we mostly refer to the [docstring of `hotspice.Magnets()`](hotspice/core.py#L56). The most important of these are:
   - `moment` (magnetic moment $M_\mathrm{sat} V$), `T` (temperature) and `E_B` (energy barrier $E_\mathrm{B}$) `E_B` of all magnets can be specified as scalars or 2D NumPy (or CuPy) arrays. For ellipsoidal nanomagnets, `hotspice.utils.E_B_ellipsoid()` can provide a basic estimate for `E_B`.
   - The `params` argument is a `hotspice.SimParams` instance, which controls technical aspects of the simulation e.g., the update/sampling scheme to use, when and at what distance to cut off the magnetostatic interaction (achieved by truncating the kernel array)...
-  - The `energies` argument can be used to add a `hotspice.ZeemanEnergy` or `hotspice.ExchangeEnergy` to the ASI. It takes a list of the energies that should be considered. Note that it is possible to omit the magnetostatic interaction in this manner. Custom energies can also be defined by the user.
+  - The `energies` argument is a list of all energies to be considered. By default, only the magnetostatic interaction is considered. `energies` allows the `hotspice.ZeemanEnergy`, `hotspice.ExchangeEnergy` or user-defined energies to be added, or the `hotspice.DipolarEnergy` to be omitted if so desired. See the docstrings of these classes for several energy-specific options like a cut-off distance for the magnetostatic interaction.
 
 Examples of usage for several of the ASI lattices are provided in the 'examples' directory.
 
