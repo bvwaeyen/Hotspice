@@ -21,6 +21,7 @@ from datetime import datetime
 from IPython.terminal.embed import InteractiveShellEmbed
 from matplotlib.figure import Figure
 from pathlib import Path
+from scipy.integrate import quad
 from textwrap import dedent, indent
 from typing import Any, Callable, Iterable, Literal, TypeVar
 
@@ -239,6 +240,40 @@ def eV_to_J(E: float, /):
     return E*1.602176634e-19
 def J_to_eV(E: float, /):
     return E/1.602176634e-19
+
+def demag_factor_ellipsoid(a: float, b: float, c: float, axis: str) -> float:
+    """ Given the semi-major axes (a, b, c) of an ellipse, this function computes
+        the demagnetizing factor along a given `axis` ('a', 'b' or 'c') as given by
+        
+        N_i = (a*b*c / 2) * ∫[0,∞] ds / ((s + (semi-axis)^2) * sqrt((s+a^2)(s+b^2)(s+c^2)))
+        
+        This agrees with the tables in:
+            Osborn, J. A. (1945). Demagnetizing factors of the general ellipsoid. Physical review, 67(11-12), 351.
+    """
+    scale = min(a, b, c)
+    a, b, c = a/scale, b/scale, c/scale
+    match axis.lower():
+        case 'a': A2 = a**2
+        case 'b': A2 = b**2
+        case 'c': A2 = c**2
+        case _: raise ValueError(f"axis must be one of 'a', 'b' or 'c', not '{axis}'")
+    
+    I, err = quad(lambda s: 1.0 / ((s + A2) * math.sqrt((s + a**2) * (s + b**2) * (s + c**2))), 0, math.inf)
+    return (a * b * c / 2.0) * I
+
+def E_B_ellipsoid(a: float, b: float, c: float, Msat: float = 800e3) -> float:
+    """ Calculate the energy barrier E_B (in Joules) separating the two stable 
+        magnetization states of a uniformly magnetized ellipsoid.
+        It is approximated as:
+            E_B = K_u * V = mu0/2 * Msat² * (N_hard - N_easy) * V
+        
+        `a`, `b` and `c` are the length of the ellipsoid's SEMI-axes.
+    """
+    a, b, c = sorted([a, b, c], reverse=True) # a > b > c
+    V = 4*math.pi/3 * a*b*c
+    N_a = demag_factor_ellipsoid(a, b, c, 'a') # Easy axis
+    N_b = demag_factor_ellipsoid(a, b, c, 'b') # Hard axis
+    return 2*math.pi*1e-7*V*(Msat**2)*(N_b - N_a)
 
 def filter_kwargs(kwargs: dict, func: Callable):
     # return {k: v for k, v in kwargs.items() if k in func.__code__.co_varnames} # Old version with unintended behavior, I don't think this was used anywhere anymore but I leave it here in case something would break anyway.
