@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from matplotlib import cm, colormaps, patches
 from scipy.spatial import distance
 
+import os
+os.environ['HOTSPICE_USE_GPU'] = 'True'
 from context import hotspice
 if hotspice.config.USE_GPU:
     import cupy as xp
@@ -42,7 +44,7 @@ def calculate_any_neighbors(pos, shape, center: int = 0):
         return final_array
 
 
-def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=None, r:float=16, plot:bool=True, save:bool=False, PBC:bool=True, ASI_type:type[hotspice.Magnets]=None):
+def analysis_select_distribution(n:int|float=1e5, L:int=400, Lx:int=None, Ly:int=None, r:float=16, plot:bool=True, save:bool=False, PBC:bool=True, ASI_type:type[hotspice.Magnets]=None):
     """ In this analysis, the multiple-magnet-selection algorithm of `hotspice.Magnets.select()` is analyzed.
         The spatial distribution is calculated by performing `n` runs of the `select()` method.
         Also the probability distribution of the distance between two samples is calculated,
@@ -52,6 +54,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
         @param Lx, Ly [int] (400): the size of the simulation in x- and y-direction. Can also specify `L` for square domain.
         @param r [float] (16): the minimal distance between two selected magnets (specified as a number of cells).
     """
+    n = int(n)
     if Ly is None: Ly = L
     if Lx is None: Lx = L
     if ASI_type is None: ASI_type = hotspice.ASI.OOP_Square
@@ -74,7 +77,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     field = xp.zeros_like(mm.m) # The number of times each given cell was chosen
     field_local = xp.zeros((2*r*scale+1, 2*r*scale+1)) # Basically distances_binned, but in 2D (distribution of neighbors around a choice)
     spectrum = xp.zeros_like(field)
-    for _ in range(n):
+    while total < n:
         # from poisson_disc import Bridson_sampling
         # pos = xp.asarray(Bridson_sampling(dims=np.array([Ly, Lx]), radius=r, k=5).T, dtype=int) # POISSON DISC SAMPLING BRIDSON2007
         pos = mm.select(r=r)
@@ -113,9 +116,9 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     field_local[r*scale, r*scale] = 0 # set center value to zero
     t = time.perf_counter() - t
     
-    print(f"Time required for {n} runs of this analysis: {t:.3f}s.")
+    print(f"Time required to sample and process {n} magnets: {t:.3f}s.")
     print(f"--- ANALYSIS RESULTS ---")
-    print(f"Total number of samples: {total}")
+    print(f"Total number of actual samples: {total}")
     print(f"Empirical minimal distance between two samples in a single selection: {min_dist:.2f} (r={r})")
     
     cmap = colormaps['viridis'].copy()
@@ -180,7 +183,7 @@ def analysis_select_distribution(n:int=10000, L:int=400, Lx:int=None, Ly:int=Non
     
     # TODO: show histogram of how many samples are generated for each call of select()
     # TODO: show one representative (or the worst i.e. least samples maybe? or lowest distance?) call of select() spatially for visual inspection (might not be necessary since we have the other plots already)
-    plt.suptitle(f"{Lx}x{Ly} grid, r={r} cells: {n} runs ({total} samples)\nPBC {'en' if mm.PBC else 'dis'}abled")
+    plt.suptitle(f"{Lx}x{Ly} grid, r={r} cells: {total} samples\nPBC {'en' if mm.PBC else 'dis'}abled")
     plt.gcf().tight_layout()
     if save:
         save_path = f"results/analysis_select_distribution/{type(mm).__name__}_{mm.params.MULTISAMPLING_SCHEME}_{Lx}x{Ly}_r={r}{'_PBC' if mm.PBC else ''}"
@@ -207,8 +210,9 @@ def analysis_select_speed(n: int=10000, L:int=400, r=16, PBC:bool=True, params:h
 # e.g. occupation sparsity, nx & ny for constant r or vice versa (or maybe 2D imshow changing nx=ny and r?)
 
 if __name__ == "__main__":
-    save = False
+    save = True
     PBC = True
     # analysis_select_speed(L=400, n=400, PBC=PBC)
     # analysis_select_distribution(Lx=296, Ly=200, n=10000, r=16, ASI_type=hotspice.ASI.OOP_Square, save=save, PBC=PBC)
-    analysis_select_distribution(Lx=315, Ly=296, n=10000, r=16, ASI_type=hotspice.ASI.IP_Pinwheel, save=save, PBC=PBC)
+    # analysis_select_distribution(Lx=315, Ly=296, n=10000, r=16, ASI_type=hotspice.ASI.IP_Pinwheel, save=save, PBC=PBC)
+    analysis_select_distribution(Lx=401, Ly=401, n=1e6, r=16, ASI_type=hotspice.ASI.OOP_Square, save=save, PBC=PBC)
