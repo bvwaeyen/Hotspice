@@ -376,7 +376,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         # Plot the metrics
         fig = plt.figure(figsize=(3.3*n, 3))
         axes = []
-        label_x = name_x if unit_x is None else f"{name_x} ({unit_x})"
+        label_x = name_x if unit_x is None else f"{name_x} [{unit_x}]"
         if names_z is None:
             names_z = [None]*n
         elif isinstance(names_z, str): # Just add it at the end
@@ -384,7 +384,7 @@ class Sweep(ABC): # TODO: add a method to finish an unfinished sweep, by specify
         else:
             names_z = names_z + [None]*(n - len(names_z))
         if is_2D:
-            label_y = name_y if unit_y is None else f"{name_y} ({unit_y})"
+            label_y = name_y if unit_y is None else f"{name_y} [{unit_y}]"
             X, Y = np.meshgrid(x_lims, y_lims)
             for i, params in enumerate(metrics_dict.values()):
                 Z = np.transpose(all_metrics[i])
@@ -613,7 +613,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         outputreader = RegionalOutputReader(2, 2, mm)
         return cls(inputter, outputreader, mm)
 
-    def run(self, N=1000, pattern=None, verbose=False):
+    def run(self, N=1000, pattern=None, verbose=False, STOP_IF_MANY_SWITCHES=True):
         """ @param N [int]: The total number of `self.inputter.input()` iterations performed.
             @param pattern [str] (None): The state that `self.mm` is initialized in. If not specified,
                 the ground state of the spin ice geometry is used.
@@ -637,6 +637,11 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         for i in range(N):
             self.u[i] = self.inputter.input(self.mm)
             self.y[i,:] = self.outputreader.read_state().copy()
+            if STOP_IF_MANY_SWITCHES and (i % 50) == 49: # Run 50 iterations before checking if we should stop
+                if self.mm.switches/self.mm.attempted_switches > 0.99: # Then all magnets are basically switching at all times
+                    self.u = np.tile(self.u[:i+1], 5)[:N] # Tile a few times to calculate reasonable metrics
+                    self.y = np.tile(self.y[:i+1,:], (5,1))[:N]
+                    break
             if verbose:
                 if verbose > 1: fig = show_m(self.mm, figure=fig)
                 if is_significant(i, N):
