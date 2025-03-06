@@ -780,7 +780,7 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
             y_train, y_test = np.split(sm.add_constant(asnumpy(self.y[:,neighbors]), has_constant='add'), [train_test_cutoff])
             Rsq = xp.empty(k) # R² correlation coefficient
             for d in range(1, k+1): # Train an estimator for the parity of the d previous inputs
-                parity_d = xp.sum((strided(self.u, d)*2) - 1, axis=1) # Parity of previous <d> inputs including the current one
+                parity_d = xp.remainder(xp.sum(strided(self.u, d), axis=1), 2) # Parity of previous <d> inputs including the current one
                 parity_train, parity_test = xp.split(parity_d, [train_test_cutoff]) # train_test_cutoff in iterable for correct behavior
                 results = sm.OLS(asnumpy(parity_train), y_train, missing='drop').fit() # missing='drop' ignores samples with NaNs (i.e. the first k-1 samples)
                 parity_hat_test = results.predict(y_test[d:,:]) # Start at y_test[d] to prevent leakage between train/test
