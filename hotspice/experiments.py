@@ -643,10 +643,11 @@ class TaskAgnosticExperiment(Experiment): # TODO: add a plot method to this clas
         for i in range(N):
             self.u[i] = self.inputter.input(self.mm)
             self.y[i,:] = self.outputreader.read_state().copy()
-            if STOP_IF_MANY_SWITCHES and (i % 50) == 49: # Run 50 iterations before checking if we should stop
-                if self.mm.switches/self.mm.attempted_switches > 0.99: # Then all magnets are basically switching at all times
-                    self.u = np.tile(self.u[:i+1], 5)[:N] # Tile a few times to calculate reasonable metrics
-                    self.y = np.tile(self.y[:i+1,:], (5,1))[:N]
+            if STOP_IF_MANY_SWITCHES and (i % 200) == 199: # Run 200 iterations before checking if we should stop. This should suffice for train/test.
+                # Check if all magnets are either switching all the time or never switching
+                if not (0.01 < self.mm.switches/self.mm.attempted_switches > 0.99):
+                    self.u = self.u[:i+1]
+                    self.y = self.y[:i+1,:]
                     break
             if verbose:
                 if verbose > 1: fig = show_m(self.mm, figure=fig)
