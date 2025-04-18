@@ -78,7 +78,10 @@ Examples of usage for several of the ASI lattices are provided in the 'examples'
 
 ### Stepping in time
 
-To perform a single simulation step, call `mm.update()`. The scheme used to perform this single step is determined by `mm.params.UPDATE_SCHEME`, which is an instance of `hotspice.Scheme`. Alternatively, `mm.progress()` can be used to advance the simulation by a given duration in time or a number of Monte Carlo steps.
+To perform a single simulation step, call `mm.update()`. The scheme used to perform this single step is determined by `mm.params.UPDATE_SCHEME`, which is an instance of `hotspice.Scheme`. Both available schemes are explained in our paper. Alternatively, `mm.progress()` can be used to advance the simulation by a given duration in time or a number of Monte Carlo steps.
+
+> [!WARNING]
+> As mentioned in [our paper](https://arxiv.org/abs/2409.05580), Monte Carlo simulations may suffer from phenomena like "critical slowing down", which lower the rate of convergence towards thermal equilibrium. Therefore, in Hotspice the user must take care to perform a sufficient number of simulation steps, to ensure equilibrium is reached.
 
 To relax the magnetization to a (meta)stable state, call `mm.relax()` or `mm.minimize()` (the former is faster for large simulations but less accurate, the latter is faster for small simulations and follows the real relaxation order more closely).
 
