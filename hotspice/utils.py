@@ -370,7 +370,7 @@ def get_caller_script():
     """ Returns the filename of the script that calls this function. """
     return Path(inspect.stack()[1].filename)
 
-def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure]|dict[str,Figure] = None, copy_script: bool = True, timestamped: bool = True, outdir: str|Path = None, figure_format: tuple[str]|str = ('.pdf', '.png', '.svg'), dpi=600) -> str:
+def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iterable[Figure]|dict[str,Figure] = None, copy_script: bool = True, timestamped: bool = True, outdir: str|Path = None, figure_format: tuple[str]|str = ('.pdf', '.png', '.svg'), dpi=600, **kwargs) -> str:
     """ The most basic way to consistently save results of a simulation script. This can save the basic
         parameters (scalars etc.) as JSON, the full data (large arrays etc.) as pickle, and Matplotlib
         figure(s) as pdf/png/svg, and automatially saves a copy of the topmost script (where __name__ == "__main__"),
@@ -409,7 +409,8 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
             figures = {f'figure{i if len(figures) > 1 else ""}': figure for i, figure in enumerate(figures)}
         for name, fig in figures.items():
             for ext in figure_format:
-                fig.savefig(outdir / (name + ext), dpi=dpi, transparent=True)
+                kwargs = dict(transparent=True) | kwargs
+                fig.savefig(outdir / (name + ext), dpi=dpi, **kwargs)
     return outdir
 
 def load_results(data_dir: Path|str):
