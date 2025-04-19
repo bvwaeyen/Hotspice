@@ -204,8 +204,9 @@ class Hysteresis:
         if labels is None: labels = [None]*len(hystereses)
         if labels_snapshots is None: labels_snapshots = labels
         markers = np.resize(['o', 's', 'D', 'P', 'X', 'p', '*', '^'], n) # Circle, square, diamond, plus, cross, pentagon, star, triangle up (and repeat enough times)
-        markersize = 3
-        markevery = 0.015
+        markersize_panel_a = 4
+        markersize_panel_b = 7
+        markevery_panel_a, markevery_panel_b = markersize_panel_a/200, markersize_panel_b/100
         max_thresholds = max(len(data.threshold_indices) for data in hystereses)
         if SHOW_SNAPSHOTS is None: SHOW_SNAPSHOTS = n == 1
         if _vertical is None: _vertical = n == 1 # Whether the line plots are above the snapshot plots (True), or next to them (False). Also affects layout of snapshot plot subgrid.
@@ -278,16 +279,16 @@ class Hysteresis:
             X = H_fields/H_factor
             Y = m_parallel/m_parallel_sat
             # NORMAL HYSTERESIS PLOT
-            ax1.step(X, Y, where="post", linewidth=1, color=color, marker=markers[j], markevery=markevery, markersize=markersize, fillstyle='none', label=labels[j])
+            ax1.step(X, Y, where="post", linewidth=1, color=color, marker=markers[j], markevery=markevery_panel_a, markersize=markersize_panel_a, fillstyle='none', label=labels[j])
             # POLAR PLOT
             angle = d_angle if FIELD_POLAR_ZERO else m_angle # If FIELD_POLAR_ZERO, then the 0° on the polar plot is the field direction. Otherwise, 0° is the x-axis.
             if is_monotonic[j]:
-                ax2.plot(angle, (m_avg/data.m_avg_sat), color='red' if n == 1 else color, marker='^', markevery=markevery, markersize=markersize, fillstyle='none')
+                ax2.plot(angle, (m_avg/data.m_avg_sat), color='red' if n == 1 else color, marker='^', markevery=(markevery_panel_b/2*j, markevery_panel_b), markersize=markersize_panel_b, fillstyle='none')
             else:
                 increasing = (H_fields[1:] - H_fields[:-1]) > 0
                 N2 = np.argmax(increasing != increasing[0]) # First index where direction of field reverses. An edge case remains where the direction never reverses but that should have been caught by is_monotonic.
-                ax2.plot(angle[:N2+1], (m_avg/data.m_avg_sat)[:N2+1], color='black' if n == 1 else color, marker='^', markevery=markevery, markersize=markersize, fillstyle='none', label='Up' if j == 0 else None)
-                ax2.plot(angle[N2:], (m_avg/data.m_avg_sat)[N2:], color='red' if n == 1 else color, marker='v', markevery=markevery, markersize=markersize, fillstyle='none', label='Down' if j == 0 else None)
+                ax2.plot(angle[:N2+1], (m_avg/data.m_avg_sat)[:N2+1], color='black' if n == 1 else color, marker='^', markevery=(markevery_panel_b/2*j, markevery_panel_b), markersize=markersize_panel_b, fillstyle='none', label='Up' if j == 0 else None)
+                ax2.plot(angle[N2:], (m_avg/data.m_avg_sat)[N2:], color='red' if n == 1 else color, marker='v', markevery=(markevery_panel_b/2*j, markevery_panel_b), markersize=markersize_panel_b, fillstyle='none', label='Down' if j == 0 else None)
             if not FIELD_POLAR_ZERO: # Draw line of field
                 all_same_angle = np.allclose([h.H_angle for h in hystereses], data.H_angle)
                 if j == 0 or not all_same_angle: # Always draw the first one, but after that only draw if they are not all the same

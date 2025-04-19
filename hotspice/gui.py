@@ -126,6 +126,10 @@ class GUI(ctk.CTk):
     def dark_mode(self) -> bool:
         return ctk.get_appearance_mode() == "Dark"
     
+    @property
+    def color_bg(self):
+        return '#%02x%02x%02x' % tuple(i//256 for i in self.winfo_rgb(self["bg"]))
+
     def all_children(self, widget):
         return [widget] + [subchild
                            for child in widget.winfo_children()
@@ -378,7 +382,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         avg: Average|str = Average.POINT
         fill: bool = True
         color_quiver: bool = True
-        quiver_qty: Literal['spin', 'H_eff'] = 'spin'
+        quiver_qty: Literal['Spin', 'Effective field'] = 'Spin'
         subtract_barrier: bool = True
         energy_component: Literal['Total', 'E_barrier']|str = 'Total'
         energy_perp: bool = False
@@ -408,6 +412,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
 
         ## Create the basic MPL figure inside this Tkinter frame
         self.figure = Figure(dpi=100, tight_layout=True) # Tight_layout true at the start to get a nice layout to begin with
+        self.figure.patch.set_facecolor(self.gui.color_bg)
         self.canvas = FigureCanvasTkAgg(self.figure, master=self)
         self.toolbar = NavigationToolbar2Tk(self.canvas, self)
         self.toolbar.update()
@@ -435,6 +440,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         self.ax.set_ylabel(f"y [{self.unit_axes}m]")
         self.ax.set_xlim(self.full_extent[:2])
         self.ax.set_ylim(self.full_extent[2:])
+        self.ax.set_facecolor("None")
         self.content: quiver.Quiver | image.AxesImage = None
         self.colorbar: colorbar.Colorbar = None
         self.figparams = { # This should not be changed dynamically, so this can stay as a dictionary
@@ -706,11 +712,11 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         color_quiver, quiver_qty = self.settings.color_quiver, self.settings.quiver_qty
         if settings_changed: self.quiver_scale = np.inf
         match quiver_qty:
-            case 'spin':
+            case 'Spin':
                 x = asnumpy(xp.multiply(xp.multiply(self.mm.m, self.mm.orientation[:,:,0]), self.mm.occupation)[self.mm.nonzero])
                 y = asnumpy(xp.multiply(xp.multiply(self.mm.m, self.mm.orientation[:,:,1]), self.mm.occupation)[self.mm.nonzero])
-            case 'H_eff':
-                x, y = self.mm.H_eff
+            case 'Effective field':
+                x, y = self.mm.B_eff
                 x, y = asnumpy(x[self.mm.nonzero]), asnumpy(y[self.mm.nonzero])
                 if np.any(x*self.quiver_scale > .8): self.quiver_scale = .8/np.nanmax(x)
                 if np.any(y*self.quiver_scale > .8): self.quiver_scale = .8/np.nanmax(y)
@@ -718,7 +724,7 @@ class MagnetizationView(ctk.CTkFrame): # TODO: remember last DisplayMode and Vie
         self.content.set_UVC(x/self.unit_axes_factor, y/self.unit_axes_factor)
         if settings_changed:
             self.colorbar.ax.set_visible(color_quiver)
-            titles = {'spin': r"Magnetization $\overrightarrow{m}$", 'H_eff': r"Effective field $\overrightarrow{H_\mathrm{eff}}$"}
+            titles = {'Spin': r"Magnetization $\overrightarrow{m}$", 'Effective field': r"Effective field $\overrightarrow{H_\mathrm{eff}}$"}
             self.ax.set_title(titles.get(quiver_qty, ""))
         colorfield = self.cmap_hsv((np.arctan2(y, x)/2/np.pi) % 1) if color_quiver else 'black'
         self.content.set_color(colorfield)
@@ -830,9 +836,9 @@ class MagnetizationViewSettingsTabView(ctk.CTkTabview):
         self.option_color_quiver = ctk.CTkSwitch(self.tab_QUIVER, text="Color", command=self.init_settings_magview)
         self.option_color_quiver.pack(pady=10, padx=10)
         self.option_color_quiver.select() # Set to 'on' by default
-        self.option_quiver_qty = ctk.CTkOptionMenu(self.tab_QUIVER, values=["spin", "H_eff"], command=self.init_settings_magview)
+        self.option_quiver_qty = ctk.CTkOptionMenu(self.tab_QUIVER, values=["Spin", "Effective field"], command=self.init_settings_magview)
         self.option_quiver_qty.pack(pady=10, padx=10)
-        self.option_quiver_qty.set("spin")
+        self.option_quiver_qty.set("Spin")
 
         ## Tab 3: DOMAINS
         if hasattr(self.mm, 'get_domains'):

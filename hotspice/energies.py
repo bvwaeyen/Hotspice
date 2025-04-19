@@ -141,16 +141,18 @@ class ZeemanEnergy(Energy):
 
 
 class DipolarEnergy(Energy):
-    def __init__(self, prefactor: float = 1, decay_exponent: float = -3):
+    def __init__(self, prefactor: float = 1, decay_exponent: float = -3, cutoff_range: float = xp.inf):
         """ This `DipolarEnergy` class implements the interaction between the magnets of the simulation themselves.
             It should therefore always be included in the simulations.
             @param prefactor [float] (1): The relative strength of the dipolar interaction.
             @param decay_exponent [float] (-3): How fast the dipole interaction weakens with distance: DD ∝ 1/r^`decay_exponent`.
+            @param cutoff_range [float] (Infinity): Maximum distance of the magnetostatic interaction, in meters.
         """
         # TODO: a more intricate scaling with distance is needed to incorporate the effect of the magnets not being infinitely small magnetic spins.
         #       Further steps can then concern themselves with the nonpolynomial fall-off with distance, as the magnets start to see each other more as infinitesimal spins rather than a finite FM geometry.
         self._prefactor = prefactor
         self.decay_exponent = decay_exponent
+        self.cutoff_range = cutoff_range
     
     @property
     def prefactor(self):
@@ -160,6 +162,16 @@ class DipolarEnergy(Energy):
         self.E *= value/self._prefactor
         self.E_perp *= value/self._prefactor
         self._prefactor = value
+    
+    @property
+    def cutoff_range(self):
+        return self._cutoff_range
+    @cutoff_range.setter
+    def cutoff_range(self, value):
+        self._cutoff_range = value
+        if hasattr(self, 'mm'):
+            self._initialize()
+            self.update()
 
     def _initialize(self):
         """ When `self.mm` has nonzero `major_axis` and `minor_axis`, the magnet
@@ -204,6 +216,7 @@ class DipolarEnergy(Energy):
                 # Let us first make the four-mirrored distance matrix rinv3
                 rr_sq = (rrx**2 + rry**2).astype(float)
                 rr_sq[self.mm.ny - 1,self.mm.nx - 1] = xp.inf
+                rr_sq[xp.where(rr_sq > self.cutoff_range**2)] = xp.inf
                 rr_inv = rr_sq**-0.5 # Due to the previous line, this is now never infinite
                 rinv3 = rr_inv**(-self.decay_exponent) # = 1/r^3 by default
                 rinv5 = rr_inv**(-self.decay_exponent + 2) # = 1/r^5 by default

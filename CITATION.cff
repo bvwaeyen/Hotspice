@@ -11,5 +11,39 @@ authors:
     family-names: Van Waeyenberge
     affiliation: Ghent University
     orcid: 'https://orcid.org/0000-0001-7523-1661'
+  - given-names: Diego
+    family-names: De Gusem
+    affiliation: Ghent University
+    orcid: "https://orcid.org/0009-0008-3341-0555"
 repository-code: 'https://github.com/bvwaeyen/Hotspice'
 abstract: Simulation package for thermally active artificial spin ices, with a focus on reservoir computing.
+preferred-citation:
+  type: article
+  title: "The design, verification, and applications of Hotspice: a Monte Carlo simulator for artificial spin ice"
+  identifiers:
+    - type: other
+      value: "arXiv:2409.05580"
+      description: The ArXiv preprint of the paper
+  authors:
+  - family-names: "Maes"
+    given-names: "Jonathan"
+    orcid: "https://orcid.org/0000-0003-4973-8383"
+  - family-names: "De Gusem"
+    given-names: "Diego"
+    orcid: "https://orcid.org/0009-0008-3341-0555"
+  - family-names: "Lateur"
+    given-names: "Ian"
+    orcid: "https://orcid.org/0009-0003-8283-4083"
+  - family-names: "Leliaert"
+    given-names: "Jonathan"
+    orcid: "https://orcid.org/0000-0001-8778-3092"
+  - family-names: "Kurenkov"
+    given-names: "Aleksandr"
+    orcid: "https://orcid.org/0000-0002-0918-9554"
+  - family-names: "Van Waeyenberge"
+    given-names: "Bartel"
+    orcid: "https://orcid.org/0000-0001-7523-1661"
+  doi: "10.48550/arXiv.2409.05580"
+  url: https://arxiv.org/abs/2409.05580
+  year: 2024
+  month: 9

@@ -312,8 +312,8 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         return sum([energy.E_perp for energy in self._energies])*self.m_perp_factor
     
     @property
-    def H_eff(self) -> xp.ndarray: # NOTE: E_perp should be activated
-        """ Returns the effective field (H_x, H_y) at the position of each magnet. """
+    def B_eff(self) -> xp.ndarray: # NOTE: E_perp should be activated
+        """ Returns the effective field (B_x, B_y) at the position of each magnet. """
         if not self.USE_PERP_ENERGY: return np.zeros_like(self.m), np.zeros_like(self.m)
         E_1, E_perp = self.E, sum([energy.E_perp for energy in self._energies]) #! Don't use self.E_perp, that is already scaled by m_perp_factor!
         moment = np.where(self.moment, self.moment, np.inf)
@@ -321,8 +321,8 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
             a = np.where(E_1 != 0, E_1*xp.sqrt(1 + (E_perp/E_1)**2), np.abs(E_perp))/moment # [T] Field strength
             b = xp.arctan(E_perp/E_1) # Field angle w.r.t. magnetization direction (if E_1 = 0: yields sign(E_perp)*np.pi/2)
         angle = b + self.angles + (self.m + 1)*np.pi/2
-        H_x, H_y = a*xp.cos(angle), a*xp.sin(angle)
-        return H_x, H_y
+        B_x, B_y = a*xp.cos(angle), a*xp.sin(angle)
+        return B_x, B_y
 
     @property
     def T(self) -> xp.ndarray:
@@ -561,11 +561,11 @@ class Magnets(ABC): # TODO: make it possible to offset the ASI by some amount of
         if r is None: r = self.calc_r(0.01)
 
         # p = SequentialPoissonDiskSampling(self.y_max, self.x_max, r, tries=1).fill()
-        p = np.asarray(poisson_disc_samples(self.y_max, self.x_max, r, k=4))
+        p = xp.asarray(poisson_disc_samples(self.y_max, self.x_max, r, k=4)).reshape(-1, 2)
         
         def nearest_grid_indices(grid_1D, coords_1D): # TODO: this method is flawed because if some dx are very small they will almost never be visited
-            return np.abs(grid_1D[:, np.newaxis] - coords_1D).argmin(axis=0)
-        points = np.column_stack((nearest_grid_indices(self.x, p[:,0] + self.x_min),
+            return xp.abs(grid_1D[:, xp.newaxis] - coords_1D).argmin(axis=0)
+        points = xp.column_stack((nearest_grid_indices(self.x, p[:,0] + self.x_min),
                                   nearest_grid_indices(self.y, p[:,1] + self.y_min)))
         return xp.asarray(points.T)
 

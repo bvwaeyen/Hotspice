@@ -57,7 +57,7 @@ def run(N: float = 10, size: int = 51, monopoles: list[float] = None, PBC: bool 
         for j in range(N):
             for i, angle in enumerate(angles):
                 print(f"[sample {j}] {angle=}°, {monopole_d=}...")
-                a = d_paper*2*np.cos(np.deg2rad(angle))
+                a = d_paper*np.sqrt(2)/np.sin(np.abs(np.pi/4 + np.deg2rad(angle) % (np.pi/2)))
                 mm = hotspice.ASI.IP_Square(a, size, PBC=PBC, moment=moment, T=300, 
                                             energies=[energyDD],E_B=E_B, m_perp_factor=0.4,
                                             angle=np.deg2rad(angle))

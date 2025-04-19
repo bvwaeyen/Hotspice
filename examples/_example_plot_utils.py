@@ -14,14 +14,14 @@ class Cycle(object):
     def __repr__(self): return self.data.__repr__()
 marker_cycle = Cycle(['o', 's', 'D', 'P', 'X', 'p', '*', '^']) # Circle, square, diamond, plus, cross, pentagon, star, triangle up (and repeat enough times)
 
+fs_small = 9
+fs_medium = fs_small + 1
+fs_large = fs_medium + 1
 
 def init_style(style=None):
-    small = 9
-    medium = small + 1
-    large = medium + 1
-    hotspice.plottools.init_style(small=small, medium=medium, large=large, style=style if style is not None else "default")
+    hotspice.plottools.init_style(small=fs_small, medium=fs_medium, large=fs_large, style=style if style is not None else "default")
     if style is None: plt.rcParams['axes.prop_cycle'] = cycler(color=["dodgerblue", "tab:red", "tab:orange", "m", "c"])
-    plt.rcParams["legend.fontsize"] = medium
+    plt.rcParams["legend.fontsize"] = fs_medium
     plt.rcParams["mathtext.fontset"] = "dejavusans"
 
 def replot_all(plot_function):
