@@ -23,7 +23,7 @@ preferred-citation:
   identifiers:
     - type: other
       value: "arXiv:2409.05580"
-      description: The ArXiv preprint of the paper
+      description: The arXiv preprint of the paper
   authors:
   - family-names: "Maes"
     given-names: "Jonathan"
@@ -43,7 +43,11 @@ preferred-citation:
   - family-names: "Van Waeyenberge"
     given-names: "Bartel"
     orcid: "https://orcid.org/0000-0001-7523-1661"
-  doi: "10.48550/arXiv.2409.05580"
-  url: https://arxiv.org/abs/2409.05580
-  year: 2024
-  month: 9
+  doi: "10.1016/j.cpc.2025.109643"
+  url: "https://www.sciencedirect.com/science/article/pii/S0010465525001456"
+  year: 2025
+  volume: 313
+  start: 109643
+  journal: "Computer Physics Communications"
+  issn: "0010-4655"
+  keywords: "Artificial spin ice, Monte Carlo simulation, Metropolis-Hastings, Néel-Arrhenius, Reservoir computing"

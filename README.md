@@ -5,7 +5,7 @@
 The time evolution can either follow the Néel-Arrhenius law of switching over an energy barrier in a chronological manner, or alternatively use Metropolis-Hastings to model the statistical behavior while making abstraction of the time variable.
 
 > [!NOTE]
-> Our paper, [The design, verification, and applications of Hotspice: a Monte Carlo simulator for artificial spin ice](https://arxiv.org/abs/2409.05580), provides more details on the model used and model variants implemented.
+> Our paper, [The design, verification, and applications of Hotspice: a Monte Carlo simulator for artificial spin ice](https://doi.org/10.1016/j.cpc.2025.109643), provides more details on the model used and model variants implemented.
 It also discusses the main examples provided in the `examples/` directory.
 
 1) [Dependencies](#dependencies)
@@ -67,7 +67,7 @@ hotspice.gui.show(mm) # Display a GUI showing the current state of the spin ice
   In this example, the 'diamond' pinwheel ASI has 10000 available grid-points, of which 5000 (=`mm.n`) will contain a magnet.
 
 > [!NOTE]
-> As explained in [our paper](https://arxiv.org/abs/2409.05580), Hotspice simulations use an underlying grid for efficient calculation. Hence, all ASI in Hotspice are represented as 2D arrays. Note that this implies that the possible spin ice lattices are restricted to those that can be represented as a periodic structure on a square grid. The lattices in [Available spin ices](#available-spin-ices) are defined by leaving some spots on this grid empty, while filling others with the properties of a magnet e.g., magnetic moment, orientation...
+> As explained in [our paper](https://doi.org/10.1016/j.cpc.2025.109643), Hotspice simulations use an underlying grid for efficient calculation. Hence, all ASI in Hotspice are represented as 2D arrays. Note that this implies that the possible spin ice lattices are restricted to those that can be represented as a periodic structure on a square grid. The lattices in [Available spin ices](#available-spin-ices) are defined by leaving some spots on this grid empty, while filling others with the properties of a magnet e.g., magnetic moment, orientation...
 
 - Additional arguments can be provided, for which we mostly refer to the [docstring of `hotspice.Magnets()`](hotspice/core.py#L56). The most important of these are:
   - `moment` (magnetic moment $M_\mathrm{sat} V$), `T` (temperature) and `E_B` (energy barrier $E_\mathrm{B}$) `E_B` of all magnets can be specified as scalars or 2D NumPy (or CuPy) arrays. For ellipsoidal nanomagnets, `hotspice.utils.E_B_ellipsoid()` can provide a basic estimate for `E_B`.
@@ -81,7 +81,7 @@ Examples of usage for several of the ASI lattices are provided in the 'examples'
 To perform a single simulation step, call `mm.update()`. The scheme used to perform this single step is determined by `mm.params.UPDATE_SCHEME`, which is an instance of `hotspice.Scheme`. Both available schemes are explained in our paper. Alternatively, `mm.progress()` can be used to advance the simulation by a given duration in time or a number of Monte Carlo steps.
 
 > [!WARNING]
-> As mentioned in [our paper](https://arxiv.org/abs/2409.05580), Monte Carlo simulations may suffer from phenomena like "critical slowing down", which lower the rate of convergence towards thermal equilibrium. Therefore, in Hotspice the user must take care to perform a sufficient number of simulation steps, to ensure equilibrium is reached.
+> As mentioned in [our paper](https://doi.org/10.1016/j.cpc.2025.109643), Monte Carlo simulations may suffer from phenomena like "critical slowing down", which lower the rate of convergence towards thermal equilibrium. Therefore, in Hotspice the user must take care to perform a sufficient number of simulation steps, to ensure equilibrium is reached.
 
 To relax the magnetization to a (meta)stable state, call `mm.relax()` or `mm.minimize()` (the former is faster for large simulations but less accurate, the latter is faster for small simulations and follows the real relaxation order more closely).
 
