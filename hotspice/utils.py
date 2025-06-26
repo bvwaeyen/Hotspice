@@ -416,10 +416,16 @@ def save_results(parameters: dict = None, data: Any = None, figures: Figure|Iter
 def load_results(data_dir: Path|str):
     """ Loads the `params` and `data` as saved by `save_results()`. """
     data_dir = Path(data_dir)
-    with open(data_dir / "data.pkl", "rb") as infile:
-        data = pickle.load(infile)
-    with open(data_dir / "params.json", "r") as infile:
-        params: dict = json.load(infile)
+    try:
+        with open(data_dir / "data.pkl", "rb") as infile:
+            data = pickle.load(infile)
+    except FileNotFoundError:
+        data = None
+    try:
+        with open(data_dir / "params.json", "r") as infile:
+            params: dict = json.load(infile)
+    except FileNotFoundError:
+        params = None
     return params, data
 
 class Data: # TODO: make a get_column() function that returns (one or multiple) df column even if the requested column is actually a constant
